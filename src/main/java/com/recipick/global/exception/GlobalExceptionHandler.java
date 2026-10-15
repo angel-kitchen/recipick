@@ -84,10 +84,11 @@ public class GlobalExceptionHandler {
         return toResponse(CommonErrorCode.METHOD_NOT_ALLOWED);
     }
 
-    // @PreAuthorize 거부는 Security Filter가 아니라 컨트롤러 호출 중에 발생해 이곳으로 들어온다
+    // @PreAuthorize 거부는 Security Filter가 아니라 컨트롤러 호출 중에 발생해 이곳으로 들어온다.
+    // 회원·관리자 토큰 교차 호출은 필터에서 먼저 막히므로, 여기 오는 경우는 MART_ADMIN의 SUPER_ADMIN 전용 API 호출이다.
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
-        return toResponse(AuthErrorCode.ACCESS_DENIED);
+        return toResponse(AuthErrorCode.SUPER_ADMIN_ONLY);
     }
 
     @ExceptionHandler(Exception.class)
