@@ -30,12 +30,16 @@ public class Product extends BaseTimeEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mart_id")
+    private Mart mart;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private Category category;
 
     private Long ingredientId;
 
-    @Column(length = 50)
+    @Column(length = 100)
     private String name;
 
     @Column(columnDefinition = "text")
@@ -50,18 +54,36 @@ public class Product extends BaseTimeEntity {
 
     private String imageUrl;
 
+    private Long price;
+
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private ProductStatus status;
+
+    private int totalQuantity;
+
+    private int reservedQuantity;
+
     private boolean deleted;
 
     @Builder
     private Product(
+
+            Mart mart,
             Category category,
             Long ingredientId,
             String name,
             String description,
             BigDecimal saleUnitAmount,
             SaleUnit saleUnit,
-            String imageUrl
+            String imageUrl,
+            Long price,
+            ProductStatus status,
+            int totalQuantity,
+            int reservedQuantity,
+            boolean deleted
     ) {
+        this.mart = mart;
         this.category = category;
         this.ingredientId = ingredientId;
         this.name = name;
@@ -69,5 +91,10 @@ public class Product extends BaseTimeEntity {
         this.saleUnitAmount = saleUnitAmount;
         this.saleUnit = saleUnit;
         this.imageUrl = imageUrl;
+        this.price = price;
+        this.status = ProductStatus.SELLING;
+        this.totalQuantity = totalQuantity;
+        this.reservedQuantity = reservedQuantity;
+        this.deleted = deleted;
     }
 }
