@@ -1,31 +1,29 @@
 package com.recipick.domain.product.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+
+
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+
+
+import com.recipick.global.entity.BaseTimeEntity;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+
 
 @Getter
 @Entity
-@EntityListeners(AuditingEntityListener.class)
 @Table(name = "mart")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Mart {
+public class Mart extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
 
     @Column(unique = true)
     private Long regionId;
@@ -41,13 +39,11 @@ public class Mart {
 
     private Integer serviceRadiusM;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String status;
 
-    @CreatedDate
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private MartStatus status;
+
 
     @Builder
     private Mart(
@@ -56,13 +52,13 @@ public class Mart {
             BigDecimal latitude,
             BigDecimal longitude,
             Integer serviceRadiusM,
-            String status
+            MartStatus status
     ) {
         this.regionId = regionId;
         this.name = name;
         this.latitude = latitude;
         this.longitude = longitude;
         this.serviceRadiusM = serviceRadiusM;
-        this.status = status;
+        this.status = MartStatus.OPEN;
     }
 }
