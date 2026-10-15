@@ -38,7 +38,7 @@ public class Admin {
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private AdminRole role;
 
     private Long martId;

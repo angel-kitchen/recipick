@@ -41,7 +41,7 @@ public class Payment extends BaseTimeEntity {
     private Long amount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private PaymentStatus status;
 
     @Column(length = 500)

@@ -43,7 +43,7 @@ public class OrderItem {
     private BigDecimal saleUnitAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 10)
+    @Column(columnDefinition = "varchar(10)")
     private SaleUnit saleUnit;
 
     private Long lineAmount;

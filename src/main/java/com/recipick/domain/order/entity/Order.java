@@ -39,11 +39,11 @@ public class Order extends BaseTimeEntity {
     private Long pendingMemberId;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private OrderStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private MartStatus martStatus;
 
     private Long productAmount;

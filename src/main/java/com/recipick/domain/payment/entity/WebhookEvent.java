@@ -36,7 +36,7 @@ public class WebhookEvent extends BaseTimeEntity {
     private String portonePaymentId;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private WebhookEventStatus status;
 
     @Column(columnDefinition = "text")

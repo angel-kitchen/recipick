@@ -40,11 +40,11 @@ public class Membership extends BaseTimeEntity {
     private Admin grantedByAdmin;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private MembershipType type;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private MembershipSource source;
 
     private LocalDateTime startAt;

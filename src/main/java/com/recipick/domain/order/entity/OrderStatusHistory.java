@@ -38,7 +38,7 @@ public class OrderStatusHistory {
     private Order order;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private OrderStatusType statusType;
 
     // statusType에 따라 OrderStatus 또는 MartStatus 값이 들어가므로 String으로 둔다
@@ -49,7 +49,7 @@ public class OrderStatusHistory {
     private String toStatus;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private OrderStatusActor actor;
 
     private Long changedByAdminId;

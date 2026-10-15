@@ -45,7 +45,7 @@ public class Product extends BaseTimeEntity {
     private BigDecimal saleUnitAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 10)
+    @Column(columnDefinition = "varchar(10)")
     private SaleUnit saleUnit;
 
     private String imageUrl;

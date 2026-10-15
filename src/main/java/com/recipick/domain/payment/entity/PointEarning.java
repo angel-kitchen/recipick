@@ -37,7 +37,7 @@ public class PointEarning extends BaseTimeEntity {
     private Long remainingAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private PointEarningStatus status;
 
     private LocalDateTime confirmedAt;

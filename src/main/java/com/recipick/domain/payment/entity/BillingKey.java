@@ -32,7 +32,7 @@ public class BillingKey extends BaseTimeEntity {
     private String portoneBillingKey;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private BillingKeyStatus status;
 
     private LocalDateTime issuedAt;

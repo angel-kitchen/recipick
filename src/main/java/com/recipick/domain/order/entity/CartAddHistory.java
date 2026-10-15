@@ -34,7 +34,7 @@ public class CartAddHistory {
     private Long productId;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private CartAddSource source;
 
     private Long autoCartRequestId;

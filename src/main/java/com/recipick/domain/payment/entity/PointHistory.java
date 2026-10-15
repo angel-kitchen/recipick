@@ -41,7 +41,7 @@ public class PointHistory {
     private Long orderId;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 30)
+    @Column(columnDefinition = "varchar(30)")
     private PointHistoryType type;
 
     private Long amount;

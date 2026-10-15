@@ -42,7 +42,7 @@ public class MembershipRefund extends BaseTimeEntity {
     private Long penaltyAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private MembershipRefundStatus status;
 
     @Column(length = 500)

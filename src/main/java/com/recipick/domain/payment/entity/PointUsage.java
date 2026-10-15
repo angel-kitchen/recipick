@@ -45,7 +45,7 @@ public class PointUsage extends BaseTimeEntity {
     private Long amount;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private PointUsageStatus status;
 
     private LocalDateTime reservedAt;
