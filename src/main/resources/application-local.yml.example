@@ -1,8 +1,9 @@
-# 이 파일을 application-local.yml로 복사해 본인 환경 값으로 채운다 (application-local.yml은 커밋하지 않는다)
+# application-local.yml로 복사해 사용한다 (application-local.yml은 커밋하지 않는다)
+# datasource 값은 .env의 MYSQL_DATABASE·MYSQL_USER·MYSQL_PASSWORD와 맞춘다
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/recipick?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: root
+    username: recipick
     password: change-me
   jpa:
     hibernate:
