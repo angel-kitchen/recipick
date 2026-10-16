@@ -1,6 +1,8 @@
 package com.recipick.domain.product.entity;
 
+import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -28,7 +30,23 @@ public class Category extends BaseTimeEntity {
     private boolean deleted;
 
     @Builder
-    private Category(String name) {
+    private Category(String name){
         this.name = name;
+    }
+
+    public void rename(String newName){
+        validateNotDeleted();
+        this.name = newName;
+    }
+
+    public void delete(){
+        validateNotDeleted();
+        this.deleted = true;
+    }
+
+    private void validateNotDeleted(){
+        if(deleted){
+            throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
+        }
     }
 }
