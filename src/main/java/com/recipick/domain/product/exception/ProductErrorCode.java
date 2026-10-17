@@ -22,6 +22,7 @@ public enum ProductErrorCode implements ErrorCode {
     MART_NOT_OPEN(HttpStatus.CONFLICT, "MART-002", "운영 중인 마트가 아닙니다."),
     MART_REGION_DUPLICATED(HttpStatus.CONFLICT, "MART-003", "이 지역에는 이미 마트가 있습니다."),
     INVALID_MART_AREA(HttpStatus.BAD_REQUEST, "MART-004", "마트 좌표 또는 서비스 반경이 올바르지 않습니다."),
+    REGION_NOT_FOUND(HttpStatus.NOT_FOUND,"REGION-001", "지역을 찾을 수 없습니다." ),
     INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "STOCK-001", "재고가 부족합니다."),
     STOCK_ADJUST_EXCEEDS_AVAILABLE(HttpStatus.BAD_REQUEST, "STOCK-002", "감소 수량이 가용 재고를 넘을 수 없습니다."),
     INVALID_ADJUST_QUANTITY(HttpStatus.BAD_REQUEST, "STOCK-003", "조정 수량은 1 이상이어야 합니다.");
