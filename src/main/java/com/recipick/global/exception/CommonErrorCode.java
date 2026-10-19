@@ -17,6 +17,8 @@ public enum CommonErrorCode implements ErrorCode {
     MISSING_IDEMPOTENCY_KEY(HttpStatus.BAD_REQUEST, "COMMON-007", "Idempotency-Key 헤더가 필요합니다."),
     EXTERNAL_SERVICE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-008", "외부 서비스 응답에 문제가 있습니다."),
     EXTERNAL_SERVICE_TIMEOUT(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-009", "외부 서비스 응답이 지연되고 있습니다."),
+    LOCK_ACQUISITION_TIMEOUT(HttpStatus.CONFLICT, "COMMON-010", "다른 요청이 같은 자원을 처리하고 있습니다. 잠시 후 다시 시도해 주세요."),
+    IDEMPOTENCY_KEY_PAYLOAD_MISMATCH(HttpStatus.CONFLICT, "COMMON-011", "같은 Idempotency-Key로 다른 요청을 보낼 수 없습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-500", "서버 내부 오류가 발생했습니다.");
 
     private final HttpStatus status;
