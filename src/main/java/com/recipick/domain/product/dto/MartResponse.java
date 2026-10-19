@@ -3,7 +3,6 @@ package com.recipick.domain.product.dto;
 
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
-import com.recipick.domain.product.service.MartService;
 
 import java.math.BigDecimal;
 

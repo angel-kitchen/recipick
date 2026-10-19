@@ -26,14 +26,14 @@ public class MartService {
     private final MartRepository martRepository;
 
     @Transactional
-    public MartIdResponse createMart(MartCreateRequest request) {
+    public MartIdResponse createMart(MartCreateRequest request){
         int radius = request.serviceRadiusM() != null
             ? request.serviceRadiusM()
             : PolicyConstants.MART_SERVICE_RADIUS_METERS;
 
         validateArea(request.latitude(), request.longitude(), radius);
 
-        if (martRepository.existsByRegionId(request.regionId())) {
+        if(martRepository.existsByRegionId(request.regionId())){
             throw new BusinessException(ProductErrorCode.MART_REGION_DUPLICATED);
         }
 
@@ -47,10 +47,10 @@ public class MartService {
         return new MartIdResponse(martRepository.save(mart).getId());
     }
 
-    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius) {
-        if (latitude.abs().compareTo(MAX_LATITUDE) > 0
-            || longitude.abs().compareTo(MAX_LONGITUDE) > 0
-            || radius <= 0) {
+    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius){
+        if(latitude.abs().compareTo(MAX_LATITUDE)>0
+            || longitude.abs().compareTo(MAX_LONGITUDE)>0
+            || radius <= 0){
             throw new BusinessException(ProductErrorCode.INVALID_MART_AREA);
         }
     }
@@ -59,15 +59,12 @@ public class MartService {
     public List<MartResponse> getMarts(AdminRole role, Long adminMartId){
         if(role == AdminRole.SUPER_ADMIN){
             return martRepository.findAll().stream()
-                .map(MartResponse :: from)
+                .map(MartResponse::from)
                 .toList();
         }
         return martRepository.findById(adminMartId).stream()
-            .map(MartResponse :: from)
+            .map(MartResponse::from)
             .toList();
     }
-
-
-
 }
 
