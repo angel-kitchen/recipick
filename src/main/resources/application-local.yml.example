@@ -16,3 +16,10 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+# PortOne V2 API Secret은 관리자 콘솔 > 결제 연동 탭에서 발급한다. 실제 값은 커밋하지 않는다
+portone:
+  api-secret: change-me
+  base-url: https://api.portone.io
+  connect-timeout: 3s
+  read-timeout: 5s
