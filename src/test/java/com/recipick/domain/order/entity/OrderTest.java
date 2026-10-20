@@ -42,6 +42,18 @@ class OrderTest {
         assertThat(order.getPendingMemberId()).isNull();
     }
 
+    @Test
+    @DisplayName("결제 시각 없이 결제 완료로 바꿀 수 없다")
+    void markPaid_nullPaidAt() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+
+        // when, then
+        assertThatThrownBy(() -> order.markPaid(null))
+                .isInstanceOf(NullPointerException.class);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+    }
+
     @ParameterizedTest
     @EnumSource(value = OrderStatus.class, names = "PENDING_PAYMENT", mode = EnumSource.Mode.EXCLUDE)
     @DisplayName("결제 대기가 아닌 주문은 결제 완료로 바꿀 수 없다")

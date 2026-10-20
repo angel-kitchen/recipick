@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -120,6 +121,8 @@ public class Order extends BaseTimeEntity {
     }
 
     public void markPaid(LocalDateTime paidAt) {
+        // null로 PAID가 되면 이후 같은 성공이 와도 멱등 처리로 반환돼 paidAt을 다시 채울 수 없다
+        Objects.requireNonNull(paidAt, "paidAt은 필수입니다.");
         if (!status.canTransitionTo(OrderStatus.PAID)) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         }
