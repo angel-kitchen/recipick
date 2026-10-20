@@ -327,17 +327,17 @@ public void deductStock(Long productId, int quantity) {
 
 형식: `{type}: {한국어 요약} (#{이슈번호})`
 
-| type | 쓰는 경우 |
-| --- | --- |
-| feat | 기능 추가 |
-| fix | 버그 수정 |
+| type     | 쓰는 경우 |
+|----------| --- |
+| feature  | 기능 추가 |
+| fix      | 버그 수정 |
 | refactor | 동작이 같은 코드 개선 |
-| test | 테스트 추가·수정 |
-| docs | 문서, API 명세, README |
-| chore | 빌드, 설정, 의존성 |
-| style | 포맷 등 로직 없는 변경 |
+| test     | 테스트 추가·수정 |
+| docs     | 문서, API 명세, README |
+| chore    | 빌드, 설정, 의존성 |
+| style    | 포맷 등 로직 없는 변경 |
 
-예: `feat: 자동 장바구니 미리보기 API 구현 (#23)`
+예: `feature: 자동 장바구니 미리보기 API 구현 (#23)`
 
 - 커밋 하나에는 한 가지 변경만 담고, 컴파일이 깨진 상태로 커밋하지 않습니다.
 - 이슈 없이 진행한 작은 수정(오타 등)은 이슈 번호를 생략합니다.
