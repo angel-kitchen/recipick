@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,17 +27,9 @@ public class Region {
     @Column(length = 50)
     private String name;
 
-    @Column(precision = 10, scale = 7)
-    private BigDecimal latitude;
-
-    @Column(precision = 10, scale = 7)
-    private BigDecimal longitude;
-
     @Builder
-    private Region(String legalDongCode, String name, BigDecimal latitude, BigDecimal longitude) {
+    private Region(String legalDongCode, String name) {
         this.legalDongCode = legalDongCode;
         this.name = name;
-        this.latitude = latitude;
-        this.longitude = longitude;
     }
 }
