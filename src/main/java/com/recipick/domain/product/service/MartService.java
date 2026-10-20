@@ -1,8 +1,10 @@
 package com.recipick.domain.product.service;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
 import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
@@ -56,6 +58,18 @@ public class MartService {
     }
 
     @Transactional(readOnly = true)
+    public List<MartResponse> getMarts(AdminRole role, Long adminMartId){
+        if(role == AdminRole.SUPER_ADMIN){
+            return martRepository.findAll().stream()
+                .map(MartResponse::from)
+                .toList();
+        }
+        return martRepository.findById(adminMartId).stream()
+            .map(MartResponse::from)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<OpenMartResponse> findOpenMarts() {
         return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
             .map(OpenMartResponse::from)
@@ -69,3 +83,4 @@ public class MartService {
             .toList();
     }
 }
+
