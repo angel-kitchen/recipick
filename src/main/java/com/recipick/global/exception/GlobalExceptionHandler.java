@@ -92,10 +92,11 @@ public class GlobalExceptionHandler {
         return toResponse(AuthErrorCode.SUPER_ADMIN_ONLY);
     }
 
-    // 락 대기 시간 초과는 동시 요청이 몰릴 때 생기는 정상 경합이라 ERROR가 아닌 WARN으로 남긴다.
+    // 컨벤션에 정해진 예상 오류라 ERROR가 아닌 WARN으로 남긴다.
+    // 잠금은 수 ms 안에 풀려야 하므로 자주 나면 긴 트랜잭션·락 순서 위반·데드락 신호라, 위치를 찾도록 스택을 함께 남긴다.
     @ExceptionHandler(PessimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handlePessimisticLockingFailure(PessimisticLockingFailureException e) {
-        log.warn("Lock acquisition timeout: {}", e.getMessage());
+        log.warn("Lock acquisition failed", e);
         return toResponse(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
     }
 
