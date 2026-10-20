@@ -48,6 +48,10 @@ FEATURE_PATTERN = re.compile(r"- \*\*(.+?)\*\*")
 
 
 def split(lines):
+    """요구사항 줄을 도메인별로 나누고 차수·회원 구분별 안내문과 기능 블록을 반환한다.
+
+    DOMAIN_FEATURES에 없는 기능이 나오면 SystemExit로 종료한다.
+    """
     feature_domain = {f: d for d, features in DOMAIN_FEATURES.items() for f in features}
     # 도메인 -> (차수, 회원 구분) -> {"note": 섹션 안내문, "items": 기능 블록들}
     result = {d: OrderedDict() for d in DOMAIN_FEATURES}
@@ -77,6 +81,7 @@ def split(lines):
 
 
 def render(domain, sections):
+    """도메인의 섹션을 차수·회원 구분 순서대로 배치한 마크다운 문자열로 반환한다."""
     out = [
         f"# 요구사항 - {domain} ({DOMAIN_NAMES[domain]})",
         "",
@@ -100,6 +105,7 @@ def render(domain, sections):
 
 
 def main():
+    """SOURCE를 읽고 OUT_DIR에 도메인별 UTF-8 요구사항 문서를 생성하거나 덮어쓴다."""
     lines = SOURCE.read_text(encoding="utf-8").split("\n")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for domain, sections in split(lines).items():
