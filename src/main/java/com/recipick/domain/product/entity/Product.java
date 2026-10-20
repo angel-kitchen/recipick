@@ -1,7 +1,9 @@
 package com.recipick.domain.product.entity;
 
+import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -14,7 +16,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+
 import java.math.BigDecimal;
+
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -78,19 +82,19 @@ public class Product extends BaseTimeEntity {
     @Builder
     private Product(
 
-            Mart mart,
-            Category category,
-            Long ingredientId,
-            String name,
-            String brand,
-            String description,
-            BigDecimal saleUnitAmount,
-            SaleUnit saleUnit,
-            String imageUrl,
-            Long price,
-            ProductStatus status,
-            int totalQuantity,
-            boolean deleted
+        Mart mart,
+        Category category,
+        Long ingredientId,
+        String name,
+        String brand,
+        String description,
+        BigDecimal saleUnitAmount,
+        SaleUnit saleUnit,
+        String imageUrl,
+        Long price,
+        ProductStatus status,
+        int totalQuantity,
+        boolean deleted
     ) {
         this.mart = mart;
         this.category = category;
@@ -105,5 +109,24 @@ public class Product extends BaseTimeEntity {
         this.status = ProductStatus.SELLING;
         this.totalQuantity = totalQuantity;
         this.deleted = deleted;
+    }
+
+    public void decreaseStock(int quantity) {
+        validatePositive(quantity);
+        if (totalQuantity < quantity) {
+            throw new BusinessException(ProductErrorCode.INSUFFICIENT_STOCK);
+        }
+        this.totalQuantity -= quantity;
+    }
+
+    public void increaseStock(int quantity) {
+        validatePositive(quantity);
+        this.totalQuantity += quantity;
+    }
+
+    private void validatePositive(int quantity) {
+        if (quantity <= 0) {
+            throw new BusinessException(ProductErrorCode.INVALID_ADJUST_QUANTITY);
+        }
     }
 }
