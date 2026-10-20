@@ -98,6 +98,6 @@
 
 ## Git
 - 브랜치 `{prefix}/{domain}-{작업}` (feature, fix, refactor, test, docs, chore, style, hotfix). `global`·`infra` 작업은 domain 자리에 `global`
-- 커밋 `{type}: {한국어 요약} (#{이슈번호})` (feat, fix, refactor, test, docs, chore, style), 커밋 하나에 한 가지 변경
+- 커밋 `{type}: {한국어 요약} (#{이슈번호})` (feature, fix, refactor, test, docs, chore, style), 커밋 하나에 한 가지 변경
 - `main`, `dev`에 직접 push하지 않는다.
 - ERD, 공통 규칙, 에러 코드를 바꿀 때는 문서를 먼저 고친다.
