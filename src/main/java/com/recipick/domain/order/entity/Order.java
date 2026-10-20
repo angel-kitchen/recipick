@@ -2,7 +2,9 @@ package com.recipick.domain.order.entity;
 
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -115,5 +118,21 @@ public class Order extends BaseTimeEntity {
         this.address = address;
         this.detailAddress = detailAddress;
         this.regionId = regionId;
+    }
+
+    public void markPaid(LocalDateTime paidAt) {
+        // null로 PAID가 되면 이후 같은 성공이 와도 멱등 처리로 반환돼 paidAt을 다시 채울 수 없다
+        Objects.requireNonNull(paidAt, "paidAt은 필수입니다.");
+        if (!status.canTransitionTo(OrderStatus.PAID)) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        if (!martStatus.canTransitionTo(MartStatus.RECEIVED)) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.PAID;
+        this.martStatus = MartStatus.RECEIVED;
+        this.paidAt = paidAt;
+        // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
+        this.pendingMemberId = null;
     }
 }
