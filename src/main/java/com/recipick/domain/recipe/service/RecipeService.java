@@ -1,0 +1,78 @@
+package com.recipick.domain.recipe.service;
+
+import com.recipick.domain.recipe.dto.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.RecipeSearchRequest;
+import com.recipick.domain.recipe.dto.RecipeSummaryResponse;
+import com.recipick.domain.recipe.entity.Recipe;
+import com.recipick.domain.recipe.entity.RecipeBookmarkId;
+import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.entity.RecipeStatus;
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
+import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
+import com.recipick.domain.recipe.repository.RecipeRepository;
+import com.recipick.domain.recipe.repository.RecipeSearchCondition;
+import com.recipick.global.exception.BusinessException;
+import com.recipick.global.response.PageResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Set;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class RecipeService {
+
+    private final RecipeRepository recipeRepository;
+    private final RecipeIngredientRepository recipeIngredientRepository;
+    private final RecipeBookmarkRepository recipeBookmarkRepository;
+
+    public PageResponse<RecipeSummaryResponse> searchRecipes(
+            Long memberId,
+            RecipeSearchRequest request,
+            Pageable pageable
+    ) {
+        RecipeSearchCondition condition = new RecipeSearchCondition(
+                request.keyword(),
+                request.cuisineType(),
+                request.dishType(),
+                request.autoCarAvailable(),
+                RecipeStatus.ACTIVE
+        );
+        Page<Recipe> recipes = recipeRepository.search(condition, pageable);
+        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
+
+        return PageResponse.from(recipes.map(recipe ->
+            RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+    }
+
+    public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servivngs) {
+        Recipe recipe = getActiveRecipe(recipeId);
+        int resolvedServings = recipe.resolveServings(servivngs);
+        List<RecipeIngredient> recipeIngrediens =
+                recipeIngredientRepository.findAllWithIngredient(recipeId);
+        boolean bookmarked = recipeBookmarkRepository.existsById(new RecipeBookmarkId(memberId, recipeId));
+
+        return RecipeDetailResponse.of(recipe, resolvedServings, recipeIngrediens, bookmarked);
+    }
+
+    private Recipe getActiveRecipe(Long recipeId) {
+        return recipeRepository.findByIdAndStatus(recipeId, RecipeStatus.ACTIVE)
+            .orElseThrow(() -> new BusinessException(RecipeErrorCode.RECIPE_NOT_FOUND));
+    }
+
+    private Set<Long> findBookmarkedRecipeIds(Long memberId, List<Recipe> recipes) {
+        if (recipes.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> recipeIds = recipes.stream()
+            .map(Recipe::getId)
+            .toList();
+        return recipeBookmarkRepository.findBookmarkedRecipeIds(memberId, recipeIds);
+    }
+}
