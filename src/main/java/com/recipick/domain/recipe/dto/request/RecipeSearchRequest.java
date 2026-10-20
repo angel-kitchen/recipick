@@ -1,4 +1,4 @@
-package com.recipick.domain.recipe.dto;
+package com.recipick.domain.recipe.dto.request;
 
 import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.DishType;
@@ -7,6 +7,6 @@ public record RecipeSearchRequest(
         String keyword,
         CuisineType cuisineType,
         DishType dishType,
-        Boolean autoCarAvailable
+        Boolean autoCartAvailable
 ) {
 }

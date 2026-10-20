@@ -1,8 +1,8 @@
 package com.recipick.domain.recipe.service;
 
-import com.recipick.domain.recipe.dto.RecipeDetailResponse;
-import com.recipick.domain.recipe.dto.RecipeSearchRequest;
-import com.recipick.domain.recipe.dto.RecipeSummaryResponse;
+import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
+import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeBookmarkId;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
@@ -41,7 +41,7 @@ public class RecipeService {
                 request.keyword(),
                 request.cuisineType(),
                 request.dishType(),
-                request.autoCarAvailable(),
+                request.autoCartAvailable(),
                 RecipeStatus.ACTIVE
         );
         Page<Recipe> recipes = recipeRepository.search(condition, pageable);

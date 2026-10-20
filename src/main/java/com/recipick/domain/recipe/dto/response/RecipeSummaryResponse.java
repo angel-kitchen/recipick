@@ -1,4 +1,4 @@
-package com.recipick.domain.recipe.dto;
+package com.recipick.domain.recipe.dto.response;
 
 import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.Difficulty;
@@ -15,7 +15,7 @@ public record RecipeSummaryResponse(
         Difficulty difficulty,
         Integer spicyLevel,
         String thumbnailUrl,
-        boolean autoCarAvailable,
+        boolean autoCartAvailable,
         boolean bookmarked
 ) {
 

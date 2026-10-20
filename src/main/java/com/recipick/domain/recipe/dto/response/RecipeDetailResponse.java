@@ -1,6 +1,11 @@
-package com.recipick.domain.recipe.dto;
+package com.recipick.domain.recipe.dto.response;
 
-import com.recipick.domain.recipe.entity.*;
+import com.recipick.domain.recipe.entity.CuisineType;
+import com.recipick.domain.recipe.entity.Difficulty;
+import com.recipick.domain.recipe.entity.DishType;
+import com.recipick.domain.recipe.entity.Recipe;
+import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.entity.RecipeStep;
 import com.recipick.global.common.SaleUnit;
 
 import java.math.BigDecimal;

@@ -1,8 +1,8 @@
 package com.recipick.domain.recipe.controller;
 
-import com.recipick.domain.recipe.dto.RecipeDetailResponse;
-import com.recipick.domain.recipe.dto.RecipeSearchRequest;
-import com.recipick.domain.recipe.dto.RecipeSummaryResponse;
+import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
+import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.service.RecipeService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
