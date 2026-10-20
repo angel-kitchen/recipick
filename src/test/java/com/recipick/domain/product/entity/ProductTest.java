@@ -1,6 +1,5 @@
-package com.recipick.domain.product.service;
+package com.recipick.domain.product.entity;
 
-import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
@@ -14,7 +13,6 @@ public class ProductTest {
     private Product product(int stock) {
         return Product.builder().totalQuantity(stock).build();
     }
-
 
     @Test
     @DisplayName("차감: 재고 안에서 차감하면 그만큼 줄어든다")

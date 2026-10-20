@@ -30,7 +30,7 @@ public class ProductStockServiceTest {
     @InjectMocks
     private ProductStockService productStockService;
 
-    private Mart mart(Long id){
+    private Mart mart(Long id) {
         Mart mart = Mart.builder()
             .regionId(31L)
             .name("삼청동 마트")
@@ -45,7 +45,7 @@ public class ProductStockServiceTest {
     private Product product(Long id,
                             Mart mart,
                             int totalQuantity,
-                            boolean deleted){
+                            boolean deleted) {
         Product product = Product.builder()
             .mart(mart)
             .name("애호박")
@@ -58,14 +58,14 @@ public class ProductStockServiceTest {
 
     @Test
     @DisplayName("차감 : 모든 상품이 충분하면 각각 차감된다")
-    void decreaseStock(){
+    void decreaseStock() {
         Mart mart = mart(1L);
         Product p1 = product(1L, mart, 10, false);
         Product p2 = product(2L, mart, 5, false);
-        given(productRepository.findAllByIdInForUpdate(List.of(1L,2L))).willReturn(List.of(p1,p2));
+        given(productRepository.findAllByIdInForUpdate(List.of(1L, 2L))).willReturn(List.of(p1, p2));
 
         productStockService.decreaseStocks(1L,
-            List.of(new StockQuantity(1L,3), new StockQuantity(2L,5)));
+            List.of(new StockQuantity(1L, 3), new StockQuantity(2L, 5)));
 
         assertThat(p1.getTotalQuantity()).isEqualTo(7);
         assertThat(p2.getTotalQuantity()).isZero();
@@ -73,14 +73,13 @@ public class ProductStockServiceTest {
 
     @Test
     @DisplayName("차감 : 재고가 부족하면 INSUFFICIENT_STOCK")
-    void decreaseStock_insufficientStock(){
+    void decreaseStock_insufficientStock() {
         Mart mart = mart(1L);
         Product p1 = product(1L, mart, 2, false);
         given(productRepository.findAllByIdInForUpdate(List.of(1L))).willReturn(List.of(p1));
-
-    assertThatThrownBy(() -> productStockService.decreaseStocks(1L, List.of(new StockQuantity(1L,3))))
-        .extracting(e-> ((BusinessException) e).getErrorCode())
-        .isEqualTo(ProductErrorCode.INSUFFICIENT_STOCK);
+        assertThatThrownBy(() -> productStockService.decreaseStocks(1L, List.of(new StockQuantity(1L, 3))))
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.INSUFFICIENT_STOCK);
     }
 
     @Test
