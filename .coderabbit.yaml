@@ -1,6 +1,5 @@
 # 레시픽(recipick) CodeRabbit 설정
-# 저장소 루트에 .coderabbit.yaml 이름으로 둡니다. 리뷰 설정은 PR 브랜치의 파일을 쓰고,
-# knowledge_base의 요구사항 문서는 기본 브랜치(dev)에서 읽으므로 dev에 머지된 뒤 적용됩니다.
+# 저장소 루트에 .coderabbit.yaml 이름으로 둡니다. 설정 변경과 요구사항 문서는 모두 기본 브랜치(dev)에 머지된 뒤 적용됩니다.
 # 지침 문장에는 백틱, 달러 중괄호, 역슬래시를 넣지 않습니다(리뷰 오류 방지).
 
 language: "ko-KR"
@@ -79,3 +78,5 @@ knowledge_base:
         applyTo: "**/domain/order/**"
       - files: ".coderabbit/requirements/payment.md"
         applyTo: "**/domain/payment/**"
+      - files: ".coderabbit/requirements/auth.md"
+        applyTo: "**/global/security/**,**/global/config/SecurityConfig.java"

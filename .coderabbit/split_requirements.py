@@ -17,6 +17,7 @@ DOMAIN_NAMES = {
     "recipe": "레시피·자동 장바구니·AI",
     "order": "장바구니·주문",
     "payment": "결제·환불·포인트",
+    "auth": "인증",
 }
 
 # 담당자와 코드 도메인이 어긋나는 기능은 기능이 시작되는 도메인에 둔다.
@@ -44,6 +45,16 @@ DOMAIN_FEATURES = {
     ],
 }
 
+# 여러 도메인이 함께 구현하는 기능은 기본 도메인 외의 문서에도 넣는다.
+# auth는 global 인증 코드에 붙일 문서로, 인증 관련 기능만 모은다.
+EXTRA_DOMAINS = {
+    "자동 결제 동의": ["member"],
+    "즉시 해지": ["payment"],
+    "마트 주문 거절·자동 환불": ["payment"],
+    "회원가입·로그인": ["auth"],
+    "관리자 로그인": ["auth"],
+}
+
 FEATURE_PATTERN = re.compile(r"- \*\*(.+?)\*\*")
 
 
@@ -54,7 +65,7 @@ def split(lines):
     """
     feature_domain = {f: d for d, features in DOMAIN_FEATURES.items() for f in features}
     # 도메인 -> (차수, 회원 구분) -> {"note": 섹션 안내문, "items": 기능 블록들}
-    result = {d: OrderedDict() for d in DOMAIN_FEATURES}
+    result = {d: OrderedDict() for d in DOMAIN_NAMES}
     phase = audience = current = None
     note = []
     for line in lines:
@@ -72,9 +83,10 @@ def split(lines):
             title = match.group(1)
             if title not in feature_domain:
                 sys.exit(f"도메인이 지정되지 않은 기능입니다: {title} (DOMAIN_FEATURES에 추가하세요)")
-            section = result[feature_domain[title]].setdefault((phase, audience), {"note": list(note), "items": []})
             current = []
-            section["items"].append(current)
+            for domain in [feature_domain[title]] + EXTRA_DOMAINS.get(title, []):
+                section = result[domain].setdefault((phase, audience), {"note": list(note), "items": []})
+                section["items"].append(current)
         if current is not None and line and line != "---":
             current.append(line)
     return result
