@@ -100,7 +100,7 @@ public class Recipe extends BaseTimeEntity {
         return servings;
     }
     public String getYoutubeWatchUrl() {
-        return youtubeVideoId == null ? null : YOUTUBE_WATCH_URL + youtubeVideoId;
+        return youtubeVideoId == null ? null : YOUTUBE_WATCH_URL.formatted(youtubeVideoId);
     }
     public String getThumbnailUrl() {
         return youtubeVideoId == null ? null : YOUTUBE_THUMBNAIL_URL.formatted(youtubeVideoId);
