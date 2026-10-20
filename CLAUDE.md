@@ -71,6 +71,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 작업 전에 관련 문서를 먼저 확인하고, 문서와 코드가 다르면 임의로 판단하지 말고 질문한다.
 
 - 요구사항: `docs/requirement.md` — 기능을 구현하거나 수정하기 전에 해당 기능 항목을 읽는다.
+  - 요구사항을 수정하면 `python3 .coderabbit/split_requirements.py`를 실행해 CodeRabbit용 도메인별 문서(`.coderabbit/requirements/`)도 함께 갱신·커밋한다.
 - 컨벤션: 아래 요약을 항상 따르고, 상세 설명과 공통 에러 코드 표는 `docs/convention.md`를 본다.
 - ERD: `docs/erd.dbml` — 엔티티·테이블을 다루기 전에 확인하고, 스키마를 바꾸면 이 파일도 함께 수정한다.
 
