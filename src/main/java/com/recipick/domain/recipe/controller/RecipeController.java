@@ -6,6 +6,7 @@ import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.service.RecipeService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/recipes")
 public class RecipeController {
 
+    // TODO: @LoginMember(global/security) 머지 후 교체. 헤더 값은 검증되지 않으므로 그 전까지 Postman 테스트용으로만 쓴다
     private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     private final RecipeService recipeService;
@@ -29,7 +31,7 @@ public class RecipeController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> searchRecipes(
             @RequestHeader(MEMBER_ID_HEADER) Long memberId,
-            @ModelAttribute RecipeSearchRequest request,
+            @Valid @ModelAttribute RecipeSearchRequest request,
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(recipeService.searchRecipes(memberId, request, pageable)));
