@@ -15,12 +15,19 @@ import javax.crypto.SecretKey;
 
 class LocalJwtKeyStore {
 
-    synchronized SecretKey loadOrCreate(Path keyPath) throws IOException {
-        Path directory = keyPath.toAbsolutePath().getParent();
-        Files.createDirectories(directory);
-        boolean posix = Files.getFileStore(directory).supportsFileAttributeView("posix");
+    static synchronized SecretKey loadOrCreate(Path keyPath) throws IOException {
+        keyPath = keyPath.toAbsolutePath().normalize();
+        Path directory = keyPath.getParent();
+        Path ancestor = directory;
+        while (!Files.exists(ancestor)) {
+            ancestor = ancestor.getParent();
+        }
+        boolean posix = Files.getFileStore(ancestor).supportsFileAttributeView("posix");
         if (posix) {
-            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"));
+            Files.createDirectories(directory, PosixFilePermissions.asFileAttribute(
+                    PosixFilePermissions.fromString("rwx------")));
+        } else {
+            Files.createDirectories(directory);
         }
         Path lockPath = directory.resolve(keyPath.getFileName() + ".lock");
         try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

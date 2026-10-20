@@ -28,6 +28,6 @@ public class JwtConfig {
         }
         Path keyPath = Path.of(environment.getProperty("security.jwt.local-key-path",
                 Path.of(System.getProperty("user.home"), ".recipick", "jwt-secret").toString()));
-        return new LocalJwtKeyStore().loadOrCreate(keyPath);
+        return LocalJwtKeyStore.loadOrCreate(keyPath);
     }
 }
