@@ -4,6 +4,7 @@ import com.recipick.global.response.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -89,6 +90,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         return toResponse(AuthErrorCode.SUPER_ADMIN_ONLY);
+    }
+
+    // 컨벤션에 정해진 예상 오류라 ERROR가 아닌 WARN으로 남긴다.
+    // 잠금은 수 ms 안에 풀려야 하므로 자주 나면 긴 트랜잭션·락 순서 위반·데드락 신호라, 위치를 찾도록 스택을 함께 남긴다.
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handlePessimisticLockingFailure(PessimisticLockingFailureException e) {
+        log.warn("Lock acquisition failed", e);
+        return toResponse(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
     }
 
     @ExceptionHandler(Exception.class)
