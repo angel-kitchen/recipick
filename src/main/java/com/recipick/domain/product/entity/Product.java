@@ -1,7 +1,9 @@
 package com.recipick.domain.product.entity;
 
+import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -105,5 +107,16 @@ public class Product extends BaseTimeEntity {
         this.status = ProductStatus.SELLING;
         this.totalQuantity = totalQuantity;
         this.deleted = deleted;
+    }
+
+    public void decreaseStock(int quantity){
+        if(totalQuantity < quantity){
+            throw new BusinessException(ProductErrorCode.INSUFFICIENT_STOCK);
+        }
+        this.totalQuantity -= quantity;
+    }
+
+    public void increaseStock(int quantity){
+        this.totalQuantity += quantity;
     }
 }
