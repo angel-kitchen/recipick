@@ -4,6 +4,7 @@ import com.recipick.global.response.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -89,6 +90,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         return toResponse(AuthErrorCode.SUPER_ADMIN_ONLY);
+    }
+
+    // 락 대기 시간 초과는 동시 요청이 몰릴 때 생기는 정상 경합이라 ERROR가 아닌 WARN으로 남긴다.
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handlePessimisticLockingFailure(PessimisticLockingFailureException e) {
+        log.warn("Lock acquisition timeout: {}", e.getMessage());
+        return toResponse(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
     }
 
     @ExceptionHandler(Exception.class)
