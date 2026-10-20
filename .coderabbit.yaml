@@ -5,6 +5,10 @@
 language: "ko-KR"
 
 reviews:
+  pre_merge_checks:
+    docstrings:
+      # 주석은 "왜"만 적는 컨벤션이라 모든 메서드에 설명을 요구하는 검사는 끈다.
+      mode: "off"
   path_instructions:
     - path: "**/entity/**"
       instructions: |
