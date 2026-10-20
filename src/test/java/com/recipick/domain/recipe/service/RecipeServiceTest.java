@@ -31,6 +31,8 @@ import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -166,15 +168,17 @@ class RecipeServiceTest {
             .isEqualTo(RecipeErrorCode.RECIPE_NOT_FOUND);
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(ints = {0, 11})
     @DisplayName("상세: 인분이 범위를 벗어나면 INVALID_SERVINGS")
-    void getRecipe_invalidServings() {
+    void getRecipe_invalidServings(int servings) {
         // given
         given(recipeRepository.findByIdAndStatus(12L, RecipeStatus.ACTIVE))
             .willReturn(Optional.of(recipe(12L, "된장찌개")));
 
         // when, then
-        assertThatThrownBy(() -> recipeService.getRecipe(MEMBER_ID, 12L, 11))
+        assertThatThrownBy(() -> recipeService.getRecipe(MEMBER_ID, 12L, servings))
+            .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(RecipeErrorCode.INVALID_SERVINGS);
     }
