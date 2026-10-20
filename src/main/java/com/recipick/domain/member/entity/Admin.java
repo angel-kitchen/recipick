@@ -46,8 +46,8 @@ public class Admin extends BaseTimeEntity {
     @Builder
     private Admin(String loginId, String passwordHash, String name, AdminRole role, Long martId, boolean active) {
         if (role == null
-                || role == AdminRole.SUPER_ADMIN && martId != null
-                || role == AdminRole.MART_ADMIN && (martId == null || martId <= 0)) {
+                || (role == AdminRole.SUPER_ADMIN && martId != null)
+                || (role == AdminRole.MART_ADMIN && (martId == null || martId <= 0))) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
         }
         this.loginId = loginId;

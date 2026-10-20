@@ -116,7 +116,10 @@ public class Membership extends BaseTimeEntity {
             // 미시작 이용권을 ACTIVE로 표시하지 않고, 미정인 공개 상태값도 추가하지 않는다.
             return Optional.empty();
         }
-        return Optional.of(cancelReservedAt != null ? MembershipStatus.CANCEL_RESERVED : MembershipStatus.ACTIVE);
+        MembershipStatus status = cancelReservedAt != null
+                ? MembershipStatus.CANCEL_RESERVED
+                : MembershipStatus.ACTIVE;
+        return Optional.of(status);
     }
 
     public void reserveCancellation(LocalDateTime now) {

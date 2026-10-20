@@ -1,7 +1,7 @@
 package com.recipick.domain.member.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.domain.member.entity.enums.MembershipStatus;
@@ -42,11 +42,16 @@ class MembershipTest {
     void activeEndBoundary() {
         // given
         Membership membership = membership(MembershipType.PAID, MembershipSource.SUBSCRIBE);
-        // when / then
-        assertThat(membership.isActive(END.minusNanos(1))).isTrue();
-        assertThat(membership.getStatus(END.minusNanos(1))).contains(MembershipStatus.ACTIVE);
-        assertThat(membership.isActive(END)).isFalse();
-        assertThat(membership.getStatus(END)).contains(MembershipStatus.EXPIRED);
+        // when
+        boolean activeBeforeEnd = membership.isActive(END.minusNanos(1));
+        var statusBeforeEnd = membership.getStatus(END.minusNanos(1));
+        boolean activeAtEnd = membership.isActive(END);
+        var statusAtEnd = membership.getStatus(END);
+        // then
+        assertThat(activeBeforeEnd).isTrue();
+        assertThat(statusBeforeEnd).contains(MembershipStatus.ACTIVE);
+        assertThat(activeAtEnd).isFalse();
+        assertThat(statusAtEnd).contains(MembershipStatus.EXPIRED);
     }
 
     @Test
@@ -54,8 +59,10 @@ class MembershipTest {
     void noStatusBeforeStart() {
         // given
         Membership membership = membership(MembershipType.PAID, MembershipSource.SUBSCRIBE);
-        // when / then
-        assertThat(membership.getStatus(START.minusSeconds(1))).isEmpty();
+        // when
+        var status = membership.getStatus(START.minusSeconds(1));
+        // then
+        assertThat(status).isEmpty();
     }
 
     @ParameterizedTest
@@ -82,8 +89,10 @@ class MembershipTest {
     void rejectsAdminGrantCancellation() {
         // given
         Membership membership = membership(MembershipType.PAID, MembershipSource.ADMIN_GRANT);
-        // when / then
-        assertThatThrownBy(() -> membership.reserveCancellation(START.plusDays(1)))
+        // when
+        Throwable thrown = catchThrowable(() -> membership.reserveCancellation(START.plusDays(1)));
+        // then
+        assertThat(thrown)
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.NOT_CANCELABLE));
     }
@@ -93,8 +102,10 @@ class MembershipTest {
     void rejectsExpiredCancellation() {
         // given
         Membership membership = membership(MembershipType.PAID, MembershipSource.SUBSCRIBE);
-        // when / then
-        assertThatThrownBy(() -> membership.reserveCancellation(END))
+        // when
+        Throwable thrown = catchThrowable(() -> membership.reserveCancellation(END));
+        // then
+        assertThat(thrown)
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
     }
@@ -123,8 +134,10 @@ class MembershipTest {
     void rejectsNonPaidRefund(MembershipType type, MembershipSource source) {
         // given
         Membership membership = membership(type, source);
-        // when / then
-        assertThatThrownBy(() -> membership.terminateAfterRefund(START.plusDays(1)))
+        // when
+        Throwable thrown = catchThrowable(() -> membership.terminateAfterRefund(START.plusDays(1)));
+        // then
+        assertThat(thrown)
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.NOT_TERMINABLE));
         assertThat(membership.getTerminatedAt()).isNull();
@@ -146,8 +159,12 @@ class MembershipTest {
     @ValueSource(ints = {0, -1})
     @DisplayName("종료 시각이 시작 시각보다 늦지 않은 이용권은 생성하지 않는다")
     void rejectsInvalidPeriod(int days) {
-        // given / when / then
-        assertThatThrownBy(() -> Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
-                .startAt(START).endAt(START.plusDays(days)).build()).isInstanceOf(BusinessException.class);
+        // given
+        var builder = Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
+                .startAt(START).endAt(START.plusDays(days));
+        // when
+        Throwable thrown = catchThrowable(builder::build);
+        // then
+        assertThat(thrown).isInstanceOf(BusinessException.class);
     }
 }

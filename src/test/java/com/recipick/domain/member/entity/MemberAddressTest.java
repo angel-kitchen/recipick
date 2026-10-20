@@ -1,7 +1,7 @@
 package com.recipick.domain.member.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
@@ -50,8 +50,10 @@ class MemberAddressTest {
         Member owner = Member.builder().build();
         Member other = Member.builder().build();
         MemberAddress address = address(owner);
-        // when / then
-        assertThatThrownBy(() -> other.selectAddress(address, 1L)).isInstanceOf(BusinessException.class);
+        // when
+        Throwable thrown = catchThrowable(() -> other.selectAddress(address, 1L));
+        // then
+        assertThat(thrown).isInstanceOf(BusinessException.class);
         assertThat(other.getSelectedAddress()).isNull();
         assertThat(other.getMartId()).isNull();
     }
@@ -61,9 +63,10 @@ class MemberAddressTest {
     void keepsOriginalAddressOnInvalidChange() {
         // given
         MemberAddress address = address(Member.builder().build());
-        // when / then
-        assertThatThrownBy(() -> address.changeAddress("변경할 주소", " ", "9999999999"))
-                .isInstanceOf(BusinessException.class);
+        // when
+        Throwable thrown = catchThrowable(() -> address.changeAddress("변경할 주소", " ", "9999999999"));
+        // then
+        assertThat(thrown).isInstanceOf(BusinessException.class);
         assertThat(address.getAddress()).isEqualTo("도로명 주소");
         assertThat(address.getDetailAddress()).isEqualTo("101호");
     }

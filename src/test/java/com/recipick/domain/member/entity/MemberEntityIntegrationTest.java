@@ -111,13 +111,16 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("회원 테이블의 이전 배송지 컬럼과 지역 좌표 없이 최신 스키마를 생성한다")
     void createsLatestMemberSchema() throws Exception {
-        // given / when
+        // given
+        Set<String> removedMemberColumns = Set.of(
+                "region_id", "delivery_address", "delivery_detail_address", "delivery_region_id");
+        // when
         Set<String> memberColumns = columns("member");
         Set<String> regionColumns = columns("region");
         Set<String> addressColumns = columns("member_address");
         // then
         assertThat(memberColumns).contains("selected_address_id")
-                .doesNotContain("region_id", "delivery_address", "delivery_detail_address", "delivery_region_id");
+                .doesNotContainAnyElementsOf(removedMemberColumns);
         assertThat(regionColumns).containsExactlyInAnyOrder("id", "legal_dong_code", "name");
         assertThat(addressColumns).contains("member_id", "label", "address", "detail_address", "legal_dong_code")
                 .doesNotContain("latitude", "longitude", "selected", "mart_id");
