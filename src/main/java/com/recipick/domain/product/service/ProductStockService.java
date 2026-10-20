@@ -17,21 +17,22 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ProductStockService {
 
     private final ProductRepository productRepository;
 
     @Transactional
-    public void decreaseStocks(Long martId, List<StockQuantity> items){
+    public void decreaseStocks(Long martId, List<StockQuantity> items) {
         Map<Long, Product> products = lockProducts(items);
-        for(StockQuantity item : items){
+        for (StockQuantity item : items) {
             Product product = products.get(item.productId());
-            if(product == null || product.isDeleted()
+            if (product == null || product.isDeleted()
                 || product.getMart() == null
-                || !product.getMart().getId().equals(martId)){
+                || !product.getMart().getId().equals(martId)) {
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
             }
-            if(product.getStatus() != ProductStatus.SELLING){
+            if (product.getStatus() != ProductStatus.SELLING) {
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_SELLING);
             }
             product.decreaseStock(item.quantity());
@@ -39,22 +40,23 @@ public class ProductStockService {
     }
 
     @Transactional
-    public void increaseStocks(List<StockQuantity> items){
+    public void increaseStocks(List<StockQuantity> items) {
         Map<Long, Product> products = lockProducts(items);
-        for(StockQuantity item : items){
+        for (StockQuantity item : items) {
             Product product = products.get(item.productId());
-            if(product == null){
+            if (product == null) {
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
             }
             product.increaseStock(item.quantity());
         }
     }
-    private Map<Long, Product> lockProducts(List<StockQuantity> items){
+
+    private Map<Long, Product> lockProducts(List<StockQuantity> items) {
         List<Long> ids = items.stream()
             .map(StockQuantity::productId)
             .distinct()
             .toList();
         return productRepository.findAllByIdInForUpdate(ids).stream()
             .collect(Collectors.toMap(Product::getId, Function.identity()));
-            }
-        }
+    }
+}
