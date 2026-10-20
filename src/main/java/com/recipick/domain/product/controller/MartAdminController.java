@@ -2,7 +2,7 @@ package com.recipick.domain.product.controller;
 
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
-import com.recipick.domain.product.service.MartService;
+import com.recipick.domain.product.facade.MartFacade;
 import com.recipick.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/marts")
 public class MartAdminController {
 
-    private final MartService martService;
+    private final MartFacade martFacade;
 
     @PostMapping
     public ResponseEntity<ApiResponse<MartIdResponse>> createMart(
         @Valid @RequestBody MartCreateRequest request){
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.success(martService.createMart(request)));
+            .body(ApiResponse.success(martFacade.createMart(request)));
     }
 }

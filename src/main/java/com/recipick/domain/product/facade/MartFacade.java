@@ -3,7 +3,6 @@ package com.recipick.domain.product.facade;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
 import com.recipick.domain.product.service.MartService;
-import jakarta.persistence.Column;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
