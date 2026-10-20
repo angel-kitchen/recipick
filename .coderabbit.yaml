@@ -16,9 +16,13 @@ reviews:
     - path: "**/controller/**"
       instructions: |
         - Controller는 ResponseEntity에 ApiResponse를 담아 반환하고 비즈니스 로직을 두지 않는지 확인한다.
-        - 요청 DTO는 record이고 Valid 검증이 있는지, 엔티티를 응답으로 직접 내보내지 않는지 확인한다.
+        - 요청 본문은 Valid로 검증하고, 엔티티를 응답으로 직접 내보내지 않는지 확인한다.
         - 로그인 회원은 LoginMember, 관리자는 LoginAdmin으로 받는지, 경로로 회원 ID를 받지 않는지 확인한다.
         - 주문 생성, 취소, 환불 요청은 Idempotency-Key 헤더를 받는지 확인한다.
+    - path: "**/dto/**"
+      instructions: |
+        - DTO는 record로 작성하는지 확인한다.
+        - 요청 DTO에 jakarta validation 제약이 있는지 확인한다.
     - path: "**/service/**"
       instructions: |
         - 클래스는 readOnly 트랜잭션이 기본이고 상태를 바꾸는 메서드에만 Transactional이 있는지 확인한다.
