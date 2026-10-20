@@ -39,9 +39,6 @@ out/
 ### Local MCP config ###
 .mcp.json
 
-### Team docs (local only) ###
-docs/
-
 ### Local secrets ###
 application-local.yml
 .env
