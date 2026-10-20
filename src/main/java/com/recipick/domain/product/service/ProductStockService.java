@@ -27,6 +27,7 @@ public class ProductStockService {
         for(StockQuantity item : items){
             Product product = products.get(item.productId());
             if(product == null || product.isDeleted()
+                || product.getMart() == null
                 || !product.getMart().getId().equals(martId)){
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
             }

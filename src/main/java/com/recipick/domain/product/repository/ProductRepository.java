@@ -14,6 +14,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     boolean existsByCategoryIdAndDeletedFalse(Long categoryId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Product p where p.id in : ids order by p.id")
+    @Query("select p from Product p where p.id in :ids order by p.id")
     List<Product> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
 }

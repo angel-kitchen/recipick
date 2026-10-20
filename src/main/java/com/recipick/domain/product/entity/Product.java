@@ -110,6 +110,7 @@ public class Product extends BaseTimeEntity {
     }
 
     public void decreaseStock(int quantity){
+        validatePositive(quantity);
         if(totalQuantity < quantity){
             throw new BusinessException(ProductErrorCode.INSUFFICIENT_STOCK);
         }
@@ -117,6 +118,13 @@ public class Product extends BaseTimeEntity {
     }
 
     public void increaseStock(int quantity){
+        validatePositive(quantity);
         this.totalQuantity += quantity;
+    }
+
+    private void validatePositive(int quantity){
+        if(quantity <= 0){
+            throw new BusinessException(ProductErrorCode.INVALID_ADJUST_QUANTITY);
+        }
     }
 }
