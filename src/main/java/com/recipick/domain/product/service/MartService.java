@@ -2,7 +2,9 @@ package com.recipick.domain.product.service;
 
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
+import com.recipick.domain.product.dto.OpenMartResponse;
 import com.recipick.domain.product.entity.Mart;
+import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.global.common.PolicyConstants;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -44,11 +47,25 @@ public class MartService {
         return new MartIdResponse(martRepository.save(mart).getId());
     }
 
-    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius){
+    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius) {
         if(latitude.abs().compareTo(MAX_LATITUDE)>0
-        || longitude.abs().compareTo(MAX_LONGITUDE)>0
-        || radius <= 0){
+            || longitude.abs().compareTo(MAX_LONGITUDE)>0
+            || radius <= 0){
             throw new BusinessException(ProductErrorCode.INVALID_MART_AREA);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<OpenMartResponse> findOpenMarts() {
+        return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
+            .map(OpenMartResponse::from)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OpenMartResponse> findOpenMarts(Long regionId) {
+        return martRepository.findAllByRegionIdAndStatusOrderByIdAsc(regionId, MartStatus.OPEN).stream()
+            .map(OpenMartResponse::from)
+            .toList();
     }
 }
