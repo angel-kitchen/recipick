@@ -26,7 +26,7 @@ reviews:
     - path: "**/service/**"
       instructions: |
         - 클래스는 readOnly 트랜잭션이 기본이고 상태를 바꾸는 메서드에만 Transactional이 있는지 확인한다.
-        - 다른 도메인의 Entity나 Repository를 직접 쓰지 않고 해당 도메인의 Service나 Facade를 통하는지 확인한다.
+        - 다른 도메인의 Entity나 Repository를 직접 쓰지 않고, 다른 Service를 직접 주입하지 않는지 확인한다.
         - 둘 이상의 도메인을 함께 바꾸는 흐름은 Facade가 같은 트랜잭션에서 조립하는지 확인한다.
         - PortOne, AI 같은 외부 호출을 트랜잭션 안이나 락을 잡은 상태에서 하지 않는지 확인한다.
         - 비즈니스 오류는 BusinessException과 도메인 ErrorCode로 던지는지 확인한다.
