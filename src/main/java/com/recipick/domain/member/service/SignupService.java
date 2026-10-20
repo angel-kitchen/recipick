@@ -7,6 +7,7 @@ import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.global.common.TimeConstants;
 import com.recipick.global.exception.BusinessException;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -17,18 +18,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class SignupService {
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DuplicateMemberChecker duplicateMemberChecker;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
         if (!Boolean.TRUE.equals(request.termsAgreed()) || !Boolean.TRUE.equals(request.privacyAgreed())) {
             throw new BusinessException(MemberErrorCode.REQUIRED_AGREEMENT_MISSING);
         }
-        if (memberRepository.existsByEmail(request.email())) {
+        if (memberRepository.existsByEmailIgnoreCase(request.email())) {
             throw new BusinessException(MemberErrorCode.DUPLICATE_EMAIL);
         }
         if (memberRepository.existsByPhone(request.phone())) {
@@ -57,7 +60,23 @@ public class SignupService {
                     }
                 }
             }
+            if (isDuplicateKey(exception)) {
+                MemberErrorCode conflict = duplicateMemberChecker.findConflict(request.email(), request.phone());
+                if (conflict != null) {
+                    throw new BusinessException(conflict, exception);
+                }
+            }
             throw exception;
         }
+    }
+
+    private boolean isDuplicateKey(Throwable exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql
+                    && ("23505".equals(sql.getSQLState()) || sql.getErrorCode() == 1062)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

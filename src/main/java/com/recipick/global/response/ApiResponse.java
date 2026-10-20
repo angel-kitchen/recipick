@@ -21,8 +21,8 @@ public class ApiResponse<T> {
         return new ApiResponse<>(true, SUCCESS_CODE, SUCCESS_MESSAGE, data);
     }
 
-    public static <T> ApiResponse<T> created(String message, T data) {
-        return new ApiResponse<>(true, "CREATED", message, data);
+    public static <T> ApiResponse<T> success(String message, T data) {
+        return new ApiResponse<>(true, SUCCESS_CODE, message, data);
     }
 
     public static ApiResponse<Void> success() {

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.Locale;
 
 public record SignupRequest(
         @NotBlank @Email @Size(max = 50) String email,
@@ -17,6 +18,9 @@ public record SignupRequest(
         @NotNull Boolean privacyAgreed
 ) {
     public SignupRequest {
+        if (email != null) {
+            email = email.trim().toLowerCase(Locale.ROOT);
+        }
         if (phone != null) {
             phone = phone.replace("-", "");
         }

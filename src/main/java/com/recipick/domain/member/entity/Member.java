@@ -30,16 +30,15 @@ public class Member extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 50, nullable = false)
+    @Column(length = 50)
     private String email;
 
-    @Column(length = 50, nullable = false)
+    @Column(length = 50)
     private String name;
 
-    @Column(length = 20, nullable = false)
+    @Column(length = 20)
     private String phone;
 
-    @Column(nullable = false)
     private String passwordHash;
 
     private Long martId;
@@ -58,10 +57,8 @@ public class Member extends BaseTimeEntity {
 
     private LocalDateTime locationAgreedAt;
 
-    @Column(nullable = false)
     private LocalDateTime termsAgreedAt;
 
-    @Column(nullable = false)
     private LocalDateTime privacyAgreedAt;
 
     @Builder
