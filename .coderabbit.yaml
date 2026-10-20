@@ -1,10 +1,14 @@
 # 레시픽(recipick) CodeRabbit 설정
-# 저장소 루트에 .coderabbit.yaml 이름으로 두고, 기본 브랜치(dev)에 머지하면 적용됩니다.
+# 저장소 루트에 .coderabbit.yaml 이름으로 둡니다. 설정 변경과 요구사항 문서는 모두 기본 브랜치(dev)에 머지된 뒤 적용됩니다.
 # 지침 문장에는 백틱, 달러 중괄호, 역슬래시를 넣지 않습니다(리뷰 오류 방지).
 
 language: "ko-KR"
 
 reviews:
+  pre_merge_checks:
+    docstrings:
+      # 주석은 "왜"만 적는 컨벤션이라 모든 메서드에 설명을 요구하는 검사는 끈다.
+      mode: "off"
   path_instructions:
     - path: "**/entity/**"
       instructions: |
@@ -63,3 +67,20 @@ reviews:
       instructions: |
         - 메서드 이름은 영어, DisplayName은 한국어 문장, 본문은 given when then으로 나뉘어 있는지 확인한다.
         - 재고 차감, 결제 확정처럼 동시 요청이 겹칠 수 있는 로직에 동시성 테스트가 있는지 확인한다.
+
+knowledge_base:
+  code_guidelines:
+    # 도메인 코드에 해당 도메인의 요구사항만 붙인다. 문서는 docs/requirement.md에서 split_requirements.py로 생성한다.
+    filePatterns:
+      - files: ".coderabbit/requirements/member.md"
+        applyTo: "**/domain/member/**"
+      - files: ".coderabbit/requirements/product.md"
+        applyTo: "**/domain/product/**"
+      - files: ".coderabbit/requirements/recipe.md"
+        applyTo: "**/domain/recipe/**"
+      - files: ".coderabbit/requirements/order.md"
+        applyTo: "**/domain/order/**"
+      - files: ".coderabbit/requirements/payment.md"
+        applyTo: "**/domain/payment/**"
+      - files: ".coderabbit/requirements/auth.md"
+        applyTo: "**/global/security/**,**/global/config/SecurityConfig.java"
