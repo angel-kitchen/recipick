@@ -1,8 +1,11 @@
 package com.recipick.domain.product.service;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
+import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.entity.Mart;
+import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.global.exception.BusinessException;
@@ -14,11 +17,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.mockito.ArgumentMatchers.any;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -39,7 +44,7 @@ public class MartServiceTest {
     private MartCreateRequest request(String latitude, String longitude,
                                       Integer radius) {
         return new MartCreateRequest(
-            31L, "정자동 마트", new BigDecimal(latitude),
+            31L, "삼청동 마트", new BigDecimal(latitude),
             new BigDecimal(longitude), radius);
     }
 
@@ -124,5 +129,56 @@ public class MartServiceTest {
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_REGION_DUPLICATED);
         verify(martRepository, never()).save(any());
+    }
+
+    private Mart mart(Long id, Long regionId, String name){
+        Mart mart = Mart.builder()
+            .regionId(regionId)
+            .name(name)
+            .latitude(new BigDecimal("37.367000"))
+            .longitude(new BigDecimal("127.1080000"))
+            .serviceRadiusM(2000)
+            .build();
+        ReflectionTestUtils.setField(mart, "id", id);
+        return mart;
+    }
+
+    @Test
+    @DisplayName("목록 : SUPER_ADMIN은 운영 상태와 관계없이 모든 마트를 조회한다.")
+    void getMarts_superAdmin(){
+        Mart open = mart(1L, 31L, "삼청동 마트");
+        Mart closed = mart(2L, 32L, "혜화동 마트");
+        ReflectionTestUtils.setField(closed, "status", MartStatus.CLOSED);
+        given(martRepository.findAll()).willReturn(List.of(open,closed));
+
+        List<MartResponse> result = martService.getMarts(AdminRole.SUPER_ADMIN, null);
+        assertThat(result).extracting(MartResponse :: martId).containsExactly(1L,2L);
+        assertThat(result).extracting(MartResponse :: status).containsExactly(MartStatus.OPEN, MartStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("목록 : SUPER_ADMIN은 마트가 없으면 빈 목록")
+    void getMarts_superAdmin_empty(){
+        given(martRepository.findAll()).willReturn(List.of());
+
+        assertThat(martService.getMarts(AdminRole.SUPER_ADMIN, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("목록: MART_ADMIN은 본인 마트 하나만 조회한다")
+    void getMarts_martAdmin(){
+        given(martRepository.findById(1L)).willReturn(Optional.of(mart(1L, 31L, "삼청동 마트")));
+
+        List<MartResponse> result = martService.getMarts(AdminRole.MART_ADMIN, 1L);
+        assertThat(result).extracting(MartResponse :: martId).containsExactly(1L);
+        verify(martRepository, never()).findAll();
+    }
+
+    @Test
+    @DisplayName("목록 : MART_ADMIN의 마트가 없으면 빈 목록")
+    void getMarts_martAdmin_empty(){
+        given(martRepository.findById(99L)).willReturn(Optional.empty());
+        assertThat(martService.getMarts(AdminRole.MART_ADMIN, 99L)).isEmpty();
+
     }
 }
