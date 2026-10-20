@@ -15,6 +15,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
@@ -22,7 +23,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "recipe_bookmark")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RecipeBookmark {
+public class RecipeBookmark implements Persistable<RecipeBookmarkId> {
 
     // member는 다른 도메인이라 ID만 두고, recipe만 연관관계로 매핑한다
     @EmbeddedId
@@ -41,5 +42,9 @@ public class RecipeBookmark {
     private RecipeBookmark(Long memberId, Recipe recipe) {
         this.id = new RecipeBookmarkId(memberId, recipe.getId());
         this.recipe = recipe;
+    }
+    @Override
+    public boolean isNew() {
+        return createdAt == null;
     }
 }

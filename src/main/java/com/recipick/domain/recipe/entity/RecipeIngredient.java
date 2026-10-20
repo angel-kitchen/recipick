@@ -1,5 +1,6 @@
 package com.recipick.domain.recipe.entity;
 
+import com.recipick.global.common.SaleUnit;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -40,7 +41,7 @@ public class RecipeIngredient {
     @JoinColumn(name = "ingredient_id")
     private Ingredient ingredient;
 
-    @Column(precision = 10, scale = 4)
+    @Column(precision = 10, scale = 2)
     private BigDecimal amountPerServing;
 
     private boolean required;
@@ -51,5 +52,11 @@ public class RecipeIngredient {
         this.ingredient = ingredient;
         this.amountPerServing = amountPerServing;
         this.required = required;
+    }
+    public BigDecimal calculateRequiredAmount(int servings) {
+        return amountPerServing.multiply(BigDecimal.valueOf(servings));
+    }
+    public SaleUnit getUnit() {
+        return ingredient.getUnit();
     }
 }
