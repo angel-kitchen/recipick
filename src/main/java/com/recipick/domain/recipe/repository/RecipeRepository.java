@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface RecipeRepository extends JpaRepository<Recipe, Long>,  RecipeRepositoryCustom {
+public interface RecipeRepository extends JpaRepository<Recipe, Long>, RecipeRepositoryCustom {
 
     Optional<Recipe> findByIdAndStatus(Long id, RecipeStatus status);
 }

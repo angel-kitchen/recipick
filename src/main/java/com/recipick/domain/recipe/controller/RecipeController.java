@@ -22,15 +22,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/recipes")
 public class RecipeController {
 
-    private final String MEMBER_ID_HEADER = "X-Member-Id";
+    private static final String MEMBER_ID_HEADER = "X-Member-Id";
 
     private final RecipeService recipeService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> searchRecipes(
-        @RequestHeader(MEMBER_ID_HEADER) Long memberId,
-        @ModelAttribute RecipeSearchRequest request,
-        Pageable pageable
+            @RequestHeader(MEMBER_ID_HEADER) Long memberId,
+            @ModelAttribute RecipeSearchRequest request,
+            Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(recipeService.searchRecipes(memberId, request, pageable)));
     }
@@ -39,8 +39,8 @@ public class RecipeController {
     public ResponseEntity<ApiResponse<RecipeDetailResponse>> getRecipe(
             @RequestHeader(MEMBER_ID_HEADER) Long memberId,
             @PathVariable Long recipeId,
-            @RequestParam(required = false) Integer servings) {
-        return ResponseEntity.ok(ApiResponse.success(recipeService.getRecipe(memberId, recipeId,
-            servings)));
+            @RequestParam(required = false) Integer servings
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(recipeService.getRecipe(memberId, recipeId, servings)));
     }
 }

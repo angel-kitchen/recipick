@@ -51,14 +51,14 @@ public class RecipeService {
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
-    public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servivngs) {
+    public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {
         Recipe recipe = getActiveRecipe(recipeId);
-        int resolvedServings = recipe.resolveServings(servivngs);
-        List<RecipeIngredient> recipeIngrediens =
+        int resolvedServings = recipe.resolveServings(servings);
+        List<RecipeIngredient> recipeIngredients =
                 recipeIngredientRepository.findAllWithIngredient(recipeId);
         boolean bookmarked = recipeBookmarkRepository.existsById(new RecipeBookmarkId(memberId, recipeId));
 
-        return RecipeDetailResponse.of(recipe, resolvedServings, recipeIngrediens, bookmarked);
+        return RecipeDetailResponse.of(recipe, resolvedServings, recipeIngredients, bookmarked);
     }
 
     private Recipe getActiveRecipe(Long recipeId) {

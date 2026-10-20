@@ -48,8 +48,7 @@ public record RecipeDetailResponse(
             recipe.isAutoCartEnabled(),
             bookmarked,
             recipeIngredients.stream()
-                .map(recipeIngredient -> IngredientResponse.of(recipeIngredient,
-                    servings))
+                .map(recipeIngredient -> IngredientResponse.of(recipeIngredient, servings))
                 .toList(),
             recipe.getSteps().stream()
                 .map(StepResponse::from)
@@ -83,7 +82,7 @@ public record RecipeDetailResponse(
             String description
     ) {
         private static StepResponse from(RecipeStep step) {
-            return new StepResponse(step.order(),  step.description());
+            return new StepResponse(step.order(), step.description());
         }
     }
 }
