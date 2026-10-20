@@ -2,7 +2,9 @@ package com.recipick.domain.order.entity;
 
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -115,5 +117,19 @@ public class Order extends BaseTimeEntity {
         this.address = address;
         this.detailAddress = detailAddress;
         this.regionId = regionId;
+    }
+
+    public void markPaid(LocalDateTime paidAt) {
+        if (!status.canTransitionTo(OrderStatus.PAID)) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        if (!martStatus.canTransitionTo(MartStatus.RECEIVED)) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.PAID;
+        this.martStatus = MartStatus.RECEIVED;
+        this.paidAt = paidAt;
+        // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
+        this.pendingMemberId = null;
     }
 }
