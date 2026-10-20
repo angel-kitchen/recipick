@@ -18,7 +18,6 @@ import java.util.List;
 
 import static com.recipick.domain.recipe.entity.QRecipe.recipe;
 
-
 @RequiredArgsConstructor
 public class RecipeRepositoryImpl implements RecipeRepositoryCustom {
 
@@ -47,7 +46,7 @@ public class RecipeRepositoryImpl implements RecipeRepositoryCustom {
             .from(recipe)
             .where(where);
 
-        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchCount);
+        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
     private BooleanExpression nameContains(String keyword) {
