@@ -1,7 +1,11 @@
 package com.recipick.domain.payment.entity;
 
+import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
+import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,9 +33,9 @@ public class Payment extends BaseTimeEntity {
     @Column(unique = true)
     private Long orderId;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String paymentMethod;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private PaymentMethod paymentMethod;
 
     @Column(unique = true)
     private String portonePaymentId;
@@ -44,8 +48,9 @@ public class Payment extends BaseTimeEntity {
     @Column(columnDefinition = "varchar(20)")
     private PaymentStatus status;
 
-    @Column(length = 500)
-    private String failureReason;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(500)")
+    private PaymentFailureReason failureReason;
 
     private LocalDateTime expiresAt;
 
@@ -55,12 +60,12 @@ public class Payment extends BaseTimeEntity {
 
     @Builder
     private Payment(
-            Long orderId,
-            String paymentMethod,
-            String portonePaymentId,
-            Long amount,
-            PaymentStatus status,
-            LocalDateTime expiresAt
+        Long orderId,
+        PaymentMethod paymentMethod,
+        String portonePaymentId,
+        Long amount,
+        PaymentStatus status,
+        LocalDateTime expiresAt
     ) {
         this.orderId = orderId;
         this.paymentMethod = paymentMethod;
@@ -69,4 +74,27 @@ public class Payment extends BaseTimeEntity {
         this.status = status;
         this.expiresAt = expiresAt;
     }
+
+    public void markPaid(String portoneTransactionId, LocalDateTime paidAt) {
+        if (this.status != PaymentStatus.IN_PROGRESS) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        this.status = PaymentStatus.PAID;
+        this.portoneTransactionId = portoneTransactionId;
+        this.paidAt = paidAt;
+    }
+
+    public void fail(
+        PaymentFailureReason failureReason,
+        String portoneTransactionId
+    ) {
+        if (this.status != PaymentStatus.IN_PROGRESS) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        this.status = PaymentStatus.FAILED;
+        this.failureReason = failureReason;
+        this.portoneTransactionId = portoneTransactionId;
+    }
+
 }
+
