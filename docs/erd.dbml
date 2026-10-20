@@ -1,0 +1,531 @@
+// 첨부 ERD 변환본. NULL/NOT NULL, 기본값, 자동 증가, 삭제/갱신 정책은 원본에 명시되지 않아 생략.
+// 여러 컬럼의 UK 표시는 아래 조합의 복합 UNIQUE로 해석함 (원본에서 인덱스 그룹명 확인 불가):
+// CART_ITEM(member_id, product_id), POINT_USAGE(point_earning_id, order_id),
+// RECIPE_INGREDIENT(recipe_id, ingredient_id), AUTO_CART_ITEM(auto_cart_request_id, ingredient_id),
+// MEMBERSHIP_PAYMENT(membership_id, period_start_date), ORDERS(member_id, idempotency_key).
+// pending_member_id는 원본에서 UK만 표시되어 FK를 추가하지 않음.
+
+Table REGION {
+  id bigint [pk]
+  legal_dong_code varchar(10) [unique]
+  name varchar(50)
+}
+
+Table MEMBER {
+  id bigint [pk]
+  email varchar(50) [unique]
+  name varchar(50)
+  phone varchar(20) [unique]
+  password_hash varchar(255)
+  mart_id bigint
+  selected_address_id bigint
+  location_agreed_at datetime
+  terms_agreed_at datetime
+  privacy_agreed_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table MEMBER_ADDRESS {
+  id bigint [pk]
+  member_id bigint
+  label varchar(30)
+  address varchar(255)
+  detail_address varchar(255)
+  legal_dong_code varchar(10)
+  created_at datetime
+  updated_at datetime
+}
+
+Table ADMIN {
+  id bigint [pk]
+  login_id varchar(50) [unique]
+  password_hash varchar(255)
+  name varchar(50)
+  role varchar(20)
+  mart_id bigint
+  active boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table MEMBERSHIP {
+  id bigint [pk]
+  member_id bigint
+  granted_by_admin_id bigint
+  type varchar(20)
+  source varchar(20)
+  start_at datetime
+  end_at datetime
+  auto_renew boolean
+  billing_anchor_date date
+  consented_amount bigint
+  consent_text_version varchar(20)
+  autopay_consented_at datetime
+  cancel_reserved_at datetime
+  terminated_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table CART_ITEM {
+  id bigint [pk]
+  member_id bigint
+  product_id bigint
+  quantity int
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (member_id, product_id) [unique]
+  }
+}
+
+Table ORDERS {
+  id bigint [pk]
+  order_number varchar(30) [unique]
+  member_id bigint
+  mart_id bigint
+  pending_member_id bigint [unique]
+  idempotency_key varchar(64)
+  request_hash varchar(64)
+  status varchar(20)
+  mart_status varchar(20)
+  product_amount bigint
+  delivery_fee bigint
+  used_point bigint
+  pay_amount bigint
+  point_rate decimal(5,4)
+  receiver_name varchar(50)
+  receiver_phone varchar(20)
+  address varchar(255)
+  detail_address varchar(255)
+  region_id bigint
+  created_at datetime
+  updated_at datetime
+  paid_at datetime
+  canceled_at datetime
+  cancel_reason_code varchar(30)
+  cancel_reason_detail varchar(500)
+  indexes {
+    (member_id, idempotency_key) [unique]
+  }
+}
+
+Table ORDER_ITEM {
+  id bigint [pk]
+  order_id bigint
+  product_id bigint
+  product_name varchar(100)
+  unit_price bigint
+  sale_unit_amount decimal(10,2)
+  sale_unit varchar(10)
+  line_amount bigint
+  quantity int
+}
+
+Table ORDER_STATUS_HISTORY {
+  id bigint [pk]
+  order_id bigint
+  status_type varchar(20)
+  from_status varchar(20)
+  to_status varchar(20)
+  actor varchar(20)
+  changed_by_admin_id bigint
+  reason varchar(500)
+  created_at datetime
+}
+
+Table PAYMENT {
+  id bigint [pk]
+  order_id bigint [unique]
+  payment_method varchar(20)
+  portone_payment_id varchar(255) [unique]
+  portone_transaction_id varchar(255)
+  amount bigint
+  status varchar(20)
+  failure_reason varchar(500)
+  expires_at datetime
+  paid_at datetime
+  canceled_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table WEBHOOK_EVENT {
+  id bigint [pk]
+  webhook_id varchar(255) [unique]
+  type varchar(50)
+  portone_payment_id varchar(255)
+  status varchar(20)
+  payload text
+  attempt_count int
+  failure_reason varchar(500)
+  finished_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table REFUND {
+  id bigint [pk]
+  payment_id bigint
+  amount bigint
+  reason varchar(500)
+  status varchar(20)
+  requested_by varchar(20)
+  idempotency_key varchar(255) [unique]
+  portone_cancellation_id varchar(255) [unique]
+  failure_reason varchar(500)
+  requested_at datetime
+  completed_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table POINT_EARNING {
+  id bigint [pk]
+  member_id bigint
+  order_id bigint [unique]
+  amount bigint
+  remaining_amount bigint
+  status varchar(20)
+  confirmed_at datetime
+  expires_on date
+  created_at datetime
+  updated_at datetime
+}
+
+Table POINT_USAGE {
+  id bigint [pk]
+  point_earning_id bigint
+  order_id bigint
+  amount bigint
+  status varchar(20)
+  reserved_at datetime
+  confirmed_at datetime
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (point_earning_id, order_id) [unique]
+  }
+}
+
+Table POINT_HISTORY {
+  id bigint [pk]
+  point_earning_id bigint
+  member_id bigint
+  order_id bigint
+  type varchar(30)
+  amount bigint
+  created_at datetime
+}
+
+Table MEMBER_POINT {
+  id bigint [pk]
+  member_id bigint [unique]
+  balance bigint
+  created_at datetime
+  updated_at datetime
+}
+
+Table CATEGORY {
+  id bigint [pk]
+  name varchar(50) [unique]
+  deleted boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table PRODUCT {
+  id bigint [pk]
+  mart_id bigint
+  category_id bigint
+  ingredient_id bigint
+  name varchar(50)
+  brand varchar(50)
+  description text
+  sale_unit_amount decimal(10,2)
+  sale_unit varchar(10)
+  image_url varchar(255)
+  price bigint
+  status varchar(20)
+  total_quantity int
+  deleted boolean
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (mart_id, ingredient_id)
+  }
+}
+
+Table STOCK_ADJUSTMENT {
+  id bigint [pk]
+  product_id bigint
+  type varchar(20)
+  quantity int
+  before_quantity int
+  reason varchar(500)
+  admin_id bigint
+  created_at datetime
+}
+
+Table MART {
+  id bigint [pk]
+  region_id bigint [unique]
+  name varchar(50)
+  latitude decimal(10,7)
+  longitude decimal(10,7)
+  service_radius_m int
+  status varchar(20)
+  created_at datetime
+  updated_at datetime
+}
+
+Table INGREDIENT {
+  id bigint [pk]
+  name varchar(50) [unique]
+  unit varchar(10)
+}
+
+Table RECIPE_INGREDIENT {
+  id bigint [pk]
+  recipe_id bigint
+  ingredient_id bigint
+  amount_per_serving decimal(10,2)
+  required boolean
+  indexes {
+    (recipe_id, ingredient_id) [unique]
+  }
+}
+
+Table RECIPE {
+  id bigint [pk]
+  name varchar(50)
+  cuisine varchar(20)
+  dish_type varchar(20)
+  base_servings int
+  cook_time_min int
+  difficulty varchar(20)
+  spicy_level int
+  steps json
+  youtube_video_id varchar(20)
+
+  status varchar(20)
+  auto_cart_enabled boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table RECIPE_BOOKMARK {
+  member_id bigint
+  recipe_id bigint
+  created_at datetime
+  indexes {
+    (member_id, recipe_id) [pk]
+  }
+}
+
+Table AUTO_CART_REQUEST {
+  id bigint [pk]
+  member_id bigint
+  mart_id bigint
+  status varchar(20)
+  menus json
+  total_price bigint
+  created_at datetime
+  confirmed_at datetime
+  indexes {
+    (status, created_at)
+    (member_id, created_at)
+  }
+}
+
+Table AUTO_CART_ITEM {
+  id bigint [pk]
+  auto_cart_request_id bigint
+  ingredient_id bigint
+  product_id bigint
+  product_name varchar(100)
+  sale_unit_amount decimal(10,2)
+  unit_price bigint
+  required_amount decimal(10,2)
+  purchase_quantity int
+  line_price bigint
+  unavailable_reason varchar(20)
+  indexes {
+    (auto_cart_request_id, ingredient_id) [unique]
+  }
+}
+
+Table AI_REQUEST_LOG {
+  id bigint [pk]
+  member_id bigint
+  auto_cart_request_id bigint
+  raw_text text
+  parsed_result json
+  matched_recipe_ids text
+  success boolean
+  failure_reason varchar(500)
+  created_at datetime
+}
+
+Table CART_ADD_HISTORY {
+  id bigint [pk]
+  member_id bigint
+  product_id bigint
+  source varchar(20)
+  auto_cart_request_id bigint
+  quantity int
+  created_at datetime
+  indexes {
+    auto_cart_request_id
+  }
+}
+
+Table BILLING_KEY {
+  id bigint [pk]
+  member_id bigint
+  portone_billing_key varchar(255) [unique]
+  status varchar(20)
+  issued_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table MEMBERSHIP_PAYMENT {
+  id bigint [pk]
+  membership_id bigint
+  billing_key_id bigint
+  portone_payment_id varchar(255) [unique]
+  amount bigint
+  status varchar(30)
+  billing_date date
+  period_start_date date
+  period_end_date date
+  attempt_count int
+  last_attempt_at datetime
+  next_retry_at datetime
+  failure_reason varchar(500)
+  paid_at datetime
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (membership_id, period_start_date) [unique]
+  }
+}
+
+Table MEMBERSHIP_REFUND {
+  id bigint [pk]
+  membership_payment_id bigint
+  amount bigint
+  used_days int
+  used_day_fee bigint
+  penalty_amount bigint
+  status varchar(20)
+  reason varchar(500)
+  requested_by varchar(20)
+  idempotency_key varchar(255) [unique]
+  portone_cancellation_id varchar(255) [unique]
+  failure_reason varchar(500)
+  requested_at datetime
+  completed_at datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Ref: MEMBER.mart_id > MART.id
+Ref: MEMBER.selected_address_id > MEMBER_ADDRESS.id
+Ref: MEMBER_ADDRESS.member_id > MEMBER.id
+Ref: ADMIN.mart_id > MART.id
+Ref: MEMBERSHIP.member_id > MEMBER.id
+Ref: MEMBERSHIP.granted_by_admin_id > ADMIN.id
+Ref: CART_ITEM.member_id > MEMBER.id
+Ref: CART_ITEM.product_id > PRODUCT.id
+Ref: ORDERS.member_id > MEMBER.id
+Ref: ORDERS.mart_id > MART.id
+Ref: ORDERS.region_id > REGION.id
+Ref: ORDER_ITEM.order_id > ORDERS.id
+Ref: ORDER_ITEM.product_id > PRODUCT.id
+Ref: ORDER_STATUS_HISTORY.order_id > ORDERS.id
+Ref: ORDER_STATUS_HISTORY.changed_by_admin_id > ADMIN.id
+Ref: ORDERS.id - PAYMENT.order_id
+Ref: REFUND.payment_id > PAYMENT.id
+Ref: POINT_EARNING.member_id > MEMBER.id
+Ref: ORDERS.id - POINT_EARNING.order_id
+Ref: POINT_USAGE.point_earning_id > POINT_EARNING.id
+Ref: POINT_USAGE.order_id > ORDERS.id
+Ref: POINT_HISTORY.point_earning_id > POINT_EARNING.id
+Ref: POINT_HISTORY.member_id > MEMBER.id
+Ref: POINT_HISTORY.order_id > ORDERS.id
+Ref: MEMBER.id - MEMBER_POINT.member_id
+Ref: PRODUCT.mart_id > MART.id
+Ref: PRODUCT.category_id > CATEGORY.id
+Ref: PRODUCT.ingredient_id > INGREDIENT.id
+Ref: STOCK_ADJUSTMENT.product_id > PRODUCT.id
+Ref: STOCK_ADJUSTMENT.admin_id > ADMIN.id
+Ref: REGION.id - MART.region_id
+Ref: RECIPE_INGREDIENT.recipe_id > RECIPE.id
+Ref: RECIPE_INGREDIENT.ingredient_id > INGREDIENT.id
+Ref: RECIPE_BOOKMARK.member_id > MEMBER.id
+Ref: RECIPE_BOOKMARK.recipe_id > RECIPE.id
+Ref: AUTO_CART_REQUEST.member_id > MEMBER.id
+Ref: AUTO_CART_REQUEST.mart_id > MART.id
+Ref: AUTO_CART_ITEM.auto_cart_request_id > AUTO_CART_REQUEST.id
+Ref: AUTO_CART_ITEM.ingredient_id > INGREDIENT.id
+Ref: AUTO_CART_ITEM.product_id > PRODUCT.id
+Ref: AI_REQUEST_LOG.member_id > MEMBER.id
+Ref: AI_REQUEST_LOG.auto_cart_request_id > AUTO_CART_REQUEST.id
+Ref: CART_ADD_HISTORY.member_id > MEMBER.id
+Ref: CART_ADD_HISTORY.product_id > PRODUCT.id
+Ref: CART_ADD_HISTORY.auto_cart_request_id > AUTO_CART_REQUEST.id
+Ref: BILLING_KEY.member_id > MEMBER.id
+Ref: MEMBERSHIP_PAYMENT.membership_id > MEMBERSHIP.id
+Ref: MEMBERSHIP_PAYMENT.billing_key_id > BILLING_KEY.id
+Ref: MEMBERSHIP_REFUND.membership_payment_id > MEMBERSHIP_PAYMENT.id
+
+TableGroup member_admin_membership {
+  REGION
+  MEMBER
+  MEMBER_ADDRESS
+  ADMIN
+  MEMBERSHIP
+}
+TableGroup cart_order {
+  CART_ITEM
+  ORDERS
+  ORDER_ITEM
+  ORDER_STATUS_HISTORY
+}
+TableGroup payment_refund {
+  PAYMENT
+  WEBHOOK_EVENT
+  REFUND
+}
+TableGroup point {
+  POINT_EARNING
+  POINT_USAGE
+  POINT_HISTORY
+  MEMBER_POINT
+}
+TableGroup product_stock_mart {
+  CATEGORY
+  PRODUCT
+  STOCK_ADJUSTMENT
+  MART
+}
+TableGroup recipe_ingredient {
+  INGREDIENT
+  RECIPE_INGREDIENT
+  RECIPE
+  RECIPE_BOOKMARK
+}
+TableGroup auto_cart_ai {
+  AUTO_CART_REQUEST
+  AUTO_CART_ITEM
+  AI_REQUEST_LOG
+  CART_ADD_HISTORY
+}
+TableGroup membership_billing {
+  BILLING_KEY
+  MEMBERSHIP_PAYMENT
+  MEMBERSHIP_REFUND
+}
