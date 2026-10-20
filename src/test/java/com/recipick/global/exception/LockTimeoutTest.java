@@ -3,6 +3,7 @@ package com.recipick.global.exception;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -21,16 +22,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest
-@ActiveProfiles("test")
-class LockTimeoutTest {
+class LockTimeoutTest extends IntegrationTestSupport {
 
     @Autowired
     ProductStockService productStockService;

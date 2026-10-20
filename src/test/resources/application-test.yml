@@ -6,8 +6,3 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
-
-security:
-  jwt:
-    # 테스트 전용 더미 키. JWT_SECRET 환경변수 없이도 test 프로필 컨텍스트가 뜨도록 둔다.
-    secret: ${JWT_SECRET:cmVjaXBpY2stdGVzdC1vbmx5LWR1bW15LWp3dC1zZWNyZXQ=}
