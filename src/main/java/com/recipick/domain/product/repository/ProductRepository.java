@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface ProductRepository extends JpaRepository<Product, Long>, ProductRepositoryCustom {
@@ -16,4 +17,13 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Product p where p.id in :ids order by p.id")
     List<Product> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
+
+    @Query("""
+            SELECT p.ingredientId AS ingredientId, COUNT(p) AS productCount
+            FROM Product p
+            WHERE p.ingredientId IN :ingredientIds
+              AND p.deleted = false
+            GROUP BY p.ingredientId
+            """)
+    List<IngredientProductCount> countByIngredientIds(@Param("ingredientIds") Collection<Long> ingredientIds);
 }

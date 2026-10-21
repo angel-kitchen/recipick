@@ -17,4 +17,5 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
             ORDER BY ri.required DESC, ri.id ASC
             """)
     List<RecipeIngredient> findAllWithIngredient(@Param("recipeId") Long recipeId);
+    boolean existsByIngredientId(Long ingredientId);
 }
