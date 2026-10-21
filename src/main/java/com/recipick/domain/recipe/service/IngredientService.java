@@ -8,6 +8,7 @@ import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,7 +34,12 @@ public class IngredientService {
             .name(request.name())
             .unit(request.unit())
             .build();
-        return new IngredientIdResponse(ingredientRepository.save(ingredient).getId());
+        try {
+            // 같은 이름 등록이 동시에 exists 검사를 통과하면 name UNIQUE가 두 번째 INSERT를 막는다
+            return new IngredientIdResponse(ingredientRepository.saveAndFlush(ingredient).getId());
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME, e);
+        }
     }
 
     // 레시피 재료 등록 화면에서 이름으로 찾기 쉽도록 가나다순으로 고정한다
@@ -62,6 +68,12 @@ public class IngredientService {
         }
         ingredient.rename(request.name());
         ingredient.changeUnit(request.unit());
+        try {
+            // 변경 감지 UPDATE는 커밋 때 나가므로 여기서 flush해야 UNIQUE 위반을 이 메서드 안에서 잡을 수 있다
+            ingredientRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME, e);
+        }
         return new IngredientIdResponse(ingredientId);
     }
 }

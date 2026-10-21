@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,7 +57,37 @@ class IngredientServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME);
-        verify(ingredientRepository, never()).save(any());
+        verify(ingredientRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("등록: 동시 요청으로 이름 UNIQUE 위반이 나면 DUPLICATE_INGREDIENT_NAME으로 바꾼다")
+    void createIngredient_concurrentDuplicate() {
+        // given
+        given(ingredientRepository.existsByName("두부")).willReturn(false);
+        given(ingredientRepository.saveAndFlush(any(Ingredient.class)))
+            .willThrow(new DataIntegrityViolationException("duplicate key"));
+
+        // when, then
+        assertThatThrownBy(() -> ingredientService.createIngredient(new IngredientSaveRequest("두부", SaleUnit.G)))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME);
+    }
+
+    @Test
+    @DisplayName("수정: 동시 요청으로 이름 UNIQUE 위반이 나면 DUPLICATE_INGREDIENT_NAME으로 바꾼다")
+    void updateIngredient_concurrentDuplicate() {
+        // given
+        given(ingredientRepository.findById(3L)).willReturn(Optional.of(ingredient(3L, "두부")));
+        given(ingredientRepository.existsByNameAndIdNot("애호박", 3L)).willReturn(false);
+        willThrow(new DataIntegrityViolationException("duplicate key")).given(ingredientRepository).flush();
+
+        // when, then
+        assertThatThrownBy(() -> ingredientService.updateIngredient(3L, new IngredientSaveRequest("애호박", SaleUnit.G)))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME);
     }
 
     @Test
