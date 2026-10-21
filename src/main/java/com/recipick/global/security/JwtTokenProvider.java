@@ -8,6 +8,7 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
@@ -19,18 +20,23 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
+    // 발급 서버와 검증 서버 사이의 작은 시계 차이로 정상 토큰을 거절하지 않도록 한다.
+    private static final Duration CLOCK_SKEW = Duration.ofSeconds(5);
+
     private final SecretKey jwtSigningKey;
     private final JwtProperties properties;
     private final Clock clock;
 
     public AuthPrincipal parseAccessToken(String token) {
+        Instant now = clock.instant();
         try {
             Claims claims = Jwts.parser().verifyWith(jwtSigningKey)
-                    .clock(() -> Date.from(clock.instant())).build().parseSignedClaims(token).getPayload();
+                    .clockSkewSeconds(CLOCK_SKEW.toSeconds())
+                    .clock(() -> Date.from(now)).build().parseSignedClaims(token).getPayload();
             if (!"ACCESS".equals(claims.get("tokenUse", String.class)) || claims.getExpiration() == null
                     || claims.getIssuedAt() == null || claims.getId() == null || claims.getId().isBlank()
                     || !claims.getExpiration().after(claims.getIssuedAt())
-                    || claims.getIssuedAt().toInstant().isAfter(clock.instant())) {
+                    || claims.getIssuedAt().toInstant().isAfter(now.plus(CLOCK_SKEW))) {
                 throw new IllegalArgumentException("액세스 토큰의 필수 정보가 올바르지 않습니다.");
             }
             String subject = claims.getSubject();

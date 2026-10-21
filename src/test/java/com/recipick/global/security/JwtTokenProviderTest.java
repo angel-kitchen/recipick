@@ -64,7 +64,7 @@ class JwtTokenProviderTest {
     @DisplayName("만료된 토큰은 형식 오류와 구분하여 AUTH-003으로 거절한다")
     void rejectsExpiredToken() {
         // given
-        String token = token(Map.of("exp", Date.from(NOW.minusSeconds(1)),
+        String token = token(Map.of("exp", Date.from(NOW.minusSeconds(6)),
                 "iat", Date.from(NOW.minusSeconds(60))));
 
         // when
@@ -72,6 +72,76 @@ class JwtTokenProviderTest {
 
         // then
         assertError(thrown, AuthErrorCode.EXPIRED_TOKEN);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 4, 5})
+    @DisplayName("발급 시각이 검증 서버보다 최대 5초 빠르면 허용한다")
+    void acceptsIssuedAtWithinClockSkew(int seconds) {
+        // given
+        String token = token(Map.of("iat", Date.from(NOW.plusSeconds(seconds))));
+
+        // when
+        AuthPrincipal principal = provider.parseAccessToken(token);
+
+        // then
+        assertThat(principal.id()).isEqualTo(17L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {6, 30})
+    @DisplayName("발급 시각이 5초 허용 오차를 초과하면 AUTH-002로 거절한다")
+    void rejectsIssuedAtBeyondClockSkew(int seconds) {
+        // given
+        String token = token(Map.of("iat", Date.from(NOW.plusSeconds(seconds))));
+
+        // when
+        Throwable thrown = catchThrowable(() -> provider.parseAccessToken(token));
+
+        // then
+        assertError(thrown, AuthErrorCode.INVALID_TOKEN);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 4, 5})
+    @DisplayName("만료 시각이 지났어도 5초 허용 오차 안이면 허용한다")
+    void acceptsExpirationWithinClockSkew(int seconds) {
+        // given
+        String token = token(Map.of("exp", Date.from(NOW.minusSeconds(seconds)),
+                "iat", Date.from(NOW.minusSeconds(60))));
+
+        // when
+        AuthPrincipal principal = provider.parseAccessToken(token);
+
+        // then
+        assertThat(principal.id()).isEqualTo(17L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 5})
+    @DisplayName("사용 가능 시각도 동일한 5초 허용 오차를 적용한다")
+    void acceptsNotBeforeWithinClockSkew(int seconds) {
+        // given
+        String token = token(Map.of("nbf", Date.from(NOW.plusSeconds(seconds))));
+
+        // when
+        AuthPrincipal principal = provider.parseAccessToken(token);
+
+        // then
+        assertThat(principal.id()).isEqualTo(17L);
+    }
+
+    @Test
+    @DisplayName("사용 가능 시각이 5초 허용 오차를 초과하면 AUTH-002로 거절한다")
+    void rejectsNotBeforeBeyondClockSkew() {
+        // given
+        String token = token(Map.of("nbf", Date.from(NOW.plusSeconds(6))));
+
+        // when
+        Throwable thrown = catchThrowable(() -> provider.parseAccessToken(token));
+
+        // then
+        assertError(thrown, AuthErrorCode.INVALID_TOKEN);
     }
 
     @Test
