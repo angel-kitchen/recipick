@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
@@ -105,6 +106,7 @@ public class ProductServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        verifyNoInteractions(productRepository);
     }
 
     @Test
