@@ -30,3 +30,17 @@ security:
     secret: ${JWT_SECRET:}
     access-token-expiration: 30m
     refresh-token-expiration: 14d
+  login:
+    max-failures: 3
+    failure-expiration: 10m
+    lock-duration: 10m
+    refresh-cookie-secure: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+security:
+  login:
+    refresh-cookie-secure: ${AUTH_COOKIE_SECURE:false}

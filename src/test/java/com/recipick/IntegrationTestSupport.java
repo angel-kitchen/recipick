@@ -10,7 +10,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -22,8 +24,13 @@ public abstract class IntegrationTestSupport {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withCommand("--innodb-lock-wait-timeout=5");
 
+    @ServiceConnection(name = "redis")
+    static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7.4"))
+            .withExposedPorts(6379);
+
     static {
         MYSQL.start();
+        REDIS.start();
     }
 
     @MockitoSpyBean
