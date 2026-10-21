@@ -18,26 +18,30 @@ class PortOnePaymentTest {
     @DisplayName("UTC paidAt을 한국 시간 LocalDateTime으로 바꾼다")
     void convertPaidAtFromUtc() {
         // given
-        PortOnePaymentResponse response = paidResponse(OffsetDateTime.parse("2026-10-20T10:03:11Z"));
+        PortOnePaymentResponse response =
+            paidResponse(OffsetDateTime.parse("2026-10-20T10:03:11Z"));
 
         // when
         PortOnePayment payment = PortOnePayment.from(response);
 
         // then
-        assertThat(payment.paidAt()).isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
+        assertThat(payment.paidAt())
+            .isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
     }
 
     @Test
     @DisplayName("+09:00 paidAt도 같은 한국 시간이 된다")
     void convertPaidAtFromKstOffset() {
         // given
-        PortOnePaymentResponse response = paidResponse(OffsetDateTime.parse("2026-10-20T19:03:11+09:00"));
+        PortOnePaymentResponse response =
+            paidResponse(OffsetDateTime.parse("2026-10-20T19:03:11+09:00"));
 
         // when
         PortOnePayment payment = PortOnePayment.from(response);
 
         // then
-        assertThat(payment.paidAt()).isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
+        assertThat(payment.paidAt())
+            .isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
     }
 
     @Test
@@ -45,7 +49,15 @@ class PortOnePaymentTest {
     void nullableFields() {
         // given
         PortOnePaymentResponse response = new PortOnePaymentResponse(
-                "pay_1", "tx_1", PortOnePaymentStatus.READY, null, "KRW", null, null, null);
+            "pay_1",
+            "tx_1",
+            PortOnePaymentStatus.READY,
+            null,
+            "KRW",
+            null,
+            null,
+            null
+        );
 
         // when
         PortOnePayment payment = PortOnePayment.from(response);
@@ -61,7 +73,8 @@ class PortOnePaymentTest {
     @DisplayName("총 결제금액·customData 주문 ID·식별자를 옮긴다")
     void copyIdentifiersAndAmount() {
         // given
-        PortOnePaymentResponse response = paidResponse(OffsetDateTime.parse("2026-10-20T10:03:11Z"));
+        PortOnePaymentResponse response =
+            paidResponse(OffsetDateTime.parse("2026-10-20T10:03:11Z"));
 
         // when
         PortOnePayment payment = PortOnePayment.from(response);
@@ -80,33 +93,48 @@ class PortOnePaymentTest {
     void failureSummary() {
         // given
         PortOnePaymentResponse response = new PortOnePaymentResponse(
-                "pay_1", "tx_1", PortOnePaymentStatus.FAILED, null, null, null, null,
-                new PortOnePaymentFailure("card declined", "E001", "한도 초과"));
+            "pay_1",
+            "tx_1",
+            PortOnePaymentStatus.FAILED,
+            null,
+            null,
+            null,
+            null,
+            new PortOnePaymentFailure("card declined", "E001", "한도 초과")
+        );
 
         // when
         PortOnePayment payment = PortOnePayment.from(response);
 
         // then
-        assertThat(payment.failureSummary()).isEqualTo("card declined | E001 | 한도 초과");
+        assertThat(payment.failureSummary())
+            .isEqualTo("card declined | E001 | 한도 초과");
     }
 
     @Test
     @DisplayName("실패 사유 일부가 비어 있으면 있는 값만 합치고, 전부 비면 null")
     void failureSummaryNullSafe() {
         // given
-        PortOnePaymentFailure partial = new PortOnePaymentFailure(null, "E001", "  ");
-        PortOnePaymentFailure empty = new PortOnePaymentFailure(null, null, null);
+        PortOnePaymentFailure partial =
+            new PortOnePaymentFailure(null, "E001", "  ");
+        PortOnePaymentFailure empty =
+            new PortOnePaymentFailure(null, null, null);
 
-        // when & then
-        assertThat(partial.summary()).isEqualTo("E001");
-        assertThat(empty.summary()).isNull();
+        // when
+        String partialSummary = partial.summary();
+        String emptySummary = empty.summary();
+
+        // then
+        assertThat(partialSummary).isEqualTo("E001");
+        assertThat(emptySummary).isNull();
     }
 
     @Test
     @DisplayName("실패 사유가 500자를 넘으면 500자에서 자른다")
     void failureSummaryTruncated() {
         // given
-        PortOnePaymentFailure longFailure = new PortOnePaymentFailure("x".repeat(600), null, null);
+        PortOnePaymentFailure longFailure =
+            new PortOnePaymentFailure("x".repeat(600), null, null);
 
         // when
         String summary = longFailure.summary();
@@ -117,14 +145,14 @@ class PortOnePaymentTest {
 
     private static PortOnePaymentResponse paidResponse(OffsetDateTime paidAt) {
         return new PortOnePaymentResponse(
-                "pay_1",
-                "tx_1",
-                PortOnePaymentStatus.PAID,
-                new PortOnePaymentAmount(23800L, 23800L),
-                "KRW",
-                paidAt,
-                "{\"orderId\":10}",
-                null
+            "pay_1",
+            "tx_1",
+            PortOnePaymentStatus.PAID,
+            new PortOnePaymentAmount(23800L, 23800L),
+            "KRW",
+            paidAt,
+            "{\"orderId\":10}",
+            null
         );
     }
 }

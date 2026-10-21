@@ -1,7 +1,7 @@
 package com.recipick.infra.portone;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -34,7 +34,11 @@ import org.springframework.web.client.RestClient;
 class PortOnePaymentClientTest {
 
     private static final PortOneProperties PROPERTIES = new PortOneProperties(
-            "test-secret", "https://api.portone.io", Duration.ofSeconds(1), Duration.ofSeconds(1));
+        "test-secret",
+        "https://api.portone.io",
+        Duration.ofSeconds(1),
+        Duration.ofSeconds(1)
+    );
 
     private static final String PAID_BODY = """
             {
@@ -54,7 +58,11 @@ class PortOnePaymentClientTest {
     @BeforeEach
     void setUp() {
         // 운영 빈과 같은 configure()를 거친 빌더에 Mock 서버를 붙여 헤더·컨버터 설정을 그대로 검증한다
-        RestClient.Builder builder = PortOneClientConfig.configure(RestClient.builder(), PROPERTIES);
+        RestClient.Builder builder = PortOneClientConfig.configure(
+            RestClient.builder(),
+            PROPERTIES
+        );
+
         server = MockRestServiceServer.bindTo(builder).build();
         client = new PortOnePaymentClient(builder.build());
     }
@@ -64,9 +72,9 @@ class PortOnePaymentClientTest {
     void getPayment() {
         // given
         server.expect(requestTo("https://api.portone.io/payments/pay_1"))
-                .andExpect(method(HttpMethod.GET))
-                .andExpect(header(HttpHeaders.AUTHORIZATION, "PortOne test-secret"))
-                .andRespond(withSuccess(PAID_BODY, MediaType.APPLICATION_JSON));
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(header(HttpHeaders.AUTHORIZATION, "PortOne test-secret"))
+            .andRespond(withSuccess(PAID_BODY, MediaType.APPLICATION_JSON));
 
         // when
         PortOnePayment payment = client.getPayment("pay_1");
@@ -76,7 +84,8 @@ class PortOnePaymentClientTest {
         assertThat(payment.status()).isEqualTo(PortOnePaymentStatus.PAID);
         assertThat(payment.transactionId()).isEqualTo("tx_1");
         assertThat(payment.totalAmount()).isEqualTo(23800L);
-        assertThat(payment.paidAt()).isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
+        assertThat(payment.paidAt())
+            .isEqualTo(LocalDateTime.of(2026, 10, 20, 19, 3, 11));
         assertThat(payment.customDataOrderId()).isEqualTo(10L);
     }
 
@@ -85,7 +94,7 @@ class PortOnePaymentClientTest {
     void encodePaymentId() {
         // given
         server.expect(requestTo("https://api.portone.io/payments/pay_a%20b"))
-                .andRespond(withSuccess(PAID_BODY, MediaType.APPLICATION_JSON));
+            .andRespond(withSuccess(PAID_BODY, MediaType.APPLICATION_JSON));
 
         // when
         client.getPayment("pay_a b");
@@ -99,8 +108,10 @@ class PortOnePaymentClientTest {
     void unknownStatusViaClient() {
         // given
         server.expect(requestTo("https://api.portone.io/payments/pay_1"))
-                .andRespond(withSuccess("{\"status\":\"PAY_PENDING\",\"id\":\"pay_1\"}",
-                        MediaType.APPLICATION_JSON));
+            .andRespond(withSuccess(
+                "{\"status\":\"PAY_PENDING\",\"id\":\"pay_1\"}",
+                MediaType.APPLICATION_JSON
+            ));
 
         // when
         PortOnePayment payment = client.getPayment("pay_1");
@@ -114,26 +125,37 @@ class PortOnePaymentClientTest {
     void notFound() {
         // given
         server.expect(requestTo("https://api.portone.io/payments/pay_missing"))
-                .andRespond(withStatus(HttpStatus.NOT_FOUND)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"type\":\"PAYMENT_NOT_FOUND\",\"message\":\"not found\"}"));
+            .andRespond(withStatus(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"type\":\"PAYMENT_NOT_FOUND\",\"message\":\"not found\"}"));
 
-        // when & then
-        assertErrorCode(() -> client.getPayment("pay_missing"), PaymentErrorCode.PAYMENT_NOT_FOUND);
+        // when
+        Throwable thrown = catchThrowable(() -> client.getPayment("pay_missing"));
+
+        // then
+        assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
     }
 
     @Test
     @DisplayName("401·403·500 오류 응답이면 EXTERNAL_SERVICE_ERROR")
     void errorResponses() {
         for (HttpStatus status : new HttpStatus[] {
-                HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN, HttpStatus.INTERNAL_SERVER_ERROR}) {
+            HttpStatus.UNAUTHORIZED,
+            HttpStatus.FORBIDDEN,
+            HttpStatus.INTERNAL_SERVER_ERROR
+        }) {
             // given
             server.reset();
             server.expect(requestTo("https://api.portone.io/payments/pay_1"))
-                    .andRespond(withStatus(status).contentType(MediaType.APPLICATION_JSON).body("{}"));
+                .andRespond(withStatus(status)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{}"));
 
-            // when & then
-            assertErrorCode(() -> client.getPayment("pay_1"), CommonErrorCode.EXTERNAL_SERVICE_ERROR);
+            // when
+            Throwable thrown = catchThrowable(() -> client.getPayment("pay_1"));
+
+            // then
+            assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_ERROR);
         }
     }
 
@@ -142,10 +164,16 @@ class PortOnePaymentClientTest {
     void unreadableBody() {
         // given
         server.expect(requestTo("https://api.portone.io/payments/pay_1"))
-                .andRespond(withSuccess("{\"status\": PAID", MediaType.APPLICATION_JSON));
+            .andRespond(withSuccess(
+                "{\"status\": PAID",
+                MediaType.APPLICATION_JSON
+            ));
 
-        // when & then
-        assertErrorCode(() -> client.getPayment("pay_1"), CommonErrorCode.EXTERNAL_SERVICE_ERROR);
+        // when
+        Throwable thrown = catchThrowable(() -> client.getPayment("pay_1"));
+
+        // then
+        assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_ERROR);
     }
 
     @Test
@@ -153,10 +181,14 @@ class PortOnePaymentClientTest {
     void readTimeout() {
         // given
         PortOnePaymentClient timeoutClient = clientWithFailingRequestFactory(
-                new SocketTimeoutException("Read timed out"));
+            new SocketTimeoutException("Read timed out")
+        );
 
-        // when & then
-        assertErrorCode(() -> timeoutClient.getPayment("pay_1"), CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
+        // when
+        Throwable thrown = catchThrowable(() -> timeoutClient.getPayment("pay_1"));
+
+        // then
+        assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
     }
 
     @Test
@@ -164,10 +196,14 @@ class PortOnePaymentClientTest {
     void httpTimeout() {
         // given
         PortOnePaymentClient timeoutClient = clientWithFailingRequestFactory(
-                new HttpTimeoutException("request timed out"));
+            new HttpTimeoutException("request timed out")
+        );
 
-        // when & then
-        assertErrorCode(() -> timeoutClient.getPayment("pay_1"), CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
+        // when
+        Throwable thrown = catchThrowable(() -> timeoutClient.getPayment("pay_1"));
+
+        // then
+        assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
     }
 
     @Test
@@ -175,26 +211,34 @@ class PortOnePaymentClientTest {
     void connectionRefused() {
         // given
         PortOnePaymentClient failingClient = clientWithFailingRequestFactory(
-                new ConnectException("Connection refused"));
+            new ConnectException("Connection refused")
+        );
 
-        // when & then
-        assertErrorCode(() -> failingClient.getPayment("pay_1"), CommonErrorCode.EXTERNAL_SERVICE_ERROR);
+        // when
+        Throwable thrown = catchThrowable(() -> failingClient.getPayment("pay_1"));
+
+        // then
+        assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_ERROR);
     }
 
     private static PortOnePaymentClient clientWithFailingRequestFactory(IOException failure) {
         ClientHttpRequestFactory failingFactory = (uri, method) -> {
             throw failure;
         };
-        RestClient restClient = PortOneClientConfig.configure(RestClient.builder(), PROPERTIES)
-                .requestFactory(failingFactory)
-                .build();
+
+        RestClient restClient = PortOneClientConfig.configure(
+                RestClient.builder(),
+                PROPERTIES
+            )
+            .requestFactory(failingFactory)
+            .build();
+
         return new PortOnePaymentClient(restClient);
     }
 
-    private static void assertErrorCode(Runnable call, ErrorCode expected) {
-        assertThatThrownBy(call::run)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(expected);
+    private static void assertErrorCode(Throwable thrown, ErrorCode expected) {
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(expected));
     }
 }
