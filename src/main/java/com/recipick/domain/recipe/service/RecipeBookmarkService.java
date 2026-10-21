@@ -41,7 +41,7 @@ public class RecipeBookmarkService {
             .memberId(memberId)
             .recipe(recipe)
             .build();
-        try{
+        try {
             return RecipeBookmarkCreateResponse.from(recipeBookmarkRepository.saveAndFlush(bookmark));
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(RecipeErrorCode.DUPLICATE_BOOKMARK, e);
@@ -54,13 +54,13 @@ public class RecipeBookmarkService {
     }
 
     public PageResponse<RecipeBookmarkResponse> findMyBookmarks(Long memberId, Pageable pageable) {
-        Pageable latesFirst = PageRequest.of(
+        Pageable latestFirst = PageRequest.of(
             pageable.getPageNumber(),
             pageable.getPageSize(),
             Sort.by(Sort.Direction.DESC, "createdAt")
         );
         return PageResponse.from(recipeBookmarkRepository
-            .findByIdMemberIdAndRecipeStatus(memberId, RecipeStatus.ACTIVE, latesFirst)
+            .findByIdMemberIdAndRecipeStatus(memberId, RecipeStatus.ACTIVE, latestFirst)
             .map(RecipeBookmarkResponse::from));
     }
 }
