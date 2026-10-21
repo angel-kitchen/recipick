@@ -1,0 +1,116 @@
+package com.recipick.domain.payment.repository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.recipick.IntegrationTestSupport;
+import com.recipick.domain.payment.entity.Payment;
+import com.recipick.domain.payment.entity.Refund;
+import com.recipick.domain.payment.entity.enums.PaymentMethod;
+import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
+import com.recipick.domain.payment.entity.enums.RefundStatus;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
+
+@Transactional
+class RefundRepositoryTest extends IntegrationTestSupport {
+
+    @Autowired
+    PaymentRepository paymentRepository;
+
+    @Autowired
+    RefundRepository refundRepository;
+
+    @Autowired
+    EntityManager em;
+
+    @Test
+    @DisplayName("같은 결제에 MEMBER 환불이 있어도 SYSTEM 환불만 조회한다")
+    void findSystemRefundByPaymentId() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(1L));
+        Refund system = refundRepository.save(Refund.requestedBySystem(
+            payment, 23800L, "결제 금액 불일치", "key_1_system",
+            LocalDateTime.of(2026, 10, 21, 10, 10)));
+        refundRepository.save(newMemberRefund(payment, "key_1_member"));
+        em.flush();
+        em.clear();
+
+        // when
+        Refund found = refundRepository.findSystemRefundByPaymentId(payment.getId()).orElseThrow();
+
+        // then
+        assertThat(found.getId()).isEqualTo(system.getId());
+        assertThat(found.getRequestedBy()).isEqualTo(RefundRequester.SYSTEM);
+        assertThat(found.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+    }
+
+    @Test
+    @DisplayName("MEMBER 환불만 있는 결제는 SYSTEM 환불 조회가 비어 있다")
+    void findSystemRefundByPaymentIdWhenOnlyMember() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(3L));
+        refundRepository.save(newMemberRefund(payment, "key_3_member"));
+        em.flush();
+        em.clear();
+
+        // when
+        Optional<Refund> found = refundRepository.findSystemRefundByPaymentId(payment.getId());
+
+        // then
+        assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Refund의 enum 두 개가 이름 문자열로 저장된다")
+    void enumStoredAsString() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(2L));
+        Refund saved = refundRepository.save(Refund.requestedBySystem(
+            payment, 23800L, "결제 금액 불일치", "key_2",
+            LocalDateTime.of(2026, 10, 21, 10, 10)));
+        em.flush();
+
+        // when
+        Object status = selectColumn("status", saved.getId());
+        Object requestedBy = selectColumn("requested_by", saved.getId());
+
+        // then
+        assertThat(status).isEqualTo("REQUESTED");
+        assertThat(requestedBy).isEqualTo("SYSTEM");
+    }
+
+    private Payment newFailedPayment(Long orderId) {
+        return Payment.builder()
+            .orderId(orderId)
+            .paymentMethod(PaymentMethod.CARD)
+            .portonePaymentId("pay_" + orderId)
+            .amount(23800L)
+            .status(PaymentStatus.FAILED)
+            .expiresAt(LocalDateTime.of(2026, 10, 21, 10, 5))
+            .build();
+    }
+
+    private Refund newMemberRefund(Payment payment, String idempotencyKey) {
+        return Refund.builder()
+            .payment(payment)
+            .amount(23800L)
+            .reason("회원 취소")
+            .status(RefundStatus.REQUESTED)
+            .requestedBy(RefundRequester.MEMBER)
+            .idempotencyKey(idempotencyKey)
+            .requestedAt(LocalDateTime.of(2026, 10, 21, 10, 10))
+            .build();
+    }
+
+    private Object selectColumn(String column, Long id) {
+        return em.createNativeQuery("SELECT " + column + " FROM refund WHERE id = :id")
+            .setParameter("id", id)
+            .getSingleResult();
+    }
+}
