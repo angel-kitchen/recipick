@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -21,7 +22,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "cart_add_history")
+@Table(
+        name = "cart_add_history",
+        indexes = @Index(
+                name = "idx_cart_add_history_auto_cart_request_id",
+                columnList = "auto_cart_request_id"
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CartAddHistory {
 

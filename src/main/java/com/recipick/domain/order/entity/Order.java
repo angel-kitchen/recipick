@@ -14,8 +14,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -24,7 +26,13 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @Entity
-@Table(name = "orders")
+@Table(
+        name = "orders",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_orders_member_id_idempotency_key",
+                columnNames = {"member_id", "idempotency_key"}
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseTimeEntity {
 
@@ -41,6 +49,12 @@ public class Order extends BaseTimeEntity {
 
     @Column(unique = true)
     private Long pendingMemberId;
+
+    @Column(length = 64)
+    private String idempotencyKey;
+
+    @Column(length = 64)
+    private String requestHash;
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")
@@ -90,6 +104,8 @@ public class Order extends BaseTimeEntity {
             Long memberId,
             Long martId,
             Long pendingMemberId,
+            String idempotencyKey,
+            String requestHash,
             OrderStatus status,
             MartStatus martStatus,
             Long productAmount,
@@ -107,6 +123,9 @@ public class Order extends BaseTimeEntity {
         this.memberId = memberId;
         this.martId = martId;
         this.pendingMemberId = pendingMemberId;
+        // 대소문자만 다른 재시도도 같은 키로 판정해야 UNIQUE가 중복 주문을 막는다
+        this.idempotencyKey = idempotencyKey == null ? null : idempotencyKey.toLowerCase(Locale.ROOT);
+        this.requestHash = requestHash;
         this.status = status;
         this.martStatus = martStatus;
         this.productAmount = productAmount;

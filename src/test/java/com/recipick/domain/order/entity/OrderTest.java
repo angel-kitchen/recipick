@@ -28,6 +28,22 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("멱등성 키는 소문자로 바꿔 저장한다")
+    void create_normalizesIdempotencyKey() {
+        // given
+        String idempotencyKey = "3F2A9C1E-7B4D-4E8A-9C0F-1A2B3C4D5E6F";
+
+        // when
+        Order order = Order.builder()
+                .memberId(1L)
+                .idempotencyKey(idempotencyKey)
+                .build();
+
+        // then
+        assertThat(order.getIdempotencyKey()).isEqualTo("3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f");
+    }
+
+    @Test
     @DisplayName("결제 대기 주문을 결제 완료로 바꾸면 마트 처리 상태는 접수중이 되고 결제 대기 표시가 풀린다")
     void markPaid() {
         // given
