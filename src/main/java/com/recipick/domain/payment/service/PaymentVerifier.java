@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class PaymentVerifier {
 
     // 1차 문서 4절의 검증 번호 순서(0 → 4 → 5 → 6 → 7)로 본다. 프론트가 보낸 값은 쓰지 않고,
-    // 상태를 바꾸거나 예외를 던지지 않고 판정만 돌려준다. 집행은 Service 몫이다
+    // 상태를 바꾸거나 예외를 던지지 않고 판정만 돌려준다. 집행은 Processor 몫이다
     public PaymentApprovalOutcome verify(Payment payment, PortOnePayment portOnePayment) {
         PaymentStatus status = payment.getStatus();
         if (status == PaymentStatus.PAID) {
@@ -31,7 +31,7 @@ public class PaymentVerifier {
         }
         if (portOneStatus == PortOnePaymentStatus.CANCELED
             || portOneStatus == PortOnePaymentStatus.PARTIAL_CANCELED) {
-            // PG 쪽에서 취소된 결제. 즉시 닫을지는 테스트 채널 확인 뒤 정하므로 상태를 바꾸지 않는다
+            // PG 쪽에서 취소된 결제. 즉시 닫을지는 테스트 채널 확인(메모 검증 ②·⑤) 뒤 정하므로 상태를 바꾸지 않는다
             return PaymentApprovalOutcome.INVALID_STATUS;
         }
         if (portOneStatus != PortOnePaymentStatus.PAID) {
@@ -42,8 +42,14 @@ public class PaymentVerifier {
         if (!Objects.equals(portOnePayment.customDataOrderId(), payment.getOrderId())) {
             return PaymentApprovalOutcome.ORDER_MISMATCH;
         }
+
+        Long totalAmount = portOnePayment.totalAmount();
+        if (totalAmount == null) {
+            // PAID인데 금액이 없으면 승인 근거가 없는 것이지 불일치가 아니다. AMOUNT_MISMATCH는 환불·주문 종료를 집행하므로 쓰지 않는다
+            return PaymentApprovalOutcome.NOT_PAID;
+        }
         // 주문 금액이 아니라 결제 생성 때 찍어 둔 PAYMENT.amount 스냅샷과 비교한다
-        if (!Objects.equals(portOnePayment.totalAmount(), payment.getAmount())) {
+        if (!totalAmount.equals(payment.getAmount())) {
             return PaymentApprovalOutcome.AMOUNT_MISMATCH;
         }
 

@@ -120,7 +120,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("SYSTEM 환불이 없으면 전액·UUID 키·멈춘 시계의 시각으로 REQUESTED 행을 만든다")
+    @DisplayName("SYSTEM 환불이 없으면 PG 청구 금액·UUID 키·멈춘 시계의 시각으로 REQUESTED 행을 만든다")
     void requestSystemRefundCreatesFirstOne() {
         // given
         Payment payment = failedPayment();
@@ -128,13 +128,13 @@ class PaymentServiceTest {
         given(refundRepository.save(any(Refund.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        Refund refund = paymentService.requestSystemRefund(payment, "결제 금액 불일치");
+        Refund refund = paymentService.requestSystemRefund(payment, 20000L, "결제 금액 불일치");
 
         // then
         verify(refundRepository).save(refundCaptor.capture());
         assertThat(refund).isSameAs(refundCaptor.getValue());
         assertThat(refund.getPayment()).isSameAs(payment);
-        assertThat(refund.getAmount()).isEqualTo(23800L);
+        assertThat(refund.getAmount()).isEqualTo(20000L);
         assertThat(refund.getReason()).isEqualTo("결제 금액 불일치");
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.SYSTEM);
@@ -160,10 +160,11 @@ class PaymentServiceTest {
         given(refundRepository.findSystemRefundByPaymentId(PAYMENT_ID)).willReturn(Optional.of(existing));
 
         // when
-        Refund refund = paymentService.requestSystemRefund(payment, "다른 문구여도 상관없다");
+        Refund refund = paymentService.requestSystemRefund(payment, 20000L, "다른 문구여도 상관없다");
 
         // then
         assertThat(refund).isSameAs(existing);
+        assertThat(refund.getAmount()).isEqualTo(23800L);
         assertThat(refund.getStatus()).isEqualTo(status);
         assertThat(refund.getIdempotencyKey()).isEqualTo("key_existing");
         verify(refundRepository, never()).save(any(Refund.class));

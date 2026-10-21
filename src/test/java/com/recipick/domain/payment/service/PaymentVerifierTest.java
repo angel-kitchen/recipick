@@ -133,19 +133,30 @@ class PaymentVerifierTest {
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ORDER_MISMATCH);
     }
 
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(longs = {20000L})
-    @DisplayName("PG 결제 금액이 없거나 PAYMENT.amount와 다르면 AMOUNT_MISMATCH다")
-    void amountMismatch(Long totalAmount) {
+    @Test
+    @DisplayName("PG 결제 금액이 PAYMENT.amount와 다르면 AMOUNT_MISMATCH다")
+    void amountMismatch() {
         // given
-        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID, 1L, totalAmount, EXPIRES_AT);
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID, 1L, 20000L, EXPIRES_AT);
 
         // when
         PaymentApprovalOutcome outcome = verifier.verify(payment(PaymentStatus.IN_PROGRESS), portOne);
 
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.AMOUNT_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("PAID인데 금액이 없으면 불일치가 아니라 NOT_PAID다 (AMOUNT_MISMATCH는 환불·주문 종료를 집행하므로)")
+    void amountMissingIsNotPaid() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID, 1L, null, EXPIRES_AT);
+
+        // when
+        PaymentApprovalOutcome outcome = verifier.verify(payment(PaymentStatus.IN_PROGRESS), portOne);
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.NOT_PAID);
     }
 
     @Test
@@ -178,16 +189,10 @@ class PaymentVerifierTest {
     @DisplayName("금액 불일치는 만료보다 먼저 판정한다")
     void amountMismatchBeforeExpired() {
         // given
-        PortOnePayment portOne = portOne(
-            PortOnePaymentStatus.PAID,
-            1L,
-            20000L,
-            EXPIRES_AT.plusMinutes(10)
-        );
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID, 1L, 20000L, EXPIRES_AT.plusMinutes(10));
 
         // when
-        PaymentApprovalOutcome outcome =
-            verifier.verify(payment(PaymentStatus.IN_PROGRESS), portOne);
+        PaymentApprovalOutcome outcome = verifier.verify(payment(PaymentStatus.IN_PROGRESS), portOne);
 
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.AMOUNT_MISMATCH);

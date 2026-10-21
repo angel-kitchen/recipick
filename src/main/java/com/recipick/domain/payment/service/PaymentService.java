@@ -36,13 +36,13 @@ public class PaymentService {
 
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도
     // 기존 행(REQUESTED·COMPLETED·FAILED 무관)을 돌려주고 새 키를 만들지 않는다 (1차 문서 8절).
-    // FAILED를 다시 시도하지 않는 정책이 여기서 보장된다. 호출 전에 PAYMENT 행이 잠겨 있어야 한다
+    // amount는 PG가 실제로 청구한 금액이다 — 금액 불일치면 PAYMENT.amount와 다르다. 호출 전에 PAYMENT 행이 잠겨 있어야 한다
     @Transactional
-    public Refund requestSystemRefund(Payment payment, String reason) {
+    public Refund requestSystemRefund(Payment payment, Long amount, String reason) {
         return refundRepository.findSystemRefundByPaymentId(payment.getId())
             .orElseGet(() -> refundRepository.save(Refund.requestedBySystem(
                 payment,
-                payment.getAmount(),
+                amount,
                 reason,
                 UUID.randomUUID().toString(),
                 LocalDateTime.now(clock))));
