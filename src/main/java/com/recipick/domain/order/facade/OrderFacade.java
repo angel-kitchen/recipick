@@ -1,0 +1,36 @@
+package com.recipick.domain.order.facade;
+
+import com.recipick.domain.order.entity.enums.CancelReasonCode;
+import com.recipick.domain.order.service.OrderService;
+import com.recipick.domain.product.dto.StockQuantity;
+import com.recipick.domain.product.service.ProductStockService;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+@RequiredArgsConstructor
+public class OrderFacade {
+
+    private final OrderService orderService;
+    private final ProductStockService productStockService;
+
+    // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고에서 포인트 복구가 사이에 들어가야 해서
+    // 주문 종료와 재고 복구를 나눈다. 결제 Facade가 한 트랜잭션 안에서 종료 → 포인트 복구 → 재고 복구 순으로 호출한다.
+    @Transactional
+    public List<StockQuantity> closeByPaymentFailure(Long orderId, CancelReasonCode reasonCode) {
+        return orderService.closeByPaymentFailure(orderId, reasonCode).stream()
+                .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
+                .toList();
+    }
+
+    @Transactional
+    public void restoreStock(List<StockQuantity> items) {
+        // 이미 종료된 주문은 복구할 재고가 없다
+        if (items.isEmpty()) {
+            return;
+        }
+        productStockService.increaseStocks(items);
+    }
+}
