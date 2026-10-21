@@ -36,4 +36,12 @@ public class Ingredient {
         this.name = name;
         this.unit = unit;
     }
+
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    public void changeUnit(SaleUnit unit) {
+        this.unit = unit;
+    }
 }
