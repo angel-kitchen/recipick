@@ -84,7 +84,7 @@ class AdminSeedSqlIntegrationTest extends IntegrationTestSupport {
         long count = admins.count();
         Admin admin = admins.findByLoginIdIgnoreCase("super01").orElseThrow();
         jdbc.update("UPDATE admin SET password_hash = ?, active = false WHERE id = ?", "changed-hash", admin.getId());
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new ClassPathResource("data.sql"));
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new ClassPathResource("data-admin-local.sql"));
         populator.setSqlScriptEncoding("UTF-8");
 
         // when

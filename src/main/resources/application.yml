@@ -46,3 +46,14 @@ spring:
 security:
   login:
     refresh-cookie-secure: ${AUTH_COOKIE_SECURE:false}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "(local | test) & !prod & !production"
+  sql:
+    init:
+      data-locations:
+        - classpath:data.sql
+        - classpath:data-admin-local.sql
