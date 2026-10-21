@@ -14,6 +14,7 @@ import com.recipick.global.common.PolicyConstants;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,7 +56,7 @@ public class MartService {
     public MartIdResponse updateMart(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
         validateUpdatePermission(role, adminMartId, martId, request);
 
-        Mart mart = martRepository.findById(martId)
+        Mart mart = martRepository.findByIdForUpdate(martId)
             .orElseThrow(() -> new BusinessException(ProductErrorCode.MART_NOT_FOUND));
 
         if((request.latitude() == null) != (request.longitude() == null)){
