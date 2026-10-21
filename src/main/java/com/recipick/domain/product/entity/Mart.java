@@ -68,4 +68,20 @@ public class Mart extends BaseTimeEntity {
         this.serviceRadiusM = serviceRadiusM;
         this.status = MartStatus.OPEN;
     }
+
+    public void update(BigDecimal latitude,
+                       BigDecimal longitude,
+                       Integer serviceRadiusM,
+                       MartStatus status){
+        if (latitude != null){
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
+        if (serviceRadiusM != null){
+            this.serviceRadiusM = serviceRadiusM;
+        }
+        if (status != null){
+            this.status = status;
+        }
+    }
 }
