@@ -26,9 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class OrderService {
 
-    // 회원 취소·마트 거절은 결제 후 환불 흐름을 타므로 이 메서드로 종료하면 안 된다
-    private static final Set<CancelReasonCode> PAYMENT_FAILURE_REASONS = EnumSet.of(
-            CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH);
+    // 결제 전 회원 취소도 결제 실패와 같은 종료 흐름을 탄다. 마트 거절은 결제 후 환불 흐름을 타므로 이 메서드로 종료하면 안 된다
+    private static final Set<CancelReasonCode> BEFORE_PAYMENT_CLOSE_REASONS = EnumSet.of(
+            CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH,
+            CancelReasonCode.MEMBER_CANCELED);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -63,8 +64,8 @@ public class OrderService {
     @Transactional
     public List<OrderItem> closeByPaymentFailure(
             Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
-        if (!PAYMENT_FAILURE_REASONS.contains(reasonCode)) {
-            throw new IllegalArgumentException("결제 실패 사유가 아닙니다: " + reasonCode);
+        if (!BEFORE_PAYMENT_CLOSE_REASONS.contains(reasonCode)) {
+            throw new IllegalArgumentException("결제 전 종료 사유가 아닙니다: " + reasonCode);
         }
         Order order = getOrderForUpdate(orderId);
         // 실패·만료 결과가 반복 전달돼도 최초 취소 사유를 덮어쓰거나 재고를 다시 복구하지 않는다

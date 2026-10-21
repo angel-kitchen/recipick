@@ -184,10 +184,30 @@ class OrderServiceTest {
         verify(orderItemRepository, never()).findAllByOrderId(any());
     }
 
+    @Test
+    @DisplayName("결제 전 회원 취소면 회원 취소 사유로 주문을 종료하고 재고를 복구할 주문 상품을 돌려준다")
+    void closeByPaymentFailure_memberCanceledBeforePay() {
+        // given
+        List<OrderItem> items = List.of(OrderItem.builder().productId(10L).quantity(2).build());
+        Order order = pendingOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+        given(orderItemRepository.findAllByOrderId(1L)).willReturn(items);
+
+        // when
+        List<OrderItem> result = orderService.closeByPaymentFailure(1L, CancelReasonCode.MEMBER_CANCELED, null);
+
+        // then
+        assertThat(result).isEqualTo(items);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getReason()).isEqualTo("MEMBER_CANCELED");
+    }
+
     @ParameterizedTest
     @NullSource
-    @EnumSource(value = CancelReasonCode.class, names = {"MEMBER_CANCELED", "MART_REJECTED"})
-    @DisplayName("결제 실패 사유가 아니면 주문을 잠그지 않고 거부한다")
+    @EnumSource(value = CancelReasonCode.class, names = "MART_REJECTED")
+    @DisplayName("결제 전 종료 사유가 아니면 주문을 잠그지 않고 거부한다")
     void closeByPaymentFailure_notPaymentFailureReason(CancelReasonCode reasonCode) {
         // when, then
         assertThatThrownBy(() -> orderService.closeByPaymentFailure(1L, reasonCode, null))
