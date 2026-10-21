@@ -147,14 +147,16 @@ class OrderServiceTest {
     void closeByPaymentFailure() {
         // given
         List<OrderItem> items = List.of(OrderItem.builder().productId(10L).quantity(2).build());
-        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(pendingOrder()));
+        Order order = pendingOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
         given(orderItemRepository.findAllByOrderId(1L)).willReturn(items);
 
         // when
-        List<OrderItem> result = orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_TIMEOUT);
+        List<OrderItem> result = orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_TIMEOUT, "결제 시간 만료");
 
         // then
         assertThat(result).isEqualTo(items);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("결제 시간 만료");
         verify(orderStatusHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue())
                 .extracting(OrderStatusHistory::getStatusType, OrderStatusHistory::getFromStatus,
@@ -168,15 +170,16 @@ class OrderServiceTest {
     void closeByPaymentFailure_alreadyCanceled() {
         // given
         Order order = pendingOrder();
-        order.cancel(CancelReasonCode.PAYMENT_TIMEOUT);
+        order.cancel(CancelReasonCode.PAYMENT_TIMEOUT, "결제 시간 만료");
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        List<OrderItem> result = orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED);
+        List<OrderItem> result = orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED, "카드 한도 초과");
 
         // then
         assertThat(result).isEmpty();
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.PAYMENT_TIMEOUT);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("결제 시간 만료");
         verify(orderStatusHistoryRepository, never()).save(any());
         verify(orderItemRepository, never()).findAllByOrderId(any());
     }
@@ -187,7 +190,7 @@ class OrderServiceTest {
     @DisplayName("결제 실패 사유가 아니면 주문을 잠그지 않고 거부한다")
     void closeByPaymentFailure_notPaymentFailureReason(CancelReasonCode reasonCode) {
         // when, then
-        assertThatThrownBy(() -> orderService.closeByPaymentFailure(1L, reasonCode))
+        assertThatThrownBy(() -> orderService.closeByPaymentFailure(1L, reasonCode, null))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(orderRepository, never()).findByIdForUpdate(any());
     }
@@ -199,7 +202,7 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.empty());
 
         // when, then
-        assertThatThrownBy(() -> orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED))
+        assertThatThrownBy(() -> orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);

@@ -35,12 +35,12 @@ class OrderFacadeTest {
     @DisplayName("결제 실패로 주문을 종료하면 재고는 건드리지 않고 복구할 상품 수량을 돌려준다")
     void closeByPaymentFailure() {
         // given
-        given(orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED)).willReturn(List.of(
+        given(orderService.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED, null)).willReturn(List.of(
                 OrderItem.builder().productId(10L).quantity(2).build(),
                 OrderItem.builder().productId(20L).quantity(1).build()));
 
         // when
-        List<StockQuantity> result = orderFacade.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED);
+        List<StockQuantity> result = orderFacade.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED, null);
 
         // then
         assertThat(result).containsExactly(new StockQuantity(10L, 2), new StockQuantity(20L, 1));

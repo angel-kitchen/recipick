@@ -21,8 +21,9 @@ public class OrderFacade {
     // 주문 종료와 재고 복구를 나눈다. 결제 Facade가 한 트랜잭션 안에서 종료 → 포인트 복구 → 재고 복구 순으로 호출한다.
     // 따로 커밋되면 종료만 반영되고 재고 복구가 빠질 수 있어 바깥 트랜잭션 없이는 호출할 수 없게 한다.
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<StockQuantity> closeByPaymentFailure(Long orderId, CancelReasonCode reasonCode) {
-        return orderService.closeByPaymentFailure(orderId, reasonCode).stream()
+    public List<StockQuantity> closeByPaymentFailure(
+            Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
+        return orderService.closeByPaymentFailure(orderId, reasonCode, reasonDetail).stream()
                 .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
                 .toList();
     }
