@@ -9,9 +9,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
+import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
+import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
@@ -139,5 +141,39 @@ public class ProductServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상품 ID 목록으로 장바구니용 상품 정보를 조회한다")
+    void findProducts() {
+        // given
+        Product product = product(1L, 3L);
+        ReflectionTestUtils.setField(product, "status", ProductStatus.STOPPED);
+        given(productRepository.findAllById(List.of(1L, 2L))).willReturn(List.of(product));
+
+        // when
+        List<ProductSummary> result = productService.findProducts(List.of(1L, 2L));
+
+        // then
+        assertThat(result).hasSize(1);
+        ProductSummary summary = result.get(0);
+        assertThat(summary.productId()).isEqualTo(1L);
+        assertThat(summary.martId()).isEqualTo(3L);
+        assertThat(summary.name()).isEqualTo("애호박");
+        assertThat(summary.price()).isEqualTo(1500L);
+        assertThat(summary.status()).isEqualTo(ProductStatus.STOPPED);
+        assertThat(summary.totalQuantity()).isEqualTo(5);
+        assertThat(summary.deleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("빈 목록이면 조회 없이 빈 결과를 돌려준다")
+    void findProductsWithEmptyIds() {
+        // when
+        List<ProductSummary> result = productService.findProducts(List.of());
+
+        // then
+        assertThat(result).isEmpty();
+        verifyNoInteractions(productRepository);
     }
 }
