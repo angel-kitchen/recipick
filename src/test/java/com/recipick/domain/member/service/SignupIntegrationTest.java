@@ -15,7 +15,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -150,7 +149,6 @@ class SignupIntegrationTest extends IntegrationTestSupport {
 
     @ParameterizedTest
     @ValueSource(strings = {"email", "phone"})
-    @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:mysql:.*")
     @DisplayName("기존 MySQL UNIQUE 이름에서도 동시 가입 충돌을 409로 변환한다")
     void concurrentSignupsWithLegacyMysqlIndexes(String duplicateField) throws Exception {
         // given: 기존 DB의 자동 생성 제약 이름을 재현한다.
