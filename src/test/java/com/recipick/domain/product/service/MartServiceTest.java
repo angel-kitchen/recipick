@@ -7,10 +7,13 @@ import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.dto.MartUpdateRequest;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
+import com.recipick.domain.product.entity.Product;
+import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -373,5 +376,22 @@ public class MartServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("판매 상태 변경 : null이면 INVALID_INPUT이고 상태는 그대로다")
+    void changeStatus_null() {
+        // given
+        Product product = Product.builder().name("애호박").totalQuantity(5).build();
+
+        // when
+        Throwable thrown = catchThrowable(() -> product.changeStatus(null));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
     }
 }
