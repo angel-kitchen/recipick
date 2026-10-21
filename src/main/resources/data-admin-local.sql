@@ -5,9 +5,15 @@ SELECT 'super01', '$2a$10$jxuhhdAkkBCHu1LkjzHriu1sc9/rZqRSmZoSNQGJm9b5MaaQUdACm'
 WHERE NOT EXISTS (SELECT 1 FROM admin WHERE login_id = 'super01');
 
 INSERT INTO admin (login_id, password_hash, name, role, mart_id, active, created_at, updated_at)
-SELECT 'samcheong01', '$2a$10$jxuhhdAkkBCHu1LkjzHriu1sc9/rZqRSmZoSNQGJm9b5MaaQUdACm', '삼청 마트 관리자', 'MART_ADMIN', 1, TRUE, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM admin WHERE login_id = 'samcheong01');
+SELECT 'samcheong01', '$2a$10$jxuhhdAkkBCHu1LkjzHriu1sc9/rZqRSmZoSNQGJm9b5MaaQUdACm', '삼청 마트 관리자', 'MART_ADMIN', m.id, TRUE, NOW(), NOW()
+FROM mart m
+JOIN region r ON r.id = m.region_id
+WHERE r.legal_dong_code = '1111014000'
+  AND NOT EXISTS (SELECT 1 FROM admin WHERE login_id = 'samcheong01');
 
 INSERT INTO admin (login_id, password_hash, name, role, mart_id, active, created_at, updated_at)
-SELECT 'haan01', '$2a$10$jxuhhdAkkBCHu1LkjzHriu1sc9/rZqRSmZoSNQGJm9b5MaaQUdACm', '하안 마트 관리자', 'MART_ADMIN', 2, TRUE, NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM admin WHERE login_id = 'haan01');
+SELECT 'haan01', '$2a$10$jxuhhdAkkBCHu1LkjzHriu1sc9/rZqRSmZoSNQGJm9b5MaaQUdACm', '하안 마트 관리자', 'MART_ADMIN', m.id, TRUE, NOW(), NOW()
+FROM mart m
+JOIN region r ON r.id = m.region_id
+WHERE r.legal_dong_code = '4121010300'
+  AND NOT EXISTS (SELECT 1 FROM admin WHERE login_id = 'haan01');

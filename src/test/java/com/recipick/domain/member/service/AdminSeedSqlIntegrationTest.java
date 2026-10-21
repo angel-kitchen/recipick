@@ -76,6 +76,40 @@ class AdminSeedSqlIntegrationTest extends IntegrationTestSupport {
         assertThat(memberResponse.getHeader("Set-Cookie")).isNull();
     }
 
+    @ParameterizedTest
+    @CsvSource({"samcheong01,1,900001", "haan01,2,900002"})
+    @Transactional
+    @DisplayName("기존 마트 ID가 달라도 법정동으로 찾아 관리자와 토큰에 실제 ID를 저장한다")
+    void usesExistingMartId(String loginId, Long regionId, Long actualMartId) throws Exception {
+        // given
+        jdbc.update("DELETE FROM admin WHERE login_id = ?", loginId);
+        jdbc.update("UPDATE mart SET region_id = NULL WHERE id = ?", regionId);
+        jdbc.update("""
+                INSERT INTO mart (id, region_id, name, latitude, longitude,
+                                  service_radius_m, status, created_at, updated_at)
+                SELECT ?, ?, name, latitude, longitude, service_radius_m, status, NOW(), NOW()
+                FROM mart WHERE id = ?
+                """, actualMartId, regionId, regionId);
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("data.sql"), new ClassPathResource("data-admin-local.sql"));
+        populator.setSqlScriptEncoding("UTF-8");
+
+        // when
+        populator.execute(dataSource);
+        MockHttpServletResponse response = mockMvc.perform(post("/api/admin/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(Map.of("loginId", loginId, "password", TEST_PASSWORD))))
+                .andReturn().getResponse();
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        JsonNode data = mapper.readTree(response.getContentAsString()).path("data");
+        assertThat(data.path("martId").asLong()).isEqualTo(actualMartId);
+        assertThat(tokens.parseAccessToken(data.path("accessToken").asText()).martId()).isEqualTo(actualMartId);
+        assertThat(jdbc.queryForObject("SELECT mart_id FROM admin WHERE login_id = ?", Long.class, loginId))
+                .isEqualTo(actualMartId);
+    }
+
     @Test
     @Transactional
     @DisplayName("SQL을 다시 실행해도 관리자 중복 생성과 기존 정보 덮어쓰기가 없다")
@@ -84,7 +118,8 @@ class AdminSeedSqlIntegrationTest extends IntegrationTestSupport {
         long count = admins.count();
         Admin admin = admins.findByLoginIdIgnoreCase("super01").orElseThrow();
         jdbc.update("UPDATE admin SET password_hash = ?, active = false WHERE id = ?", "changed-hash", admin.getId());
-        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(new ClassPathResource("data-admin-local.sql"));
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("data-admin-local.sql"));
         populator.setSqlScriptEncoding("UTF-8");
 
         // when
