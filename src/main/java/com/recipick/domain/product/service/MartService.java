@@ -3,6 +3,7 @@ package com.recipick.domain.product.service;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
+import com.recipick.domain.product.dto.MartUpdateRequest;
 import com.recipick.domain.product.dto.OpenMartResponse;
 import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.entity.Mart;
@@ -10,6 +11,7 @@ import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.global.common.PolicyConstants;
+import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -49,7 +51,38 @@ public class MartService {
         return new MartIdResponse(martRepository.save(mart).getId());
     }
 
-    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius) {
+    @Transactional
+    public MartIdResponse updateMart(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
+        validateUpdatePermission(role, adminMartId, martId, request);
+
+        Mart mart = martRepository.findById(martId)
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.MART_NOT_FOUND));
+
+        if((request.latitude() == null) != (request.longitude() == null)){
+            throw new BusinessException(ProductErrorCode.INVALID_MART_AREA);
+        }
+        BigDecimal latitude = request.latitude() != null ? request.latitude() : mart.getLatitude();
+        BigDecimal longitude = request.longitude() != null ? request.longitude() : mart.getLongitude();
+        int radius = request.serviceRadiusM() != null ? request.serviceRadiusM() : mart.getServiceRadiusM();
+        validateArea(latitude, longitude, radius);
+
+        mart.update(request.latitude(), request.longitude(), request.serviceRadiusM(), request.status());
+        return new MartIdResponse(mart.getId());
+    }
+
+    private void validateUpdatePermission(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
+        if (role != AdminRole.MART_ADMIN){
+            return;
+        }
+        if(!martId.equals(adminMartId)){
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+        if(request.latitude() != null || request.longitude() != null || request.serviceRadiusM() != null){
+            throw new BusinessException(AuthErrorCode.SUPER_ADMIN_ONLY);
+        }
+    }
+
+    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius){
         if(latitude.abs().compareTo(MAX_LATITUDE)>0
             || longitude.abs().compareTo(MAX_LONGITUDE)>0
             || radius <= 0){
