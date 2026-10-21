@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.IntegrationTestSupport;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,20 +13,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 
 /**
  * PortOne 전용 ObjectMapper가 전역 Jackson 설정과 MVC 메시지 컨버터에 영향을 주지 않는지 확인한다.
  * global JacksonConfig의 직렬화 규칙 회귀 테스트를 겸한다.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-class PortOneJacksonIsolationTest {
+class PortOneJacksonIsolationTest extends IntegrationTestSupport {
 
     @Autowired
     private ApplicationContext context;
@@ -48,13 +45,13 @@ class PortOneJacksonIsolationTest {
 
         // then
         assertThat(names).as("ObjectMapper 빈 %d개: %s", names.length, List.of(names))
-                .doesNotContain("portOneObjectMapper")
-                .isNotEmpty();
+            .doesNotContain("portOneObjectMapper")
+            .isNotEmpty();
         for (String name : names) {
             ObjectMapper mapper = context.getBean(name, ObjectMapper.class);
             assertThat(mapper.isEnabled(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE))
-                    .as("ObjectMapper 빈 '%s'에 PortOne 전용 옵션이 켜져 있다", name)
-                    .isFalse();
+                .as("ObjectMapper 빈 '%s'에 PortOne 전용 옵션이 켜져 있다", name)
+                .isFalse();
         }
     }
 
@@ -110,18 +107,18 @@ class PortOneJacksonIsolationTest {
     void mvcConvertersUsePrimaryObjectMapper() {
         // given
         List<MappingJackson2HttpMessageConverter> jacksonConverters = httpMessageConverters.getConverters().stream()
-                .filter(converter -> converter.getClass() == MappingJackson2HttpMessageConverter.class)
-                .map(MappingJackson2HttpMessageConverter.class::cast)
-                .toList();
+            .filter(converter -> converter.getClass() == MappingJackson2HttpMessageConverter.class)
+            .map(MappingJackson2HttpMessageConverter.class::cast)
+            .toList();
 
         // then
         assertThat(jacksonConverters).isNotEmpty();
         assertThat(jacksonConverters.get(0).getObjectMapper()).isSameAs(primaryObjectMapper);
         for (MappingJackson2HttpMessageConverter converter : jacksonConverters) {
             assertThat(converter.getObjectMapper()
-                    .isEnabled(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE))
-                    .as("PortOne 전용 옵션이 켜진 매퍼가 MVC 컨버터에 들어 있다")
-                    .isFalse();
+                .isEnabled(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE))
+                .as("PortOne 전용 옵션이 켜진 매퍼가 MVC 컨버터에 들어 있다")
+                .isFalse();
         }
     }
 }
