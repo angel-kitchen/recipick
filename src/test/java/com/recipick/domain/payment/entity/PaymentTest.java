@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class PaymentTest {
+class PaymentTest {
 
     @Test
     @DisplayName("결제 대기 상태에서 결제 완료로 변경한다")
