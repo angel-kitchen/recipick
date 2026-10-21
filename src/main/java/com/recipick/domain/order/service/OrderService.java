@@ -61,7 +61,8 @@ public class OrderService {
 
     // 재고 복구는 호출한 Facade가 하므로, 이번 호출로 종료된 경우에만 주문 상품을 돌려준다
     @Transactional
-    public List<OrderItem> closeByPaymentFailure(Long orderId, CancelReasonCode reasonCode) {
+    public List<OrderItem> closeByPaymentFailure(
+            Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
         if (!PAYMENT_FAILURE_REASONS.contains(reasonCode)) {
             throw new IllegalArgumentException("결제 실패 사유가 아닙니다: " + reasonCode);
         }
@@ -72,7 +73,7 @@ public class OrderService {
         }
 
         OrderStatus fromStatus = order.getStatus();
-        order.cancel(reasonCode);
+        order.cancel(reasonCode, reasonDetail);
 
         orderStatusHistoryRepository.save(systemHistory(
                 order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), reasonCode.name()));

@@ -115,7 +115,7 @@ class OrderPaymentFailureConcurrencyTest extends IntegrationTestSupport {
                 // 결제 Facade처럼 한 트랜잭션 안에서 주문 종료 후 재고를 복구한다
                 transactionTemplate.executeWithoutResult(status -> {
                     List<StockQuantity> items =
-                            orderFacade.closeByPaymentFailure(orderId, CancelReasonCode.PAYMENT_TIMEOUT);
+                            orderFacade.closeByPaymentFailure(orderId, CancelReasonCode.PAYMENT_TIMEOUT, null);
                     orderFacade.restoreStock(items);
                 });
                 return null;
@@ -138,7 +138,7 @@ class OrderPaymentFailureConcurrencyTest extends IntegrationTestSupport {
     @DisplayName("바깥 트랜잭션 없이 주문 종료나 재고 복구를 호출하면 거부한다")
     void calledWithoutTransaction() {
         // when, then
-        assertThatThrownBy(() -> orderFacade.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED))
+        assertThatThrownBy(() -> orderFacade.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED, null))
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> orderFacade.restoreStock(List.of(new StockQuantity(1L, 1))))
                 .isInstanceOf(IllegalTransactionStateException.class);

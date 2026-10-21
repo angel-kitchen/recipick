@@ -156,13 +156,14 @@ public class Order extends BaseTimeEntity {
         this.pendingMemberId = null;
     }
 
-    public void cancel(CancelReasonCode reasonCode) {
+    public void cancel(CancelReasonCode reasonCode, String reasonDetail) {
         if (!status.canTransitionTo(OrderStatus.CANCELED)) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         }
         this.status = OrderStatus.CANCELED;
         this.canceledAt = LocalDateTime.now();
         this.cancelReasonCode = reasonCode;
+        this.cancelReasonDetail = reasonDetail;
         // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
         this.pendingMemberId = null;
     }

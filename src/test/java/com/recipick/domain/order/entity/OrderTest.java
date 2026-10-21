@@ -106,11 +106,12 @@ class OrderTest {
         Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
 
         // when
-        order.cancel(CancelReasonCode.PAYMENT_TIMEOUT);
+        order.cancel(CancelReasonCode.PAYMENT_TIMEOUT, "결제 시간 만료");
 
         // then
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.PAYMENT_TIMEOUT);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("결제 시간 만료");
         assertThat(order.getCanceledAt()).isNotNull();
         assertThat(order.getPendingMemberId()).isNull();
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.NONE);
@@ -124,7 +125,7 @@ class OrderTest {
         Order order = order(status, MartStatus.NONE);
 
         // when, then
-        assertThatThrownBy(() -> order.cancel(CancelReasonCode.PAYMENT_FAILED))
+        assertThatThrownBy(() -> order.cancel(CancelReasonCode.PAYMENT_FAILED, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
