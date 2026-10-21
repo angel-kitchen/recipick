@@ -3,6 +3,7 @@ package com.recipick.domain.order.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.exception.OrderErrorCode;
@@ -80,5 +81,36 @@ class OrderTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("결제 대기 주문을 취소하면 사유와 취소 시각이 남고 결제 대기 표시가 풀리며 마트 처리 상태는 그대로다")
+    void cancel() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+
+        // when
+        order.cancel(CancelReasonCode.PAYMENT_TIMEOUT);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.PAYMENT_TIMEOUT);
+        assertThat(order.getCanceledAt()).isNotNull();
+        assertThat(order.getPendingMemberId()).isNull();
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.NONE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = "PENDING_PAYMENT", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("결제 대기가 아닌 주문은 결제 실패로 취소할 수 없다")
+    void cancel_notPendingPayment(OrderStatus status) {
+        // given
+        Order order = order(status, MartStatus.NONE);
+
+        // when, then
+        assertThatThrownBy(() -> order.cancel(CancelReasonCode.PAYMENT_FAILED))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
 }

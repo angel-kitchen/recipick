@@ -1,5 +1,6 @@
 package com.recipick.domain.order.entity;
 
+import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.exception.OrderErrorCode;
@@ -76,9 +77,9 @@ public class Order extends BaseTimeEntity {
 
     private LocalDateTime canceledAt;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 30)
-    private String cancelReasonCode;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(30)")
+    private CancelReasonCode cancelReasonCode;
 
     @Column(length = 500)
     private String cancelReasonDetail;
@@ -132,6 +133,17 @@ public class Order extends BaseTimeEntity {
         this.status = OrderStatus.PAID;
         this.martStatus = MartStatus.RECEIVED;
         this.paidAt = paidAt;
+        // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
+        this.pendingMemberId = null;
+    }
+
+    public void cancel(CancelReasonCode reasonCode) {
+        if (!status.canTransitionTo(OrderStatus.CANCELED)) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.CANCELED;
+        this.canceledAt = LocalDateTime.now();
+        this.cancelReasonCode = reasonCode;
         // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
         this.pendingMemberId = null;
     }
