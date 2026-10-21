@@ -2,6 +2,9 @@ package com.recipick.domain.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.withMarginOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -9,6 +12,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
+import com.recipick.domain.product.dto.ProductStatusResponse;
+import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
@@ -23,6 +28,8 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -175,5 +182,129 @@ public class ProductServiceTest {
         // then
         assertThat(result).isEmpty();
         verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : SUPER_ADMIN이 판매 중 상품을 판매 중지로 바꾼다")
+    void changeStatus_toStopped(){
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
+
+        // when
+        ProductStatusResponse result =
+            productService.changeStatus(AdminRole.SUPER_ADMIN, null, 1L, request);
+
+        // then
+        assertThat(result.productId()).isEqualTo(1L);
+        assertThat(result.status()).isEqualTo(ProductStatus.STOPPED);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : 판매 중지 상품을 다시 판매중으로 바꾼다")
+    void changeStatus_toSelling(){
+        //given
+        Product product = product(1L, 1L);
+        product.changeStatus(ProductStatus.STOPPED);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.SELLING);
+
+        //when
+        ProductStatusResponse result =
+            productService.changeStatus(AdminRole.SUPER_ADMIN, null, 1L, request);
+
+        //then
+        assertThat(result.status()).isEqualTo(ProductStatus.SELLING);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : 이미 같은 상태로 바꿔도 성공한다")
+    void changeStatus_sameStatus(){
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.SELLING);
+
+        // when
+            ProductStatusResponse result =
+                productService.changeStatus(AdminRole.SUPER_ADMIN, null, 1L , request);
+
+        // then
+        assertThat(result.status()).isEqualTo(ProductStatus.SELLING);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : MART_ADMIN은 본인 마트 상품의 상태를 바꿀 수 있다.")
+    void changeStatus_martAdminOwnMart(){
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
+
+        // when
+        productService.changeStatus(AdminRole.MART_ADMIN, 1L, 1L, request);
+
+        // then
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.STOPPED);
+    }
+
+    @Test
+    @DisplayName("상태 변경: MART_ADMIN이 다른 마트 상품을 바꾸면 MART_ACCESS_DENIED이고 상태는 그대로다")
+    void changeStats_martAdminOtherMart(){
+        Product product = product(1L, 2L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.changeStatus(AdminRole.MART_ADMIN, 1L, 1L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : 없는 상품이면 PRODUCT_NOT_FOUND")
+    void changeStatus_notFound() {
+        // given
+        given(productRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.changeStatus(AdminRole.SUPER_ADMIN, null, 99L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상태 변경 : 삭제된 상품이면 PRODUCT_NOT_FOUND")
+    void changeStatus_deleted() {
+        // given
+        Product product = product(1L, 1L);
+        ReflectionTestUtils.setField(product, "deleted", true);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.changeStatus(AdminRole.SUPER_ADMIN, null, 1L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
     }
 }
