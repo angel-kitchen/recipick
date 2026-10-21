@@ -98,7 +98,7 @@ class LockTimeoutTest extends IntegrationTestSupport {
 
         // then
         assertThat(thrown).isInstanceOf(PessimisticLockingFailureException.class);
-        // H2 기본값(1초)이 아니라 팀 공통값(5초)이 적용됐는지 확인한다.
+        // MySQL 기본값(50초)이 아니라 팀 공통값(5초)이 적용됐는지 확인한다.
         assertThat(waitedMillis).isGreaterThanOrEqualTo(4_500);
         ResponseEntity<ErrorResponse> response =
             globalExceptionHandler.handlePessimisticLockingFailure((PessimisticLockingFailureException) thrown);
