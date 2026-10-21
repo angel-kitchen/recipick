@@ -17,7 +17,7 @@
 - 응답: `{success, code, message, data}`, 실패 시 `errors`(입력값 검증 실패만), `timestamp`
 - 처리 중 상태는 오류가 아니다: `success: true`, `data.status = IN_PROGRESS`
 - 조회·미리보기의 판정 결과(예: 배송 가능 여부)는 상태 필드로 내려주고, 거절 오류는 상태를 바꾸는 요청의 최종 검증에서만 쓴다.
-- 목록: 요청 `page`(0부터), `size`(기본 20, 최대 100), `sort`, 응답 `content`, `page`, `size`, `totalElements`, `totalPages`
+- 목록: 요청 `page`(0부터), `size`(기본 20, 최대 100), `sort`, 응답 `content`, `page`, `size`, `totalElements`, `totalPages`. 장바구니처럼 한 화면에서 전체를 다루는 목록은 페이지 없이 전체 반환(`data`는 목록과 부가 정보를 담은 객체, 페이지 필드 없음)
 - 값 형식: 금액은 원 단위 정수, 필요량·판매 단위 수치는 소수 문자열(`"150.5"`), 휴대전화는 숫자만, enum은 UPPER_SNAKE_CASE, JSON 필드는 camelCase
 
 ## 인증·권한
