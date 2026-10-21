@@ -58,8 +58,7 @@ public class Mart extends BaseTimeEntity {
             String name,
             BigDecimal latitude,
             BigDecimal longitude,
-            Integer serviceRadiusM,
-            MartStatus status
+            Integer serviceRadiusM
     ) {
         this.regionId = regionId;
         this.name = name;

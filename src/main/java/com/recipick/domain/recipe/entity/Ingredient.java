@@ -1,7 +1,10 @@
 package com.recipick.domain.recipe.entity;
 
+import com.recipick.global.common.SaleUnit;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,12 +27,12 @@ public class Ingredient {
     @Column(length = 50, unique = true)
     private String name;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 10)
-    private String unit;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(10)")
+    private SaleUnit unit;
 
     @Builder
-    private Ingredient(String name, String unit) {
+    private Ingredient(String name, SaleUnit unit) {
         this.name = name;
         this.unit = unit;
     }

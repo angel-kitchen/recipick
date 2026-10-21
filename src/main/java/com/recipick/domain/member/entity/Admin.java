@@ -1,29 +1,27 @@
 package com.recipick.domain.member.entity;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.global.entity.BaseTimeEntity;
+import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Entity
-@EntityListeners(AuditingEntityListener.class)
 @Table(name = "admin")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Admin {
+public class Admin extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,12 +43,13 @@ public class Admin {
 
     private boolean active;
 
-    @CreatedDate
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
     @Builder
     private Admin(String loginId, String passwordHash, String name, AdminRole role, Long martId, boolean active) {
+        if (role == null
+                || (role == AdminRole.SUPER_ADMIN && martId != null)
+                || (role == AdminRole.MART_ADMIN && (martId == null || martId <= 0))) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
         this.loginId = loginId;
         this.passwordHash = passwordHash;
         this.name = name;

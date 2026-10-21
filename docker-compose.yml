@@ -12,6 +12,8 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      # 컨벤션의 팀 공통 락 대기 시간(5초)
+      - --innodb-lock-wait-timeout=5
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
