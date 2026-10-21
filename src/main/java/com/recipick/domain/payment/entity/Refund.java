@@ -1,8 +1,12 @@
 package com.recipick.domain.payment.entity;
 
+import com.recipick.domain.payment.entity.enums.RefundRequester;
+import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,13 +39,13 @@ public class Refund extends BaseTimeEntity {
     @Column(length = 500)
     private String reason;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private RefundStatus status;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String requestedBy;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private RefundRequester requestedBy;
 
     @Column(unique = true)
     private String idempotencyKey;
@@ -58,13 +62,13 @@ public class Refund extends BaseTimeEntity {
 
     @Builder
     private Refund(
-            Payment payment,
-            Long amount,
-            String reason,
-            String status,
-            String requestedBy,
-            String idempotencyKey,
-            LocalDateTime requestedAt
+        Payment payment,
+        Long amount,
+        String reason,
+        RefundStatus status,
+        RefundRequester requestedBy,
+        String idempotencyKey,
+        LocalDateTime requestedAt
     ) {
         this.payment = payment;
         this.amount = amount;
@@ -73,5 +77,23 @@ public class Refund extends BaseTimeEntity {
         this.requestedBy = requestedBy;
         this.idempotencyKey = idempotencyKey;
         this.requestedAt = requestedAt;
+    }
+
+    public static Refund requestedBySystem(
+        Payment payment,
+        Long amount,
+        String reason,
+        String idempotencyKey,
+        LocalDateTime requestedAt
+    ) {
+        return Refund.builder()
+            .payment(payment)
+            .amount(amount)
+            .reason(reason)
+            .status(RefundStatus.REQUESTED)
+            .requestedBy(RefundRequester.SYSTEM)
+            .idempotencyKey(idempotencyKey)
+            .requestedAt(requestedAt)
+            .build();
     }
 }
