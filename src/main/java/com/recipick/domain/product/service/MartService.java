@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -115,6 +116,10 @@ public class MartService {
         return martRepository.findAllByRegionIdAndStatusOrderByIdAsc(regionId, MartStatus.OPEN).stream()
             .map(OpenMartResponse::from)
             .toList();
+    }
+    @Transactional(readOnly = true)
+    public Optional<MartResponse> findMart(Long martId) {
+        return martRepository.findById(martId).map(MartResponse::from);
     }
 }
 

@@ -178,6 +178,9 @@
 - **마이페이지** (담당: 채빈 화면 구성, 각 도메인 조회 제공)
     - 내 정보(이메일·이름·휴대전화(원문)·이용 마트·현재 배송지·멤버십 유형·만료일·무료체험 가능 여부)
     - 주문 내역, 결제 내역, 취소·환불 내역을 한 화면에서 제공
+    - 내 정보 조회 `GET /api/members/me`는 `trialEligible`을 포함합니다. 모든 멤버십 이력이 없을 때만 true이며, 멤버십 조회도 같은 자격 판단을 사용합니다.
+    - `mart`는 회원에게 지정된 마트입니다. 운영 중지여도 이름·ID를 표시하고, 배송지의 `serviceAvailable`로 현재 이용 가능 여부를 구분합니다.
+    - 배송지에서 조회한 운영 마트와 지정 마트가 다르거나 지정 마트가 없으면 `serviceAvailable = false`입니다. 조회로 저장된 마트·배송지를 보정하지 않습니다.
 - **멤버십 기능 제한** (담당: 채빈)
     - 자동 장바구니·AI 요청 시 멤버십 안내
     - 상품 검색·직접 장바구니·주문·결제는 이용 가능
@@ -512,3 +515,23 @@
 - **회원별 멤버십 이력 조회** (담당: 채빈)
     - `SUPER_ADMIN` 전용
     - 회원의 모든 이용권(체험·유료 전환·구독·관리자 지급)과 상태(이용 중·해지 예약·만료·즉시 해지) 조회
+
+## 내 정보 조회 API 계약
+
+- `GET /api/members/me`, 회원 Bearer 토큰 필수. 회원 ID는 토큰에서만 사용합니다.
+- 성공: `200`, 공통 응답의 `data`에 아래 정보를 반환합니다.
+
+| 필드 | 의미 |
+| --- | --- |
+| `memberId`, `email`, `name`, `phone` | 본인 정보. 휴대전화는 숫자 원문이며 응답 본문은 로그에 기록하지 않습니다. |
+| `locationAgreed` | 위치 동의 일시가 있으면 true |
+| `mart` | 저장된 `mart_id`로 조회한 지정 마트의 `martId`, `name`. 운영 중지여도 표시하며, 미지정·존재하지 않는 마트이면 null |
+| `currentAddress` | 현재 배송지의 `addressId`, `label`, `address`, `detailAddress`, `legalDongCode`, `serviceAvailable`. 없으면 null |
+| `currentAddress.serviceAvailable` | 배송지 법정동에 운영 중 마트가 있고 그 마트가 지정 마트와 같을 때 true. 불일치 시 주문 가능으로 표시하지 않음 |
+| `membership` | `active`, `type`, `endAt`. `start_at <= 현재 < end_at`이고 `terminated_at`이 없을 때 활성. 비활성이면 type·endAt은 null |
+| `trialEligible` | 이용권 유형·발급 경로와 관계없이 멤버십 이력이 한 건도 없을 때 true |
+
+- 예: 지정 마트가 운영 중지이면 `mart`는 유지하고 `currentAddress.serviceAvailable = false`입니다.
+- 예: 삼청동 배송지에 하안 마트가 지정되어 있으면 하안 마트를 표시하되 `serviceAvailable = false`이며, 배송지 재선택 과정에서 다시 판정합니다.
+- 오류: 비로그인 401, 관리자 토큰 403, 토큰의 회원 없음 404(`MEMBER-001`).
+- 상품 도메인 조회 계약: `MartService.findMart(Long martId)`는 운영 상태와 무관하게 `Optional<MartResponse>`를 반환합니다. 없으면 empty이며 Entity·Repository를 외부에 제공하지 않습니다.
