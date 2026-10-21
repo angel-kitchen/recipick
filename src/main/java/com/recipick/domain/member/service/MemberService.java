@@ -1,6 +1,8 @@
 package com.recipick.domain.member.service;
 
+import com.recipick.domain.member.dto.MemberProfile;
 import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.entity.MemberAddress;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.global.exception.BusinessException;
@@ -21,5 +23,15 @@ public class MemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
         return Optional.ofNullable(member.getMartId());
+    }
+    public MemberProfile getProfile(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
+        MemberAddress address = member.getSelectedAddress();
+        MemberProfile.Address currentAddress = address == null ? null : new MemberProfile.Address(
+                address.getId(), address.getLabel(), address.getAddress(),
+                address.getDetailAddress(), address.getLegalDongCode());
+        return new MemberProfile(member.getId(), member.getEmail(), member.getName(), member.getPhone(),
+                member.getLocationAgreedAt() != null, member.getMartId(), currentAddress);
     }
 }
