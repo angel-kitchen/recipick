@@ -25,7 +25,8 @@ public enum RecipeErrorCode implements ErrorCode {
     AUTO_CART_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "RECIPE-014", "자동 구성 요청을 찾을 수 없습니다."),
     AUTO_CART_INVALID_STATUS(HttpStatus.CONFLICT, "RECIPE-015", "확정할 수 없는 상태의 자동 구성 요청입니다."),
     NO_PURCHASABLE_INGREDIENTS(HttpStatus.CONFLICT, "RECIPE-016", "재계산 결과 장바구니에 담을 수 있는 상품이 없습니다."),
-    DUPLICATE_BOOKMARK(HttpStatus.CONFLICT, "RECIPE-017", "이미 찜한 레시피입니다.");
+    DUPLICATE_BOOKMARK(HttpStatus.CONFLICT, "RECIPE-017", "이미 찜한 레시피입니다."),
+    INGREDIENT_IN_USE(HttpStatus.CONFLICT, "RECIPE-018", "레시피나 상품에 연결된 재료는 단위를 바꿀 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
