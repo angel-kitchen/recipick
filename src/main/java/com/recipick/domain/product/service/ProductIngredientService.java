@@ -10,8 +10,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.logging.log4j.ThreadContext.isEmpty;
-
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
