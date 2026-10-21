@@ -6,15 +6,14 @@ import com.recipick.domain.member.dto.SignupResponse;
 import com.recipick.domain.member.dto.request.MemberLoginRequest;
 import com.recipick.domain.member.dto.response.MemberLoginResponse;
 import com.recipick.domain.member.dto.response.TokenReissueResponse;
+import com.recipick.domain.member.service.AuthCookieFactory;
 import com.recipick.domain.member.service.MemberLoginService;
 import com.recipick.domain.member.service.SignupService;
 import com.recipick.domain.member.service.TokenManagementService;
-import com.recipick.global.config.LoginProperties;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.AuthPrincipal;
 import com.recipick.global.security.JwtTokenPair;
 import jakarta.validation.Valid;
-import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -34,13 +33,13 @@ public class AuthController {
 
     private final SignupService signupService;
     private final MemberLoginService memberLoginService;
-    private final LoginProperties loginProperties;
+    private final AuthCookieFactory cookieFactory;
     private final TokenManagementService tokenManagementService;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<MemberLoginResponse>> login(@Valid @RequestBody MemberLoginRequest request) {
         MemberLoginResult result = memberLoginService.login(request);
-        ResponseCookie cookie = refreshCookie(result.refreshToken(), result.refreshExpiration());
+        ResponseCookie cookie = cookieFactory.createRefreshCookie(result.refreshToken(), result.refreshExpiration());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(ApiResponse.success("로그인되었습니다.", result.response()));
@@ -52,7 +51,7 @@ public class AuthController {
         JwtTokenPair tokens = tokenManagementService.reissue(refreshToken);
         TokenReissueResponse response = new TokenReissueResponse(tokens.accessToken(),
                 tokens.accessExpiration().toSeconds());
-        ResponseCookie cookie = refreshCookie(tokens.refreshToken(), tokens.refreshExpiration());
+        ResponseCookie cookie = cookieFactory.createRefreshCookie(tokens.refreshToken(), tokens.refreshExpiration());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(ApiResponse.success("토큰이 재발급되었습니다.", response));
@@ -63,17 +62,7 @@ public class AuthController {
             @CookieValue(name = "refreshToken", required = false) String refreshToken) {
         tokenManagementService.logout(principal, refreshToken);
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie("", Duration.ZERO).toString())
-                .build();
-    }
-
-    private ResponseCookie refreshCookie(String token, Duration expiration) {
-        return ResponseCookie.from("refreshToken", token)
-                .httpOnly(true)
-                .secure(loginProperties.refreshCookieSecure())
-                .sameSite("Strict")
-                .path("/api/auth")
-                .maxAge(expiration)
+                .header(HttpHeaders.SET_COOKIE, cookieFactory.clearRefreshCookie().toString())
                 .build();
     }
 
