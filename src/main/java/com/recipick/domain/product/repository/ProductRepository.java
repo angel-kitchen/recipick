@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long>, ProductRepositoryCustom {
 
@@ -26,4 +27,8 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
             GROUP BY p.ingredientId
             """)
     List<IngredientProductCount> countByIngredientIds(@Param("ingredientIds") Collection<Long> ingredientIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") Long id);
 }
