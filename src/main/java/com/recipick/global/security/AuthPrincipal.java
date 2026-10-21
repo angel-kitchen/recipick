@@ -3,11 +3,18 @@ package com.recipick.global.security;
 import java.util.List;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-public record AuthPrincipal(SubjectType type, Long id, String role, Long martId) {
+public record AuthPrincipal(SubjectType type, Long id, String role, Long martId, String sessionId) {
+
+    public AuthPrincipal(SubjectType type, Long id, String role, Long martId) {
+        this(type, id, role, martId, null);
+    }
 
     public AuthPrincipal {
         if (type == null || id == null || id <= 0) {
             throw new IllegalArgumentException("인증 주체가 올바르지 않습니다.");
+        }
+        if (sessionId != null && !sessionId.matches("[A-Za-z0-9-]{1,128}")) {
+            throw new IllegalArgumentException("로그인 세션 식별자가 올바르지 않습니다.");
         }
         if (type == SubjectType.MEMBER && (role != null || martId != null)) {
             throw new IllegalArgumentException("회원 토큰에는 관리자 권한을 넣을 수 없습니다.");
