@@ -44,6 +44,7 @@ public class Mart extends BaseTimeEntity {
     @Column(precision = 10, scale = 7)
     private BigDecimal longitude;
 
+    @Column(name = "service_radius_m")
     private Integer serviceRadiusM;
 
 

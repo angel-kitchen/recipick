@@ -1,8 +1,11 @@
 package com.recipick.domain.product.facade;
 
+import com.recipick.domain.member.exception.MemberErrorCode;
+import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
 import com.recipick.domain.product.service.MartService;
+import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,10 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class MartFacade {
 
     private final MartService martService;
+    private final RegionService regionService;
 
     @Transactional
     public MartIdResponse createMart(MartCreateRequest request){
-        // RegionService의 지역 존재 확인 메서드 완성 후 여기서 먼저 호출(REGION_NOT_FOUND)
+        if (!regionService.existsById(request.regionId())){
+            throw new BusinessException(MemberErrorCode.REGION_NOT_FOUND);
+        }
         return martService.createMart(request);
     }
 }
