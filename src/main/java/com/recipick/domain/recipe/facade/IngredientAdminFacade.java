@@ -29,9 +29,10 @@ public class IngredientAdminFacade {
     public PageResponse<IngredientAdminResponse> findIngredients(String keyword, Pageable pageable) {
         Page<Ingredient> ingredients = ingredientService.findIngredients(keyword, pageable);
         List<Long> ingredientIds = ingredients.map(Ingredient::getId).getContent();
-        Map<Long, Long> likedCounts = productIngredientService.countLinkedProducts(ingredientIds);
+        Map<Long, Long> linkedCounts = productIngredientService.countLinkedProducts(ingredientIds);
 
-        return PageResponse.from(ingredients.map(ingredient -> IngredientAdminResponse.of(ingredient, likedCounts.get(ingredient.getId()))));
+        return PageResponse.from(ingredients.map(ingredient ->
+                IngredientAdminResponse.of(ingredient, linkedCounts.getOrDefault(ingredient.getId(), 0L))));
     }
 
     @Transactional
@@ -45,7 +46,7 @@ public class IngredientAdminFacade {
 
     private boolean isInUse(Long ingredientId) {
         return ingredientService.isUsedInRecipe(ingredientId)
-                ||
-productIngredientService.countLinkedProducts(List.of(ingredientId)).get(ingredientId) > 0;
+                || productIngredientService.countLinkedProducts(List.of(ingredientId))
+                        .getOrDefault(ingredientId, 0L) > 0;
     }
 }

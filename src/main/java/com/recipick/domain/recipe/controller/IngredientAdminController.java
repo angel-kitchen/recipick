@@ -33,16 +33,16 @@ public class IngredientAdminController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<IngredientIdResponse>> createIngredient(
-        @Valid @RequestBody IngredientSaveRequest request
+            @Valid @RequestBody IngredientSaveRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(ingredientService.createIngredient(request)));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(ingredientService.createIngredient(request)));
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<IngredientAdminResponse>>>
-    findIngredients(
-                @RequestParam(required = false) String keyword,
-                Pageable pageable
+    public ResponseEntity<ApiResponse<PageResponse<IngredientAdminResponse>>> findIngredients(
+            @RequestParam(required = false) String keyword,
+            Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(ingredientAdminFacade.findIngredients(keyword, pageable)));
     }
