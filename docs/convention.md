@@ -90,6 +90,7 @@ API 명세는 각자 형식으로 쓰되, 아래 공통 규칙과 에러 코드 
 
 - 요청: `page`(0부터), `size`(기본 20, 최대 100), `sort`(예: `createdAt,desc`)
 - 응답 `data`: `content`, `page`, `size`, `totalElements`, `totalPages`
+- 한 화면에서 전체를 보고 선택해야 하는 목록(장바구니)은 페이지 없이 전체를 반환합니다. `data`는 목록과 부가 정보를 담은 객체로 반환하고(예: `{items, hasPreviousMartItems}`), 페이지 필드(`page`, `size`, `totalElements`, `totalPages`)는 넣지 않습니다.
 
 ### 같은 요청 반복
 
