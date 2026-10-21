@@ -7,6 +7,7 @@ import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.CartAddSource;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,10 +82,37 @@ class CartItemRepositoryTest extends IntegrationTestSupport {
         assertThat(cartAddHistoryRepository.findById(history.getId())).isPresent();
     }
 
+    @Test
+    @DisplayName("일괄 삭제는 본인 항목만 지우고, 다른 회원의 ID와 없는 ID는 건너뛴다")
+    void deleteByMemberIdAndIdIn() {
+        // given
+        CartItem mine1 = cartItemRepository.save(newCartItem(MEMBER_ID, 10L));
+        CartItem mine2 = cartItemRepository.save(newCartItem(MEMBER_ID, 11L));
+        CartItem mineKept = cartItemRepository.save(newCartItem(MEMBER_ID, 12L));
+        CartItem others = cartItemRepository.save(newCartItem(OTHER_MEMBER_ID, 10L));
+        em.flush();
+        em.clear();
+        Long missingId = others.getId() + 1000;
+
+        // when
+        int deleted = cartItemRepository.deleteByMemberIdAndIdIn(
+                MEMBER_ID, List.of(mine1.getId(), mine2.getId(), others.getId(), missingId));
+
+        // then
+        assertThat(deleted).isEqualTo(2);
+        assertThat(cartItemRepository.findAllById(List.of(mine1.getId(), mine2.getId()))).isEmpty();
+        assertThat(cartItemRepository.findById(mineKept.getId())).isPresent();
+        assertThat(cartItemRepository.findById(others.getId())).isPresent();
+    }
+
     private CartItem newCartItem(Long memberId) {
+        return newCartItem(memberId, PRODUCT_ID);
+    }
+
+    private CartItem newCartItem(Long memberId, Long productId) {
         return CartItem.builder()
                 .memberId(memberId)
-                .productId(PRODUCT_ID)
+                .productId(productId)
                 .quantity(2)
                 .build();
     }

@@ -1,12 +1,16 @@
 package com.recipick.domain.order.controller;
 
+import com.recipick.domain.order.dto.request.CartItemBulkDeleteRequest;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -21,6 +25,16 @@ public class CartController {
             @PathVariable Long cartItemId
     ) {
         cartService.deleteCartItem(memberId, cartItemId);
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    // DELETE 본문은 일부 클라이언트·프록시가 버리므로, ID 목록을 본문으로 받는 일괄 삭제는 POST 하위 경로로 둔다.
+    @PostMapping("/api/cart-items/bulk-delete")
+    public ResponseEntity<ApiResponse<Void>> deleteCartItems(
+            @LoginMember Long memberId,
+            @Valid @RequestBody CartItemBulkDeleteRequest request
+    ) {
+        cartService.deleteCartItems(memberId, request.cartItemIds());
         return ResponseEntity.ok(ApiResponse.success());
     }
 }

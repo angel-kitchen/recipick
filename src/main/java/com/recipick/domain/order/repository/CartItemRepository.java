@@ -1,6 +1,7 @@
 package com.recipick.domain.order.repository;
 
 import com.recipick.domain.order.entity.CartItem;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,4 +13,8 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     @Modifying
     @Query("delete from CartItem c where c.id = :id and c.memberId = :memberId")
     int deleteByIdAndMemberId(@Param("id") Long id, @Param("memberId") Long memberId);
+
+    @Modifying
+    @Query("delete from CartItem c where c.memberId = :memberId and c.id in :ids")
+    int deleteByMemberIdAndIdIn(@Param("memberId") Long memberId, @Param("ids") Collection<Long> ids);
 }
