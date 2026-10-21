@@ -1,6 +1,7 @@
 package com.recipick.domain.order.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.Order;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class OrderPaymentFailureConcurrencyTest extends IntegrationTestSupport {
@@ -130,5 +132,15 @@ class OrderPaymentFailureConcurrencyTest extends IntegrationTestSupport {
         assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity()).isEqualTo(7);
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(orderStatusHistoryRepository.findAllByOrderId(orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("바깥 트랜잭션 없이 주문 종료나 재고 복구를 호출하면 거부한다")
+    void calledWithoutTransaction() {
+        // when, then
+        assertThatThrownBy(() -> orderFacade.closeByPaymentFailure(1L, CancelReasonCode.PAYMENT_FAILED))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> orderFacade.restoreStock(List.of(new StockQuantity(1L, 1))))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 }

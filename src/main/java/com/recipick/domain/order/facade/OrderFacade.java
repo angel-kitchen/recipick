@@ -7,6 +7,7 @@ import com.recipick.domain.product.service.ProductStockService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
@@ -18,14 +19,15 @@ public class OrderFacade {
 
     // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고에서 포인트 복구가 사이에 들어가야 해서
     // 주문 종료와 재고 복구를 나눈다. 결제 Facade가 한 트랜잭션 안에서 종료 → 포인트 복구 → 재고 복구 순으로 호출한다.
-    @Transactional
+    // 따로 커밋되면 종료만 반영되고 재고 복구가 빠질 수 있어 바깥 트랜잭션 없이는 호출할 수 없게 한다.
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<StockQuantity> closeByPaymentFailure(Long orderId, CancelReasonCode reasonCode) {
         return orderService.closeByPaymentFailure(orderId, reasonCode).stream()
                 .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
                 .toList();
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void restoreStock(List<StockQuantity> items) {
         // 이미 종료된 주문은 복구할 재고가 없다
         if (items.isEmpty()) {
