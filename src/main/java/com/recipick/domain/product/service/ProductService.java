@@ -1,6 +1,9 @@
 package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.product.dto.ProductStatusResponse;
+import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
+import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
@@ -43,6 +46,25 @@ public class ProductService {
             productRepository.searchAdminProducts(scoped, pageable)
                 .map(AdminProductResponse::from)
         );
+    }
+
+    @Transactional
+    public ProductStatusResponse changeStatus(
+        AdminRole role,
+        Long adminMartId,
+        Long productId,
+        ProductStatusUpdateRequest request
+    ){
+        Product product = productRepository.findByIdForUpdate(productId)
+            .filter(p -> !p.isDeleted())
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+
+        product.changeStatus(request.status());
+        return ProductStatusResponse.from(product);
     }
 
     // 장바구니처럼 여러 상품을 한 화면에 그리는 곳에서 쓰므로 IN 쿼리 한 번으로 조회한다. 없는 ID는 결과에서 빠진다.
