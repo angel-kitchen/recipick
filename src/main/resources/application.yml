@@ -6,7 +6,12 @@ spring:
   autoconfigure:
     # JWT 인증을 직접 구현하므로 기본 사용자(임시 비밀번호) 생성을 끈다
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
   jpa:
+    defer-datasource-initialization: true
     open-in-view: false
     properties:
       hibernate:
