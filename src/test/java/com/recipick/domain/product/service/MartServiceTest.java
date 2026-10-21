@@ -12,17 +12,19 @@ import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.test.util.ReflectionTestUtils;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -206,7 +208,7 @@ public class MartServiceTest {
     void updateMart_partial() {
         // given
         Mart mart = martWithId(1L);
-        given(martRepository.findById(1L)).willReturn(Optional.of(mart));
+        given(martRepository.findByIdForUpdate(1L)).willReturn(Optional.of(mart));
 
         // when
         MartIdResponse result = martService.updateMart(
@@ -224,7 +226,7 @@ public class MartServiceTest {
     void updateMart_all() {
         // given
         Mart mart = martWithId(1L);
-        given(martRepository.findById(1L)).willReturn(Optional.of(mart));
+        given(martRepository.findByIdForUpdate(1L)).willReturn(Optional.of(mart));
 
         // when
         martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L,
@@ -242,7 +244,7 @@ public class MartServiceTest {
     void updateMart_martAdminStatus() {
         // given
         Mart mart = martWithId(1L);
-        given(martRepository.findById(1L)).willReturn(Optional.of(mart));
+        given(martRepository.findByIdForUpdate(1L)).willReturn(Optional.of(mart));
 
         // when
         martService.updateMart(AdminRole.MART_ADMIN, 1L, 1L,
@@ -258,7 +260,18 @@ public class MartServiceTest {
         // given
         MartUpdateRequest request = updateRequest(null, null, null, MartStatus.CLOSED);
 
-        // when & then
+        // when
+        Throwable thrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 2L, request));
+
+        //then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        verifyNoInteractions(martRepository);
+
+
         assertThatThrownBy(() -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 2L, request))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -269,16 +282,23 @@ public class MartServiceTest {
     @Test
     @DisplayName("수정 : MART_ADMIN이 좌표나 반경을 보내면 SUPER_ADMIN_ONLY")
     void updateMart_martAdminAreaDenied() {
+
         // given
         MartUpdateRequest radiusRequest = updateRequest(null, null, 3000, null);
         MartUpdateRequest coordinateRequest = updateRequest("37.5000000", "127.0000000", null, null);
 
-        // when & then
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 1L, radiusRequest))
+        // when
+        Throwable radiusThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 1L, radiusRequest));
+        Throwable coordinateThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 1L, coordinateRequest));
+
+        // then
+        assertThat(radiusThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(AuthErrorCode.SUPER_ADMIN_ONLY);
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.MART_ADMIN, 1L, 1L, coordinateRequest))
+        assertThat(coordinateThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(AuthErrorCode.SUPER_ADMIN_ONLY);
@@ -290,16 +310,22 @@ public class MartServiceTest {
     void updateMart_onlyOneCoordinate() {
         // given
         Mart mart = martWithId(1L);
-        given(martRepository.findById(1L)).willReturn(Optional.of(mart));
+        given(martRepository.findByIdForUpdate(1L)).willReturn(Optional.of(mart));
         MartUpdateRequest latitudeOnly = updateRequest("37.5000000", null, null, null);
         MartUpdateRequest longitudeOnly = updateRequest(null, "127.0000000", null, null);
 
-        // when & then
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, latitudeOnly))
+        // when
+        Throwable latitudeThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, latitudeOnly));
+        Throwable longitudeThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, longitudeOnly));
+
+        // then
+        assertThat(latitudeThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.INVALID_MART_AREA);
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, longitudeOnly))
+        assertThat(longitudeThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.INVALID_MART_AREA);
@@ -310,16 +336,22 @@ public class MartServiceTest {
     @DisplayName("수정 : 좌표가 범위 밖이거나 반경이 0 이하이면 INVALID_MART_AREA")
     void updateMart_invalidArea() {
         // given
-        given(martRepository.findById(1L)).willReturn(Optional.of(martWithId(1L)));
+        given(martRepository.findByIdForUpdate(1L)).willReturn(Optional.of(martWithId(1L)));
         MartUpdateRequest badCoordinate = updateRequest("91.0000000", "127.0000000", null, null);
         MartUpdateRequest badRadius = updateRequest(null, null, 0, null);
 
-        // when & then
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, badCoordinate))
+        // when
+        Throwable coordinateThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, badCoordinate));
+        Throwable radiusThrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, badRadius));
+
+        // then
+        assertThat(coordinateThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.INVALID_MART_AREA);
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 1L, badRadius))
+        assertThat(radiusThrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.INVALID_MART_AREA);
@@ -329,11 +361,15 @@ public class MartServiceTest {
     @DisplayName("수정 : 없는 마트이면 MART_NOT_FOUND")
     void updateMart_notFound() {
         // given
-        given(martRepository.findById(99L)).willReturn(Optional.empty());
+        given(martRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
         MartUpdateRequest request = updateRequest(null, null, 3000, null);
 
-        // when & then
-        assertThatThrownBy(() -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 99L, request))
+        // when
+        Throwable thrown = catchThrowable(
+            () -> martService.updateMart(AdminRole.SUPER_ADMIN, null, 99L, request));
+
+        // then
+        assertThat(thrown)
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_NOT_FOUND);
