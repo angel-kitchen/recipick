@@ -257,4 +257,31 @@ class OrderTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
+
+    @Test
+    @DisplayName("결제 대기 주문에 금액을 확정한다")
+    void confirmAmounts() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+
+        // when
+        order.confirmAmounts(38000L, 3000L, 41000L);
+
+        // then
+        assertThat(order.getProductAmount()).isEqualTo(38000L);
+        assertThat(order.getDeliveryFee()).isEqualTo(3000L);
+        assertThat(order.getPayAmount()).isEqualTo(41000L);
+    }
+
+    @Test
+    @DisplayName("이미 금액이 확정된 주문은 금액을 다시 바꿀 수 없다")
+    void confirmAmounts_alreadyConfirmed() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+        order.confirmAmounts(38000L, 3000L, 41000L);
+
+        // when, then
+        assertThatThrownBy(() -> order.confirmAmounts(1000L, 3000L, 4000L))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }
