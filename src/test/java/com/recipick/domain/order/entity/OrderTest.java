@@ -227,6 +227,20 @@ class OrderTest {
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
     }
 
+    @Test
+    @DisplayName("취소 사유가 없는 취소 요청 주문은 환불 완료로 바꿀 수 없다")
+    void markRefunded_noCancelReason() {
+        // given
+        Order order = order(OrderStatus.CANCEL_REQUESTED, MartStatus.RECEIVED);
+
+        // when, then
+        assertThatThrownBy(order::markRefunded)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+    }
+
     @ParameterizedTest
     @EnumSource(value = OrderStatus.class, names = "CANCEL_REQUESTED", mode = EnumSource.Mode.EXCLUDE)
     @DisplayName("취소 요청이 아닌 주문은 환불 완료로 바꿀 수 없다")

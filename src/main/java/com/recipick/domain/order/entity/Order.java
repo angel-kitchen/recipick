@@ -195,7 +195,8 @@ public class Order extends BaseTimeEntity {
     }
 
     public void markRefunded() {
-        if (!status.canTransitionTo(OrderStatus.REFUNDED)) {
+        // 환불 완료 이력에 남길 취소 사유가 없으면 어떤 취소로 끝났는지 알 수 없다
+        if (!status.canTransitionTo(OrderStatus.REFUNDED) || cancelReasonCode == null) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         }
         this.status = OrderStatus.REFUNDED;
