@@ -1,14 +1,17 @@
 package com.recipick.domain.recipe.service;
 
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
+import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeStatusUpdateRequest;
 import com.recipick.domain.recipe.dto.request.RecipeStepRequest;
 import com.recipick.domain.recipe.dto.response.RecipeIdResponse;
+import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.entity.RecipeStep;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.domain.recipe.repository.RecipeSearchCondition;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +36,7 @@ public class RecipeAdminService {
 
     private final RecipeRepository recipeRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
+    private final IngredientRepository ingredientRepository;
 
     @Transactional
     public RecipeIdResponse createRecipe(RecipeSaveRequest request) {
@@ -75,6 +80,34 @@ public class RecipeAdminService {
     private Recipe getRecipeForUpdate(Long recipeId) {
         return recipeRepository.findByIdForUpdate(recipeId)
             .orElseThrow(() -> new BusinessException(RecipeErrorCode.RECIPE_NOT_FOUND));
+    }
+
+    @Transactional
+    public int replaceIngredients(Long recipeId, RecipeIngredientsSaveRequest request) {
+        Recipe recipe = getRecipe(recipeId);
+        List<Long> ingredientIds = request.ingredients().stream()
+            .map(RecipeIngredientsSaveRequest.Item::ingredientId)
+            .toList();
+        if (ingredientIds.size() != ingredientIds.stream().distinct().count()) {
+            throw new BusinessException(RecipeErrorCode.DUPLICATE_RECIPE_INGREDIENT);
+        }
+        Map<Long, Ingredient> ingredients =
+            ingredientRepository.findAllById(ingredientIds).stream()
+                .collect(Collectors.toMap(Ingredient::getId, Function.identity()));
+        if (ingredients.size() != ingredientIds.size()) {
+            throw new BusinessException(RecipeErrorCode.INGREDIENT_NOT_FOUND);
+        }
+
+        recipeIngredientRepository.deleteByRecipeId(recipeId);
+        recipeIngredientRepository.saveAll(request.ingredients().stream()
+            .map(item -> RecipeIngredient.builder()
+                .recipe(recipe)
+                .ingredient(ingredients.get(item.ingredientId()))
+                .amountPerServing(item.amountPerServing())
+                .required(item.required())
+                .build())
+            .toList());
+        return ingredients.size();
     }
 
     public Page<Recipe> searchRecipes(RecipeAdminSearchRequest request, Pageable pageable) {

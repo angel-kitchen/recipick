@@ -2,8 +2,10 @@ package com.recipick.domain.recipe.facade;
 
 import com.recipick.domain.product.service.ProductIngredientService;
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
+import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.response.RecipeAdminDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeAdminSummaryResponse;
+import com.recipick.domain.recipe.dto.response.RecipeIngredientsSaveResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.service.RecipeAdminService;
@@ -54,6 +56,17 @@ public class RecipeAdminFacade {
         );
     }
 
+    @Transactional
+    public RecipeIngredientsSaveResponse saveIngredients(Long recipeId, RecipeIngredientsSaveRequest request) {
+        int ingredientCount = recipeAdminService.replaceIngredients(recipeId, request);
+        Recipe recipe = recipeAdminService.getRecipe(recipeId);
+        boolean released = recipe.isAutoCartEnabled() && !hasLinkedProductsForAllRequired(recipeId);
+        if (released) {
+            recipe.disableAutoCart();
+        }
+        return new RecipeIngredientsSaveResponse(recipeId, ingredientCount, recipe.isAutoCartEnabled(), released);
+    }
+
     private int countMissingLinked(List<Long> requiredIngredientIds, Map<Long, Long> linkedCounts
     ) {
         return (int) requiredIngredientIds.stream()
@@ -66,5 +79,14 @@ public class RecipeAdminFacade {
             .flatMap(List::stream)
             .distinct()
             .toList();
+    }
+
+    private boolean hasLinkedProductsForAllRequired(Long recipeId) {
+        List<Long> requiredIds = recipeAdminService.findRequiredIngredientIds(List.of(recipeId))
+            .getOrDefault(recipeId, List.of());
+        if (requiredIds.isEmpty()) {
+            return false;
+        }
+        return countMissingLinked(requiredIds, productIngredientService.countLinkedProducts(requiredIds)) == 0;
     }
 }
