@@ -15,6 +15,7 @@ import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.global.security.SubjectType;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -224,6 +225,26 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
         assertThat(member.getMartId()).isEqualTo(1L);
     }
 
+    @ParameterizedTest
+    @MethodSource("invalidTypes")
+    @DisplayName("문자열이 아닌 수정 값은 COMMON-002로 거절하고 기존 정보를 유지한다")
+    void rejectsNonTextValues(String field, Object value) throws Exception {
+        // given
+        Map<String, Object> body = body("4121010300");
+        body.put(field, value);
+
+        // when
+        MockHttpServletResponse response = request(body, token);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("COMMON-002");
+        assertThat(address.getLabel()).isEqualTo("집");
+        assertThat(address.getAddress()).isEqualTo("기존 주소");
+        assertThat(address.getLegalDongCode()).isEqualTo("1111014000");
+        assertThat(member.getMartId()).isEqualTo(1L);
+    }
+
     @Test
     @DisplayName("회원 토큰 없이 또는 관리자 토큰으로 배송지를 수정할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
@@ -238,6 +259,15 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
         assertThat(anonymous.getStatus()).isEqualTo(401);
         assertThat(administrator.getStatus()).isEqualTo(403);
         assertThat(address.getLabel()).isEqualTo("집");
+    }
+
+    private static Stream<Arguments> invalidTypes() {
+        return Stream.of(
+                Arguments.of("label", 123),
+                Arguments.of("address", true),
+                Arguments.of("detailAddress", List.of("101호")),
+                Arguments.of("legalDongCode", Map.of("code", "1111014000"))
+        );
     }
 
     private static Stream<Arguments> invalidFields() {
