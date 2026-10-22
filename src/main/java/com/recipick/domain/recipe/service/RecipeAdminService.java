@@ -51,7 +51,7 @@ public class RecipeAdminService {
 
     @Transactional
     public RecipeIdResponse updateRecipe(Long recipeId, RecipeSaveRequest request) {
-        Recipe recipe = getRecipe(recipeId);
+        Recipe recipe = getRecipeForUpdate(recipeId);
         recipe.update(
                 request.name(),
                 request.cuisineType(),
@@ -68,8 +68,13 @@ public class RecipeAdminService {
 
     @Transactional
     public RecipeIdResponse changeStatus(Long recipeId, RecipeStatusUpdateRequest request) {
-        getRecipe(recipeId).changeStatus(request.status());
+        getRecipeForUpdate(recipeId).changeStatus(request.status());
         return new RecipeIdResponse(recipeId);
+    }
+
+    private Recipe getRecipeForUpdate(Long recipeId) {
+        return recipeRepository.findByIdForUpdate(recipeId)
+            .orElseThrow(() -> new BusinessException(RecipeErrorCode.RECIPE_NOT_FOUND));
     }
 
     public Page<Recipe> searchRecipes(RecipeAdminSearchRequest request, Pageable pageable) {
