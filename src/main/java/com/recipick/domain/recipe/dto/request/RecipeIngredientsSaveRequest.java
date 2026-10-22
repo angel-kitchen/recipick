@@ -10,7 +10,7 @@ import java.util.List;
 
 public record RecipeIngredientsSaveRequest(
         @NotNull
-        List<@Valid Item> ingredients
+        List<@NotNull @Valid Item> ingredients
 ) {
 
     public record Item(
