@@ -29,12 +29,14 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "orders",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_orders_member_id_idempotency_key",
+                name = Order.IDEMPOTENCY_KEY_CONSTRAINT,
                 columnNames = {"member_id", "idempotency_key"}
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseTimeEntity {
+
+    public static final String IDEMPOTENCY_KEY_CONSTRAINT = "uk_orders_member_id_idempotency_key";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -155,6 +157,16 @@ public class Order extends BaseTimeEntity {
         this.paidAt = paidAt;
         // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
         this.pendingMemberId = null;
+    }
+
+    // 금액은 재고를 잠근 뒤의 가격으로 계산하는데, 락 순서상 주문을 재고보다 먼저 저장해야 해서 생성 뒤에 채운다
+    public void confirmAmounts(long productAmount, long deliveryFee, long payAmount) {
+        if (status != OrderStatus.PENDING_PAYMENT || this.payAmount != null) {
+            throw new IllegalStateException("결제 대기 중이고 금액이 정해지지 않은 주문만 금액을 확정할 수 있습니다.");
+        }
+        this.productAmount = productAmount;
+        this.deliveryFee = deliveryFee;
+        this.payAmount = payAmount;
     }
 
     public void cancel(CancelReasonCode reasonCode, String reasonDetail) {
