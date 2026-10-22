@@ -2,7 +2,9 @@ package com.recipick.domain.order.controller;
 
 import com.recipick.domain.order.dto.request.CartItemAddRequest;
 import com.recipick.domain.order.dto.request.CartItemBulkDeleteRequest;
+import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
 import com.recipick.domain.order.facade.CartFacade;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.global.response.ApiResponse;
@@ -11,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +32,15 @@ public class CartController {
             @Valid @RequestBody CartItemAddRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(cartFacade.addCartItem(memberId, request)));
+    }
+
+    @PatchMapping("/api/cart-items/{cartItemId}")
+    public ResponseEntity<ApiResponse<CartItemQuantityUpdateResponse>> updateCartItemQuantity(
+            @LoginMember Long memberId,
+            @PathVariable Long cartItemId,
+            @Valid @RequestBody CartItemQuantityUpdateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(cartFacade.updateCartItemQuantity(memberId, cartItemId, request)));
     }
 
     @DeleteMapping("/api/cart-items/{cartItemId}")

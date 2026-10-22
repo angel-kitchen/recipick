@@ -6,7 +6,9 @@ import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.CartAddSource;
+import com.recipick.global.common.TimeConstants;
 import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,28 @@ class CartItemRepositoryTest extends IntegrationTestSupport {
 
     @Autowired
     EntityManager em;
+
+    @Test
+    @DisplayName("수량 변경은 본인 항목만 최종 수량으로 바꾸고 갱신 건수를 돌려준다")
+    void updateQuantity() {
+        // given
+        CartItem mine = cartItemRepository.save(newCartItem(MEMBER_ID));
+        CartItem others = cartItemRepository.save(newCartItem(OTHER_MEMBER_ID));
+        em.flush();
+        em.clear();
+        LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
+
+        // when
+        int updated = cartItemRepository.updateQuantity(mine.getId(), MEMBER_ID, 7, now);
+        int updatedOthers = cartItemRepository.updateQuantity(others.getId(), MEMBER_ID, 7, now);
+
+        // then
+        assertThat(updated).isEqualTo(1);
+        assertThat(updatedOthers).isZero();
+        assertThat(cartItemRepository.findById(mine.getId()).orElseThrow().getQuantity()).isEqualTo(7);
+        assertThat(cartItemRepository.findById(others.getId()).orElseThrow().getQuantity())
+                .isEqualTo(others.getQuantity());
+    }
 
     @Test
     @DisplayName("본인 항목은 삭제하고 삭제 건수 1을 돌려준다")

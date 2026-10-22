@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
 import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.CartAddSource;
@@ -193,6 +194,45 @@ class CartServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.CART_CONCURRENT_MODIFICATION);
         verify(cartAddHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수량 변경: 최종 수량으로 바꾸고 이력은 남기지 않는다")
+    void updateCartItemQuantity() {
+        // given
+        given(cartItemRepository.updateQuantity(
+                eq(CART_ITEM_ID), eq(MEMBER_ID), eq(5), any(LocalDateTime.class))).willReturn(1);
+
+        // when
+        CartItemQuantityUpdateResponse response = cartService.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, 5, 30);
+
+        // then
+        assertThat(response).isEqualTo(new CartItemQuantityUpdateResponse(CART_ITEM_ID, 5));
+        verify(cartAddHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("수량 변경: 재고보다 많으면 CART_INSUFFICIENT_STOCK")
+    void updateCartItemQuantityOverStock() {
+        // when, then
+        assertThatThrownBy(() -> cartService.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, 6, 5))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CART_INSUFFICIENT_STOCK);
+        verify(cartItemRepository, never()).updateQuantity(any(), any(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("수량 변경: 읽은 뒤 다른 요청이 항목을 지워 갱신되지 않으면 CART_ITEM_NOT_FOUND")
+    void updateCartItemQuantityDeletedConcurrently() {
+        // given
+        given(cartItemRepository.updateQuantity(any(), any(), anyInt(), any())).willReturn(0);
+
+        // when, then
+        assertThatThrownBy(() -> cartService.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, 5, 30))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CART_ITEM_NOT_FOUND);
     }
 
     private CartItem cartItem(int quantity) {

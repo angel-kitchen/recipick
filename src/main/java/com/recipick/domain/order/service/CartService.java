@@ -1,6 +1,7 @@
 package com.recipick.domain.order.service;
 
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
 import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.CartAddSource;
@@ -47,6 +48,24 @@ public class CartService {
                 .quantity(quantity)
                 .build());
         return CartItemAddResponse.from(cartItem);
+    }
+
+    public CartItem getCartItem(Long memberId, Long cartItemId) {
+        return cartItemRepository.findByIdAndMemberId(cartItemId, memberId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.CART_ITEM_NOT_FOUND));
+    }
+
+    // 상품 판매 가능 여부·마트 검증은 호출하는 Facade가 끝낸 뒤 들어온다.
+    // 최종 수량으로 덮어쓰므로 같은 요청이 반복되거나 겹쳐도 마지막 요청의 수량이 남는다.
+    @Transactional
+    public CartItemQuantityUpdateResponse updateCartItemQuantity(
+            Long memberId, Long cartItemId, int quantity, int stock) {
+        validateQuantity(quantity, stock);
+        LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
+        if (cartItemRepository.updateQuantity(cartItemId, memberId, quantity, now) == 0) {
+            throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return new CartItemQuantityUpdateResponse(cartItemId, quantity);
     }
 
     @Transactional

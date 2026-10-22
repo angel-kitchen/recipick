@@ -2,7 +2,10 @@ package com.recipick.domain.order.facade;
 
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.order.dto.request.CartItemAddRequest;
+import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
+import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -31,16 +34,35 @@ public class CartFacade {
                 .filter(summary -> !summary.deleted())
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        if (!product.martId().equals(martId)
-                || product.status() != ProductStatus.SELLING
-                || product.totalQuantity() == 0) {
-            throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
-        }
+        validatePurchasable(product, martId);
         boolean hasPreviousMartItems = productService.findProducts(cartService.findProductIds(memberId)).stream()
                 .anyMatch(summary -> !summary.martId().equals(martId));
         if (hasPreviousMartItems) {
             throw new BusinessException(OrderErrorCode.CART_HAS_PREVIOUS_MART_ITEMS);
         }
         return cartService.addCartItem(memberId, product.productId(), request.quantity(), product.totalQuantity());
+    }
+
+    @Transactional
+    public CartItemQuantityUpdateResponse updateCartItemQuantity(
+            Long memberId, Long cartItemId, CartItemQuantityUpdateRequest request) {
+        CartItem cartItem = cartService.getCartItem(memberId, cartItemId);
+        Long martId = memberService.getMartId(memberId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_SELECTED));
+        // 담긴 뒤 삭제된 상품도 장바구니에는 남아 삭제만 허용하므로, 없는 상품이 아니라 변경 불가로 응답한다.
+        ProductSummary product = productService.findProducts(List.of(cartItem.getProductId())).stream()
+                .filter(summary -> !summary.deleted())
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE));
+        validatePurchasable(product, martId);
+        return cartService.updateCartItemQuantity(memberId, cartItemId, request.quantity(), product.totalQuantity());
+    }
+
+    private void validatePurchasable(ProductSummary product, Long martId) {
+        if (!product.martId().equals(martId)
+                || product.status() != ProductStatus.SELLING
+                || product.totalQuantity() == 0) {
+            throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
+        }
     }
 }

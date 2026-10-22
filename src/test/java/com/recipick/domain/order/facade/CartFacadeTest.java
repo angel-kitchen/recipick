@@ -2,12 +2,19 @@ package com.recipick.domain.order.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.order.dto.request.CartItemAddRequest;
+import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
+import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -24,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class CartFacadeTest {
@@ -33,7 +41,9 @@ class CartFacadeTest {
     private static final Long OTHER_MART_ID = 8L;
     private static final Long PRODUCT_ID = 10L;
     private static final Long CART_PRODUCT_ID = 11L;
+    private static final Long CART_ITEM_ID = 100L;
     private static final CartItemAddRequest REQUEST = new CartItemAddRequest(PRODUCT_ID, 2);
+    private static final CartItemQuantityUpdateRequest UPDATE_REQUEST = new CartItemQuantityUpdateRequest(5);
 
     @Mock
     private MemberService memberService;
@@ -152,11 +162,123 @@ class CartFacadeTest {
         assertErrorCode(OrderErrorCode.CART_HAS_PREVIOUS_MART_ITEMS);
     }
 
+    @Test
+    @DisplayName("수량 변경: 이용 마트의 판매 중인 상품이면 최종 수량으로 바꾼다")
+    void updateCartItemQuantity() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(productService.findProducts(List.of(PRODUCT_ID)))
+                .willReturn(List.of(product(PRODUCT_ID, MART_ID, ProductStatus.SELLING, 30, false)));
+        CartItemQuantityUpdateResponse expected = new CartItemQuantityUpdateResponse(CART_ITEM_ID, 5);
+        given(cartService.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, 5, 30)).willReturn(expected);
+
+        // when
+        CartItemQuantityUpdateResponse response =
+                cartFacade.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, UPDATE_REQUEST);
+
+        // then
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 이전 마트 상품이면 CART_ITEM_NOT_PURCHASABLE")
+    void updateCartItemQuantityPreviousMartProduct() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(productService.findProducts(List.of(PRODUCT_ID)))
+                .willReturn(List.of(product(PRODUCT_ID, OTHER_MART_ID, ProductStatus.SELLING, 30, false)));
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 판매 중지 상품이면 CART_ITEM_NOT_PURCHASABLE")
+    void updateCartItemQuantityStoppedProduct() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(productService.findProducts(List.of(PRODUCT_ID)))
+                .willReturn(List.of(product(PRODUCT_ID, MART_ID, ProductStatus.STOPPED, 30, false)));
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 품절 상품이면 CART_ITEM_NOT_PURCHASABLE")
+    void updateCartItemQuantitySoldOutProduct() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(productService.findProducts(List.of(PRODUCT_ID)))
+                .willReturn(List.of(product(PRODUCT_ID, MART_ID, ProductStatus.SELLING, 0, false)));
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 담긴 뒤 삭제된 상품이면 CART_ITEM_NOT_PURCHASABLE")
+    void updateCartItemQuantityDeletedProduct() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(productService.findProducts(List.of(PRODUCT_ID)))
+                .willReturn(List.of(product(PRODUCT_ID, MART_ID, ProductStatus.SELLING, 30, true)));
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 이용 마트가 없으면 MART_NOT_SELECTED")
+    void updateCartItemQuantityWithoutMart() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID)).willReturn(cartItem());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.empty());
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.MART_NOT_SELECTED);
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    @DisplayName("수량 변경: 없거나 다른 회원의 항목이면 CART_ITEM_NOT_FOUND")
+    void updateCartItemQuantityNotFound() {
+        // given
+        given(cartService.getCartItem(MEMBER_ID, CART_ITEM_ID))
+                .willThrow(new BusinessException(OrderErrorCode.CART_ITEM_NOT_FOUND));
+
+        // when, then
+        assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_FOUND);
+        verify(cartService, never()).updateCartItemQuantity(any(), any(), anyInt(), anyInt());
+    }
+
     private void assertErrorCode(ErrorCode errorCode) {
         assertThatThrownBy(() -> cartFacade.addCartItem(MEMBER_ID, REQUEST))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(errorCode);
+    }
+
+    private void assertUpdateErrorCode(ErrorCode errorCode) {
+        assertThatThrownBy(() -> cartFacade.updateCartItemQuantity(MEMBER_ID, CART_ITEM_ID, UPDATE_REQUEST))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(errorCode);
+    }
+
+    private CartItem cartItem() {
+        CartItem cartItem = CartItem.builder()
+                .memberId(MEMBER_ID)
+                .productId(PRODUCT_ID)
+                .quantity(2)
+                .build();
+        ReflectionTestUtils.setField(cartItem, "id", CART_ITEM_ID);
+        return cartItem;
     }
 
     private ProductSummary product(Long productId, Long martId, ProductStatus status, int stock, boolean deleted) {
