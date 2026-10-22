@@ -15,6 +15,8 @@ public enum OrderErrorCode implements ErrorCode {
     INVALID_CART_QUANTITY(HttpStatus.BAD_REQUEST, "CART-003", "상품 수량이 올바르지 않습니다."),
     CART_ITEM_NOT_PURCHASABLE(HttpStatus.CONFLICT, "CART-004", "현재 장바구니에 담거나 수량을 변경할 수 없는 상품입니다."),
     CART_INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "CART-005", "요청한 수량보다 상품 재고가 부족합니다."),
+    CART_HAS_PREVIOUS_MART_ITEMS(HttpStatus.CONFLICT, "CART-006", "장바구니에 이전 마트 상품이 있습니다. 삭제한 뒤 다시 담아 주세요."),
+    CART_CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "CART-007", "다른 요청과 동시에 처리되어 장바구니에 담지 못했습니다. 장바구니를 확인해 주세요."),
 
     // 주문 생성
     ORDER_ITEMS_REQUIRED(HttpStatus.BAD_REQUEST, "ORDER-001", "주문할 상품을 선택해 주세요."),
