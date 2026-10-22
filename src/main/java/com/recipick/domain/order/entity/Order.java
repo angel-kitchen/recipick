@@ -143,7 +143,8 @@ public class Order extends BaseTimeEntity {
     public void markPaid(LocalDateTime paidAt) {
         // null로 PAID가 되면 이후 같은 성공이 와도 멱등 처리로 반환돼 paidAt을 다시 채울 수 없다
         Objects.requireNonNull(paidAt, "paidAt은 필수입니다.");
-        if (!status.canTransitionTo(OrderStatus.PAID)) {
+        // CANCEL_REQUESTED → PAID는 결제 성공이 아니라 회원 취소 실패 복귀이므로 여기서 받지 않는다
+        if (status != OrderStatus.PENDING_PAYMENT) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         }
         if (!martStatus.canTransitionTo(MartStatus.RECEIVED)) {
@@ -166,5 +167,38 @@ public class Order extends BaseTimeEntity {
         this.cancelReasonDetail = reasonDetail;
         // 결제 대기를 벗어나야 같은 회원이 새 주문을 만들 수 있다
         this.pendingMemberId = null;
+    }
+
+    // 마트가 준비를 시작하면 회원 직접 취소·환불을 받지 않는다
+    public boolean isCancelableByMember() {
+        return status == OrderStatus.PAID && martStatus == MartStatus.RECEIVED;
+    }
+
+    public void requestMemberCancel(String reasonDetail) {
+        if (!isCancelableByMember()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_CANCELABLE);
+        }
+        this.status = OrderStatus.CANCEL_REQUESTED;
+        this.cancelReasonCode = CancelReasonCode.MEMBER_CANCELED;
+        this.cancelReasonDetail = reasonDetail;
+    }
+
+    public void restorePaidAfterMemberCancelFailure() {
+        // 마트 거절은 이미 처리할 수 없다고 판정됐으므로 PG 취소가 실패해도 정상 주문으로 되돌리지 않는다
+        if (cancelReasonCode != CancelReasonCode.MEMBER_CANCELED || !status.canTransitionTo(OrderStatus.PAID)) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.PAID;
+        // 다시 취소할 때 새 사유를 받을 수 있어야 하고, 취소 시도는 상태 이력에 남아 있다
+        this.cancelReasonCode = null;
+        this.cancelReasonDetail = null;
+    }
+
+    public void markRefunded() {
+        if (!status.canTransitionTo(OrderStatus.REFUNDED)) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.REFUNDED;
+        this.canceledAt = LocalDateTime.now();
     }
 }
