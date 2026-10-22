@@ -26,3 +26,5 @@ portone:
   base-url: https://api.portone.io
   connect-timeout: 3s
   read-timeout: 5s
+  store-id: ""
+  channel-key: ""

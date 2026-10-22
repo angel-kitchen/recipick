@@ -37,7 +37,9 @@ class PortOnePaymentClientTest {
         "test-secret",
         "https://api.portone.io",
         Duration.ofSeconds(1),
-        Duration.ofSeconds(1)
+        Duration.ofSeconds(1),
+        "test-store-id",
+        "test-channel-key"
     );
 
     private static final String PAID_BODY = """
