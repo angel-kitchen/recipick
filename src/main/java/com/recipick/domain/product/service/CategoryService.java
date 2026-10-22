@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -30,14 +31,20 @@ public class CategoryService {
     }
 
     @Transactional
-    public CategoryIdResponse createCategory(CategoryCreateRequest request){
-    if(categoryRepository.existsByName(request.name())){
-        throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
-    }
+    public CategoryIdResponse createCategory(CategoryCreateRequest request) {
+        Optional<Category> existing = categoryRepository.findByName(request.name());
+        if (existing.isPresent()) {
+            Category category = existing.get();
+            if (!category.isDeleted()) {
+                throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
+            }
+            category.restore();
+            return new CategoryIdResponse(category.getId());
+        }
         Category category = Category.builder()
             .name(request.name())
             .build();
-    return new CategoryIdResponse(categoryRepository.save(category).getId());
+        return new CategoryIdResponse(categoryRepository.save(category).getId());
     }
 
     @Transactional
