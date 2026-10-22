@@ -23,7 +23,6 @@ public class CartFacade {
     private final ProductService productService;
     private final CartService cartService;
 
-    // 담을 때 재고를 차감하지 않으므로 상품에 락을 잡지 않는다. 재고는 주문 생성에서 락을 잡고 다시 검증한다.
     @Transactional
     public CartItemAddResponse addCartItem(Long memberId, CartItemAddRequest request) {
         Long martId = memberService.getMartId(memberId)
