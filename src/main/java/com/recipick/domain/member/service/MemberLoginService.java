@@ -12,6 +12,7 @@ import com.recipick.global.security.JwtTokenPair;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.infra.redis.RedisLoginAttemptStore;
 import com.recipick.infra.redis.RedisRefreshTokenStore;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -47,15 +48,21 @@ public class MemberLoginService {
             throw new BusinessException(AuthErrorCode.LOGIN_LOCKED);
         }
         Member member = memberRepository.findByEmailIgnoreCase(request.email()).orElse(null);
+        // DB가 같은 계정으로 비교하는 표기가 달라도 잠금은 저장된 이메일로 모은다.
+        String attemptId = member == null ? request.email()
+                : member.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (!attemptId.equals(request.email()) && attemptStore.isLocked(SUBJECT_TYPE, attemptId)) {
+            throw new BusinessException(AuthErrorCode.LOGIN_LOCKED);
+        }
         String hash = member == null ? dummyPasswordHash : member.getPasswordHash();
         boolean matches = passwordEncoder.matches(request.password(), hash);
         if (member == null || !matches) {
-            boolean locked = attemptStore.recordFailure(SUBJECT_TYPE, request.email(), properties.maxFailures(),
+            boolean locked = attemptStore.recordFailure(SUBJECT_TYPE, attemptId, properties.maxFailures(),
                     properties.failureExpiration(), properties.lockDuration());
             throw new BusinessException(locked ? AuthErrorCode.LOGIN_LOCKED : AuthErrorCode.INVALID_MEMBER_CREDENTIALS);
         }
         // 비밀번호 검사 중 다른 요청이 잠금을 만들었으면 토큰을 발급하지 않는다.
-        if (!attemptStore.clearIfUnlocked(SUBJECT_TYPE, request.email())) {
+        if (!attemptStore.clearIfUnlocked(SUBJECT_TYPE, attemptId)) {
             throw new BusinessException(AuthErrorCode.LOGIN_LOCKED);
         }
         JwtTokenPair tokens = tokenProvider.createMemberTokens(member.getId());

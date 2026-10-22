@@ -9,6 +9,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.domain.product.controller.CategoryAdminController;
+import com.recipick.domain.product.controller.CategoryController;
+import com.recipick.domain.product.service.CategoryService;
 import com.recipick.domain.recipe.controller.RecipeBookmarkController;
 import com.recipick.domain.recipe.controller.RecipeController;
 import com.recipick.domain.recipe.service.RecipeBookmarkService;
@@ -48,7 +51,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-@WebMvcTest(controllers = {RecipeController.class, RecipeBookmarkController.class},
+@WebMvcTest(controllers = {RecipeController.class, RecipeBookmarkController.class,
+        CategoryController.class, CategoryAdminController.class},
         properties = "security.cors.allowed-origins=http://localhost:3000")
 @ActiveProfiles("test")
 @Import({SecurityConfig.class, JwtConfig.class, JwtTokenProvider.class, ClockConfig.class,
@@ -76,6 +80,8 @@ class AuthenticationWebTest {
     private RecipeService recipeService;
     @MockitoBean
     private RecipeBookmarkService bookmarkService;
+    @MockitoBean
+    private CategoryService categoryService;
 
     @Test
     @DisplayName("보호 API에 토큰 없이 접근하면 공통 AUTH-001 응답을 반환한다")
@@ -256,6 +262,42 @@ class AuthenticationWebTest {
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("카테고리 목록은 로그인 없이 또는 잘못된 토큰으로도 조회할 수 있다")
+    void permitsPublicCategoryList() throws Exception {
+        // given
+        String path = "/api/categories";
+
+        // when
+        MockHttpServletResponse anonymous = mockMvc.perform(get(path)).andReturn().getResponse();
+        MockHttpServletResponse stale = mockMvc.perform(get(path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer invalid")).andReturn().getResponse();
+
+        // then
+        assertThat(anonymous.getStatus()).isEqualTo(200);
+        assertThat(stale.getStatus()).isEqualTo(200);
+        verify(categoryService, times(2)).getCategories();
+    }
+
+    @Test
+    @DisplayName("카테고리 공개 조회 설정은 쓰기 요청과 관리자 경로를 공개하지 않는다")
+    void keepsCategoryWritesProtected() throws Exception {
+        // given
+        String memberToken = tokenProvider.createMemberTokens(17L).accessToken();
+
+        // when
+        MockHttpServletResponse write = mockMvc.perform(post("/api/categories")).andReturn().getResponse();
+        MockHttpServletResponse anonymous = mockMvc.perform(post("/api/admin/categories"))
+                .andReturn().getResponse();
+        MockHttpServletResponse member = mockMvc.perform(post("/api/admin/categories")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken)).andReturn().getResponse();
+
+        // then
+        assertError(write, 401, "AUTH-001");
+        assertError(anonymous, 401, "AUTH-001");
+        assertError(member, 403, "AUTH-004");
     }
 
     @Test

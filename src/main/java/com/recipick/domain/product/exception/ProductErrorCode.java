@@ -14,6 +14,7 @@ public enum ProductErrorCode implements ErrorCode {
     UNIT_MISMATCH(HttpStatus.BAD_REQUEST, "PRODUCT-004", "재료 단위와 판매 단위가 맞지 않습니다."),
     INVALID_PRICE(HttpStatus.BAD_REQUEST, "PRODUCT-005", "가격은 0 이상이어야 합니다."),
     INVALID_SALE_UNIT(HttpStatus.BAD_REQUEST, "PRODUCT-006", "판매 단위가 올바르지 않습니다."),
+    PRODUCT_NAME_DUPLICATED(HttpStatus.CONFLICT, "PRODUCT-008","이미 같은 이름의 상품이 있습니다."),
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CATEGORY-001", "카테고리를 찾을 수 없습니다."),
     CATEGORY_NAME_DUPLICATED(HttpStatus.CONFLICT, "CATEGORY-002", "이미 있는 카테고리입니다."),
     CATEGORY_HAS_PRODUCTS(HttpStatus.CONFLICT, "CATEGORY-003", "상품이 있는 카테고리는 삭제할 수 없습니다."),

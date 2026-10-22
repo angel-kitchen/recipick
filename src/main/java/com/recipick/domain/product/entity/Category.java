@@ -49,4 +49,8 @@ public class Category extends BaseTimeEntity {
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
     }
+
+    public void restore(){
+        this.deleted = false;
+    }
 }

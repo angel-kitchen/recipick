@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class OrderTest {
@@ -129,5 +130,158 @@ class OrderTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "PAID, RECEIVED, true",
+            "PAID, PREPARING, false",
+            "PAID, SHIPPED, false",
+            "CANCEL_REQUESTED, RECEIVED, false",
+            "PENDING_PAYMENT, NONE, false"
+    })
+    @DisplayName("결제 완료이면서 마트가 접수중일 때만 회원이 직접 취소할 수 있다")
+    void isCancelableByMember(OrderStatus status, MartStatus martStatus, boolean expected) {
+        // given
+        Order order = order(status, martStatus);
+
+        // when
+        boolean cancelable = order.isCancelableByMember();
+
+        // then
+        assertThat(cancelable).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("회원 취소를 요청하면 취소 요청 상태가 되고 회원 취소 사유와 상세가 남으며 마트 처리 상태는 그대로다")
+    void requestMemberCancel() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+
+        // when
+        order.requestMemberCancel("단순 변심");
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
+        assertThat(order.getCanceledAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("마트가 준비를 시작한 주문은 회원 취소를 요청할 수 없다")
+    void requestMemberCancel_martPreparing() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.PREPARING);
+
+        // when, then
+        assertThatThrownBy(() -> order.requestMemberCancel(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_CANCELABLE);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("회원 취소가 실패해 결제 완료로 되돌리면 취소 사유와 상세가 비워진다")
+    void restorePaidAfterMemberCancelFailure() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.requestMemberCancel("단순 변심");
+
+        // when
+        order.restorePaidAfterMemberCancelFailure();
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
+        assertThat(order.getCancelReasonCode()).isNull();
+        assertThat(order.getCancelReasonDetail()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원 취소 요청이 아닌 취소 요청 주문은 결제 완료로 되돌릴 수 없다")
+    void restorePaidAfterMemberCancelFailure_notMemberCanceled() {
+        // given
+        Order order = order(OrderStatus.CANCEL_REQUESTED, MartStatus.REJECTED);
+
+        // when, then
+        assertThatThrownBy(order::restorePaidAfterMemberCancelFailure)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+    }
+
+    @Test
+    @DisplayName("취소 요청 주문을 환불 완료로 바꾸면 취소 시각이 남고 취소 사유는 유지된다")
+    void markRefunded() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.requestMemberCancel(null);
+
+        // when
+        order.markRefunded();
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getCanceledAt()).isNotNull();
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+    }
+
+    @Test
+    @DisplayName("취소 사유가 없는 취소 요청 주문은 환불 완료로 바꿀 수 없다")
+    void markRefunded_noCancelReason() {
+        // given
+        Order order = order(OrderStatus.CANCEL_REQUESTED, MartStatus.RECEIVED);
+
+        // when, then
+        assertThatThrownBy(order::markRefunded)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = "CANCEL_REQUESTED", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("취소 요청이 아닌 주문은 환불 완료로 바꿀 수 없다")
+    void markRefunded_notCancelRequested(OrderStatus status) {
+        // given
+        Order order = order(status, MartStatus.RECEIVED);
+
+        // when, then
+        assertThatThrownBy(order::markRefunded)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("결제 대기 주문에 금액을 확정한다")
+    void confirmAmounts() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+
+        // when
+        order.confirmAmounts(38000L, 3000L, 41000L);
+
+        // then
+        assertThat(order.getProductAmount()).isEqualTo(38000L);
+        assertThat(order.getDeliveryFee()).isEqualTo(3000L);
+        assertThat(order.getPayAmount()).isEqualTo(41000L);
+    }
+
+    @Test
+    @DisplayName("이미 금액이 확정된 주문은 금액을 다시 바꿀 수 없다")
+    void confirmAmounts_alreadyConfirmed() {
+        // given
+        Order order = order(OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+        order.confirmAmounts(38000L, 3000L, 41000L);
+
+        // when, then
+        assertThatThrownBy(() -> order.confirmAmounts(1000L, 3000L, 4000L))
+                .isInstanceOf(IllegalStateException.class);
     }
 }

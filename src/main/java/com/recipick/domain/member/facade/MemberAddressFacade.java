@@ -1,6 +1,7 @@
 package com.recipick.domain.member.facade;
 
 import com.recipick.domain.member.dto.request.MemberAddressCreateRequest;
+import com.recipick.domain.member.dto.request.MemberAddressUpdateRequest;
 import com.recipick.domain.member.dto.response.MemberAddressListResponse;
 import com.recipick.domain.member.dto.response.MemberAddressResponse;
 import com.recipick.domain.member.entity.Member;
@@ -65,6 +66,32 @@ public class MemberAddressFacade {
         }
         if (Boolean.TRUE.equals(request.locationAgreed())) {
             member.agreeToLocation(LocalDateTime.now(clock));
+        }
+        MemberAddressResponse.Mart currentMart = member.getMartId() == null ? null
+                : martService.findMart(member.getMartId())
+                        .map(mart -> new MemberAddressResponse.Mart(mart.martId(), mart.name())).orElse(null);
+        return new MemberAddressResponse(address.getId(), address.getLabel(), address.getAddress(),
+                address.getDetailAddress(), address.getLegalDongCode(), availableMart.isPresent(), selected,
+                currentMart, !Objects.equals(previousMartId, member.getMartId()));
+    }
+
+    @Transactional
+    public MemberAddressResponse updateAddress(Long memberId, Long addressId, MemberAddressUpdateRequest request) {
+        // 등록과 같은 회원 행을 먼저 잠가 선택·삭제 요청과의 경합을 직렬화한다.
+        Member member = memberService.getMemberForUpdate(memberId);
+        MemberAddress address = memberAddressService.getOwnedAddress(memberId, addressId);
+        Long previousMartId = member.getMartId();
+        if (request.label() != null) {
+            address.rename(request.label().isBlank() ? null : request.label());
+        }
+        if (request.address() != null) {
+            address.changeAddress(request.address(), request.detailAddress(), request.legalDongCode());
+        }
+        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
+        boolean selected = member.getSelectedAddress() != null
+                && address.getId().equals(member.getSelectedAddress().getId());
+        if (selected) {
+            member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
         }
         MemberAddressResponse.Mart currentMart = member.getMartId() == null ? null
                 : martService.findMart(member.getMartId())
