@@ -14,6 +14,8 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
     Optional<CartItem> findByMemberIdAndProductId(Long memberId, Long productId);
 
+    Optional<CartItem> findByIdAndMemberId(Long id, Long memberId);
+
     @Query("select c.productId from CartItem c where c.memberId = :memberId")
     List<Long> findProductIdsByMemberId(@Param("memberId") Long memberId);
 
@@ -28,6 +30,17 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
             @Param("productId") Long productId,
             @Param("quantity") int quantity,
             @Param("maxQuantity") int maxQuantity,
+            @Param("now") LocalDateTime now
+    );
+
+    // 읽은 뒤 다른 요청이 항목을 지우면 변경 감지 UPDATE가 0건이 되어 500이 나므로, 한 문장으로 바꾸고 갱신 건수로 판단한다.
+    @Modifying(clearAutomatically = true)
+    @Query("update CartItem c set c.quantity = :quantity, c.updatedAt = :now "
+            + "where c.id = :id and c.memberId = :memberId")
+    int updateQuantity(
+            @Param("id") Long id,
+            @Param("memberId") Long memberId,
+            @Param("quantity") int quantity,
             @Param("now") LocalDateTime now
     );
 
