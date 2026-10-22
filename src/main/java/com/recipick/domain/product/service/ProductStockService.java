@@ -1,6 +1,7 @@
 package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockAdjustmentHistoryResponse;
 import com.recipick.domain.product.dto.StockAdjustmentRequest;
 import com.recipick.domain.product.dto.StockAdjustmentResponse;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -34,9 +36,11 @@ public class ProductStockService {
 
     private final StockAdjustmentRepository stockAdjustmentRepository;
 
+    // 주문은 잠근 상태의 가격으로 금액을 계산해야 해서, 차감한 상품을 요청 순서대로 돌려준다
     @Transactional
-    public void decreaseStocks(Long martId, List<StockQuantity> items) {
+    public List<ProductSummary> decreaseStocks(Long martId, List<StockQuantity> items) {
         Map<Long, Product> products = lockProducts(items);
+        List<ProductSummary> decreased = new ArrayList<>(items.size());
         for (StockQuantity item : items) {
             Product product = products.get(item.productId());
             if (product == null || product.isDeleted()
@@ -48,7 +52,9 @@ public class ProductStockService {
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_SELLING);
             }
             product.decreaseStock(item.quantity());
+            decreased.add(ProductSummary.from(product));
         }
+        return decreased;
     }
 
     @Transactional
