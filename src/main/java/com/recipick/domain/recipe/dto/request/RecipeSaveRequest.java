@@ -45,6 +45,6 @@ public record RecipeSaveRequest(
         String youtubeUrl,
 
         @NotEmpty
-        List<@Valid RecipeStepRequest> steps
+        List<@NotNull @Valid RecipeStepRequest> steps
 ) {
 }
