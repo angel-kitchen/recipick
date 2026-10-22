@@ -129,8 +129,15 @@ public class Product extends BaseTimeEntity {
         this.status = status;
     }
 
+    public void delete(){
+        this.deleted = true;
+    }
+
     public void increaseStock(int quantity) {
         validatePositive(quantity);
+            if(quantity > Integer.MAX_VALUE - totalQuantity){
+                throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+            }
         this.totalQuantity += quantity;
     }
 
