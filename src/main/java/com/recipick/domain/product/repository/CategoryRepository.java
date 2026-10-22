@@ -14,7 +14,6 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     List<Category> findAllByDeletedFalse();
     boolean existsByName(String name);
-    Optional<Category> findByName(String name);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Category c where c.name = :name")
