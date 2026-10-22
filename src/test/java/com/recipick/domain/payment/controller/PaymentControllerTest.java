@@ -1,19 +1,23 @@
 package com.recipick.domain.payment.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.recipick.domain.payment.dto.response.PaymentConfirmResponse;
+import com.recipick.domain.payment.dto.response.PaymentDetailResponse;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.facade.PaymentConfirmFacade;
+import com.recipick.domain.payment.facade.PaymentQueryFacade;
 import com.recipick.global.config.ClockConfig;
 import com.recipick.global.config.JacksonConfig;
 import com.recipick.global.config.JwtConfig;
@@ -72,6 +76,9 @@ class PaymentControllerTest {
 
     @MockitoBean
     private PaymentConfirmFacade paymentConfirmFacade;
+
+    @MockitoBean
+    private PaymentQueryFacade paymentQueryFacade;
 
     @Test
     @DisplayName("회원 토큰과 올바른 본문이면 토큰의 회원 ID로 Facade를 부르고 200 성공 봉투에 담아 돌려준다")
@@ -150,6 +157,66 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.code").value("PAYMENT-005"))
             .andExpect(jsonPath("$.message").value("결제 가능 시간이 만료되었습니다."));
+    }
+
+    @Test
+    @DisplayName("회원 토큰으로 주문 결제를 조회하면 토큰의 회원 ID로 Facade를 부르고 결제 정보를 돌려준다")
+    void getByOrderId() throws Exception {
+        // given
+        given(paymentQueryFacade.getByOrderId(MEMBER_ID, 1L)).willReturn(new PaymentDetailResponse(
+            10L, 1L, "pay_1", PaymentMethod.CARD, 23800L, PaymentStatus.IN_PROGRESS,
+            null, LocalDateTime.of(2026, 10, 22, 10, 5)));
+
+        // when
+        ResultActions result = mockMvc.perform(get("/api/payments/orders/{orderId}", 1L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken()));
+
+        // then
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.message").value("요청이 처리되었습니다."))
+            .andExpect(jsonPath("$.data.paymentId").value(10))
+            .andExpect(jsonPath("$.data.orderId").value(1))
+            .andExpect(jsonPath("$.data.portonePaymentId").value("pay_1"))
+            .andExpect(jsonPath("$.data.paymentMethod").value("CARD"))
+            .andExpect(jsonPath("$.data.amount").value(23800))
+            .andExpect(jsonPath("$.data.paymentStatus").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.paidAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.expiresAt").value("2026-10-22T10:05:00+09:00"))
+            .andExpect(jsonPath("$.data.failureReason").doesNotExist());
+        verify(paymentQueryFacade).getByOrderId(MEMBER_ID, 1L);
+    }
+
+    @Test
+    @DisplayName("토큰이 없으면 주문 결제를 조회할 수 없고 AUTH-001을 반환한다")
+    void getByOrderIdWithoutToken() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(get("/api/payments/orders/{orderId}", 1L));
+
+        // then
+        result.andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("AUTH-001"));
+        verify(paymentQueryFacade, never()).getByOrderId(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("Facade가 PAYMENT-001을 던지면 404 오류 봉투로 반환한다")
+    void getByOrderIdWithPaymentError() throws Exception {
+        // given
+        given(paymentQueryFacade.getByOrderId(anyLong(), anyLong()))
+            .willThrow(new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+        // when
+        ResultActions result = mockMvc.perform(get("/api/payments/orders/{orderId}", 1L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken()));
+
+        // then
+        result.andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("PAYMENT-001"))
+            .andExpect(jsonPath("$.message").value("결제 정보를 찾을 수 없습니다."));
     }
 
     private String memberToken() {
