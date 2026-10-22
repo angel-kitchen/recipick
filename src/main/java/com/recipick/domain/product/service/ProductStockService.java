@@ -1,6 +1,7 @@
 package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.product.dto.StockAdjustmentHistoryResponse;
 import com.recipick.domain.product.dto.StockAdjustmentRequest;
 import com.recipick.domain.product.dto.StockAdjustmentResponse;
 import com.recipick.domain.product.dto.StockQuantity;
@@ -13,7 +14,9 @@ import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.repository.StockAdjustmentRepository;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,7 +71,25 @@ public class ProductStockService {
         return productRepository.findAllByIdInForUpdate(ids).stream()
             .collect(Collectors.toMap(Product::getId, Function.identity()));
     }
+    public PageResponse<StockAdjustmentHistoryResponse> getStockAdjustments(
+        AdminRole role,
+        Long adminMartId,
+        Long productId,
+        Pageable pageable
+    ) {
+        Product product = productRepository.findById(productId)
+            .filter(p -> !p.isDeleted())
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
+        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+
+        return PageResponse.from(
+            stockAdjustmentRepository.findByProductIdOrderByCreatedAtDescIdDesc(productId, pageable)
+                .map(StockAdjustmentHistoryResponse::from)
+        );
+    }
     @Transactional
     public StockAdjustmentResponse adjustStock(
         AdminRole role,
