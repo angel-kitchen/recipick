@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,5 +44,12 @@ public class MemberAddressController {
             @PathVariable Long addressId, @Valid @RequestBody MemberAddressUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("배송지가 수정되었습니다.",
                 memberAddressFacade.updateAddress(memberId, addressId, request)));
+    }
+
+    @PutMapping("/{addressId}/select")
+    public ResponseEntity<ApiResponse<MemberAddressResponse>> selectAddress(@LoginMember Long memberId,
+            @PathVariable Long addressId) {
+        return ResponseEntity.ok(ApiResponse.success("현재 배송지가 선택되었습니다.",
+                memberAddressFacade.selectAddress(memberId, addressId)));
     }
 }
