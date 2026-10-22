@@ -97,6 +97,13 @@ public class Recipe extends BaseTimeEntity {
         this.autoCartEnabled = false;
     }
 
+    public void enableAutoCart() {
+        if (!isActive()) {
+            throw new BusinessException(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
+        }
+        this.autoCartEnabled = true;
+    }
+
     public void disableAutoCart() {
         this.autoCartEnabled = false;
     }
