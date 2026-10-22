@@ -33,6 +33,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 @WebMvcTest(
     controllers = PortOneConfigController.class,
@@ -78,9 +79,13 @@ class PortOneConfigControllerTest {
                 "test-channel-key"
             ));
 
-        // when, then
-        mockMvc.perform(get("/api/config/portone"))
-            .andExpect(status().isOk())
+        // when
+        ResultActions result = mockMvc.perform(
+            get("/api/config/portone")
+        );
+
+        // then
+        result.andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.code").value("OK"))
             .andExpect(jsonPath("$.data.storeId").value("test-store-id"))
@@ -99,9 +104,13 @@ class PortOneConfigControllerTest {
                 PaymentErrorCode.PORTONE_CONFIG_ERROR
             ));
 
-        // when, then
-        mockMvc.perform(get("/api/config/portone"))
-            .andExpect(status().isInternalServerError())
+        // when
+        ResultActions result = mockMvc.perform(
+            get("/api/config/portone")
+        );
+
+        // then
+        result.andExpect(status().isInternalServerError())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.code").value("PAYMENT-010"))
             .andExpect(jsonPath("$.message")
