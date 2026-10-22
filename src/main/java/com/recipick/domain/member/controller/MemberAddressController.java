@@ -1,6 +1,7 @@
 package com.recipick.domain.member.controller;
 
 import com.recipick.domain.member.dto.request.MemberAddressCreateRequest;
+import com.recipick.domain.member.dto.request.MemberAddressUpdateRequest;
 import com.recipick.domain.member.dto.response.MemberAddressListResponse;
 import com.recipick.domain.member.dto.response.MemberAddressResponse;
 import com.recipick.domain.member.facade.MemberAddressFacade;
@@ -11,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,5 +36,12 @@ public class MemberAddressController {
             @Valid @RequestBody MemberAddressCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("배송지가 등록되었습니다.", memberAddressFacade.createAddress(memberId, request)));
+    }
+
+    @PatchMapping("/{addressId}")
+    public ResponseEntity<ApiResponse<MemberAddressResponse>> updateAddress(@LoginMember Long memberId,
+            @PathVariable Long addressId, @Valid @RequestBody MemberAddressUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("배송지가 수정되었습니다.",
+                memberAddressFacade.updateAddress(memberId, addressId, request)));
     }
 }
