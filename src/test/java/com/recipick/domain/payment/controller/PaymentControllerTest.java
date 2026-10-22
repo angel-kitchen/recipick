@@ -47,7 +47,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-// 보안 설정 구성은 AuthenticationWebTest(채빈)와 같다. 컨트롤러 한 장만 올리고 Facade는 mock이라 Docker가 필요 없다
+// 보안 설정 구성은 AuthenticationWebTest(채빈님)와 같다. 컨트롤러 한 장만 올리고 Facade는 mock이라 Docker가 필요 없다
 @WebMvcTest(controllers = PaymentController.class,
     properties = "security.cors.allowed-origins=http://localhost:3000")
 @ActiveProfiles("test")
@@ -164,8 +164,8 @@ class PaymentControllerTest {
     void getByOrderId() throws Exception {
         // given
         given(paymentQueryFacade.getByOrderId(MEMBER_ID, 1L)).willReturn(new PaymentDetailResponse(
-            10L, 1L, "pay_1", PaymentMethod.CARD, 23800L, PaymentStatus.IN_PROGRESS,
-            null, LocalDateTime.of(2026, 10, 22, 10, 5)));
+            10L, 1L, "pay_1", PaymentMethod.CARD, 23800L, PaymentStatus.IN_PROGRESS, null,
+            null, LocalDateTime.of(2026, 10, 22, 10, 5), 0L, null));
 
         // when
         ResultActions result = mockMvc.perform(get("/api/payments/orders/{orderId}", 1L)
@@ -182,9 +182,11 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.data.paymentMethod").value("CARD"))
             .andExpect(jsonPath("$.data.amount").value(23800))
             .andExpect(jsonPath("$.data.paymentStatus").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.failureReason").value(nullValue()))
             .andExpect(jsonPath("$.data.paidAt").value(nullValue()))
             .andExpect(jsonPath("$.data.expiresAt").value("2026-10-22T10:05:00+09:00"))
-            .andExpect(jsonPath("$.data.failureReason").doesNotExist());
+            .andExpect(jsonPath("$.data.completedRefundAmount").value(0))
+            .andExpect(jsonPath("$.data.latestRefundStatus").value(nullValue()));
         verify(paymentQueryFacade).getByOrderId(MEMBER_ID, 1L);
     }
 

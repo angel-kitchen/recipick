@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
@@ -21,6 +22,7 @@ import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -170,6 +172,54 @@ class PaymentServiceTest {
         verify(refundRepository, never()).save(any(Refund.class));
     }
 
+    @Test
+    @DisplayName("환불 행이 없으면 완료 금액 0, 최근 상태 null이다")
+    void getRefundSummaryWithoutRefunds() {
+        // given
+        given(refundRepository.findAllByPaymentIdOrderByIdDesc(PAYMENT_ID)).willReturn(List.of());
+
+        // when
+        RefundSummary summary = paymentService.getRefundSummary(PAYMENT_ID);
+
+        // then
+        assertThat(summary).isEqualTo(RefundSummary.NONE);
+        assertThat(summary.completedAmount()).isZero();
+        assertThat(summary.latestStatus()).isNull();
+    }
+
+    @Test
+    @DisplayName("완료 금액은 COMPLETED 행만 더하고, 최근 상태는 가장 나중에 만든 행의 상태다")
+    void getRefundSummaryWithMixedStatuses() {
+        // given — id 역순으로 온다. SYSTEM 시도가 실패한 뒤 ADMIN 재처리가 완료된 결제
+        Payment payment = failedPayment();
+        given(refundRepository.findAllByPaymentIdOrderByIdDesc(PAYMENT_ID)).willReturn(List.of(
+            refund(payment, 20000L, RefundStatus.COMPLETED, RefundRequester.ADMIN),
+            refund(payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM)));
+
+        // when
+        RefundSummary summary = paymentService.getRefundSummary(PAYMENT_ID);
+
+        // then — FAILED 행의 20000원은 더해지지 않는다
+        assertThat(summary.completedAmount()).isEqualTo(20000L);
+        assertThat(summary.latestStatus()).isEqualTo(RefundStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("진행 중인 환불만 있으면 완료 금액 0, 최근 상태 REQUESTED다")
+    void getRefundSummaryWithRequestedOnly() {
+        // given
+        Payment payment = failedPayment();
+        given(refundRepository.findAllByPaymentIdOrderByIdDesc(PAYMENT_ID)).willReturn(List.of(
+            refund(payment, 23800L, RefundStatus.REQUESTED, RefundRequester.SYSTEM)));
+
+        // when
+        RefundSummary summary = paymentService.getRefundSummary(PAYMENT_ID);
+
+        // then
+        assertThat(summary.completedAmount()).isZero();
+        assertThat(summary.latestStatus()).isEqualTo(RefundStatus.REQUESTED);
+    }
+
     private Payment failedPayment() {
         Payment payment = Payment.builder()
             .orderId(1L)
@@ -182,5 +232,17 @@ class PaymentServiceTest {
         // DB를 거치지 않아 id가 비어 있다. JPA가 채웠을 값을 흉내 내서 orderId와 섞이는 실수를 잡는다
         ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
         return payment;
+    }
+
+    private Refund refund(Payment payment, long amount, RefundStatus status, RefundRequester requestedBy) {
+        return Refund.builder()
+            .payment(payment)
+            .amount(amount)
+            .reason("결제 금액 불일치")
+            .status(status)
+            .requestedBy(requestedBy)
+            .idempotencyKey("key_" + requestedBy + "_" + status)
+            .requestedAt(NOW.minusMinutes(5))
+            .build();
     }
 }
