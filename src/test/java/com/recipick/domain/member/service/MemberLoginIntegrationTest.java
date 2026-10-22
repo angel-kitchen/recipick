@@ -235,6 +235,43 @@ class MemberLoginIntegrationTest extends IntegrationTestSupport {
         assertThat(redisTemplate.hasKey(attemptKey("MEMBER", email))).isFalse();
     }
 
+    @Test
+    @DisplayName("DB가 같은 회원으로 비교하는 이메일 표기는 실패 횟수와 잠금을 공유한다")
+    void sharesLockForEquivalentEmails() throws Exception {
+        // given
+        String alias = email.replace("@test.com", "@tést.com");
+        assertThat(memberRepository.findByEmailIgnoreCase(alias)).isPresent();
+        login(email, "wrong");
+        login(alias, "wrong");
+
+        // when
+        MockHttpServletResponse third = login(alias, "wrong");
+        MockHttpServletResponse original = login(email, PASSWORD);
+        MockHttpServletResponse accented = login(alias, PASSWORD);
+
+        // then
+        assertError(third, 403, "AUTH-012");
+        assertError(original, 403, "AUTH-012");
+        assertError(accented, 403, "AUTH-012");
+        assertThat(redisTemplate.opsForHash().get(attemptKey("MEMBER", email), "failures")).isEqualTo("3");
+        assertThat(redisTemplate.hasKey(attemptKey("MEMBER", alias))).isFalse();
+    }
+
+    @Test
+    @DisplayName("다른 이메일 표기로 로그인에 성공해도 저장된 이메일의 실패 횟수를 초기화한다")
+    void clearsCanonicalFailuresOnAliasSuccess() throws Exception {
+        // given
+        String alias = email.replace("@test.com", "@tést.com");
+        login(email, "wrong");
+
+        // when
+        MockHttpServletResponse success = login(alias, PASSWORD);
+
+        // then
+        assertThat(success.getStatus()).isEqualTo(200);
+        assertThat(redisTemplate.hasKey(attemptKey("MEMBER", email))).isFalse();
+    }
+
     private MockHttpServletResponse login(String loginEmail, String password) throws Exception {
         return mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("email", loginEmail, "password", password))))
