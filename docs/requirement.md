@@ -535,3 +535,14 @@
 - 예: 삼청동 배송지에 하안 마트가 지정되어 있으면 하안 마트를 표시하되 `serviceAvailable = false`이며, 배송지 재선택 과정에서 다시 판정합니다.
 - 오류: 비로그인 401, 관리자 토큰 403, 토큰의 회원 없음 404(`MEMBER-001`).
 - 상품 도메인 조회 계약: `MartService.findMart(Long martId)`는 운영 상태와 무관하게 `Optional<MartResponse>`를 반환합니다. 없으면 empty이며 Entity·Repository를 외부에 제공하지 않습니다.
+
+## 배송지 목록 조회 API 계약
+
+- `GET /api/members/me/addresses`, 회원 토큰의 본인 배송지만 조회합니다.
+- 응답 `data`: `maxCount = 5`, `addresses` 배열. 배송지가 없으면 200과 빈 배열을 반환합니다.
+- 각 주소 필드: `addressId`, `label`, `address`, `detailAddress`, `legalDongCode`, `serviceAvailable`, `selected`.
+- 현재 배송지가 먼저 오고, 나머지는 `created_at DESC, id DESC`로 정렬합니다. 페이지는 사용하지 않습니다.
+- 목록의 `serviceAvailable`은 해당 주소의 법정동에 운영 중 마트가 있는지입니다. 다른 마트 지역이어도 해당 주소를 선택해 이용할 수 있으면 true입니다.
+- 내 정보의 `currentAddress.serviceAvailable`은 현재 지정 마트와의 일치도 확인합니다. 목록의 선택 후보 판정과 구분합니다.
+- 가능 여부는 조회마다 계산하고, 같은 요청 안의 동일 법정동은 결과를 재사용합니다. 배송지·선택 상태·지정 마트는 변경하지 않습니다.
+- 오류: 비로그인 401, 관리자 토큰 403, 토큰의 회원 없음 404(`MEMBER-001`).

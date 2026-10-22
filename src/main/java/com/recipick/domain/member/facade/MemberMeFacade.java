@@ -1,5 +1,6 @@
 package com.recipick.domain.member.facade;
 
+import com.recipick.domain.member.dto.MemberAddressData;
 import com.recipick.domain.member.dto.MemberProfile;
 import com.recipick.domain.member.dto.response.MemberMeResponse;
 import com.recipick.domain.member.service.MemberService;
@@ -26,7 +27,7 @@ public class MemberMeFacade {
 
     public MemberMeResponse getMe(Long memberId) {
         MemberProfile profile = memberService.getProfile(memberId);
-        MemberProfile.Address address = profile.address();
+        MemberAddressData address = profile.address();
         Optional<OpenMartResponse> availableMart = address == null ? Optional.empty()
                 : serviceAreaFacade.findAvailableMart(address.legalDongCode());
         MemberMeResponse.Mart mart = profile.martId() == null ? null : martService.findMart(profile.martId())
