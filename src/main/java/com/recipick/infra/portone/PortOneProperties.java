@@ -15,6 +15,8 @@ public record PortOneProperties(
         @NotBlank String apiSecret,
         @DefaultValue("https://api.portone.io") String baseUrl,
         @DefaultValue("3s") Duration connectTimeout,
-        @DefaultValue("5s") Duration readTimeout
+        @DefaultValue("5s") Duration readTimeout,
+        String storeId,
+        String channelKey
 ) {
 }

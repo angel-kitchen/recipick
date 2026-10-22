@@ -9,3 +9,5 @@ portone:
   base-url: http://localhost:0
   connect-timeout: 1s
   read-timeout: 1s
+  store-id: test-store-id
+  channel-key: test-channel-key
