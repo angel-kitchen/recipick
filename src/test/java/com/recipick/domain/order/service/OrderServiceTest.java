@@ -18,11 +18,13 @@ import com.recipick.domain.order.entity.enums.OrderStatusActor;
 import com.recipick.domain.order.entity.enums.OrderStatusType;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.OrderItemRepository;
+import com.recipick.domain.order.repository.OrderMemberId;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,6 +93,32 @@ class OrderServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("주문 ID 목록의 회원 ID를 주문 ID별로 돌려준다")
+    void findMemberIdsOf() {
+        // given
+        given(orderRepository.findMemberIdsByIdIn(List.of(1L, 2L))).willReturn(List.of(
+                orderMemberId(1L, 7L),
+                orderMemberId(2L, 8L)));
+
+        // when
+        Map<Long, Long> result = orderService.findMemberIdsOf(List.of(1L, 2L));
+
+        // then
+        assertThat(result).containsExactlyInAnyOrderEntriesOf(Map.of(1L, 7L, 2L, 8L));
+    }
+
+    @Test
+    @DisplayName("빈 주문 ID 목록이면 조회하지 않고 빈 결과를 돌려준다")
+    void findMemberIdsOf_emptyOrderIds() {
+        // when
+        Map<Long, Long> result = orderService.findMemberIdsOf(List.of());
+
+        // then
+        assertThat(result).isEmpty();
+        verify(orderRepository, never()).findMemberIdsByIdIn(any());
     }
 
     @Test
@@ -226,5 +254,19 @@ class OrderServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    private OrderMemberId orderMemberId(Long orderId, Long memberId) {
+        return new OrderMemberId() {
+            @Override
+            public Long getOrderId() {
+                return orderId;
+            }
+
+            @Override
+            public Long getMemberId() {
+                return memberId;
+            }
+        };
     }
 }
