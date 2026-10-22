@@ -307,4 +307,79 @@ public class ProductServiceTest {
             .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
         assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
     }
+
+    @Test
+    @DisplayName("삭제 : SUPER_ADMIN이 삭제하면 삭제 표시만 되고 재고·상태는 그대로다")
+    void deleteProduct_superAdmin() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        productService.deleteProduct(AdminRole.SUPER_ADMIN, null, 1L);
+
+        // then
+        assertThat(product.isDeleted()).isTrue();
+        assertThat(product.getTotalQuantity()).isEqualTo(5);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
+    }
+
+    @Test
+    @DisplayName("삭제 : MART_ADMIN은 본인 마트 상품을 삭제할 수 있다")
+    void deleteProduct_martAdminOwnMart() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        productService.deleteProduct(AdminRole.MART_ADMIN, 1L, 1L);
+
+        // then
+        assertThat(product.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("삭제 : MART_ADMIN이 다른 마트 상품이면 MART_ACCESS_DENIED이고 삭제되지 않는다")
+    void deleteProduct_martAdminOtherMart() {
+        // given
+        Product product = product(1L, 2L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.deleteProduct(AdminRole.MART_ADMIN, 1L, 1L));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(product.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("삭제 : 없는 상품이거나 이미 삭제된 상품이면 PRODUCT_NOT_FOUND")
+    void deleteProduct_notFound() {
+        // given
+        given(productRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
+        Product alreadyDeleted = product(1L, 1L);
+        ReflectionTestUtils.setField(alreadyDeleted, "deleted", true);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(alreadyDeleted));
+
+        // when
+        Throwable missingThrown = catchThrowable(
+            () -> productService.deleteProduct(AdminRole.SUPER_ADMIN, null, 99L));
+        Throwable deletedThrown = catchThrowable(
+            () -> productService.deleteProduct(AdminRole.SUPER_ADMIN, null, 1L));
+
+        // then
+        assertThat(missingThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(deletedThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
 }
