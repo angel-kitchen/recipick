@@ -11,6 +11,8 @@ public enum OrderStatus {
     public boolean canTransitionTo(OrderStatus next) {
         return switch (this) {
             case PENDING_PAYMENT -> next == PAID || next == CANCELED;
+            case PAID -> next == CANCEL_REQUESTED;
+            case CANCEL_REQUESTED -> next == PAID || next == REFUNDED;
             default -> false;
         };
     }
