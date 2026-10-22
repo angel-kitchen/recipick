@@ -32,7 +32,7 @@ public class CategoryService {
 
     @Transactional
     public CategoryIdResponse createCategory(CategoryCreateRequest request) {
-        Optional<Category> existing = categoryRepository.findByName(request.name());
+        Optional<Category> existing = categoryRepository.findByNameForUpdate(request.name());
         if (existing.isPresent()) {
             Category category = existing.get();
             if (!category.isDeleted()) {
@@ -64,7 +64,8 @@ public class CategoryService {
 
     @Transactional
     public void delete(Long categoryId){
-        Category category = findCategory(categoryId);
+        Category category = categoryRepository.findByIdForUpdate(categoryId)
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
         if(category.isDeleted()){
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
