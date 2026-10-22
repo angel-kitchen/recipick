@@ -1,6 +1,9 @@
 package com.recipick.domain.member.service;
 
 import com.recipick.domain.member.dto.MemberAddressData;
+import com.recipick.domain.member.dto.request.MemberAddressCreateRequest;
+import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.entity.MemberAddress;
 import com.recipick.domain.member.repository.MemberAddressRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberAddressService {
 
+    public static final int MAX_COUNT = 5;
+
     private final MemberAddressRepository memberAddressRepository;
 
     public List<MemberAddressData> findAddresses(Long memberId, Long selectedAddressId) {
@@ -19,5 +24,16 @@ public class MemberAddressService {
                 .map(address -> new MemberAddressData(address.getId(), address.getLabel(),
                         address.getAddress(), address.getDetailAddress(), address.getLegalDongCode()))
                 .toList();
+    }
+
+    public long countAddresses(Long memberId) {
+        return memberAddressRepository.countByMemberId(memberId);
+    }
+
+    @Transactional
+    public MemberAddress createAddress(Member member, MemberAddressCreateRequest request) {
+        return memberAddressRepository.save(MemberAddress.builder().member(member).label(request.label())
+                .address(request.address()).detailAddress(request.detailAddress())
+                .legalDongCode(request.legalDongCode()).build());
     }
 }

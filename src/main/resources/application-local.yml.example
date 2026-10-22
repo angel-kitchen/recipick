@@ -5,6 +5,9 @@ spring:
     url: jdbc:mysql://localhost:3306/recipick?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: recipick
     password: change-me
+    hikari:
+      # 기존 MySQL을 재사용해도 앱 연결의 잠금 대기는 팀 기준 5초로 맞춘다.
+      connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5
   jpa:
     hibernate:
       ddl-auto: update

@@ -16,4 +16,6 @@ public interface MemberAddressRepository extends JpaRepository<MemberAddress, Lo
             """)
     List<MemberAddress> findMemberAddresses(@Param("memberId") Long memberId,
             @Param("selectedAddressId") Long selectedAddressId);
+
+    long countByMemberId(Long memberId);
 }
