@@ -1,7 +1,7 @@
 package com.recipick.domain.recipe.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
@@ -116,7 +116,7 @@ class RecipeAdminFacadeTest {
     void changeAutoCart_enable() {
         // given
         Recipe recipe = recipe(RECIPE_ID, false);
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe);
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe);
         given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID)))
             .willReturn(Map.of(RECIPE_ID, List.of(3L)));
         given(productIngredientService.countLinkedProducts(List.of(3L))).willReturn(Map.of(3L, 2L));
@@ -130,51 +130,60 @@ class RecipeAdminFacadeTest {
     }
 
     @Test
-    @DisplayName("자동 장보기 지정: 필수 재료가 없으면 AUTO_CART_ENABLE_CONDITION_NOT_MET")
+    @DisplayName("자동 장보기 지정: 필수 재료가 없으면 AUTO_CART_ENABLE_CONDITION_NOT_MET 예외를 던진다")
     void changeAutoCart_noRequiredIngredient() {
         // given
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
         given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID))).willReturn(Map.of());
 
-        // when, then
-        assertThatThrownBy(() -> recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
+        // when
+        Throwable thrown = catchThrowable(() ->
+            recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET));
     }
 
     @Test
-    @DisplayName("자동 장보기 지정: 연결 상품 없는 필수 재료가 있으면 AUTO_CART_ENABLE_CONDITION_NOT_MET")
+    @DisplayName("자동 장보기 지정: 연결 상품 없는 필수 재료가 있으면 AUTO_CART_ENABLE_CONDITION_NOT_MET 예외를 던진다")
     void changeAutoCart_missingLinkedProduct() {
         // given
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
         given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID)))
             .willReturn(Map.of(RECIPE_ID, List.of(3L, 7L)));
         given(productIngredientService.countLinkedProducts(List.of(3L, 7L))).willReturn(Map.of(3L, 1L, 7L, 0L));
 
-        // when, then
-        assertThatThrownBy(() -> recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
+        // when
+        Throwable thrown = catchThrowable(() ->
+            recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET));
     }
 
     @Test
-    @DisplayName("자동 장보기 지정: 비활성 레시피면 조건이 맞아도 AUTO_CART_ENABLE_CONDITION_NOT_MET")
+    @DisplayName("자동 장보기 지정: 비활성 레시피면 조건이 맞아도 AUTO_CART_ENABLE_CONDITION_NOT_MET 예외를 던진다")
     void changeAutoCart_inactive() {
         // given
         Recipe recipe = recipe(RECIPE_ID, false);
         recipe.changeStatus(RecipeStatus.INACTIVE);
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe);
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe);
         given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID)))
             .willReturn(Map.of(RECIPE_ID, List.of(3L)));
         given(productIngredientService.countLinkedProducts(any())).willReturn(Map.of(3L, 1L));
 
-        // when, then
-        assertThatThrownBy(() -> recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
+        // when
+        Throwable thrown = catchThrowable(() ->
+            recipeAdminFacade.changeAutoCart(RECIPE_ID, new RecipeAutoCartUpdateRequest(true)));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET));
     }
 
     @Test
@@ -182,7 +191,7 @@ class RecipeAdminFacadeTest {
     void changeAutoCart_disable() {
         // given
         Recipe recipe = recipe(RECIPE_ID, true);
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe);
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe);
 
         // when
         RecipeAutoCartResponse response =
