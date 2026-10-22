@@ -10,13 +10,16 @@ import com.recipick.domain.order.entity.enums.OrderStatusActor;
 import com.recipick.domain.order.entity.enums.OrderStatusType;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.OrderItemRepository;
+import com.recipick.domain.order.repository.OrderMemberId;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +42,20 @@ public class OrderService {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
                 .getMemberId();
+    }
+
+    // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
+    public List<Long> findOrderIdsOf(Long memberId) {
+        return orderRepository.findIdsByMemberId(memberId);
+    }
+
+    // 없는 주문 ID는 결과에서 빠진다
+    public Map<Long, Long> findMemberIdsOf(List<Long> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        return orderRepository.findMemberIdsByIdIn(orderIds).stream()
+                .collect(Collectors.toMap(OrderMemberId::getOrderId, OrderMemberId::getMemberId));
     }
 
     // 결제 Facade가 PAYMENT를 먼저 잠근 트랜잭션 안에서 호출한다(락 순서 PAYMENT → ORDERS)
