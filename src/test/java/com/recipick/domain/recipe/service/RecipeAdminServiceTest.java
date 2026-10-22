@@ -149,7 +149,7 @@ class RecipeAdminServiceTest {
     @DisplayName("재료 저장: 한 요청에 같은 재료가 두 번 있으면 DUPLICATE_RECIPE_INGREDIENT")
     void replaceIngredients_duplicated() {
         // given
-        given(recipeRepository.findById(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
         RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(3L)));
 
         // when, then
@@ -164,7 +164,7 @@ class RecipeAdminServiceTest {
     @DisplayName("재료 저장: 없는 재료가 있으면 기존 재료를 지우지 않고 INGREDIENT_NOT_FOUND")
     void replaceIngredients_ingredientNotFound() {
         // given
-        given(recipeRepository.findById(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
         given(ingredientRepository.findAllById(List.of(3L, 99L))).willReturn(List.of(ingredient(3L)));
         RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(99L)));
 
@@ -180,7 +180,7 @@ class RecipeAdminServiceTest {
     @DisplayName("재료 저장: 기존 재료를 지운 뒤 요청한 재료로 바꾸고 개수를 돌려준다")
     void replaceIngredients() {
         // given
-        given(recipeRepository.findById(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
         given(ingredientRepository.findAllById(List.of(3L, 7L))).willReturn(List.of(ingredient(3L), ingredient(7L)));
         RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(7L)));
 

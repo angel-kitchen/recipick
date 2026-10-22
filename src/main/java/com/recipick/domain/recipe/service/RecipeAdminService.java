@@ -84,7 +84,8 @@ public class RecipeAdminService {
 
     @Transactional
     public int replaceIngredients(Long recipeId, RecipeIngredientsSaveRequest request) {
-        Recipe recipe = getRecipe(recipeId);
+        // 같은 레시피의 재료를 동시에 교체하면 삭제·삽입이 서로의 행을 잠가 교착이 나므로 레시피 행부터 잠가 차례로 처리한다
+        Recipe recipe = getRecipeForUpdate(recipeId);
         List<Long> ingredientIds = request.ingredients().stream()
             .map(RecipeIngredientsSaveRequest.Item::ingredientId)
             .toList();
