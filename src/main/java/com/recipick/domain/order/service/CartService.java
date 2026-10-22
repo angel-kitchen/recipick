@@ -12,6 +12,9 @@ import com.recipick.global.common.TimeConstants;
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -48,6 +51,16 @@ public class CartService {
                 .quantity(quantity)
                 .build());
         return CartItemAddResponse.from(cartItem);
+    }
+
+    // 요청한 순서대로 돌려준다. 하나라도 없거나 다른 회원 소유면 주문 대상을 확정할 수 없다
+    public List<CartItem> findCartItems(Long memberId, List<Long> cartItemIds) {
+        Map<Long, CartItem> cartItems = cartItemRepository.findAllByMemberIdAndIdIn(memberId, cartItemIds).stream()
+                .collect(Collectors.toMap(CartItem::getId, Function.identity()));
+        if (cartItems.size() != cartItemIds.size()) {
+            throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return cartItemIds.stream().map(cartItems::get).toList();
     }
 
     public CartItem getCartItem(Long memberId, Long cartItemId) {

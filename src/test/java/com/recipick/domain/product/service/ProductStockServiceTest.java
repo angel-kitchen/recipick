@@ -1,5 +1,6 @@
 package com.recipick.domain.product.service;
 
+import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -7,6 +8,7 @@ import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.global.exception.BusinessException;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -16,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.util.List;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,6 +72,24 @@ public class ProductStockServiceTest {
 
         assertThat(p1.getTotalQuantity()).isEqualTo(7);
         assertThat(p2.getTotalQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("차감: 차감한 상품 정보를 요청 순서대로 돌려준다")
+    void decreaseStock_returnsSummariesInRequestOrder() {
+        // given
+        Mart mart = mart(1L);
+        Product p1 = product(1L, mart, 10, false);
+        Product p2 = product(2L, mart, 5, false);
+        given(productRepository.findAllByIdInForUpdate(List.of(2L, 1L))).willReturn(List.of(p1, p2));
+
+        // when
+        List<ProductSummary> result = productStockService.decreaseStocks(1L,
+            List.of(new StockQuantity(2L, 1), new StockQuantity(1L, 3)));
+
+        // then
+        Assertions.assertThat(result).extracting(ProductSummary::productId, ProductSummary::totalQuantity)
+            .containsExactly(tuple(2L, 4), tuple(1L, 7));
     }
 
     @Test

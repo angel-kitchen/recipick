@@ -16,6 +16,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
+    Optional<Order> findByMemberIdAndIdempotencyKey(Long memberId, String idempotencyKey);
+
+    boolean existsByPendingMemberId(Long pendingMemberId);
+
+    boolean existsByOrderNumber(String orderNumber);
+
     @Query("select o.id from Order o where o.memberId = :memberId order by o.id desc")
     List<Long> findIdsByMemberId(@Param("memberId") Long memberId);
 

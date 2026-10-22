@@ -6,6 +6,7 @@ import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.MartRepository;
+import com.recipick.domain.product.repository.ProductMartId;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -15,6 +16,8 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,6 +91,16 @@ public class ProductService {
         return productRepository.findAllById(productIds).stream()
             .map(ProductSummary::from)
             .toList();
+    }
+
+    // 엔티티를 읽지 않고 값만 조회한다. 같은 트랜잭션에서 뒤이어 재고를 잠그고 차감할 때
+    // 미리 읽어 둔 엔티티가 있으면 잠금 조회가 그 엔티티의 이전 재고 값으로 계산하기 때문이다
+    public Map<Long, Long> findMartIdsOf(List<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return productRepository.findMartIdsByIdIn(productIds).stream()
+            .collect(Collectors.toMap(ProductMartId::getProductId, ProductMartId::getMartId));
     }
 
     private Long resolveMartId(AdminRole role, Long adminMartId, Long requestedMartId){
