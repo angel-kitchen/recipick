@@ -2,13 +2,17 @@ package com.recipick.domain.recipe.facade;
 
 import com.recipick.domain.product.service.ProductIngredientService;
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
+import com.recipick.domain.recipe.dto.request.RecipeAutoCartUpdateRequest;
 import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.response.RecipeAdminDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeAdminSummaryResponse;
+import com.recipick.domain.recipe.dto.response.RecipeAutoCartResponse;
 import com.recipick.domain.recipe.dto.response.RecipeIngredientsSaveResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
 import com.recipick.domain.recipe.service.RecipeAdminService;
+import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -65,6 +69,20 @@ public class RecipeAdminFacade {
             recipe.disableAutoCart();
         }
         return new RecipeIngredientsSaveResponse(recipeId, ingredientCount, recipe.isAutoCartEnabled(), released);
+    }
+
+    @Transactional
+    public RecipeAutoCartResponse changeAutoCart(Long recipeId, RecipeAutoCartUpdateRequest  request) {
+        Recipe recipe = recipeAdminService.getRecipe(recipeId);
+        if (recipe.autoCartAvailable()) {
+            if (!hasLinkedProductsForAllRequired(recipeId)) {
+                throw new BusinessException(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
+            }
+            recipe.enableAutoCart();
+        } else {
+            recipe.disableAutoCart();
+        }
+        return new RecipeAutoCartResponse(recipeId, recipe.isAutoCartEnabled());
     }
 
     private int countMissingLinked(List<Long> requiredIngredientIds, Map<Long, Long> linkedCounts
