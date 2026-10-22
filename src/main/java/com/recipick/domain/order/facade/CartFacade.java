@@ -34,11 +34,7 @@ public class CartFacade {
                 .filter(summary -> !summary.deleted())
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        if (!product.martId().equals(martId)
-                || product.status() != ProductStatus.SELLING
-                || product.totalQuantity() == 0) {
-            throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
-        }
+        validatePurchasable(product, martId);
         boolean hasPreviousMartItems = productService.findProducts(cartService.findProductIds(memberId)).stream()
                 .anyMatch(summary -> !summary.martId().equals(martId));
         if (hasPreviousMartItems) {
@@ -58,11 +54,15 @@ public class CartFacade {
                 .filter(summary -> !summary.deleted())
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE));
+        validatePurchasable(product, martId);
+        return cartService.updateCartItemQuantity(memberId, cartItemId, request.quantity(), product.totalQuantity());
+    }
+
+    private void validatePurchasable(ProductSummary product, Long martId) {
         if (!product.martId().equals(martId)
                 || product.status() != ProductStatus.SELLING
                 || product.totalQuantity() == 0) {
             throw new BusinessException(OrderErrorCode.CART_ITEM_NOT_PURCHASABLE);
         }
-        return cartService.updateCartItemQuantity(memberId, cartItemId, request.quantity(), product.totalQuantity());
     }
 }
