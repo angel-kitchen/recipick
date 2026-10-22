@@ -4,6 +4,6 @@ import jakarta.validation.constraints.NotNull;
 
 public record RecipeAutoCartUpdateRequest(
         @NotNull
-        Boolean autoAvailable
+        Boolean autoCartAvailable
 ) {
 }

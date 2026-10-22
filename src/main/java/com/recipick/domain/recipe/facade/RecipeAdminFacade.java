@@ -72,9 +72,10 @@ public class RecipeAdminFacade {
     }
 
     @Transactional
-    public RecipeAutoCartResponse changeAutoCart(Long recipeId, RecipeAutoCartUpdateRequest  request) {
-        Recipe recipe = recipeAdminService.getRecipe(recipeId);
-        if (recipe.autoCartAvailable()) {
+    public RecipeAutoCartResponse changeAutoCart(Long recipeId, RecipeAutoCartUpdateRequest request) {
+        // 재료 저장과 같은 레시피 행 잠금을 먼저 잡아야, 재료가 바뀌는 중에 이전 재료 기준으로 지정되지 않는다
+        Recipe recipe = recipeAdminService.getRecipeForUpdate(recipeId);
+        if (request.autoCartAvailable()) {
             if (!hasLinkedProductsForAllRequired(recipeId)) {
                 throw new BusinessException(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
             }
