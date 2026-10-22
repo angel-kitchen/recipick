@@ -1,5 +1,6 @@
 package com.recipick.domain.order.facade;
 
+import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.product.dto.StockQuantity;
@@ -23,9 +24,13 @@ public class OrderFacade {
     @Transactional(propagation = Propagation.MANDATORY)
     public List<StockQuantity> closeByPaymentFailure(
             Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
-        return orderService.closeByPaymentFailure(orderId, reasonCode, reasonDetail).stream()
-                .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
-                .toList();
+        return toStockQuantities(orderService.closeByPaymentFailure(orderId, reasonCode, reasonDetail));
+    }
+
+    // 환불 완료도 포인트 복구가 주문과 재고 사이에 들어가야 해서 같은 이유로 재고 복구를 나눈다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<StockQuantity> markRefunded(Long orderId) {
+        return toStockQuantities(orderService.markRefunded(orderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -35,5 +40,11 @@ public class OrderFacade {
             return;
         }
         productStockService.increaseStocks(items);
+    }
+
+    private List<StockQuantity> toStockQuantities(List<OrderItem> items) {
+        return items.stream()
+                .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
+                .toList();
     }
 }

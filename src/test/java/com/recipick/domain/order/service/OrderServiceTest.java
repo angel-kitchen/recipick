@@ -256,6 +256,146 @@ class OrderServiceTest {
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
     }
 
+    private Order paidOrder(MartStatus martStatus) {
+        return Order.builder()
+                .memberId(7L)
+                .status(OrderStatus.PAID)
+                .martStatus(martStatus)
+                .build();
+    }
+
+    private Order memberCancelRequestedOrder() {
+        Order order = paidOrder(MartStatus.RECEIVED);
+        order.requestMemberCancel("단순 변심");
+        return order;
+    }
+
+    @Test
+    @DisplayName("접수중인 결제 완료 주문에 회원 취소를 요청하면 취소 요청 상태로 바꾸고 회원 주체 이력을 남긴다")
+    void markMemberCancelRequested() {
+        // given
+        Order order = paidOrder(MartStatus.RECEIVED);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MemberCancelRequestResult result = orderService.markMemberCancelRequested(1L, "단순 변심");
+
+        // then
+        assertThat(result).isEqualTo(MemberCancelRequestResult.REQUESTED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue())
+                .extracting(OrderStatusHistory::getStatusType, OrderStatusHistory::getFromStatus,
+                        OrderStatusHistory::getToStatus, OrderStatusHistory::getActor, OrderStatusHistory::getReason)
+                .containsExactly(OrderStatusType.ORDER, "PAID", "CANCEL_REQUESTED", OrderStatusActor.MEMBER,
+                        "MEMBER_CANCELED");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"PREPARING", "SHIPPED"})
+    @DisplayName("마트가 준비를 시작한 주문은 상태를 바꾸지 않고 마트가 이미 준비 중이라고 돌려준다")
+    void markMemberCancelRequested_martAlreadyPreparing(MartStatus martStatus) {
+        // given
+        Order order = paidOrder(martStatus);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MemberCancelRequestResult result = orderService.markMemberCancelRequested(1L, null);
+
+        // then
+        assertThat(result).isEqualTo(MemberCancelRequestResult.MART_ALREADY_PREPARING);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 취소 요청 중인 주문에 회원 취소가 다시 오면 상태와 사유를 바꾸지 않고 잘못된 상태라고 돌려준다")
+    void markMemberCancelRequested_alreadyCancelRequested() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MemberCancelRequestResult result = orderService.markMemberCancelRequested(1L, "다른 사유");
+
+        // then
+        assertThat(result).isEqualTo(MemberCancelRequestResult.INVALID_ORDER_STATUS);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원 취소가 실패하면 결제 완료로 되돌리고 시스템 주체 이력을 남긴다")
+    void restorePaidAfterMemberCancelFailure() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        orderService.restorePaidAfterMemberCancelFailure(1L);
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue())
+                .extracting(OrderStatusHistory::getFromStatus, OrderStatusHistory::getToStatus,
+                        OrderStatusHistory::getActor)
+                .containsExactly("CANCEL_REQUESTED", "PAID", OrderStatusActor.SYSTEM);
+    }
+
+    @Test
+    @DisplayName("이미 결제 완료로 되돌린 주문에 취소 실패가 다시 오면 아무것도 바꾸지 않는다")
+    void restorePaidAfterMemberCancelFailure_alreadyPaid() {
+        // given
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(paidOrder(MartStatus.RECEIVED)));
+
+        // when
+        orderService.restorePaidAfterMemberCancelFailure(1L);
+
+        // then
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("취소 요청 주문을 환불 완료로 바꾸면 취소 사유가 담긴 이력을 남기고 재고를 복구할 주문 상품을 돌려준다")
+    void markRefunded() {
+        // given
+        List<OrderItem> items = List.of(OrderItem.builder().productId(10L).quantity(2).build());
+        Order order = memberCancelRequestedOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+        given(orderItemRepository.findAllByOrderId(1L)).willReturn(items);
+
+        // when
+        List<OrderItem> result = orderService.markRefunded(1L);
+
+        // then
+        assertThat(result).isEqualTo(items);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue())
+                .extracting(OrderStatusHistory::getFromStatus, OrderStatusHistory::getToStatus,
+                        OrderStatusHistory::getActor, OrderStatusHistory::getReason)
+                .containsExactly("CANCEL_REQUESTED", "REFUNDED", OrderStatusActor.SYSTEM, "MEMBER_CANCELED");
+    }
+
+    @Test
+    @DisplayName("이미 환불 완료된 주문에 환불 성공이 다시 오면 복구할 상품 없이 끝난다")
+    void markRefunded_alreadyRefunded() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        order.markRefunded();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        List<OrderItem> result = orderService.markRefunded(1L);
+
+        // then
+        assertThat(result).isEmpty();
+        verify(orderStatusHistoryRepository, never()).save(any());
+        verify(orderItemRepository, never()).findAllByOrderId(any());
+    }
+
     private OrderMemberId orderMemberId(Long orderId, Long memberId) {
         return new OrderMemberId() {
             @Override

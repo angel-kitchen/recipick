@@ -11,6 +11,7 @@ import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,27 @@ class RefundRepositoryTest extends IntegrationTestSupport {
         assertThat(requestedBy).isEqualTo("SYSTEM");
     }
 
+    @Test
+    @DisplayName("결제의 환불 이력을 최신 생성 순으로 조회하고 다른 결제의 환불은 제외한다")
+    void findAllByPaymentIdOrderByIdDesc() {
+        // given — 실패한 시도 뒤에 완료된 시도가 생긴 결제와, 섞이면 안 되는 다른 결제
+        Payment payment = paymentRepository.save(newFailedPayment(4L));
+        Payment otherPayment = paymentRepository.save(newFailedPayment(5L));
+        Refund first = refundRepository.save(newMemberRefund(payment, "key_4_first", RefundStatus.FAILED));
+        Refund second = refundRepository.save(newMemberRefund(payment, "key_4_second", RefundStatus.COMPLETED));
+        refundRepository.save(newMemberRefund(otherPayment, "key_5_other", RefundStatus.REQUESTED));
+        em.flush();
+        em.clear();
+
+        // when
+        List<Refund> found = refundRepository.findAllByPaymentIdOrderByIdDesc(payment.getId());
+
+        // then
+        assertThat(found).extracting(Refund::getId).containsExactly(second.getId(), first.getId());
+        assertThat(found).extracting(Refund::getStatus)
+            .containsExactly(RefundStatus.COMPLETED, RefundStatus.FAILED);
+    }
+
     private Payment newFailedPayment(Long orderId) {
         return Payment.builder()
             .orderId(orderId)
@@ -97,11 +119,15 @@ class RefundRepositoryTest extends IntegrationTestSupport {
     }
 
     private Refund newMemberRefund(Payment payment, String idempotencyKey) {
+        return newMemberRefund(payment, idempotencyKey, RefundStatus.REQUESTED);
+    }
+
+    private Refund newMemberRefund(Payment payment, String idempotencyKey, RefundStatus status) {
         return Refund.builder()
             .payment(payment)
             .amount(23800L)
             .reason("회원 취소")
-            .status(RefundStatus.REQUESTED)
+            .status(status)
             .requestedBy(RefundRequester.MEMBER)
             .idempotencyKey(idempotencyKey)
             .requestedAt(LocalDateTime.of(2026, 10, 21, 10, 10))
