@@ -1,11 +1,23 @@
 package com.recipick.domain.member.facade;
 
+import com.recipick.domain.member.dto.request.MemberAddressCreateRequest;
 import com.recipick.domain.member.dto.response.MemberAddressListResponse;
+import com.recipick.domain.member.dto.response.MemberAddressResponse;
+import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.entity.MemberAddress;
+import com.recipick.domain.member.exception.AddressErrorCode;
 import com.recipick.domain.member.service.MemberAddressService;
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.service.MartService;
+import com.recipick.global.exception.BusinessException;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,11 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberAddressFacade {
 
-    private static final int MAX_COUNT = 5;
-
     private final MemberService memberService;
     private final MemberAddressService memberAddressService;
     private final ServiceAreaFacade serviceAreaFacade;
+    private final MartService martService;
+    private final Clock clock;
 
     public MemberAddressListResponse findAddresses(Long memberId) {
         Long selectedAddressId = memberService.getSelectedAddressId(memberId).orElse(null);
@@ -33,6 +45,32 @@ public class MemberAddressFacade {
                                 code -> serviceAreaFacade.findAvailableMart(code).isPresent()),
                         address.addressId().equals(selectedAddressId)))
                 .toList();
-        return new MemberAddressListResponse(MAX_COUNT, addresses);
+        return new MemberAddressListResponse(MemberAddressService.MAX_COUNT, addresses);
+    }
+
+    @Transactional
+    public MemberAddressResponse createAddress(Long memberId, MemberAddressCreateRequest request) {
+        // 개수 조회보다 먼저 잠가 대기 중 시작된 이전 스냅샷으로 한도를 판단하지 않게 한다.
+        Member member = memberService.getMemberForUpdate(memberId);
+        long count = memberAddressService.countAddresses(memberId);
+        if (count >= MemberAddressService.MAX_COUNT) {
+            throw new BusinessException(AddressErrorCode.ADDRESS_LIMIT_EXCEEDED);
+        }
+        Long previousMartId = member.getMartId();
+        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(request.legalDongCode());
+        MemberAddress address = memberAddressService.createAddress(member, request);
+        boolean selected = count == 0 || Boolean.TRUE.equals(request.select());
+        if (selected) {
+            member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
+        }
+        if (Boolean.TRUE.equals(request.locationAgreed())) {
+            member.agreeToLocation(LocalDateTime.now(clock));
+        }
+        MemberAddressResponse.Mart currentMart = member.getMartId() == null ? null
+                : martService.findMart(member.getMartId())
+                        .map(mart -> new MemberAddressResponse.Mart(mart.martId(), mart.name())).orElse(null);
+        return new MemberAddressResponse(address.getId(), address.getLabel(), address.getAddress(),
+                address.getDetailAddress(), address.getLegalDongCode(), availableMart.isPresent(), selected,
+                currentMart, !Objects.equals(previousMartId, member.getMartId()));
     }
 }

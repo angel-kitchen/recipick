@@ -546,3 +546,18 @@
 - 내 정보의 `currentAddress.serviceAvailable`은 현재 지정 마트와의 일치도 확인합니다. 목록의 선택 후보 판정과 구분합니다.
 - 가능 여부는 조회마다 계산하고, 같은 요청 안의 동일 법정동은 결과를 재사용합니다. 배송지·선택 상태·지정 마트는 변경하지 않습니다.
 - 오류: 비로그인 401, 관리자 토큰 403, 토큰의 회원 없음 404(`MEMBER-001`).
+
+## 배송지 등록 API 계약
+
+- `POST /api/members/me/addresses`, 회원 토큰 기준 본인 배송지 등록. 성공 201, 공통 code는 OK입니다.
+- 요청: 선택 label(최대 30자), 필수 address·detailAddress(공백 불가, 최대 255자), 필수 legalDongCode(숫자 10자리), 선택 select·locationAgreed(기본 false).
+- 회원 행을 먼저 비관적 잠금으로 조회한 뒤 배송지 개수를 확인하고, 같은 트랜잭션에서 등록·선택·이용 마트·동의 일시를 반영합니다.
+- 최대 5개이며 초과 시 400 `ADDRESS_LIMIT_EXCEEDED` / `ADDRESS-002` / `배송지는 최대 5개까지 저장할 수 있습니다.`를 반환합니다. 동시성 제어는 향후 수정·삭제·선택에도 같은 회원 잠금을 사용합니다.
+- 첫 배송지는 자동 선택합니다. 이후 select=true인 경우에만 현재 배송지와 이용 마트를 갱신합니다.
+- 미등록 법정동·운영 마트 없음도 저장 가능합니다. 새 주소의 serviceAvailable=false이며, 선택하면 지정 마트는 null입니다.
+- 선택하지 않은 주소 등록은 기존 현재 배송지·마트를 유지하며 응답 mart는 처리 후 지정 마트입니다. martChanged는 등록 전후 지정 마트 ID가 다를 때 true입니다.
+- locationAgreed=true이고 기존 동의 기록이 없을 때만 최초 동의 일시를 기록합니다. false·생략은 동의 철회를 뜻하지 않습니다.
+- 응답: addressId, label, address, detailAddress, legalDongCode, serviceAvailable, selected, mart(martId·name 또는 null), martChanged.
+- 오류: 입력 400 COMMON-001, 한도 초과 400 ADDRESS-002, 비로그인 401, 관리자 403, 회원 없음 404 MEMBER-001, 잠금 대기 5초 초과 409 COMMON-010.
+
+- 로컬 설정 예시의 Hikari connection-init-sql은 앱 연결에 innodb_lock_wait_timeout=5를 적용합니다. DB 전역값은 변경하지 않으며 운영 DB 연결에도 동일한 5초 설정이 필요합니다.

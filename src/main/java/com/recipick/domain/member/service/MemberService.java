@@ -41,4 +41,10 @@ public class MemberService {
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
         return Optional.ofNullable(member.getSelectedAddress()).map(MemberAddress::getId);
     }
+
+    @Transactional
+    public Member getMemberForUpdate(Long memberId) {
+        return memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
+    }
 }
