@@ -173,4 +173,56 @@ class ProductRepositoryTest extends IntegrationTestSupport {
         // then
         assertThat(result.getTotalElements()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("중복 검사 : 이름이 같고 둘 다 브랜드가 없으면 중복이다")
+    void existsDuplicate_bothNoBrand() {
+        // given
+        Long martId = martA.getId();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalse(martId, "애호박", null);
+
+        // then
+        assertThat(exists).isTrue();
+    }
+
+    @Test
+    @DisplayName("중복 검사 : 한쪽만 브랜드가 있으면 다른 상품이다")
+    void existsDuplicate_oneSideBrand() {
+        // given
+        Long martId = martA.getId();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalse(martId, "애호박", "국산농장");
+
+        // then
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("중복 검사 : 삭제된 상품과 같은 이름은 중복이 아니다")
+    void existsDuplicate_ignoresDeleted() {
+        // given
+        Long martId = martA.getId();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalse(martId, "삭제된 양파", null);
+
+        // then
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("중복 검사 : 다른 마트에 있는 같은 이름은 중복이 아니다")
+    void existsDuplicate_otherMart() {
+        // given
+        Long martId = martB.getId();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalse(martId, "청양고추", null);
+
+        // then
+        assertThat(exists).isFalse();
+    }
 }
