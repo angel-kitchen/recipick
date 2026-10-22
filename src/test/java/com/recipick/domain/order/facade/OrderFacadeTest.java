@@ -48,6 +48,21 @@ class OrderFacadeTest {
     }
 
     @Test
+    @DisplayName("환불 완료로 바꾸면 재고는 건드리지 않고 복구할 상품 수량을 돌려준다")
+    void markRefunded() {
+        // given
+        given(orderService.markRefunded(1L)).willReturn(List.of(
+                OrderItem.builder().productId(10L).quantity(2).build()));
+
+        // when
+        List<StockQuantity> result = orderFacade.markRefunded(1L);
+
+        // then
+        assertThat(result).containsExactly(new StockQuantity(10L, 2));
+        verify(productStockService, never()).increaseStocks(any());
+    }
+
+    @Test
     @DisplayName("복구할 상품 수량만큼 재고를 복구한다")
     void restoreStock() {
         // given
