@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.repository;
 
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,4 +19,8 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
             """)
     List<RecipeIngredient> findAllWithIngredient(@Param("recipeId") Long recipeId);
     boolean existsByIngredientId(Long ingredientId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("DELETE FROM RecipeIngredient ri WHERE ri.recipe.id = :recipeId")
+    void deleteByRecipeId(@Param("recipeId") Long recipeId);
 }
