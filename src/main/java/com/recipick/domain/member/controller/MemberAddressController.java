@@ -55,8 +55,8 @@ public class MemberAddressController {
     }
 
     @DeleteMapping("/{addressId}")
-    public ResponseEntity<Void> deleteAddress(@LoginMember Long memberId, @PathVariable Long addressId) {
+    public ResponseEntity<ApiResponse<Void>> deleteAddress(@LoginMember Long memberId, @PathVariable Long addressId) {
         memberAddressFacade.deleteAddress(memberId, addressId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }
