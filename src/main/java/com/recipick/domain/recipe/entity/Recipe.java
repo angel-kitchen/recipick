@@ -112,4 +112,37 @@ public class Recipe extends BaseTimeEntity {
     public String getThumbnailUrl() {
         return youtubeVideoId == null ? null : YOUTUBE_THUMBNAIL_URL.formatted(youtubeVideoId);
     }
+
+    public void update(
+        String name,
+        CuisineType cuisine,
+        DishType dishType,
+        int baseServings,
+        Integer cookTimeMin,
+        Difficulty difficulty,
+        Integer spicyLevel,
+        List<RecipeStep> steps,
+        String youtubeVideoId
+    ) {
+        this.name = name;
+        this.cuisine = cuisine;
+        this.dishType = dishType;
+        this.baseServings = baseServings;
+        this.cookTimeMin = cookTimeMin;
+        this.difficulty = difficulty;
+        this.spicyLevel = spicyLevel;
+        this.steps = steps;
+        this.youtubeVideoId = youtubeVideoId;
+    }
+
+    public void changeStatus(RecipeStatus status) {
+        this.status = status;
+        if (status == RecipeStatus.INACTIVE) {
+            this.autoCartEnabled = false;
+        }
+    }
+
+    public boolean isActive() {
+        return status == RecipeStatus.ACTIVE;
+    }
 }
