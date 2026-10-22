@@ -73,4 +73,19 @@ public class MemberAddressFacade {
                 address.getDetailAddress(), address.getLegalDongCode(), availableMart.isPresent(), selected,
                 currentMart, !Objects.equals(previousMartId, member.getMartId()));
     }
+
+    @Transactional
+    public MemberAddressResponse selectAddress(Long memberId, Long addressId) {
+        Member member = memberService.getMemberForUpdate(memberId);
+        MemberAddress address = memberAddressService.getOwnedAddress(memberId, addressId);
+        Long previousMartId = member.getMartId();
+        // 같은 배송지 재선택도 마트 운영 재개·중지 결과를 반영해야 한다.
+        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
+        member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
+        MemberAddressResponse.Mart currentMart = availableMart
+                .map(mart -> new MemberAddressResponse.Mart(mart.martId(), mart.name())).orElse(null);
+        return new MemberAddressResponse(address.getId(), address.getLabel(), address.getAddress(),
+                address.getDetailAddress(), address.getLegalDongCode(), availableMart.isPresent(), true,
+                currentMart, !Objects.equals(previousMartId, member.getMartId()));
+    }
 }

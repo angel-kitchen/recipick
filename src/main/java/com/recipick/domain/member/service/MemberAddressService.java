@@ -4,7 +4,9 @@ import com.recipick.domain.member.dto.MemberAddressData;
 import com.recipick.domain.member.dto.request.MemberAddressCreateRequest;
 import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.entity.MemberAddress;
+import com.recipick.domain.member.exception.AddressErrorCode;
 import com.recipick.domain.member.repository.MemberAddressRepository;
+import com.recipick.global.exception.BusinessException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,11 @@ public class MemberAddressService {
                 .map(address -> new MemberAddressData(address.getId(), address.getLabel(),
                         address.getAddress(), address.getDetailAddress(), address.getLegalDongCode()))
                 .toList();
+    }
+
+    public MemberAddress getOwnedAddress(Long memberId, Long addressId) {
+        return memberAddressRepository.findByIdAndMemberId(addressId, memberId)
+                .orElseThrow(() -> new BusinessException(AddressErrorCode.ADDRESS_NOT_FOUND));
     }
 
     public long countAddresses(Long memberId) {
