@@ -100,7 +100,7 @@ class RecipeAdminServiceTest {
         // given
         Recipe recipe = recipe();
         ReflectionTestUtils.setField(recipe, "autoCartEnabled", true);
-        given(recipeRepository.findById(RECIPE_ID)).willReturn(Optional.of(recipe));
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe));
 
         // when
         recipeAdminService.changeStatus(RECIPE_ID, new RecipeStatusUpdateRequest(RecipeStatus.INACTIVE));
