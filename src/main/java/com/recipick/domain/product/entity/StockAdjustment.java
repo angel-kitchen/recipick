@@ -50,12 +50,14 @@ public class StockAdjustment extends BaseTimeEntity {
     @Builder
     private StockAdjustment(
             Product product,
+            StockAdjustmentType type,
             int quantity,
             int beforeQuantity,
             String reason,
             Long adminId
     ) {
         this.product = product;
+        this.type = type;
         this.quantity = quantity;
         this.beforeQuantity = beforeQuantity;
         this.reason = reason;

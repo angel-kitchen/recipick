@@ -2,11 +2,14 @@ package com.recipick.domain.product.entity;
 
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.shaded.org.bouncycastle.pqc.legacy.math.linearalgebra.PolynomialRingGF2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 public class ProductTest {
 
@@ -53,5 +56,22 @@ public class ProductTest {
         product.increaseStock(3);
 
         assertThat(product.getTotalQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("재고 증가 : int 범위를 넘으면 INVALID_INPUT이고 재고는 그대로다")
+    void increaseStocks_overflow(){
+        // given
+        Product product = Product.builder().name("애호박").totalQuantity(50).build();
+
+        // when
+        Throwable thrown = catchThrowable(() -> product.increaseStock(Integer.MAX_VALUE));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT);
+        assertThat(product.getTotalQuantity()).isEqualTo(50);
     }
 }

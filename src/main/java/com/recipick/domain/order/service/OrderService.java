@@ -10,13 +10,16 @@ import com.recipick.domain.order.entity.enums.OrderStatusActor;
 import com.recipick.domain.order.entity.enums.OrderStatusType;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.OrderItemRepository;
+import com.recipick.domain.order.repository.OrderMemberId;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +42,20 @@ public class OrderService {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
                 .getMemberId();
+    }
+
+    // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
+    public List<Long> findOrderIdsOf(Long memberId) {
+        return orderRepository.findIdsByMemberId(memberId);
+    }
+
+    // 없는 주문 ID는 결과에서 빠진다
+    public Map<Long, Long> findMemberIdsOf(List<Long> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        return orderRepository.findMemberIdsByIdIn(orderIds).stream()
+                .collect(Collectors.toMap(OrderMemberId::getOrderId, OrderMemberId::getMemberId));
     }
 
     // 결제 Facade가 PAYMENT를 먼저 잠근 트랜잭션 안에서 호출한다(락 순서 PAYMENT → ORDERS)
@@ -81,6 +98,58 @@ public class OrderService {
         return orderItemRepository.findAllByOrderId(orderId);
     }
 
+    // 중복 요청은 결제 쪽이 PAYMENT 락과 Idempotency-Key로 거른다.
+    // 주문은 같은 요청인지 알 수 없으므로 PAID가 아니면 이미 취소 요청 중이어도 상태를 바꾸지 않고 거절만 한다
+    @Transactional
+    public MemberCancelRequestResult markMemberCancelRequested(Long orderId, String reasonDetail) {
+        Order order = getOrderForUpdate(orderId);
+        if (order.getStatus() != OrderStatus.PAID) {
+            return MemberCancelRequestResult.INVALID_ORDER_STATUS;
+        }
+        if (!order.isCancelableByMember()) {
+            return MemberCancelRequestResult.MART_ALREADY_PREPARING;
+        }
+
+        OrderStatus fromStatus = order.getStatus();
+        order.requestMemberCancel(reasonDetail);
+
+        orderStatusHistoryRepository.save(history(order, OrderStatusType.ORDER, fromStatus.name(),
+                order.getStatus().name(), OrderStatusActor.MEMBER, CancelReasonCode.MEMBER_CANCELED.name()));
+        return MemberCancelRequestResult.REQUESTED;
+    }
+
+    @Transactional
+    public void restorePaidAfterMemberCancelFailure(Long orderId) {
+        Order order = getOrderForUpdate(orderId);
+        // PG 취소 실패 결과가 반복 전달될 수 있다
+        if (order.getStatus() == OrderStatus.PAID) {
+            return;
+        }
+
+        OrderStatus fromStatus = order.getStatus();
+        order.restorePaidAfterMemberCancelFailure();
+
+        orderStatusHistoryRepository.save(systemHistory(
+                order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null));
+    }
+
+    // 재고 복구는 호출한 Facade가 포인트 복구 뒤에 하므로, 이번 호출로 환불 완료된 경우에만 주문 상품을 돌려준다
+    @Transactional
+    public List<OrderItem> markRefunded(Long orderId) {
+        Order order = getOrderForUpdate(orderId);
+        // 웹훅·재조회가 같은 환불 성공을 반복 전달해도 재고를 다시 복구하지 않는다
+        if (order.getStatus() == OrderStatus.REFUNDED) {
+            return List.of();
+        }
+
+        OrderStatus fromStatus = order.getStatus();
+        order.markRefunded();
+
+        orderStatusHistoryRepository.save(systemHistory(order, OrderStatusType.ORDER, fromStatus.name(),
+                order.getStatus().name(), order.getCancelReasonCode().name()));
+        return orderItemRepository.findAllByOrderId(orderId);
+    }
+
     private Order getOrderForUpdate(Long orderId) {
         return orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
@@ -88,12 +157,17 @@ public class OrderService {
 
     private OrderStatusHistory systemHistory(
             Order order, OrderStatusType statusType, String from, String to, String reason) {
+        return history(order, statusType, from, to, OrderStatusActor.SYSTEM, reason);
+    }
+
+    private OrderStatusHistory history(
+            Order order, OrderStatusType statusType, String from, String to, OrderStatusActor actor, String reason) {
         return OrderStatusHistory.builder()
                 .order(order)
                 .statusType(statusType)
                 .fromStatus(from)
                 .toStatus(to)
-                .actor(OrderStatusActor.SYSTEM)
+                .actor(actor)
                 .reason(reason)
                 .build();
     }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredient, Long> {
@@ -19,6 +20,14 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
             """)
     List<RecipeIngredient> findAllWithIngredient(@Param("recipeId") Long recipeId);
     boolean existsByIngredientId(Long ingredientId);
+
+    @Query("""
+            SELECT ri.recipe.id AS recipeId, ri.ingredient.id AS ingredientId
+            FROM RecipeIngredient ri
+            WHERE ri.recipe.id IN :recipeIds
+              AND ri.required = true
+            """)
+    List<RequiredIngredientRef> findRequiredIngredientRefs(@Param("recipeIds") Collection<Long> recipeIds);
 
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM RecipeIngredient ri WHERE ri.recipe.id = :recipeId")
