@@ -26,7 +26,7 @@ public enum OrderErrorCode implements ErrorCode {
     MART_NOT_OPEN(HttpStatus.CONFLICT, "ORDER-005", "현재 이용 마트에서 주문할 수 없습니다."),
     INVALID_DELIVERY_INFORMATION(HttpStatus.BAD_REQUEST, "ORDER-006", "배송지 정보를 확인해 주세요."),
     DELIVERY_REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "ORDER-007", "배송지 지역을 찾을 수 없습니다."),
-    OUTSIDE_DELIVERY_AREA(HttpStatus.UNPROCESSABLE_ENTITY, "ORDER-008", "배송 가능한 지역이 아닙니다."),
+    OUTSIDE_DELIVERY_AREA(HttpStatus.BAD_REQUEST, "ORDER-008", "배송 가능한 지역이 아닙니다."),
     NO_PURCHASABLE_ORDER_ITEMS(HttpStatus.CONFLICT, "ORDER-009", "주문 가능한 상품이 없습니다."),
     ORDER_INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "ORDER-010", "상품 재고가 부족하여 주문을 생성할 수 없습니다."),
     ORDER_AMOUNT_CHANGED(HttpStatus.CONFLICT, "ORDER-011", "주문 금액이 변경되었습니다. 다시 확인해 주세요."),
