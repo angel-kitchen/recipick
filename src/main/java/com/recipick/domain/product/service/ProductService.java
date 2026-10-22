@@ -70,6 +70,19 @@ public class ProductService {
         return ProductStatusResponse.from(product);
     }
 
+    @Transactional
+    public void deleteProduct(AdminRole role, Long adminMartId, Long productId){
+        Product product = productRepository.findByIdForUpdate(productId)
+            .filter(p -> !p.isDeleted())
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+
+        product.delete();
+    }
+
     // 장바구니처럼 여러 상품을 한 화면에 그리는 곳에서 쓰므로 IN 쿼리 한 번으로 조회한다. 없는 ID는 결과에서 빠진다.
     public List<ProductSummary> findProducts(List<Long> productIds) {
         if (productIds.isEmpty()) {

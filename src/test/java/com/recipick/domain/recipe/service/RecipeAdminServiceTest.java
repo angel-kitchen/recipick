@@ -7,18 +7,24 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeStatusUpdateRequest;
 import com.recipick.domain.recipe.dto.request.RecipeStepRequest;
 import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.Difficulty;
 import com.recipick.domain.recipe.entity.DishType;
+import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
+import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
+
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +47,9 @@ class RecipeAdminServiceTest {
     @Mock
     private RecipeIngredientRepository recipeIngredientRepository;
 
+    @Mock
+    private IngredientRepository ingredientRepository;
+
     @InjectMocks
     private RecipeAdminService recipeAdminService;
 
@@ -56,6 +65,19 @@ class RecipeAdminServiceTest {
             .build();
         ReflectionTestUtils.setField(recipe, "id", RECIPE_ID);
         return recipe;
+    }
+
+    private Ingredient ingredient(Long id) {
+        Ingredient ingredient = Ingredient.builder()
+            .name("재료" + id)
+            .unit(SaleUnit.G)
+            .build();
+        ReflectionTestUtils.setField(ingredient, "id", id);
+        return ingredient;
+    }
+
+    private RecipeIngredientsSaveRequest.Item item(Long ingredientId) {
+        return new RecipeIngredientsSaveRequest.Item(ingredientId, new BigDecimal("100"), true);
     }
 
     @Test
@@ -121,5 +143,53 @@ class RecipeAdminServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(RecipeErrorCode.RECIPE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("재료 저장: 한 요청에 같은 재료가 두 번 있으면 DUPLICATE_RECIPE_INGREDIENT")
+    void replaceIngredients_duplicated() {
+        // given
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(3L)));
+
+        // when, then
+        assertThatThrownBy(() -> recipeAdminService.replaceIngredients(RECIPE_ID, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(RecipeErrorCode.DUPLICATE_RECIPE_INGREDIENT);
+        verify(recipeIngredientRepository, never()).deleteByRecipeId(any());
+    }
+
+    @Test
+    @DisplayName("재료 저장: 없는 재료가 있으면 기존 재료를 지우지 않고 INGREDIENT_NOT_FOUND")
+    void replaceIngredients_ingredientNotFound() {
+        // given
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        given(ingredientRepository.findAllById(List.of(3L, 99L))).willReturn(List.of(ingredient(3L)));
+        RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(99L)));
+
+        // when, then
+        assertThatThrownBy(() -> recipeAdminService.replaceIngredients(RECIPE_ID, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(RecipeErrorCode.INGREDIENT_NOT_FOUND);
+        verify(recipeIngredientRepository, never()).deleteByRecipeId(any());
+    }
+
+    @Test
+    @DisplayName("재료 저장: 기존 재료를 지운 뒤 요청한 재료로 바꾸고 개수를 돌려준다")
+    void replaceIngredients() {
+        // given
+        given(recipeRepository.findByIdForUpdate(RECIPE_ID)).willReturn(Optional.of(recipe()));
+        given(ingredientRepository.findAllById(List.of(3L, 7L))).willReturn(List.of(ingredient(3L), ingredient(7L)));
+        RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of(item(3L), item(7L)));
+
+        // when
+        int count = recipeAdminService.replaceIngredients(RECIPE_ID, request);
+
+        // then
+        assertThat(count).isEqualTo(2);
+        verify(recipeIngredientRepository).deleteByRecipeId(RECIPE_ID);
+        verify(recipeIngredientRepository).saveAll(any());
     }
 }
