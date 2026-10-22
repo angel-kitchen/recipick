@@ -1,11 +1,13 @@
 package com.recipick.domain.recipe.controller;
 
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
+import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeStatusUpdateRequest;
 import com.recipick.domain.recipe.dto.response.RecipeAdminDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeAdminSummaryResponse;
 import com.recipick.domain.recipe.dto.response.RecipeIdResponse;
+import com.recipick.domain.recipe.dto.response.RecipeIngredientsSaveResponse;
 import com.recipick.domain.recipe.facade.RecipeAdminFacade;
 import com.recipick.domain.recipe.service.RecipeAdminService;
 import com.recipick.global.response.ApiResponse;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -69,5 +72,13 @@ public class RecipeAdminController {
         @Valid @RequestBody RecipeStatusUpdateRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(recipeAdminService.changeStatus(recipeId, request)));
+    }
+
+    @PutMapping("/{recipeId}/ingredients")
+    public ResponseEntity<ApiResponse<RecipeIngredientsSaveResponse>> saveIngredients(
+        @PathVariable Long recipeId,
+        @Valid @RequestBody RecipeIngredientsSaveRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(recipeAdminFacade.saveIngredients(recipeId, request)));
     }
 }

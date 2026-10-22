@@ -5,7 +5,9 @@ import static org.mockito.BDDMockito.given;
 
 import com.recipick.domain.product.service.ProductIngredientService;
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
+import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.response.RecipeAdminSummaryResponse;
+import com.recipick.domain.recipe.dto.response.RecipeIngredientsSaveResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.service.RecipeAdminService;
 import com.recipick.global.response.PageResponse;
@@ -23,6 +25,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class RecipeAdminFacadeTest {
+
+    private static final Long RECIPE_ID = 12L;
 
     @Mock
     private RecipeAdminService recipeAdminService;
@@ -62,5 +66,41 @@ class RecipeAdminFacadeTest {
         assertThat(response.content())
             .extracting(RecipeAdminSummaryResponse::missingLinkedRequiredCount)
             .containsExactly(1, 0);
+    }
+
+    @Test
+    @DisplayName("재료 저장: 연결 상품 없는 필수 재료가 생기면 자동 장보기 지정을 자동으로 푼다")
+    void saveIngredients_released() {
+        // given
+        Recipe recipe = recipe(RECIPE_ID, true);
+        RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of());
+        given(recipeAdminService.replaceIngredients(RECIPE_ID, request)).willReturn(2);
+        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe);
+        given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID)))
+            .willReturn(Map.of(RECIPE_ID, List.of(3L, 7L)));
+        given(productIngredientService.countLinkedProducts(List.of(3L, 7L))).willReturn(Map.of(3L, 1L, 7L, 0L));
+
+        // when
+        RecipeIngredientsSaveResponse response = recipeAdminFacade.saveIngredients(RECIPE_ID, request);
+
+        // then
+        assertThat(response.autoCartReleased()).isTrue();
+        assertThat(response.autoCartAvailable()).isFalse();
+        assertThat(recipe.isAutoCartEnabled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("재료 저장: 지정되지 않은 레시피는 조건을 다시 보지 않는다")
+    void saveIngredients_notEnabled() {
+        // given
+        RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of());
+        given(recipeAdminService.replaceIngredients(RECIPE_ID, request)).willReturn(0);
+        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
+
+        // when
+        RecipeIngredientsSaveResponse response = recipeAdminFacade.saveIngredients(RECIPE_ID, request);
+
+        // then
+        assertThat(response.autoCartReleased()).isFalse();
     }
 }
