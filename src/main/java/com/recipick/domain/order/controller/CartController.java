@@ -1,6 +1,9 @@
 package com.recipick.domain.order.controller;
 
+import com.recipick.domain.order.dto.request.CartItemAddRequest;
 import com.recipick.domain.order.dto.request.CartItemBulkDeleteRequest;
+import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.facade.CartFacade;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
@@ -18,6 +21,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class CartController {
 
     private final CartService cartService;
+    private final CartFacade cartFacade;
+
+    @PostMapping("/api/cart-items")
+    public ResponseEntity<ApiResponse<CartItemAddResponse>> addCartItem(
+            @LoginMember Long memberId,
+            @Valid @RequestBody CartItemAddRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(cartFacade.addCartItem(memberId, request)));
+    }
 
     @DeleteMapping("/api/cart-items/{cartItemId}")
     public ResponseEntity<ApiResponse<Void>> deleteCartItem(

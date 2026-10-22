@@ -1,10 +1,18 @@
 package com.recipick.domain.order.service;
 
+import com.recipick.domain.order.dto.response.CartItemAddResponse;
+import com.recipick.domain.order.entity.CartAddHistory;
+import com.recipick.domain.order.entity.CartItem;
+import com.recipick.domain.order.entity.enums.CartAddSource;
 import com.recipick.domain.order.exception.OrderErrorCode;
+import com.recipick.domain.order.repository.CartAddHistoryRepository;
 import com.recipick.domain.order.repository.CartItemRepository;
+import com.recipick.global.common.TimeConstants;
 import com.recipick.global.exception.BusinessException;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +21,33 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CartService {
 
+    private static final int MAX_QUANTITY = 99;
+
     private final CartItemRepository cartItemRepository;
+    private final CartAddHistoryRepository cartAddHistoryRepository;
+
+    public List<Long> findProductIds(Long memberId) {
+        return cartItemRepository.findProductIdsByMemberId(memberId);
+    }
+
+    // 상품 판매 가능 여부·마트 검증은 호출하는 Facade가 끝낸 뒤 들어온다.
+    @Transactional
+    public CartItemAddResponse addCartItem(Long memberId, Long productId, int quantity, int stock) {
+        // 없는 행을 UPDATE하면 MySQL이 갭 락을 잡아 동시 insert끼리 데드락이 나므로, 있을 때만 UPDATE한다.
+        CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
+                .map(existing -> increaseQuantity(existing, quantity, stock))
+                .orElseGet(() -> {
+                    validateQuantity(quantity, stock);
+                    return insertCartItem(memberId, productId, quantity);
+                });
+        cartAddHistoryRepository.save(CartAddHistory.builder()
+                .memberId(memberId)
+                .productId(productId)
+                .source(CartAddSource.DIRECT)
+                .quantity(quantity)
+                .build());
+        return CartItemAddResponse.from(cartItem);
+    }
 
     @Transactional
     public void deleteCartItem(Long memberId, Long cartItemId) {
@@ -26,5 +60,41 @@ public class CartService {
     @Transactional
     public void deleteCartItems(Long memberId, List<Long> cartItemIds) {
         cartItemRepository.deleteByMemberIdAndIdIn(memberId, cartItemIds);
+    }
+
+    private CartItem increaseQuantity(CartItem existing, int quantity, int stock) {
+        LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
+        int maxQuantity = Math.min(MAX_QUANTITY, stock);
+        if (cartItemRepository.increaseQuantity(
+                existing.getMemberId(), existing.getProductId(), quantity, maxQuantity, now) == 0) {
+            validateQuantity(existing.getQuantity() + quantity, stock);
+            // 읽은 뒤 다른 요청이 수량을 바꾸거나 항목을 지웠으므로, 현재 장바구니를 보고 다시 판단하게 한다.
+            throw new BusinessException(OrderErrorCode.CART_CONCURRENT_MODIFICATION);
+        }
+        return cartItemRepository.findByMemberIdAndProductId(existing.getMemberId(), existing.getProductId())
+                .orElseThrow();
+    }
+
+    private void validateQuantity(int totalQuantity, int stock) {
+        if (totalQuantity > MAX_QUANTITY) {
+            throw new BusinessException(OrderErrorCode.INVALID_CART_QUANTITY);
+        }
+        if (totalQuantity > stock) {
+            throw new BusinessException(OrderErrorCode.CART_INSUFFICIENT_STOCK);
+        }
+    }
+
+    // 처음 담는 상품을 연타하면 두 요청이 모두 insert로 와서 UNIQUE에 걸린다.
+    // 먼저 들어간 요청이 이미 담았으므로, 재시도로 두 번 합산되지 않게 장바구니 확인을 안내하는 409로 응답한다.
+    private CartItem insertCartItem(Long memberId, Long productId, int quantity) {
+        try {
+            return cartItemRepository.saveAndFlush(CartItem.builder()
+                    .memberId(memberId)
+                    .productId(productId)
+                    .quantity(quantity)
+                    .build());
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(OrderErrorCode.CART_CONCURRENT_MODIFICATION, e);
+        }
     }
 }
