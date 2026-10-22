@@ -115,4 +115,15 @@ public class MemberAddressFacade {
                 address.getDetailAddress(), address.getLegalDongCode(), availableMart.isPresent(), true,
                 currentMart, !Objects.equals(previousMartId, member.getMartId()));
     }
+
+    @Transactional
+    public void deleteAddress(Long memberId, Long addressId) {
+        // 선택·수정과 같은 회원 행을 잠근 뒤 검사해 현재 배송지가 삭제되는 경합을 막는다.
+        Member member = memberService.getMemberForUpdate(memberId);
+        MemberAddress address = memberAddressService.getOwnedAddress(memberId, addressId);
+        if (member.getSelectedAddress() != null && addressId.equals(member.getSelectedAddress().getId())) {
+            throw new BusinessException(AddressErrorCode.SELECTED_ADDRESS_NOT_DELETABLE);
+        }
+        memberAddressService.deleteAddress(address);
+    }
 }
