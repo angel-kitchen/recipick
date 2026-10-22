@@ -1,0 +1,98 @@
+package com.recipick.domain.product.service;
+
+import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.product.dto.ProductCreateRequest;
+import com.recipick.domain.product.dto.ProductIdResponse;
+import com.recipick.domain.product.facade.ProductAdminFacade;
+import com.recipick.domain.recipe.entity.Ingredient;
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.service.IngredientService;
+import com.recipick.global.common.SaleUnit;
+import com.recipick.global.exception.BusinessException;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.catchThrowable;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+@ExtendWith(MockitoExtension.class)
+class ProductAdminFacadeTest {
+
+    @Mock
+    private IngredientService ingredientService;
+
+    @Mock
+    private ProductService productService;
+
+    @InjectMocks
+    private ProductAdminFacade productAdminFacade;
+
+    private ProductCreateRequest request(Long ingredientId) {
+        return new ProductCreateRequest(
+            1L, 10L, ingredientId, "애호박 1개", null, null,
+            new BigDecimal("300.00"), SaleUnit.G, null, 1500L);
+    }
+
+    @Test
+    @DisplayName("등록 : 재료가 있으면 재료 단위를 상품 서비스에 넘긴다")
+    void createProduct_withIngredient() {
+        // given
+        ProductCreateRequest request = request(5L);
+        Ingredient ingredient = Ingredient.builder().name("애호박").unit(SaleUnit.G).build();
+        given(ingredientService.getIngredient(5L)).willReturn(ingredient);
+        given(productService.createProduct(AdminRole.SUPER_ADMIN, null, request, SaleUnit.G))
+            .willReturn(new ProductIdResponse(77L));
+
+        // when
+        ProductIdResponse result = productAdminFacade.createProduct(AdminRole.SUPER_ADMIN, null, request);
+
+        // then
+        assertThat(result.productId()).isEqualTo(77L);
+        verify(productService).createProduct(AdminRole.SUPER_ADMIN, null, request, SaleUnit.G);
+    }
+
+    @Test
+    @DisplayName("등록 : 재료를 지정하지 않으면 재료 서비스를 부르지 않고 단위는 null로 넘긴다")
+    void createProduct_withoutIngredient() {
+        // given
+        ProductCreateRequest request = request(null);
+        given(productService.createProduct(AdminRole.MART_ADMIN, 1L, request, null))
+            .willReturn(new ProductIdResponse(78L));
+
+        // when
+        ProductIdResponse result = productAdminFacade.createProduct(AdminRole.MART_ADMIN, 1L, request);
+
+        // then
+        assertThat(result.productId()).isEqualTo(78L);
+        verifyNoInteractions(ingredientService);
+    }
+
+    @Test
+    @DisplayName("등록 : 없는 재료이면 INGREDIENT_NOT_FOUND이고 상품을 만들지 않는다")
+    void createProduct_ingredientNotFound() {
+        // given
+        ProductCreateRequest request = request(99L);
+        given(ingredientService.getIngredient(99L))
+            .willThrow(new BusinessException(RecipeErrorCode.INGREDIENT_NOT_FOUND));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productAdminFacade.createProduct(AdminRole.SUPER_ADMIN, null, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(RecipeErrorCode.INGREDIENT_NOT_FOUND);
+        verifyNoInteractions(productService);
+    }
+}

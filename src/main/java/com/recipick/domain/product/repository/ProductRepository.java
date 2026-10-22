@@ -32,6 +32,9 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
     @Query("select p from Product p where p.id = :id")
     Optional<Product> findByIdForUpdate(@Param("id") Long id);
 
+    boolean existsByMartIdAndNameAndBrandAndDeletedFalse(Long martId, String name, String brand);
+
     @Query("select p.id as productId, p.mart.id as martId from Product p where p.id in :ids")
     List<ProductMartId> findMartIdsByIdIn(@Param("ids") Collection<Long> ids);
+
 }
