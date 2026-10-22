@@ -1,13 +1,16 @@
 package com.recipick.domain.payment.service;
 
+import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
+import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,5 +49,19 @@ public class PaymentService {
                 reason,
                 UUID.randomUUID().toString(),
                 LocalDateTime.now(clock))));
+    }
+
+    // 회원 조회용 환불 요약. 한 결제의 환불 행은 많아야 두셋이라 한 번에 읽어 여기서 더한다.
+    // 완료 금액은 COMPLETED 합계다 - 금액 불일치 경로는 PG 청구액으로 적히고 관리자 재처리는 별도 행이라 한 건만 집을 수 없다.
+    public RefundSummary getRefundSummary(Long paymentId) {
+        List<Refund> refunds = refundRepository.findAllByPaymentIdOrderByIdDesc(paymentId);
+        if (refunds.isEmpty()) {
+            return RefundSummary.NONE;
+        }
+        long completedAmount = refunds.stream()
+            .filter(refund -> refund.getStatus() == RefundStatus.COMPLETED)
+            .mapToLong(Refund::getAmount)
+            .sum();
+        return new RefundSummary(completedAmount, refunds.get(0).getStatus());
     }
 }
