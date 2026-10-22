@@ -77,7 +77,9 @@ public class RecipeAdminService {
         return new RecipeIdResponse(recipeId);
     }
 
-    private Recipe getRecipeForUpdate(Long recipeId) {
+    // 클래스 기본값이 readOnly라, 잠금 조회(SELECT ... FOR UPDATE)는 쓰기 트랜잭션으로 명시한다
+    @Transactional
+    public Recipe getRecipeForUpdate(Long recipeId) {
         return recipeRepository.findByIdForUpdate(recipeId)
             .orElseThrow(() -> new BusinessException(RecipeErrorCode.RECIPE_NOT_FOUND));
     }

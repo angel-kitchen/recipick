@@ -7,8 +7,10 @@ import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
+import com.recipick.domain.recipe.dto.request.RecipeAutoCartUpdateRequest;
 import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.response.RecipeAdminDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeIngredientsSaveResponse;
 import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.repository.IngredientRepository;
@@ -105,5 +107,21 @@ class RecipeAdminFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(detail.ingredients())
             .extracting(RecipeAdminDetailResponse.IngredientResponse::linkedProductCount)
             .containsExactly(1L, 0L);
+    }
+
+    @Test
+    @DisplayName("지정 뒤 연결 상품 없는 필수 재료가 추가되면 자동 장보기 지정이 자동으로 풀린다")
+    void saveIngredients_releasesAutoCart() {
+        // given
+        recipeAdminFacade.saveIngredients(recipe.getId(), request(item(tofu, "100", true)));
+        recipeAdminFacade.changeAutoCart(recipe.getId(), new RecipeAutoCartUpdateRequest(true));
+
+        // when
+        RecipeIngredientsSaveResponse response = recipeAdminFacade.saveIngredients(recipe.getId(),
+            request(item(tofu, "100", true), item(zucchini, "1", true)));
+
+        // then
+        assertThat(response.autoCartReleased()).isTrue();
+        assertThat(recipeRepository.findById(recipe.getId()).orElseThrow().isAutoCartEnabled()).isFalse();
     }
 }
