@@ -2,6 +2,7 @@ package com.recipick.domain.order.facade;
 
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.RegionService;
+import com.recipick.domain.order.dto.OrderCreateResult;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.response.OrderCreateResponse;
 import com.recipick.domain.order.entity.Order;

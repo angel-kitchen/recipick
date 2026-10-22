@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.repository.MemberRepository;
+import com.recipick.domain.order.dto.OrderCreateResult;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.repository.CartItemRepository;

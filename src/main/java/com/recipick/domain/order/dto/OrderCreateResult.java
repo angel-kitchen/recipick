@@ -1,4 +1,4 @@
-package com.recipick.domain.order.facade;
+package com.recipick.domain.order.dto;
 
 import com.recipick.domain.order.dto.response.OrderCreateResponse;
 
