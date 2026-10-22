@@ -145,8 +145,11 @@ class OrderTest {
         // given
         Order order = order(status, martStatus);
 
-        // when, then
-        assertThat(order.isCancelableByMember()).isEqualTo(expected);
+        // when
+        boolean cancelable = order.isCancelableByMember();
+
+        // then
+        assertThat(cancelable).isEqualTo(expected);
     }
 
     @Test
