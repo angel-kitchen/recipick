@@ -15,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -96,5 +97,30 @@ public class Payment extends BaseTimeEntity {
         this.portoneTransactionId = portoneTransactionId;
     }
 
-}
+    // PortOne 호출 전에 커밋해 둔다. 호출 중 같은 결제에 다른 취소가 끼어들면 이 상태로 걸러진다(COMMON-006)
+    public void requestCancel() {
+        if (this.status != PaymentStatus.PAID) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        this.status = PaymentStatus.CANCEL_REQUESTED;
+    }
 
+    // PortOne이 취소 완료를 확인했을 때만 부른다. 취소 시각은 PG가 준 값이어야 하므로 서버 시각으로 대신 채우지 않는다
+    public void markCanceled(LocalDateTime canceledAt) {
+        if (this.status != PaymentStatus.CANCEL_REQUESTED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        Objects.requireNonNull(canceledAt, "canceledAt은 필수입니다.");
+        this.status = PaymentStatus.CANCELED;
+        this.canceledAt = canceledAt;
+    }
+
+    // PortOne이 FAILED를 명시했거나 처리 전에 거절(400·401·403)했을 때만 되돌린다. 결과를 모르는 응답에서는 부르지 않는다
+    public void restorePaid() {
+        if (this.status != PaymentStatus.CANCEL_REQUESTED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        this.status = PaymentStatus.PAID;
+    }
+
+}
