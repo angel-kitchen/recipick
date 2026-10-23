@@ -87,7 +87,7 @@ class RefundRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("결제의 환불 이력을 최신 생성 순으로 조회하고 다른 결제의 환불은 제외한다")
+    @DisplayName("결제 하나의 환불 이력을 최신 생성 순으로 조회하고 다른 결제의 환불은 제외한다")
     void findAllByPaymentIdOrderByIdDesc() {
         // given — 실패한 시도 뒤에 완료된 시도가 생긴 결제와, 섞이면 안 되는 다른 결제
         Payment payment = paymentRepository.save(newFailedPayment(4L));
@@ -103,8 +103,29 @@ class RefundRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(found).extracting(Refund::getId).containsExactly(second.getId(), first.getId());
-        assertThat(found).extracting(Refund::getStatus)
-            .containsExactly(RefundStatus.COMPLETED, RefundStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("여러 결제의 환불을 한 번에 조회하고 목록에 없는 결제의 환불은 제외한다")
+    void findAllByPaymentIdIn() {
+        // given
+        Payment first = paymentRepository.save(newFailedPayment(6L));
+        Payment second = paymentRepository.save(newFailedPayment(7L));
+        Payment excluded = paymentRepository.save(newFailedPayment(8L));
+        refundRepository.save(newMemberRefund(first, "key_6", RefundStatus.COMPLETED));
+        refundRepository.save(newMemberRefund(second, "key_7_a", RefundStatus.FAILED));
+        refundRepository.save(newMemberRefund(second, "key_7_b", RefundStatus.COMPLETED));
+        refundRepository.save(newMemberRefund(excluded, "key_8", RefundStatus.REQUESTED));
+        em.flush();
+        em.clear();
+
+        // when
+        List<Refund> found = refundRepository.findAllByPaymentIdIn(List.of(first.getId(), second.getId()));
+
+        // then — 두 결제의 환불 3건만, 8번 결제 것은 빠진다
+        assertThat(found).hasSize(3);
+        assertThat(found).extracting(refund -> refund.getPayment().getId())
+            .containsOnly(first.getId(), second.getId());
     }
 
     private Payment newFailedPayment(Long orderId) {

@@ -1,8 +1,11 @@
 package com.recipick.domain.payment.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,8 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.recipick.domain.payment.dto.response.PaymentConfirmResponse;
 import com.recipick.domain.payment.dto.response.PaymentDetailResponse;
+import com.recipick.domain.payment.dto.response.PaymentHistoryResponse;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.facade.PaymentConfirmFacade;
 import com.recipick.domain.payment.facade.PaymentQueryFacade;
@@ -25,6 +30,7 @@ import com.recipick.global.config.SecurityConfig;
 import com.recipick.global.config.WebConfig;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.GlobalExceptionHandler;
+import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.JwtAccessDeniedHandler;
 import com.recipick.global.security.JwtAuthenticationEntryPoint;
 import com.recipick.global.security.JwtTokenProvider;
@@ -33,11 +39,15 @@ import com.recipick.global.security.SecurityErrorResponseWriter;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Encoders;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -47,7 +57,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-// 보안 설정 구성은 AuthenticationWebTest(채빈님)와 같다. 컨트롤러 한 장만 올리고 Facade는 mock이라 Docker가 필요 없다
+// 보안 설정 구성은 AuthenticationWebTest(채빈)와 같다. 컨트롤러 한 장만 올리고 Facade는 mock이라 Docker가 필요 없다
 @WebMvcTest(controllers = PaymentController.class,
     properties = "security.cors.allowed-origins=http://localhost:3000")
 @ActiveProfiles("test")
@@ -73,6 +83,9 @@ class PaymentControllerTest {
 
     @Autowired
     private JwtTokenProvider tokenProvider;
+
+    @Captor
+    private ArgumentCaptor<Pageable> pageableCaptor;
 
     @MockitoBean
     private PaymentConfirmFacade paymentConfirmFacade;
@@ -165,7 +178,7 @@ class PaymentControllerTest {
         // given
         given(paymentQueryFacade.getByOrderId(MEMBER_ID, 1L)).willReturn(new PaymentDetailResponse(
             10L, 1L, "pay_1", PaymentMethod.CARD, 23800L, PaymentStatus.IN_PROGRESS, null,
-            null, LocalDateTime.of(2026, 10, 22, 10, 5), 0L, null));
+            null, null, LocalDateTime.of(2026, 10, 22, 10, 5), 0L, null));
 
         // when
         ResultActions result = mockMvc.perform(get("/api/payments/orders/{orderId}", 1L)
@@ -175,7 +188,7 @@ class PaymentControllerTest {
         result.andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.code").value("OK"))
-            .andExpect(jsonPath("$.message").value("요청이 처리되었습니다."))
+            .andExpect(jsonPath("$.message").value("결제 정보를 조회했습니다."))
             .andExpect(jsonPath("$.data.paymentId").value(10))
             .andExpect(jsonPath("$.data.orderId").value(1))
             .andExpect(jsonPath("$.data.portonePaymentId").value("pay_1"))
@@ -184,6 +197,7 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.data.paymentStatus").value("IN_PROGRESS"))
             .andExpect(jsonPath("$.data.failureReason").value(nullValue()))
             .andExpect(jsonPath("$.data.paidAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.canceledAt").value(nullValue()))
             .andExpect(jsonPath("$.data.expiresAt").value("2026-10-22T10:05:00+09:00"))
             .andExpect(jsonPath("$.data.completedRefundAmount").value(0))
             .andExpect(jsonPath("$.data.latestRefundStatus").value(nullValue()));
@@ -219,6 +233,82 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.code").value("PAYMENT-001"))
             .andExpect(jsonPath("$.message").value("결제 정보를 찾을 수 없습니다."));
+    }
+
+    @Test
+    @DisplayName("회원 토큰으로 결제 내역을 조회하면 기본 페이징(0·20)으로 Facade를 부르고 페이지 응답을 돌려준다")
+    void findMyHistory() throws Exception {
+        // given
+        given(paymentQueryFacade.findMyHistory(anyLong(), any(Pageable.class)))
+            .willReturn(new PageResponse<>(List.of(new PaymentHistoryResponse(
+                10L, 1L, PaymentMethod.CARD, 23800L, PaymentStatus.CANCELED, null,
+                LocalDateTime.of(2026, 10, 22, 10, 3), LocalDateTime.of(2026, 10, 22, 10, 8),
+                LocalDateTime.of(2026, 10, 22, 10, 0), 23800L, RefundStatus.COMPLETED)),
+                0, 20, 1, 1));
+
+        // when
+        ResultActions result = mockMvc.perform(get("/api/payments")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken()));
+
+        // then
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.message").value("결제 내역을 조회했습니다."))
+            .andExpect(jsonPath("$.data.content[0].paymentId").value(10))
+            .andExpect(jsonPath("$.data.content[0].orderId").value(1))
+            .andExpect(jsonPath("$.data.content[0].paymentMethod").value("CARD"))
+            .andExpect(jsonPath("$.data.content[0].amount").value(23800))
+            .andExpect(jsonPath("$.data.content[0].paymentStatus").value("CANCELED"))
+            .andExpect(jsonPath("$.data.content[0].failureReason").value(nullValue()))
+            .andExpect(jsonPath("$.data.content[0].paidAt").value("2026-10-22T10:03:00+09:00"))
+            .andExpect(jsonPath("$.data.content[0].canceledAt").value("2026-10-22T10:08:00+09:00"))
+            .andExpect(jsonPath("$.data.content[0].createdAt").value("2026-10-22T10:00:00+09:00"))
+            .andExpect(jsonPath("$.data.content[0].completedRefundAmount").value(23800))
+            .andExpect(jsonPath("$.data.content[0].latestRefundStatus").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(20))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.totalPages").value(1))
+            // 목록 응답에는 상세 전용 필드가 없다
+            .andExpect(jsonPath("$.data.content[0].portonePaymentId").doesNotExist())
+            .andExpect(jsonPath("$.data.content[0].expiresAt").doesNotExist());
+
+        // 파라미터를 안 보내면 application.yml의 기본값(page 0, size 20)이 들어온다
+        verify(paymentQueryFacade).findMyHistory(eq(MEMBER_ID), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("size를 100보다 크게 보내도 전역 설정대로 100으로 잘려 Facade에 전달된다")
+    void findMyHistoryWithOversizedPage() throws Exception {
+        // given
+        given(paymentQueryFacade.findMyHistory(anyLong(), any(Pageable.class)))
+            .willReturn(new PageResponse<>(List.of(), 0, 100, 0, 0));
+
+        // when
+        mockMvc.perform(get("/api/payments")
+                .param("size", "500")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken()))
+            .andExpect(status().isOk());
+
+        // then — application.yml의 spring.data.web.pageable.max-page-size
+        verify(paymentQueryFacade).findMyHistory(eq(MEMBER_ID), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("토큰이 없으면 결제 내역을 조회할 수 없고 AUTH-001을 반환한다")
+    void findMyHistoryWithoutToken() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(get("/api/payments"));
+
+        // then
+        result.andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("AUTH-001"));
+        verify(paymentQueryFacade, never()).findMyHistory(anyLong(), any());
     }
 
     private String memberToken() {

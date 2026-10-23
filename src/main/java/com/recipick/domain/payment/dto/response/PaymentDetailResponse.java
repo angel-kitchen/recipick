@@ -8,7 +8,7 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import java.time.LocalDateTime;
 
-// 요구사항(결제 내역 조회): 실패 사유와, 취소가 발생한 결제의 완료 환불 금액·최근 환불 상태를 함께 보여준다
+// 요구사항(결제 내역 조회): 실패 사유, 취소 여부와, 취소가 발생한 결제의 완료 환불 금액·최근 환불 상태를 함께 보여준다
 public record PaymentDetailResponse(
     Long paymentId,
     Long orderId,
@@ -18,6 +18,7 @@ public record PaymentDetailResponse(
     PaymentStatus paymentStatus,
     PaymentFailureReason failureReason,
     LocalDateTime paidAt,
+    LocalDateTime canceledAt,
     LocalDateTime expiresAt,
     Long completedRefundAmount,
     RefundStatus latestRefundStatus
@@ -32,6 +33,7 @@ public record PaymentDetailResponse(
             payment.getStatus(),
             payment.getFailureReason(),
             payment.getPaidAt(),
+            payment.getCanceledAt(),
             payment.getExpiresAt(),
             refundSummary.completedAmount(),
             refundSummary.latestStatus()

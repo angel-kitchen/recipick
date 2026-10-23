@@ -23,6 +23,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +47,7 @@ class PaymentServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 21, 10, 7, 30);
     private static final Long PAYMENT_ID = 10L;
+    private static final Long OTHER_PAYMENT_ID = 20L;
 
     @Mock
     private PaymentRepository paymentRepository;
@@ -173,6 +178,21 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("내 결제 내역 조회는 받은 주문 ID와 Pageable을 그대로 Repository에 넘긴다")
+    void findHistory() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Payment> expected = Page.empty(pageable);
+        given(paymentRepository.findByOrderIdIn(List.of(1L, 2L), pageable)).willReturn(expected);
+
+        // when
+        Page<Payment> found = paymentService.findHistory(List.of(1L, 2L), pageable);
+
+        // then
+        assertThat(found).isSameAs(expected);
+    }
+
+    @Test
     @DisplayName("환불 행이 없으면 완료 금액 0, 최근 상태 null이다")
     void getRefundSummaryWithoutRefunds() {
         // given
@@ -188,13 +208,13 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("완료 금액은 COMPLETED 행만 더하고, 최근 상태는 가장 나중에 만든 행의 상태다")
+    @DisplayName("완료 금액은 COMPLETED 행만 더하고, 최근 상태는 id가 가장 큰 행의 상태다")
     void getRefundSummaryWithMixedStatuses() {
-        // given — id 역순으로 온다. SYSTEM 시도가 실패한 뒤 ADMIN 재처리가 완료된 결제
+        // given — SYSTEM 시도가 실패한 뒤 ADMIN 재처리가 완료된 결제
         Payment payment = failedPayment();
         given(refundRepository.findAllByPaymentIdOrderByIdDesc(PAYMENT_ID)).willReturn(List.of(
-            refund(payment, 20000L, RefundStatus.COMPLETED, RefundRequester.ADMIN),
-            refund(payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM)));
+            refund(3L, payment, 20000L, RefundStatus.COMPLETED, RefundRequester.ADMIN),
+            refund(1L, payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM)));
 
         // when
         RefundSummary summary = paymentService.getRefundSummary(PAYMENT_ID);
@@ -210,7 +230,7 @@ class PaymentServiceTest {
         // given
         Payment payment = failedPayment();
         given(refundRepository.findAllByPaymentIdOrderByIdDesc(PAYMENT_ID)).willReturn(List.of(
-            refund(payment, 23800L, RefundStatus.REQUESTED, RefundRequester.SYSTEM)));
+            refund(1L, payment, 23800L, RefundStatus.REQUESTED, RefundRequester.SYSTEM)));
 
         // when
         RefundSummary summary = paymentService.getRefundSummary(PAYMENT_ID);
@@ -220,29 +240,89 @@ class PaymentServiceTest {
         assertThat(summary.latestStatus()).isEqualTo(RefundStatus.REQUESTED);
     }
 
+    @Test
+    @DisplayName("결제 ID 목록이 비어 있으면 환불을 조회하지 않고 빈 Map을 돌려준다")
+    void getRefundSummariesWithEmptyIds() {
+        // when
+        Map<Long, RefundSummary> summaries = paymentService.getRefundSummaries(List.of());
+
+        // then
+        assertThat(summaries).isEmpty();
+        verify(refundRepository, never()).findAllByPaymentIdIn(any());
+    }
+
+    @Test
+    @DisplayName("여러 결제의 환불을 한 번에 읽어 결제별로 나눠 요약한다")
+    void getRefundSummaries() {
+        // given — 10번은 재시도 끝에 완료, 20번은 진행 중
+        Payment payment = failedPayment();
+        Payment otherPayment = failedPayment(OTHER_PAYMENT_ID);
+        given(refundRepository.findAllByPaymentIdIn(List.of(PAYMENT_ID, OTHER_PAYMENT_ID))).willReturn(List.of(
+            refund(1L, payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM),
+            refund(3L, payment, 20000L, RefundStatus.COMPLETED, RefundRequester.ADMIN),
+            refund(2L, otherPayment, 15000L, RefundStatus.REQUESTED, RefundRequester.MEMBER)));
+
+        // when
+        Map<Long, RefundSummary> summaries =
+            paymentService.getRefundSummaries(List.of(PAYMENT_ID, OTHER_PAYMENT_ID));
+
+        // then
+        assertThat(summaries).hasSize(2);
+        assertThat(summaries.get(PAYMENT_ID))
+            .isEqualTo(new RefundSummary(20000L, RefundStatus.COMPLETED));
+        assertThat(summaries.get(OTHER_PAYMENT_ID))
+            .isEqualTo(new RefundSummary(0L, RefundStatus.REQUESTED));
+    }
+
+    @Test
+    @DisplayName("배치 조회 결과가 id 순서대로 오지 않아도 가장 큰 id의 상태를 최근 상태로 쓴다")
+    void getRefundSummariesIgnoresRowOrder() {
+        // given — 최신(id 5)이 목록 가운데에 섞여 있다. 첫 행에 기대면 FAILED가 나온다
+        Payment payment = failedPayment();
+        given(refundRepository.findAllByPaymentIdIn(List.of(PAYMENT_ID))).willReturn(List.of(
+            refund(2L, payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM),
+            refund(5L, payment, 20000L, RefundStatus.COMPLETED, RefundRequester.ADMIN),
+            refund(1L, payment, 20000L, RefundStatus.FAILED, RefundRequester.SYSTEM)));
+
+        // when
+        Map<Long, RefundSummary> summaries = paymentService.getRefundSummaries(List.of(PAYMENT_ID));
+
+        // then
+        assertThat(summaries.get(PAYMENT_ID).latestStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(summaries.get(PAYMENT_ID).completedAmount()).isEqualTo(20000L);
+    }
+
     private Payment failedPayment() {
+        return failedPayment(PAYMENT_ID);
+    }
+
+    private Payment failedPayment(Long paymentId) {
         Payment payment = Payment.builder()
-            .orderId(1L)
+            .orderId(paymentId)
             .paymentMethod(PaymentMethod.CARD)
-            .portonePaymentId("pay_1")
+            .portonePaymentId("pay_" + paymentId)
             .amount(23800L)
             .status(PaymentStatus.FAILED)
             .expiresAt(LocalDateTime.of(2026, 10, 21, 10, 5))
             .build();
         // DB를 거치지 않아 id가 비어 있다. JPA가 채웠을 값을 흉내 내서 orderId와 섞이는 실수를 잡는다
-        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        ReflectionTestUtils.setField(payment, "id", paymentId);
         return payment;
     }
 
-    private Refund refund(Payment payment, long amount, RefundStatus status, RefundRequester requestedBy) {
-        return Refund.builder()
+    // summarize가 가장 큰 id를 최신으로 보므로 테스트 객체에도 id가 있어야 설계가 실제로 검증된다
+    private Refund refund(Long refundId, Payment payment, long amount,
+                          RefundStatus status, RefundRequester requestedBy) {
+        Refund refund = Refund.builder()
             .payment(payment)
             .amount(amount)
             .reason("결제 금액 불일치")
             .status(status)
             .requestedBy(requestedBy)
-            .idempotencyKey("key_" + requestedBy + "_" + status)
+            .idempotencyKey("key_" + refundId)
             .requestedAt(NOW.minusMinutes(5))
             .build();
+        ReflectionTestUtils.setField(refund, "id", refundId);
+        return refund;
     }
 }
