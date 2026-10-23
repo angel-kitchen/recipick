@@ -129,6 +129,37 @@ public class Product extends BaseTimeEntity {
         this.status = status;
     }
 
+    public void updateInfo(
+        Category category,
+        Long ingredientId,
+        String name,
+        String brand,
+        String description,
+        BigDecimal saleUnitAmount,
+        SaleUnit saleUnit,
+        String imageUrl
+    ){
+            this.category = category;
+            this.ingredientId = ingredientId;
+            this.name = name;
+            this.brand = brand;
+            this.description = description;
+            this.saleUnitAmount = saleUnitAmount;
+            this.saleUnit = saleUnit;
+            this.imageUrl = imageUrl;
+
+    }
+
+    public void changePrice(Long price){
+        if(price == null){
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        if(price < 0){
+            throw new BusinessException(ProductErrorCode.INVALID_PRICE);
+        }
+        this.price = price;
+    }
+
     public void delete(){
         this.deleted = true;
     }
