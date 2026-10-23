@@ -14,13 +14,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
 import com.recipick.domain.payment.dto.response.PaymentConfirmResponse;
 import com.recipick.domain.payment.dto.response.PaymentDetailResponse;
 import com.recipick.domain.payment.dto.response.PaymentHistoryResponse;
+import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
+import com.recipick.domain.payment.facade.PaymentCancelFacade;
 import com.recipick.domain.payment.facade.PaymentConfirmFacade;
 import com.recipick.domain.payment.facade.PaymentQueryFacade;
 import com.recipick.global.config.ClockConfig;
@@ -72,6 +75,10 @@ class PaymentControllerTest {
     private static final String CONFIRM_BODY = """
             {"orderId": 1, "portonePaymentId": "pay_1"}
             """;
+    private static final String CANCEL_BODY = """
+            {"reason": "단순 변심"}
+            """;
+    private static final String IDEMPOTENCY_KEY = "cancel-key-1";
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
@@ -89,6 +96,9 @@ class PaymentControllerTest {
 
     @MockitoBean
     private PaymentConfirmFacade paymentConfirmFacade;
+
+    @MockitoBean
+    private PaymentCancelFacade paymentCancelFacade;
 
     @MockitoBean
     private PaymentQueryFacade paymentQueryFacade;
@@ -170,6 +180,125 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.code").value("PAYMENT-005"))
             .andExpect(jsonPath("$.message").value("결제 가능 시간이 만료되었습니다."));
+    }
+
+    @Test
+    @DisplayName("회원 토큰·Idempotency-Key·사유가 있으면 토큰의 회원 ID로 Facade를 부르고 결제 전 취소 응답을 돌려준다")
+    void cancel() throws Exception {
+        // given
+        given(paymentCancelFacade.cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심")).willReturn(
+            new PaymentCancelResponse(10L, 1L, PaymentStatus.FAILED, PaymentFailureReason.CANCELED_BEFORE_PAY,
+                null, null, 0L));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then — 결제 전 취소는 PG를 거치지 않아 canceledAt이 없고 REFUND도 없다
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.message").value("결제 대기 주문을 취소했습니다."))
+            .andExpect(jsonPath("$.data.paymentId").value(10))
+            .andExpect(jsonPath("$.data.orderId").value(1))
+            .andExpect(jsonPath("$.data.paymentStatus").value("FAILED"))
+            .andExpect(jsonPath("$.data.failureReason").value("CANCELED_BEFORE_PAY"))
+            .andExpect(jsonPath("$.data.canceledAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.refundStatus").value(nullValue()))
+            .andExpect(jsonPath("$.data.refundAmount").value(0));
+        verify(paymentCancelFacade).cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심");
+    }
+
+    @Test
+    @DisplayName("토큰이 없으면 취소할 수 없고 AUTH-001을 반환한다")
+    void cancelWithoutToken() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("AUTH-001"));
+        verify(paymentCancelFacade, never()).cancel(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Idempotency-Key 헤더가 없으면 GlobalExceptionHandler가 COMMON-007로 답하고 Facade는 부르지 않는다")
+    void cancelWithoutIdempotencyKey() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("COMMON-007"));
+        verify(paymentCancelFacade, never()).cancel(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("사유가 비어 있으면 COMMON-001과 필드 오류를 돌려주고 Facade는 부르지 않는다")
+    void cancelWithBlankReason() throws Exception {
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\": \" \"}"));
+
+        // then
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("COMMON-001"))
+            .andExpect(jsonPath("$.errors[0].field").value("reason"));
+        verify(paymentCancelFacade, never()).cancel(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("사유가 500자를 넘으면 COMMON-001과 필드 오류를 돌려주고 Facade는 부르지 않는다")
+    void cancelWithTooLongReason() throws Exception {
+        // when — ORDER.cancel_reason_detail이 500자라 입력 단계에서 막는다
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\": \"" + "가".repeat(501) + "\"}"));
+
+        // then
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("COMMON-001"))
+            .andExpect(jsonPath("$.errors[0].field").value("reason"));
+        verify(paymentCancelFacade, never()).cancel(anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Facade가 PAYMENT-007을 던지면 409 오류 봉투로 반환한다")
+    void cancelWithInvalidStatus() throws Exception {
+        // given
+        given(paymentCancelFacade.cancel(anyLong(), anyLong(), anyString(), anyString()))
+            .willThrow(new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("PAYMENT-007"))
+            .andExpect(jsonPath("$.message").value("현재 결제 상태에서는 요청을 처리할 수 없습니다."));
     }
 
     @Test
