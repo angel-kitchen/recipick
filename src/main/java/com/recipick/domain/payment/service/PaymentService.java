@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.service;
 
+import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
@@ -34,6 +35,11 @@ public class PaymentService {
     public Payment getByOrderId(Long orderId) {
         return paymentRepository.findByOrderId(orderId)
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    // 주문 생성 재시도 응답용. 결제 엔티티를 주문 도메인으로 넘기지 않도록 변환까지 여기서 끝낸다
+    public PaymentCreated getCreatedByOrderId(Long orderId) {
+        return PaymentCreated.from(getByOrderId(orderId));
     }
 
     // 상태를 바꾸는 흐름의 첫 줄에서 부른다. 호출자 트랜잭션에 참여해야 잠금이 유지된다

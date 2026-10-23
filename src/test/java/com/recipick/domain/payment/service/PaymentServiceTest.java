@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
@@ -89,6 +90,38 @@ class PaymentServiceTest {
 
         // when
         Throwable thrown = catchThrowable(() -> paymentService.getByOrderId(1L));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("주문 생성 재시도용 조회는 결제 엔티티가 아니라 PaymentCreated로 돌려준다")
+    void getCreatedByOrderId() {
+        // given
+        Payment payment = failedPayment();
+        given(paymentRepository.findByOrderId(1L)).willReturn(Optional.of(payment));
+
+        // when
+        PaymentCreated created = paymentService.getCreatedByOrderId(1L);
+
+        // then
+        assertThat(created.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(created.portonePaymentId()).isEqualTo("pay_" + PAYMENT_ID);
+        assertThat(created.amount()).isEqualTo(23800L);
+        assertThat(created.expiresAt()).isEqualTo(LocalDateTime.of(2026, 10, 21, 10, 5));
+    }
+
+    @Test
+    @DisplayName("재시도용 조회도 없는 결제면 PAYMENT_NOT_FOUND다")
+    void getCreatedByOrderIdNotFound() {
+        // given
+        given(paymentRepository.findByOrderId(1L)).willReturn(Optional.empty());
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.getCreatedByOrderId(1L));
 
         // then
         assertThat(thrown)
