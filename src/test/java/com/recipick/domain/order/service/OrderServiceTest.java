@@ -293,7 +293,7 @@ class OrderServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MartStatus.class, names = {"PREPARING", "SHIPPED"})
+    @EnumSource(value = MartStatus.class, names = {"PREPARING", "SHIPPING", "DELIVERED"})
     @DisplayName("마트가 준비를 시작한 주문은 상태를 바꾸지 않고 마트가 이미 준비 중이라고 돌려준다")
     void markMemberCancelRequested_martAlreadyPreparing(MartStatus martStatus) {
         // given

@@ -108,6 +108,8 @@ Table ORDERS {
   cancel_reason_detail varchar(500)
   indexes {
     (member_id, idempotency_key) [unique]
+    member_id
+    (mart_id, mart_status)
   }
 }
 

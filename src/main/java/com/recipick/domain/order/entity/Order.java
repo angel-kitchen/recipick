@@ -13,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
@@ -31,7 +32,12 @@ import lombok.NoArgsConstructor;
         uniqueConstraints = @UniqueConstraint(
                 name = Order.IDEMPOTENCY_KEY_CONSTRAINT,
                 columnNames = {"member_id", "idempotency_key"}
-        )
+        ),
+        // 목록은 id 내림차순으로 읽는다. 보조 인덱스 끝에 PK가 붙어 정렬까지 인덱스 순서로 해결된다
+        indexes = {
+                @Index(name = "idx_orders_member_id", columnList = "member_id"),
+                @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status")
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseTimeEntity {

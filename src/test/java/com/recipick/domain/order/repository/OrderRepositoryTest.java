@@ -64,6 +64,26 @@ class OrderRepositoryTest extends IntegrationTestSupport {
                         tuple(others.getId(), OTHER_MEMBER_ID));
     }
 
+    @Test
+    @DisplayName("주문 목록 조회용 인덱스가 회원 ID, 마트 ID·마트 처리 상태 순서로 생성된다")
+    void listIndexesExist() {
+        // when
+        List<?> rows = em.createNativeQuery(
+                        "SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS "
+                                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' "
+                                + "AND INDEX_NAME IN ('idx_orders_member_id', 'idx_orders_mart_id_mart_status') "
+                                + "ORDER BY INDEX_NAME, SEQ_IN_INDEX")
+                .getResultList();
+
+        // then
+        assertThat(rows)
+                .extracting(row -> tuple(((Object[]) row)[0], ((Object[]) row)[1]))
+                .containsExactly(
+                        tuple("idx_orders_mart_id_mart_status", "mart_id"),
+                        tuple("idx_orders_mart_id_mart_status", "mart_status"),
+                        tuple("idx_orders_member_id", "member_id"));
+    }
+
     private Order newOrder(Long memberId, OrderStatus status) {
         return Order.builder()
                 .memberId(memberId)
