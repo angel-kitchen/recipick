@@ -1,0 +1,90 @@
+package com.recipick.domain.recipe.service;
+
+import com.recipick.domain.product.dto.ProductSummary;
+import com.recipick.domain.product.entity.ProductStatus;
+import com.recipick.domain.recipe.entity.UnavailableReason;
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.global.exception.BusinessException;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class AutoCartCalculator {
+
+    private static final Comparator<AutoCartLine.Option> PRIORITY = Comparator
+        .comparing((AutoCartLine.Option option) -> option.unavailableReason() != null)
+        .thenComparingLong(AutoCartLine.Option::linePrice)
+        .thenComparing(AutoCartLine.Option::expectedRemainingAmount)
+        .thenComparing(option -> option.product().name());
+
+    private AutoCartCalculator() {
+    }
+
+    public static List<AutoCartLine> calculate(
+            List<RequiredIngredient> ingredients,
+            Map<Long, List<ProductSummary>> candidatesByIngredient,
+            Map<Long, Integer> cartQuantities,
+            Map<Long, Long> productSelections
+    ) {
+        Set<Long> ingredientIds = ingredients.stream()
+            .map(RequiredIngredient::ingredientId)
+            .collect(Collectors.toSet());
+        if (!ingredientIds.containsAll(productSelections.keySet())) {
+            throw new BusinessException(RecipeErrorCode.INVALID_PRODUCT_SELECTION);
+        }
+        return ingredients.stream()
+            .map(ingredient -> {
+                List<AutoCartLine.Option> candidates = candidatesByIngredient
+                    .getOrDefault(ingredient.ingredientId(), List.of()).stream()
+                    .map(product -> evaluate(product, ingredient.totalRequiredAmount(),
+                            cartQuantities.getOrDefault(product.productId(), 0)))
+                    .sorted(PRIORITY)
+                    .toList();
+                AutoCartLine.Option selected = select(candidates, productSelections.get(ingredient.ingredientId()));
+                return new AutoCartLine(ingredient, selected, candidates);
+            })
+            .toList();
+    }
+
+    private static AutoCartLine.Option select(List<AutoCartLine.Option> candidates, Long selectedProductId) {
+        if (selectedProductId == null) {
+            return candidates.isEmpty() ? null : candidates.get(0);
+        }
+        return candidates.stream()
+            .filter(option -> option.product().productId().equals(selectedProductId))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException(RecipeErrorCode.INVALID_PRODUCT_SELECTION));
+    }
+
+    private static AutoCartLine.Option evaluate(ProductSummary product, BigDecimal requiredAmount, int cartQuantity) {
+        int quantity = requiredAmount.divide(product.saleUnitAmount(), 0, RoundingMode.CEILING).intValueExact();
+        BigDecimal remaining = product.saleUnitAmount()
+            .multiply(BigDecimal.valueOf(quantity))
+            .subtract(requiredAmount);
+        return new AutoCartLine.Option(
+                product,
+                quantity,
+            product.price() * quantity,
+            remaining,
+            judge(product, cartQuantity + quantity)
+        );
+    }
+
+    private static UnavailableReason judge(ProductSummary product, int totalQuantity) {
+        if (product.status() != ProductStatus.SELLING) {
+            return UnavailableReason.SALE_STOPPED;
+        }
+        if (product.totalQuantity() == 0) {
+            return UnavailableReason.SOLD_OUT;
+        }
+        if (product.totalQuantity() < totalQuantity) {
+            return UnavailableReason.INSUFFICIENT_STOCK;
+        }
+        return null;
+    }
+}
