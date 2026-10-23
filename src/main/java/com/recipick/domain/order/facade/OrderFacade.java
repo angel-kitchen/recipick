@@ -127,7 +127,7 @@ public class OrderFacade {
         if (!order.getRequestHash().equals(requestHash)) {
             throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH);
         }
-        PaymentCreated payment = PaymentCreated.from(paymentService.getByOrderId(order.getId()));
+        PaymentCreated payment = paymentService.getCreatedByOrderId(order.getId());
         return OrderCreateResponse.of(order, orderService.findOrderItems(order.getId()), payment);
     }
 
