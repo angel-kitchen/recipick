@@ -160,6 +160,36 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("ID 잠금 조회는 findByIdForUpdate로 결제를 돌려준다")
+    void getByIdForUpdate() {
+        // given
+        Payment payment = failedPayment();
+        given(paymentRepository.findByIdForUpdate(PAYMENT_ID)).willReturn(Optional.of(payment));
+
+        // when
+        Payment found = paymentService.getByIdForUpdate(PAYMENT_ID);
+
+        // then
+        assertThat(found).isSameAs(payment);
+        verify(paymentRepository).findByIdForUpdate(PAYMENT_ID);
+    }
+
+    @Test
+    @DisplayName("ID 잠금 조회도 없는 결제면 PAYMENT_NOT_FOUND다")
+    void getByIdForUpdateNotFound() {
+        // given
+        given(paymentRepository.findByIdForUpdate(PAYMENT_ID)).willReturn(Optional.empty());
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.getByIdForUpdate(PAYMENT_ID));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
     @DisplayName("SYSTEM 환불이 없으면 PG 청구 금액·UUID 키·멈춘 시계의 시각으로 REQUESTED 행을 만든다")
     void requestSystemRefundCreatesFirstOne() {
         // given

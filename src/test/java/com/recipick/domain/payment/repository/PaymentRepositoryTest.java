@@ -64,6 +64,21 @@ class PaymentRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("결제 ID 잠금 조회도 같은 결제를 돌려준다")
+    void findByIdForUpdate() {
+        // given
+        Payment saved = paymentRepository.save(newPayment(11L));
+        em.flush();
+        em.clear();
+
+        // when
+        Payment found = paymentRepository.findByIdForUpdate(saved.getId()).orElseThrow();
+
+        // then
+        assertThat(found.getOrderId()).isEqualTo(11L);
+    }
+
+    @Test
     @DisplayName("enum 세 개가 순서 번호가 아니라 이름 문자열로 저장된다")
     void enumStoredAsString() {
         // given
