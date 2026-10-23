@@ -9,6 +9,7 @@ import com.recipick.global.exception.BusinessException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,13 +32,23 @@ public class AutoCartCalculator {
             Map<Long, Integer> cartQuantities,
             Map<Long, Long> productSelections
     ) {
-        Set<Long> ingredientIds = ingredients.stream()
+        // 같은 재료가 따로 들어오면 각각 올림돼 더 많이 사게 되므로, 올림 전에 재료별로 합산한다
+        List<RequiredIngredient> mergedIngredients = ingredients.stream()
+            .collect(Collectors.toMap(
+                RequiredIngredient::ingredientId,
+                ingredient -> ingredient,
+                RequiredIngredient::add,
+                LinkedHashMap::new
+            ))
+            .values().stream()
+            .toList();
+        Set<Long> ingredientIds = mergedIngredients.stream()
             .map(RequiredIngredient::ingredientId)
             .collect(Collectors.toSet());
         if (!ingredientIds.containsAll(productSelections.keySet())) {
             throw new BusinessException(RecipeErrorCode.INVALID_PRODUCT_SELECTION);
         }
-        return ingredients.stream()
+        return mergedIngredients.stream()
             .map(ingredient -> {
                 List<AutoCartLine.Option> candidates = candidatesByIngredient
                     .getOrDefault(ingredient.ingredientId(), List.of()).stream()
