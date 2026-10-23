@@ -61,6 +61,11 @@ public class OrderService {
         return orderRepository.existsByPendingMemberId(memberId);
     }
 
+    // pending_member_id가 UNIQUE라 회원당 많아야 한 건이다
+    public Optional<Order> findPendingOrder(Long memberId) {
+        return orderRepository.findByPendingMemberId(memberId);
+    }
+
     // 주문명이 첫 상품 기준이라 담은 순서대로 돌려준다
     public List<OrderItem> findOrderItems(Long orderId) {
         return orderItemRepository.findAllByOrderIdOrderByIdAsc(orderId);

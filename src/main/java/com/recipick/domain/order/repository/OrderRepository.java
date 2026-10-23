@@ -20,6 +20,8 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
 
     boolean existsByPendingMemberId(Long pendingMemberId);
 
+    Optional<Order> findByPendingMemberId(Long pendingMemberId);
+
     boolean existsByOrderNumber(String orderNumber);
 
     @Query("select o.id from Order o where o.memberId = :memberId order by o.id desc")
