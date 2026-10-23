@@ -4,6 +4,7 @@ import com.recipick.domain.order.dto.OrderCreateResult;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.request.OrderSearchRequest;
 import com.recipick.domain.order.dto.response.OrderCreateResponse;
+import com.recipick.domain.order.dto.response.OrderDetailResponse;
 import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.facade.OrderFacade;
 import com.recipick.domain.order.service.OrderService;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -37,6 +39,14 @@ public class OrderController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(orderService.searchMemberOrders(memberId, request, pageable)));
+    }
+
+    @GetMapping("/api/orders/{orderId}")
+    public ResponseEntity<ApiResponse<OrderDetailResponse>> getOrder(
+            @LoginMember Long memberId,
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getMemberOrder(memberId, orderId)));
     }
 
     @PostMapping("/api/orders")

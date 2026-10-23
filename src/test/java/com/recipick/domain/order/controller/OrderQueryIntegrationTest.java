@@ -131,6 +131,67 @@ class OrderQueryIntegrationTest extends IntegrationTestSupport {
         assertThat(data(response).path("totalElements").asLong()).isZero();
     }
 
+    @Test
+    @DisplayName("본인 주문 상세를 상품·금액·배송지·취소 가능 여부와 함께 돌려준다")
+    void getOrder() throws Exception {
+        // given
+        Order order = order(member, OrderStatus.PENDING_PAYMENT, MartStatus.NONE, "애호박", "두부");
+
+        // when
+        MockHttpServletResponse response = perform("/api/orders/" + order.getId());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        JsonNode data = data(response);
+        assertThat(data.path("orderId").asLong()).isEqualTo(order.getId());
+        assertThat(data.path("orderNumber").asText()).isEqualTo(order.getOrderNumber());
+        assertThat(data.path("status").asText()).isEqualTo("PENDING_PAYMENT");
+        assertThat(data.path("martStatus").asText()).isEqualTo("NONE");
+        assertThat(data.path("orderName").asText()).isEqualTo("애호박 외 1건");
+        assertThat(data.path("cancelable").asBoolean()).isTrue();
+        assertThat(data.path("items").findValuesAsText("productName")).containsExactly("애호박", "두부");
+        JsonNode item = data.path("items").get(0);
+        assertThat(item.path("unitPrice").asLong()).isEqualTo(2500L);
+        assertThat(item.path("saleUnitAmount").asText()).isEqualTo("500.00");
+        assertThat(item.path("saleUnit").asText()).isEqualTo("G");
+        assertThat(item.path("quantity").asInt()).isEqualTo(2);
+        assertThat(item.path("lineAmount").asLong()).isEqualTo(5000L);
+        assertThat(data.path("productAmount").asLong()).isEqualTo(5000L);
+        assertThat(data.path("deliveryFee").asLong()).isEqualTo(3000L);
+        assertThat(data.path("payAmount").asLong()).isEqualTo(8000L);
+        assertThat(data.path("receiverName").asText()).isEqualTo("홍길동");
+        assertThat(data.path("receiverPhone").asText()).isEqualTo("01012345678");
+        assertThat(data.path("address").asText()).isEqualTo("서울 종로구 삼청로 1");
+        assertThat(data.path("detailAddress").asText()).isEqualTo("101호");
+        assertThat(data.path("cancelReasonCode").isNull()).isTrue();
+        assertThat(data.has("portonePaymentId")).isFalse();
+    }
+
+    @Test
+    @DisplayName("다른 회원의 주문 상세는 없는 주문과 같이 ORDER-012로 응답한다")
+    void getOrder_otherMember() throws Exception {
+        // given
+        Order others = order(otherMember, OrderStatus.PAID, MartStatus.RECEIVED, "애호박");
+
+        // when
+        MockHttpServletResponse response = perform("/api/orders/" + others.getId());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("ORDER-012");
+    }
+
+    @Test
+    @DisplayName("없는 주문 상세는 ORDER-012로 응답한다")
+    void getOrder_notFound() throws Exception {
+        // when
+        MockHttpServletResponse response = perform("/api/orders/" + Long.MAX_VALUE);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("ORDER-012");
+    }
+
     private MockHttpServletResponse perform(String url) throws Exception {
         return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
                 .andReturn().getResponse();

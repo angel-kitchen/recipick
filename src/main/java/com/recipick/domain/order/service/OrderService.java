@@ -2,6 +2,7 @@ package com.recipick.domain.order.service;
 
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.request.OrderSearchRequest;
+import com.recipick.domain.order.dto.response.OrderDetailResponse;
 import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
@@ -137,6 +138,14 @@ public class OrderService {
                 .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
         return PageResponse.from(orders.map(order ->
                 OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+    }
+
+    // 다른 회원의 주문이면 "그 주문은 있다"를 알리지 않도록 없는 주문과 같이 답한다
+    public OrderDetailResponse getMemberOrder(Long memberId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .filter(found -> found.getMemberId().equals(memberId))
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        return OrderDetailResponse.of(order, findOrderItems(orderId));
     }
 
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
