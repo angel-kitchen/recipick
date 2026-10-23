@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("api/admin/products/{productId}/stock-adjustment")
+@RequestMapping("/api/admin/products/{productId}/stock-adjustments")
 public class ProductStockAdminController {
 
     private final ProductStockService productStockService;

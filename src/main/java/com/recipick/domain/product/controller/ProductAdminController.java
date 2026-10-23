@@ -55,7 +55,7 @@ public class ProductAdminController {
         ProductIdResponse response = productAdminFacade.createProduct(
             AdminRole.valueOf(principal.role()), principal.martId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.success("등록되었습니다", response));
+            .body(ApiResponse.success("등록되었습니다.", response));
     }
 
     @PatchMapping("/{productId}/status")

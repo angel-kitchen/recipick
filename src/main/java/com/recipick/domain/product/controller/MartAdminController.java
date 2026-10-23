@@ -5,16 +5,12 @@ import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
 import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.dto.MartUpdateRequest;
-import com.recipick.domain.product.dto.StockAdjustmentHistoryResponse;
 import com.recipick.domain.product.facade.MartFacade;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.global.response.ApiResponse;
-import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.AuthPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.eclipse.jdt.internal.compiler.apt.dispatch.AptProblem;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.Principal;
 import java.util.List;
 
 @RestController
@@ -56,7 +51,7 @@ public class MartAdminController {
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.", response));
     }
 
-    @PatchMapping("/{martId]")
+    @PatchMapping("/{martId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MART_ADMIN')")
     public ResponseEntity<ApiResponse<MartIdResponse>> updateMart(
         @AuthenticationPrincipal AuthPrincipal principal,
