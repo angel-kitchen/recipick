@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -51,5 +52,11 @@ public class MemberAddressController {
             @PathVariable Long addressId) {
         return ResponseEntity.ok(ApiResponse.success("현재 배송지가 선택되었습니다.",
                 memberAddressFacade.selectAddress(memberId, addressId)));
+    }
+
+    @DeleteMapping("/{addressId}")
+    public ResponseEntity<ApiResponse<Void>> deleteAddress(@LoginMember Long memberId, @PathVariable Long addressId) {
+        memberAddressFacade.deleteAddress(memberId, addressId);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

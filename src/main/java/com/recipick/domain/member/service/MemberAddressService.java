@@ -43,4 +43,9 @@ public class MemberAddressService {
                 .address(request.address()).detailAddress(request.detailAddress())
                 .legalDongCode(request.legalDongCode()).build());
     }
+
+    @Transactional
+    public void deleteAddress(MemberAddress address) {
+        memberAddressRepository.delete(address);
+    }
 }

@@ -10,7 +10,8 @@ import org.springframework.http.HttpStatus;
 public enum AddressErrorCode implements ErrorCode {
 
     ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "ADDRESS-001", "배송지를 찾을 수 없습니다."),
-    ADDRESS_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "ADDRESS-002", "배송지는 최대 5개까지 저장할 수 있습니다.");
+    ADDRESS_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "ADDRESS-002", "배송지는 최대 5개까지 저장할 수 있습니다."),
+    SELECTED_ADDRESS_NOT_DELETABLE(HttpStatus.CONFLICT, "ADDRESS-003", "현재 배송지는 삭제할 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;
