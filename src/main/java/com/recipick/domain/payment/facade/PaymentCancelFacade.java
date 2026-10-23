@@ -1,14 +1,13 @@
 package com.recipick.domain.payment.facade;
 
 import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
-import com.recipick.domain.payment.entity.Payment;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-// 결제 취소 API의 진입점. 트랜잭션을 걸지 않는다. ㅡ 결제 후 취소가 붙으면 PortOne 호출이 이 자리에 들어간다.
+// 결제 취소 API의 진입점. 트랜잭션을 걸지 않는다. 결제 후 취소가 붙으면 PortOne 호출이 이 자리에 들어간다.
 // 결제 전 취소는 외부 호출이 없어 Processor의 트랜잭션 하나로 끝난다.
 @Component
 @RequiredArgsConstructor

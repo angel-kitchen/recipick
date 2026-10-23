@@ -38,11 +38,12 @@ public class PaymentCancelProcessor {
             throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
 
-        // 결제 전 취소는 키를 저장하지 않는다. 이미 닫힌 상태 자체가 같은 요청이 처리됐다는 증거다
+        // 결제 전 취소는 키를 저장하지 않는다.
+        // 이미 결제 전 취소로 종료된 상태를 기준으로 같은 취소 로직의 중복 실행을 막는다
         if (isCanceledBeforePay(payment)) {
             return PaymentCancelResponse.of(payment, RefundSummary.NONE);
         }
-        // PAID는 PG 취소가 필요해 후속 이슈에서 다룬다
+        // PAID는 PG 취소가 필요함
         if (payment.getStatus() != PaymentStatus.IN_PROGRESS) {
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
         }

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.Order;
+import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.repository.OrderItemRepository;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
@@ -15,6 +17,11 @@ import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.repository.PaymentRepository;
+import com.recipick.domain.product.entity.Mart;
+import com.recipick.domain.product.entity.Product;
+import com.recipick.domain.product.repository.MartRepository;
+import com.recipick.domain.product.repository.ProductRepository;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,13 +37,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-// 스레드들이 각자 커밋하므로 테스트 트랜잭션 롤백을 쓸 수 없다. PaymentConfirmConcurrencyTest처럼 직접 정리한다
+// 스레드들이 각자 커밋하므로 테스트 트랜잭션 롤백을 쓸 수 없다. OrderPaymentFailureConcurrencyTest(준희)처럼 직접 정리한다
 class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
 
     private static final int THREADS = 5;
     private static final Long MEMBER_ID = 9102L;
     private static final String REASON = "동시 취소";
     private static final LocalDateTime EXPIRES_AT = LocalDateTime.of(2026, 10, 21, 10, 5);
+    // 주문 생성 때 이미 차감된 뒤의 재고와 주문 수량. 복구가 한 번이면 7, 두 번 이상이면 9 이상이 된다
+    private static final int STOCK_AFTER_ORDER = 5;
+    private static final int ORDER_QUANTITY = 2;
 
     @Autowired
     PaymentCancelProcessor paymentCancelProcessor;
@@ -45,10 +55,18 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
     @Autowired
     OrderRepository orderRepository;
     @Autowired
+    OrderItemRepository orderItemRepository;
+    @Autowired
     OrderStatusHistoryRepository orderStatusHistoryRepository;
+    @Autowired
+    ProductRepository productRepository;
+    @Autowired
+    MartRepository martRepository;
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    private Long martId;
+    private Long productId;
     private Long orderId;
     private Long paymentId;
 
@@ -60,21 +78,48 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
         }
         if (orderId != null) {
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
+            orderItemRepository.deleteAll(orderItemRepository.findAllByOrderId(orderId));
             orderRepository.deleteById(orderId);
+        }
+        if (productId != null) {
+            productRepository.deleteById(productId);
+        }
+        if (martId != null) {
+            martRepository.deleteById(martId);
         }
     }
 
     @Test
-    @DisplayName("같은 결제에 취소가 5건 동시에 와도 주문 종료는 한 번만 일어나고 나머지는 멱등 응답으로 끝난다")
+    @DisplayName("같은 결제에 취소가 5건 동시에 와도 재고는 주문 수량만큼 한 번만 복구되고 나머지는 멱등 응답으로 끝난다")
     void concurrentCancels() throws Exception {
         // given
+        Mart mart = martRepository.save(Mart.builder()
+            .regionId(31L)
+            .name("결제 취소 동시성 테스트 마트")
+            .latitude(new BigDecimal("37.3670000"))
+            .longitude(new BigDecimal("127.1080000"))
+            .serviceRadiusM(2000)
+            .build());
+        Product product = productRepository.save(Product.builder()
+            .mart(mart)
+            .name("애호박")
+            .totalQuantity(STOCK_AFTER_ORDER)
+            .deleted(false)
+            .build());
         Order order = orderRepository.save(Order.builder()
             .memberId(MEMBER_ID)
-            .martId(1L)
+            .martId(mart.getId())
             .pendingMemberId(MEMBER_ID)
             .status(OrderStatus.PENDING_PAYMENT)
             .martStatus(MartStatus.NONE)
             .build());
+        orderItemRepository.save(OrderItem.builder()
+            .order(order)
+            .productId(product.getId())
+            .quantity(ORDER_QUANTITY)
+            .build());
+        martId = mart.getId();
+        productId = product.getId();
         orderId = order.getId();
         paymentId = paymentRepository.save(inProgressPayment(orderId)).getId();
 
@@ -90,6 +135,10 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
             assertThat(response.refundAmount()).isZero();
         });
 
+        // 재고가 정확히 주문 수량만큼 한 번만 돌아왔다
+        assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity())
+            .isEqualTo(STOCK_AFTER_ORDER + ORDER_QUANTITY);
+
         Payment payment = paymentRepository.findById(paymentId).orElseThrow();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.CANCELED_BEFORE_PAY);
@@ -100,8 +149,7 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
         assertThat(canceledOrder.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
         assertThat(canceledOrder.getCancelReasonDetail()).isEqualTo(REASON);
         assertThat(canceledOrder.getPendingMemberId()).isNull();
-        // ORDER 이력 1건 = 실제 종료 상태 전이가 한 번만 일어났다는 뜻. 상품 fixture가 없어 재고 복구 자체는 빈 목록이다.
-        // 멱등 재요청이 OrderFacade에 아예 들어가지 않는 것은 PaymentCancelProcessorTest에서 따로 검증한다
+        // 주문 종료 상태 전이도 한 번뿐이다
         assertThat(orderStatusHistoryRepository.findAllByOrderId(orderId)).hasSize(1);
         // 결제 전 취소는 REFUND를 만들지 않는다
         assertThat(refundCount()).isZero();
