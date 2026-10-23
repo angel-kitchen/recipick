@@ -1,5 +1,6 @@
 package com.recipick.domain.order.dto.response;
 
+import com.recipick.domain.order.dto.OrderNameFormatter;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.enums.OrderStatus;
@@ -27,7 +28,7 @@ public record OrderCreateResponse(
                 order.getId(),
                 order.getOrderNumber(),
                 order.getStatus(),
-                orderName(items),
+                OrderNameFormatter.format(items),
                 order.getProductAmount(),
                 order.getDeliveryFee(),
                 payment.amount(),
@@ -37,11 +38,5 @@ public record OrderCreateResponse(
                 order.getReceiverName(),
                 order.getReceiverPhone()
         );
-    }
-
-    // PortOne 결제창에 보여 줄 주문명. 컬럼으로 저장하지 않고 주문 상품 스냅샷에서 만든다
-    private static String orderName(List<OrderItem> items) {
-        String firstName = items.get(0).getProductName();
-        return items.size() == 1 ? firstName : firstName + " 외 " + (items.size() - 1) + "건";
     }
 }
