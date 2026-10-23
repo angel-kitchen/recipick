@@ -52,6 +52,8 @@ public class AutoCartCalculator {
             .map(ingredient -> {
                 List<AutoCartLine.Option> candidates = candidatesByIngredient
                     .getOrDefault(ingredient.ingredientId(), List.of()).stream()
+                    // 삭제된 상품은 판매 중·재고가 남아 있어도 다시 살 수 없으므로 후보에서 뺀다
+                    .filter(product -> !product.deleted())
                     .map(product -> evaluate(product, ingredient.totalRequiredAmount(),
                             cartQuantities.getOrDefault(product.productId(), 0)))
                     .sorted(PRIORITY)
