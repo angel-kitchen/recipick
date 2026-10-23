@@ -3,7 +3,6 @@ package com.recipick.domain.recipe.service;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.recipe.entity.UnavailableReason;
 
-import javax.swing.text.html.Option;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -21,7 +20,7 @@ public record AutoCartLine(
         return selected == null ? UnavailableReason.NOT_SOLD_IN_MART : selected.unavailableReason();
     }
 
-    public int purchasedQuantity() {
+    public int purchaseQuantity() {
         return purchasable() ? selected.purchaseQuantity() : 0;
     }
 
@@ -33,7 +32,7 @@ public record AutoCartLine(
             ProductSummary product,
             int purchaseQuantity,
             long linePrice,
-            BigDecimal expectedRemaininAmount,
+            BigDecimal expectedRemainingAmount,
             UnavailableReason unavailableReason
     ){
 

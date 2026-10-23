@@ -8,10 +8,10 @@ public record RequiredIngredient(
         Long ingredientId,
         String name,
         SaleUnit unit,
-        BigDecimal totalRequiredAMount
+        BigDecimal totalRequiredAmount
 ) {
 
     public RequiredIngredient add(RequiredIngredient other) {
-        return new RequiredIngredient(ingredientId, name, unit, totalRequiredAMount.add(other.totalRequiredAMount));
+        return new RequiredIngredient(ingredientId, name, unit, totalRequiredAmount.add(other.totalRequiredAmount));
     }
 }
