@@ -28,6 +28,18 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
             """)
     List<IngredientProductCount> countByIngredientIds(@Param("ingredientIds") Collection<Long> ingredientIds);
 
+    @Query("""
+            SELECT p
+            FROM Product p
+            WHERE p.mart.id = :martId
+               AND p.ingredientId IN :ingredientIds
+               AND p.deleted = false
+             """)
+    List<Product> findAllByMartIdAndIngredientIdIn(
+        @Param("martId") Long martId,
+        @Param("ingredientIds") Collection<Long> ingredientIds
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Product p where p.id = :id")
     Optional<Product> findByIdForUpdate(@Param("id") Long id);
