@@ -13,9 +13,12 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductCreateRequest;
 import com.recipick.domain.product.dto.ProductIdResponse;
+import com.recipick.domain.product.dto.ProductPriceResponse;
+import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
 import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductSummary;
+import com.recipick.domain.product.dto.ProductUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -612,5 +615,257 @@ public class ProductServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.CATEGORY_NOT_FOUND);
+    }
+
+    private ProductUpdateRequest updateRequest(String name, String brand, Long ingredientId,
+                                               SaleUnit saleUnit, String amount) {
+        return new ProductUpdateRequest(
+            10L, ingredientId, name, brand, "수정된 설명",
+            new BigDecimal(amount), saleUnit, "https://example.com/new.png");
+    }
+
+    private void stubProductAndCategory(Product product) {
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        given(categoryRepository.findById(10L)).willReturn(Optional.of(category(10L)));
+    }
+
+    @Test
+    @DisplayName("수정 : 요청 값으로 전체가 덮어써지고 가격·상태·재고는 그대로다")
+    void updateProduct() {
+        // given
+        Product product = product(1L, 1L);
+        stubProductAndCategory(product);
+        ProductUpdateRequest request = updateRequest("애호박 대", "국산농장", 5L, SaleUnit.G, "350.00");
+
+        // when
+        ProductIdResponse result =
+            productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, SaleUnit.G);
+
+        // then
+        assertThat(result.productId()).isEqualTo(1L);
+        assertThat(product.getName()).isEqualTo("애호박 대");
+        assertThat(product.getBrand()).isEqualTo("국산농장");
+        assertThat(product.getIngredientId()).isEqualTo(5L);
+        assertThat(product.getSaleUnit()).isEqualTo(SaleUnit.G);
+        assertThat(product.getSaleUnitAmount()).isEqualByComparingTo("350.00");
+        assertThat(product.getDescription()).isEqualTo("수정된 설명");
+        assertThat(product.getPrice()).isEqualTo(1500L);
+        assertThat(product.getStatus()).isEqualTo(ProductStatus.SELLING);
+        assertThat(product.getTotalQuantity()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("수정 : 재료·브랜드·설명·이미지를 null로 보내면 비워진다")
+    void updateProduct_clearOptionalFields() {
+        // given
+        Product product = product(1L, 1L);
+        product.updateInfo(category(10L), 5L, "애호박", "국산농장", "설명",
+            new BigDecimal("300.00"), SaleUnit.G, "https://example.com/old.png");
+        stubProductAndCategory(product);
+        ProductUpdateRequest request = new ProductUpdateRequest(
+            10L, null, "애호박", null, null, new BigDecimal("300.00"), SaleUnit.G, null);
+
+        // when
+        productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, null);
+
+        // then
+        assertThat(product.getIngredientId()).isNull();
+        assertThat(product.getBrand()).isNull();
+        assertThat(product.getDescription()).isNull();
+        assertThat(product.getImageUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("수정 : 이름과 브랜드가 그대로면 중복 검사도 마트 잠금도 하지 않는다")
+    void updateProduct_sameNameAndBrand() {
+        // given
+        Product product = product(1L, 1L);
+        stubProductAndCategory(product);
+        ProductUpdateRequest request = updateRequest("애호박", null, null, SaleUnit.G, "300.00");
+
+        // when
+        productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, null);
+
+        // then
+        verify(martRepository, never()).findByIdForUpdate(any());
+        verify(productRepository, never())
+            .existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("수정 : 다른 상품과 이름·브랜드가 겹치면 PRODUCT_NAME_DUPLICATED이고 바뀌지 않는다")
+    void updateProduct_duplicated() {
+        // given
+        Product product = product(1L, 1L);
+        stubProductAndCategory(product);
+        given(productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(1L, "청양고추", null, 1L))
+            .willReturn(true);
+        ProductUpdateRequest request = updateRequest("청양고추", null, null, SaleUnit.G, "300.00");
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, null));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NAME_DUPLICATED);
+        assertThat(product.getName()).isEqualTo("애호박");
+    }
+
+    @Test
+    @DisplayName("수정 : 재료 단위와 판매 단위가 다르면 UNIT_MISMATCH")
+    void updateProduct_unitMismatch() {
+        // given
+        Product product = product(1L, 1L);
+        stubProductAndCategory(product);
+        ProductUpdateRequest request = updateRequest("애호박", null, 5L, SaleUnit.G, "300.00");
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, SaleUnit.ML));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.UNIT_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("수정 : 판매 단위 수치가 0 이하면 INVALID_SALE_UNIT, 없는·삭제된 카테고리면 CATEGORY_NOT_FOUND")
+    void updateProduct_invalidValues() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        Category deleted = category(10L);
+        deleted.delete();
+        given(categoryRepository.findById(10L)).willReturn(Optional.of(deleted));
+        ProductUpdateRequest zeroAmount = updateRequest("애호박", null, null, SaleUnit.G, "0");
+        ProductUpdateRequest deletedCategory = updateRequest("애호박", null, null, SaleUnit.G, "300.00");
+
+        // when
+        Throwable amountThrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, zeroAmount, null));
+        Throwable categoryThrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, deletedCategory, null));
+
+        // then
+        assertThat(amountThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.INVALID_SALE_UNIT);
+        assertThat(categoryThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.CATEGORY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("수정 : MART_ADMIN이 다른 마트 상품이면 MART_ACCESS_DENIED이고 카테고리를 조회하지 않는다")
+    void updateProduct_martAdminOtherMart() {
+        // given
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product(1L, 2L)));
+        ProductUpdateRequest request = updateRequest("애호박", null, null, SaleUnit.G, "300.00");
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.MART_ADMIN, 1L, 1L, request, null));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        verifyNoInteractions(categoryRepository);
+    }
+
+    @Test
+    @DisplayName("수정 : 없는 상품이거나 삭제된 상품이면 PRODUCT_NOT_FOUND")
+    void updateProduct_notFound() {
+        // given
+        given(productRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
+        Product deleted = product(1L, 1L);
+        ReflectionTestUtils.setField(deleted, "deleted", true);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(deleted));
+        ProductUpdateRequest request = updateRequest("애호박", null, null, SaleUnit.G, "300.00");
+
+        // when
+        Throwable missingThrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 99L, request, null));
+        Throwable deletedThrown = catchThrowable(
+            () -> productService.updateProduct(AdminRole.SUPER_ADMIN, null, 1L, request, null));
+
+        // then
+        assertThat(missingThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(deletedThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("가격 변경 : 가격이 바뀌고 응답에 변경된 가격이 담긴다")
+    void updatePrice() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        ProductPriceResponse result = productService.updatePrice(
+            AdminRole.MART_ADMIN, 1L, 1L, new ProductPriceUpdateRequest(1800L));
+
+        // then
+        assertThat(result.productId()).isEqualTo(1L);
+        assertThat(result.price()).isEqualTo(1800L);
+        assertThat(product.getPrice()).isEqualTo(1800L);
+    }
+
+    @Test
+    @DisplayName("가격 변경 : 가격이 음수면 INVALID_PRICE이고 가격은 그대로다")
+    void updatePrice_negative() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        Throwable thrown = catchThrowable(() -> productService.updatePrice(
+            AdminRole.SUPER_ADMIN, null, 1L, new ProductPriceUpdateRequest(-1L)));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.INVALID_PRICE);
+        assertThat(product.getPrice()).isEqualTo(1500L);
+    }
+
+    @Test
+    @DisplayName("가격 변경 : MART_ADMIN이 다른 마트 상품이면 MART_ACCESS_DENIED, 없는 상품이면 PRODUCT_NOT_FOUND")
+    void updatePrice_deniedAndNotFound() {
+        // given
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product(1L, 2L)));
+        given(productRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
+        ProductPriceUpdateRequest request = new ProductPriceUpdateRequest(1800L);
+
+        // when
+        Throwable deniedThrown = catchThrowable(
+            () -> productService.updatePrice(AdminRole.MART_ADMIN, 1L, 1L, request));
+        Throwable missingThrown = catchThrowable(
+            () -> productService.updatePrice(AdminRole.SUPER_ADMIN, null, 99L, request));
+
+        // then
+        assertThat(deniedThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(missingThrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
     }
 }
