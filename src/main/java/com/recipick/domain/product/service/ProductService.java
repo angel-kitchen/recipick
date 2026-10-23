@@ -2,9 +2,12 @@ package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.ProductCreateRequest;
+import com.recipick.domain.product.dto.ProductDetailResponse;
 import com.recipick.domain.product.dto.ProductIdResponse;
 import com.recipick.domain.product.dto.ProductPriceResponse;
 import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.ProductSearchRequest;
+import com.recipick.domain.product.dto.ProductSearchResponse;
 import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductUpdateRequest;
@@ -19,16 +22,20 @@ import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
+import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -192,11 +199,11 @@ public class ProductService {
             .filter(c -> !c.isDeleted())
             .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
 
-        if (ingredientUnit != null && ingredientUnit!= request.saleUnit()){
+        if (ingredientUnit != null && ingredientUnit != request.saleUnit()) {
             throw new BusinessException(ProductErrorCode.UNIT_MISMATCH);
         }
 
-        boolean nameOrBrandChanged = !Objects.equals(product.getName(),request.name()) ||
+        boolean nameOrBrandChanged = !Objects.equals(product.getName(), request.name()) ||
             !Objects.equals(product.getBrand(), request.brand());
         if (nameOrBrandChanged) {
             martRepository.findByIdForUpdate(product.getMart().getId());
@@ -232,5 +239,37 @@ public class ProductService {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
         return product;
+    }
+
+    private static final Set<String> SEARCH_SORT_PROPERTIES = Set.of("price", "createdAt");
+
+    public PageResponse<ProductSearchResponse> searchProducts(
+        Long martId,
+        ProductSearchRequest request,
+        Pageable pageable
+    ) {
+        if (request.minPrice() != null && request.maxPrice() != null
+            && request.minPrice() > request.maxPrice()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SEARCH_SORT_PROPERTIES.contains(order.getProperty())) {
+                throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+            }
+        }
+
+        MemberProductSearchCondition condition = new MemberProductSearchCondition(
+            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice());
+        return PageResponse.from(
+            productRepository.searchMemberProducts(condition, pageable)
+                .map(ProductSearchResponse::from)
+        );
+    }
+
+    public ProductDetailResponse getProduct(Long martId, Long productId) {
+        Product product = productRepository.findById(productId)
+            .filter(p -> !p.isDeleted() && p.getMart().getId().equals(martId))
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return ProductDetailResponse.from(product);
     }
 }
