@@ -3,6 +3,7 @@ package com.recipick.domain.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -12,9 +13,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductCreateRequest;
+import com.recipick.domain.product.dto.ProductDetailResponse;
 import com.recipick.domain.product.dto.ProductIdResponse;
 import com.recipick.domain.product.dto.ProductPriceResponse;
 import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.ProductSearchRequest;
+import com.recipick.domain.product.dto.ProductSearchResponse;
 import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -28,9 +32,11 @@ import com.recipick.domain.product.repository.CategoryRepository;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
+import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +48,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -865,6 +872,124 @@ public class ProductServiceTest {
             .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
         assertThat(missingThrown)
             .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    private ProductSearchRequest searchRequest(Long minPrice, Long maxPrice) {
+        return new ProductSearchRequest("호박", 10L, minPrice, maxPrice);
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 이용 마트와 조건으로 조회하고 품절 여부를 계산해 돌려준다")
+    void searchProducts() {
+        // given
+        Product inStock = product(1L, 1L);
+        Product soldOut = product(2L, 1L);
+        ReflectionTestUtils.setField(soldOut, "totalQuantity", 0);
+        given(productRepository.searchMemberProducts(any(), any()))
+            .willReturn(new PageImpl<>(List.of(inStock, soldOut), pageable, 2));
+
+        // when
+        PageResponse<ProductSearchResponse> result =
+            productService.searchProducts(1L, searchRequest(500L, 3000L), pageable);
+
+        // then
+        ArgumentCaptor<MemberProductSearchCondition> captor =
+            ArgumentCaptor.forClass(MemberProductSearchCondition.class);
+        verify(productRepository).searchMemberProducts(captor.capture(), any());
+        assertThat(captor.getValue().martId()).isEqualTo(1L);
+        assertThat(captor.getValue().keyword()).isEqualTo("호박");
+        assertThat(captor.getValue().categoryId()).isEqualTo(10L);
+        assertThat(captor.getValue().minPrice()).isEqualTo(500L);
+        assertThat(captor.getValue().maxPrice()).isEqualTo(3000L);
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.content().get(0).soldOut()).isFalse();
+        assertThat(result.content().get(1).soldOut()).isTrue();
+        assertThat(result.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 최소 가격이 최대 가격보다 크면 INVALID_INPUT이고 조회하지 않는다")
+    void searchProducts_invalidPriceRange() {
+        // given
+        ProductSearchRequest request = searchRequest(3000L, 1000L);
+
+        // when
+        Throwable thrown = catchThrowable(() -> productService.searchProducts(1L, request, pageable));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 허용되지 않는 정렬 기준이면 INVALID_INPUT, 가격·등록일 정렬은 허용된다")
+    void searchProducts_sort() {
+        // given
+        given(productRepository.searchMemberProducts(any(), any()))
+            .willReturn(new PageImpl<>(List.of(), pageable, 0));
+        Pageable invalidSort = PageRequest.of(0, 20, Sort.by("name"));
+        Pageable priceSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "price"));
+        Pageable createdSort = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        ProductSearchRequest request = searchRequest(null, null);
+
+        // when
+        Throwable thrown = catchThrowable(() -> productService.searchProducts(1L, request, invalidSort));
+        productService.searchProducts(1L, request, priceSort);
+        productService.searchProducts(1L, request, createdSort);
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verify(productRepository).searchMemberProducts(any(), eq(priceSort));
+        verify(productRepository).searchMemberProducts(any(), eq(createdSort));
+    }
+
+    @Test
+    @DisplayName("회원 상세 : 이용 마트의 상품이면 카테고리명과 품절 여부를 포함해 돌려준다")
+    void getProduct() {
+        // given
+        given(productRepository.findById(1L)).willReturn(Optional.of(product(1L, 1L)));
+
+        // when
+        ProductDetailResponse result = productService.getProduct(1L, 1L);
+
+        // then
+        assertThat(result.productId()).isEqualTo(1L);
+        assertThat(result.categoryName()).isEqualTo("채소");
+        assertThat(result.price()).isEqualTo(1500L);
+        assertThat(result.soldOut()).isFalse();
+    }
+
+    @Test
+    @DisplayName("회원 상세 : 없는 상품·삭제된 상품·다른 마트 상품이면 PRODUCT_NOT_FOUND")
+    void getProduct_notFound() {
+        // given
+        given(productRepository.findById(99L)).willReturn(Optional.empty());
+        Product deleted = product(2L, 1L);
+        ReflectionTestUtils.setField(deleted, "deleted", true);
+        given(productRepository.findById(2L)).willReturn(Optional.of(deleted));
+        given(productRepository.findById(3L)).willReturn(Optional.of(product(3L, 2L)));
+
+        // when
+        Throwable missing = catchThrowable(() -> productService.getProduct(1L, 99L));
+        Throwable deletedThrown = catchThrowable(() -> productService.getProduct(1L, 2L));
+        Throwable otherMart = catchThrowable(() -> productService.getProduct(1L, 3L));
+
+        // then
+        assertThat(missing).isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(deletedThrown).isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+        assertThat(otherMart).isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
     }
