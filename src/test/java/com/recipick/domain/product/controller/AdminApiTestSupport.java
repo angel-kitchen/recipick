@@ -118,5 +118,9 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
             .totalQuantity(quantity)
             .build());
     }
+
+    protected MockHttpServletResponse put(String url, String token, Object body) throws Exception {
+        return exchange(MockMvcRequestBuilders.put(url), token, body);
+    }
 }
 

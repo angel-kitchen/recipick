@@ -225,4 +225,36 @@ class ProductRepositoryTest extends IntegrationTestSupport {
         // then
         assertThat(exists).isFalse();
     }
+
+    @Test
+    @DisplayName("자기 자신을 제외한 중복 검사 : 같은 이름의 자기 자신은 중복이 아니다")
+    void existsDuplicateExcludingSelf_self() {
+        // given
+        Product zucchini = productRepository.findAll().stream()
+            .filter(p -> p.getName().equals("애호박") && p.getMart().getId().equals(martA.getId()))
+            .findFirst().orElseThrow();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(
+            martA.getId(), "애호박", null, zucchini.getId());
+
+        // then
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("자기 자신을 제외한 중복 검사 : 다른 상품과 이름이 같으면 중복이다")
+    void existsDuplicateExcludingSelf_other() {
+        // given
+        Product pepper = productRepository.findAll().stream()
+            .filter(p -> p.getName().equals("청양고추") && p.getMart().getId().equals(martA.getId()))
+            .findFirst().orElseThrow();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(
+            martA.getId(), "애호박", null, pepper.getId());
+
+        // then
+        assertThat(exists).isTrue();
+    }
 }

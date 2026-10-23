@@ -136,7 +136,8 @@ class OrderTest {
     @CsvSource({
             "PAID, RECEIVED, true",
             "PAID, PREPARING, false",
-            "PAID, SHIPPED, false",
+            "PAID, SHIPPING, false",
+            "PAID, DELIVERED, false",
             "CANCEL_REQUESTED, RECEIVED, false",
             "PENDING_PAYMENT, NONE, false"
     })
