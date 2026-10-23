@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -145,6 +144,26 @@ class PaymentRepositoryTest extends IntegrationTestSupport {
             .containsExactly(second.getId(), first.getId());
     }
 
+    @Test
+    @DisplayName("createdAt이 다르면 id가 작아도 생성 시각이 최신인 결제가 먼저 나온다")
+    void findByOrderIdInSortsByCreatedAtFirst() {
+        // given — id는 first가 작지만 createdAt은 first가 더 늦다. 두 기준이 반대를 가리키는 상황
+        Payment first = paymentRepository.save(newPayment(9L));
+        Payment second = paymentRepository.save(newPayment(10L));
+        em.flush();
+        forceCreatedAt(LocalDateTime.of(2026, 10, 23, 9, 5), first.getId());
+        forceCreatedAt(LocalDateTime.of(2026, 10, 23, 9, 0), second.getId());
+        em.clear();
+
+        // when
+        Page<Payment> page = paymentRepository.findByOrderIdIn(
+            List.of(9L, 10L), PageRequest.of(0, 2, HISTORY_SORT));
+
+        // then — id가 큰 second가 아니라 createdAt이 최신인 first가 앞이다. createdAt이 1순위다
+        assertThat(page.getContent()).extracting(Payment::getId)
+            .containsExactly(first.getId(), second.getId());
+    }
+
     private Payment newPayment(Long orderId) {
         return Payment.builder()
             .orderId(orderId)
@@ -156,7 +175,7 @@ class PaymentRepositoryTest extends IntegrationTestSupport {
             .build();
     }
 
-    // createdAt은 @Column(updatable = false)라 JPA로 못 바꾼다. 동일 시각 상황을 만들려면 네이티브로 직접 쓴다
+    // createdAt은 @Column(updatable = false)라 JPA로 못 바꾼다. 정렬 경계 상황을 만들려면 네이티브로 직접 쓴다
     private void forceCreatedAt(LocalDateTime createdAt, Long... paymentIds) {
         for (Long paymentId : paymentIds) {
             em.createNativeQuery("UPDATE payment SET created_at = :createdAt WHERE id = :id")
