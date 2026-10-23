@@ -10,9 +10,15 @@ import com.recipick.domain.payment.repository.RefundRepository;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,10 +57,31 @@ public class PaymentService {
                 LocalDateTime.now(clock))));
     }
 
-    // 회원 조회용 환불 요약. 한 결제의 환불 행은 많아야 두셋이라 한 번에 읽어 여기서 더한다.
-    // 완료 금액은 COMPLETED 합계다 - 금액 불일치 경로는 PG 청구액으로 적히고 관리자 재처리는 별도 행이라 한 건만 집을 수 없다.
+    // 내 결제 내역. 정렬은 호출자가 넘긴 Pageable이 정한다
+    public Page<Payment> findHistory(Collection<Long> orderIds, Pageable pageable) {
+        return paymentRepository.findByOrderIdIn(orderIds, pageable);
+    }
+
+    // 주문 결제 조회용 단건 요약
     public RefundSummary getRefundSummary(Long paymentId) {
-        List<Refund> refunds = refundRepository.findAllByPaymentIdOrderByIdDesc(paymentId);
+        return summarize(refundRepository.findAllByPaymentIdOrderByIdDesc(paymentId));
+    }
+
+    // 결제 내역용 배치 요약. 결제마다 부르면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 여기서 나눈다.
+    // 환불이 없는 결제는 Map에 키가 없으니 호출자가 NONE으로 채운다
+    public Map<Long, RefundSummary> getRefundSummaries(Collection<Long> paymentIds) {
+        if (paymentIds.isEmpty()) {
+            return Map.of();
+        }
+        return refundRepository.findAllByPaymentIdIn(paymentIds).stream()
+            .collect(Collectors.groupingBy(refund -> refund.getPayment().getId()))
+            .entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> summarize(entry.getValue())));
+    }
+
+    // 완료 금액은 COMPLETED 합계다 — 금액 불일치 경로는 PG 청구액으로 적히고 관리자 재처리는 별도 행이라 한 건만 집을 수 없다.
+    // 최근 상태는 id가 가장 큰 행이다. 배치 조회는 정렬 없이 읽어 오므로 순서에 기대지 않고 여기서 직접 찾는다
+    private RefundSummary summarize(List<Refund> refunds) {
         if (refunds.isEmpty()) {
             return RefundSummary.NONE;
         }
@@ -62,6 +89,10 @@ public class PaymentService {
             .filter(refund -> refund.getStatus() == RefundStatus.COMPLETED)
             .mapToLong(Refund::getAmount)
             .sum();
-        return new RefundSummary(completedAmount, refunds.get(0).getStatus());
+        RefundStatus latestStatus = refunds.stream()
+            .max(Comparator.comparing(Refund::getId))
+            .map(Refund::getStatus)
+            .orElseThrow();
+        return new RefundSummary(completedAmount, latestStatus);
     }
 }
