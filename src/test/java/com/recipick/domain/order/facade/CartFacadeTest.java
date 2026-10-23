@@ -2,6 +2,7 @@ package com.recipick.domain.order.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
@@ -14,6 +15,9 @@ import com.recipick.domain.order.dto.request.CartItemAddRequest;
 import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
 import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
+import com.recipick.domain.order.dto.response.CartItemResponse;
+import com.recipick.domain.order.dto.response.CartItemStatus;
+import com.recipick.domain.order.dto.response.CartResponse;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
@@ -255,6 +259,79 @@ class CartFacadeTest {
         // when, then
         assertUpdateErrorCode(OrderErrorCode.CART_ITEM_NOT_FOUND);
         verify(cartService, never()).updateCartItemQuantity(any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("장바구니 조회: 담은 순서대로 상품 정보·줄 금액·상태와 무료배송 기준을 돌려준다")
+    void getCart() {
+        // given
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(cartService.findAllCartItems(MEMBER_ID))
+                .willReturn(List.of(cartItem(100L, PRODUCT_ID, 2), cartItem(101L, CART_PRODUCT_ID, 1)));
+        given(productService.findProducts(List.of(PRODUCT_ID, CART_PRODUCT_ID))).willReturn(List.of(
+                product(CART_PRODUCT_ID, MART_ID, ProductStatus.SELLING, 0, false),
+                product(PRODUCT_ID, MART_ID, ProductStatus.SELLING, 30, false)));
+
+        // when
+        CartResponse response = cartFacade.getCart(MEMBER_ID);
+
+        // then
+        assertThat(response.items())
+                .extracting(CartItemResponse::cartItemId, CartItemResponse::productId, CartItemResponse::quantity,
+                        CartItemResponse::lineAmount, CartItemResponse::stock, CartItemResponse::status)
+                .containsExactly(
+                        tuple(100L, PRODUCT_ID, 2, 3000L, 30, CartItemStatus.AVAILABLE),
+                        tuple(101L, CART_PRODUCT_ID, 1, 1500L, 0, CartItemStatus.SOLD_OUT));
+        assertThat(response.hasPreviousMartItems()).isFalse();
+        assertThat(response.deliveryPolicy()).isEqualTo(new CartResponse.DeliveryPolicy(40_000L, 3_000L));
+    }
+
+    @Test
+    @DisplayName("장바구니 조회: 이전 마트 상품이 하나라도 있으면 hasPreviousMartItems가 true다")
+    void getCart_hasPreviousMartItems() {
+        // given
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(cartService.findAllCartItems(MEMBER_ID))
+                .willReturn(List.of(cartItem(100L, PRODUCT_ID, 2), cartItem(101L, CART_PRODUCT_ID, 1)));
+        given(productService.findProducts(List.of(PRODUCT_ID, CART_PRODUCT_ID))).willReturn(List.of(
+                product(PRODUCT_ID, MART_ID, ProductStatus.SELLING, 30, false),
+                product(CART_PRODUCT_ID, OTHER_MART_ID, ProductStatus.SELLING, 30, false)));
+
+        // when
+        CartResponse response = cartFacade.getCart(MEMBER_ID);
+
+        // then
+        assertThat(response.items())
+                .extracting(CartItemResponse::status)
+                .containsExactly(CartItemStatus.AVAILABLE, CartItemStatus.PREVIOUS_MART);
+        assertThat(response.hasPreviousMartItems()).isTrue();
+    }
+
+    @Test
+    @DisplayName("장바구니 조회: 비어 있으면 빈 목록과 무료배송 기준을 돌려준다")
+    void getCart_empty() {
+        // given
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(cartService.findAllCartItems(MEMBER_ID)).willReturn(List.of());
+        given(productService.findProducts(List.of())).willReturn(List.of());
+
+        // when
+        CartResponse response = cartFacade.getCart(MEMBER_ID);
+
+        // then
+        assertThat(response.items()).isEmpty();
+        assertThat(response.hasPreviousMartItems()).isFalse();
+        assertThat(response.deliveryPolicy()).isEqualTo(new CartResponse.DeliveryPolicy(40_000L, 3_000L));
+    }
+
+    private CartItem cartItem(Long cartItemId, Long productId, int quantity) {
+        CartItem cartItem = CartItem.builder()
+                .memberId(MEMBER_ID)
+                .productId(productId)
+                .quantity(quantity)
+                .build();
+        ReflectionTestUtils.setField(cartItem, "id", cartItemId);
+        return cartItem;
     }
 
     private void assertErrorCode(ErrorCode errorCode) {
