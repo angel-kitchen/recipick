@@ -111,7 +111,7 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
             Order direction = order.isAscending() ? Order.ASC : Order.DESC;
             switch (order.getProperty()){
                 case "price" -> orders.add(new OrderSpecifier<>(direction, product.price));
-                case "createAt" -> orders.add(new OrderSpecifier<>(direction, product.createdAt));
+                case "createdAt" -> orders.add(new OrderSpecifier<>(direction, product.createdAt));
                 default -> throw new IllegalArgumentException("지원하지 않는 정렬 기준입니다 : " +
                     order.getProperty());
             }
