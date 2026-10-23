@@ -1,6 +1,8 @@
 package com.recipick.domain.member.repository;
 
+import com.recipick.domain.member.dto.MemberMembershipData;
 import com.recipick.domain.member.entity.Membership;
+import com.recipick.domain.member.entity.enums.MembershipType;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +32,20 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             """)
     List<Membership> findMembershipsAt(@Param("memberId") Long memberId,
             @Param("at") LocalDateTime at, Pageable pageable);
+
+    @Query("""
+            SELECT new com.recipick.domain.member.dto.MemberMembershipData(m.member.id, m.type, m.endAt)
+            FROM Membership m
+            WHERE m.member.id IN :memberIds AND m.startAt <= :now AND m.endAt > :now
+              AND m.terminatedAt IS NULL
+            ORDER BY m.startAt DESC, m.id DESC
+            """)
+    List<MemberMembershipData> findActiveMembershipsForMembers(@Param("memberIds") List<Long> memberIds,
+            @Param("now") LocalDateTime now);
+
+    @Query("SELECT DISTINCT m.member.id FROM Membership m WHERE m.member.id IN :memberIds AND m.type = :type")
+    List<Long> findMemberIdsWithTypeHistory(@Param("memberIds") List<Long> memberIds,
+            @Param("type") MembershipType type);
 
     boolean existsByMemberId(Long memberId);
 }
