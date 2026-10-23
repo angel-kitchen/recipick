@@ -1,6 +1,9 @@
 package com.recipick.domain.order.service;
 
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
+import com.recipick.domain.order.dto.request.OrderSearchRequest;
+import com.recipick.domain.order.dto.response.OrderDetailResponse;
+import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.OrderStatusHistory;
@@ -19,6 +22,7 @@ import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
+import com.recipick.global.response.PageResponse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -29,6 +33,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -121,6 +127,25 @@ public class OrderService {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
                 .getMemberId();
+    }
+
+    public PageResponse<OrderSummaryResponse> searchMemberOrders(
+            Long memberId, OrderSearchRequest request, Pageable pageable) {
+        Page<Order> orders = orderRepository.searchByMember(memberId, request.statusGroup(), pageable);
+        // 주문마다 상품을 읽으면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 주문별로 나눈다
+        Map<Long, List<OrderItem>> itemsByOrderId = orderItemRepository.findAllByOrderIdInOrderByIdAsc(
+                        orders.getContent().stream().map(Order::getId).toList()).stream()
+                .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+        return PageResponse.from(orders.map(order ->
+                OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+    }
+
+    // 다른 회원의 주문이면 "그 주문은 있다"를 알리지 않도록 없는 주문과 같이 답한다
+    public OrderDetailResponse getMemberOrder(Long memberId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .filter(found -> found.getMemberId().equals(memberId))
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        return OrderDetailResponse.of(order, findOrderItems(orderId));
     }
 
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다

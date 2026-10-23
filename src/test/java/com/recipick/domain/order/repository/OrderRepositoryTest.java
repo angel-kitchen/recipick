@@ -7,11 +7,20 @@ import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.entity.enums.OrderStatusGroup;
 import jakarta.persistence.EntityManager;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
@@ -82,6 +91,67 @@ class OrderRepositoryTest extends IntegrationTestSupport {
                         tuple("idx_orders_mart_id_mart_status", "mart_id"),
                         tuple("idx_orders_mart_id_mart_status", "mart_status"),
                         tuple("idx_orders_member_id", "member_id"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(OrderStatusGroup.class)
+    @NullSource
+    @DisplayName("회원 주문을 탭 묶음 조건으로 거르고 최신 주문부터 돌려주며 다른 회원 주문은 빼고 돌려준다")
+    void searchByMember(OrderStatusGroup statusGroup) {
+        // given
+        Order pending = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PENDING_PAYMENT, MartStatus.NONE));
+        Order received = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        Order shipping = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.SHIPPING));
+        Order delivered = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.DELIVERED));
+        Order canceled = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.CANCELED, MartStatus.NONE));
+        Order rejected = orderRepository.save(
+                newOrder(MEMBER_ID, OrderStatus.CANCEL_REQUESTED, MartStatus.REJECTED));
+        Order refunded = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.REFUNDED, MartStatus.RECEIVED));
+        orderRepository.save(newOrder(OTHER_MEMBER_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        em.flush();
+        em.clear();
+        Map<OrderStatusGroup, List<Order>> expectedByGroup = new HashMap<>();
+        expectedByGroup.put(null, List.of(refunded, rejected, canceled, delivered, shipping, received, pending));
+        expectedByGroup.put(OrderStatusGroup.ONGOING, List.of(shipping, received, pending));
+        expectedByGroup.put(OrderStatusGroup.DELIVERED, List.of(delivered));
+        expectedByGroup.put(OrderStatusGroup.CANCELED_REFUNDED, List.of(refunded, rejected, canceled));
+
+        // when
+        Page<Order> page = orderRepository.searchByMember(MEMBER_ID, statusGroup, PageRequest.of(0, 20));
+
+        // then
+        assertThat(page.getContent())
+                .extracting(Order::getId)
+                .containsExactlyElementsOf(expectedByGroup.get(statusGroup).stream().map(Order::getId).toList());
+        assertThat(page.getTotalElements()).isEqualTo(expectedByGroup.get(statusGroup).size());
+    }
+
+    @Test
+    @DisplayName("회원 주문을 페이지 크기만큼 자르고 요청한 정렬과 관계없이 id 내림차순으로 돌려준다")
+    void searchByMember_paging() {
+        // given
+        Order first = orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        orderRepository.save(newOrder(MEMBER_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        em.flush();
+        em.clear();
+
+        // when
+        Page<Order> page = orderRepository.searchByMember(
+                MEMBER_ID, null, PageRequest.of(1, 2, Sort.by(Sort.Direction.ASC, "id")));
+
+        // then
+        assertThat(page.getContent()).extracting(Order::getId).containsExactly(first.getId());
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getTotalPages()).isEqualTo(2);
+    }
+
+    private Order newOrder(Long memberId, OrderStatus status, MartStatus martStatus) {
+        return Order.builder()
+                .memberId(memberId)
+                .status(status)
+                .martStatus(martStatus)
+                .build();
     }
 
     private Order newOrder(Long memberId, OrderStatus status) {
