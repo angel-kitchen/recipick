@@ -202,4 +202,21 @@ class AutoCartCalculatorTest {
             .isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.INVALID_PRODUCT_SELECTION));
     }
+
+    @Test
+    @DisplayName("같은 재료가 나뉘어 들어오면 합산한 뒤 한 번만 올림한다")
+    void calculate_mergeSameIngredientBeforeCeiling() {
+        // given
+        ProductSummary tofu300 = product(1001L, "국산콩 두부 300g", "300", 2500L, 10);
+
+        // when
+        List<AutoCartLine> lines = AutoCartCalculator.calculate(List.of(tofu("250"), tofu("250")),
+            Map.of(TOFU_ID, List.of(tofu300)), Map.of(), Map.of());
+
+        // then
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0).ingredient().totalRequiredAmount()).isEqualByComparingTo("500");
+        assertThat(lines.get(0).purchaseQuantity()).isEqualTo(2);
+        assertThat(lines.get(0).linePrice()).isEqualTo(5000L);
+    }
 }
