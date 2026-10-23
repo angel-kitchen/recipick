@@ -129,6 +129,21 @@ class AutoCartCalculatorTest {
     }
 
     @Test
+    @DisplayName("삭제된 상품은 판매 중·재고가 있어도 후보에서 빠진다")
+    void calculate_excludeDeletedProduct() {
+        // given
+        ProductSummary deleted = new ProductSummary(1001L, 1L, "삭제된 두부", null, 1000L, new BigDecimal("300"),
+            SaleUnit.G, ProductStatus.SELLING, 10, true);
+
+        // when
+        AutoCartLine line = calculateOne(tofu("300"), List.of(deleted), Map.of());
+
+        // then
+        assertThat(line.candidates()).isEmpty();
+        assertThat(line.unavailableReason()).isEqualTo(UnavailableReason.NOT_SOLD_IN_MART);
+    }
+
+    @Test
     @DisplayName("판매 중지·품절 상품만 있으면 그 사유로 구매 불가 처리한다")
     void calculate_stoppedAndSoldOut() {
         // given
@@ -210,13 +225,13 @@ class AutoCartCalculatorTest {
         ProductSummary tofu300 = product(1001L, "국산콩 두부 300g", "300", 2500L, 10);
 
         // when
-        List<AutoCartLine> lines = AutoCartCalculator.calculate(List.of(tofu("250"), tofu("250")),
+        List<AutoCartLine> lines = AutoCartCalculator.calculate(List.of(tofu("100"), tofu("100")),
             Map.of(TOFU_ID, List.of(tofu300)), Map.of(), Map.of());
 
         // then
         assertThat(lines).hasSize(1);
-        assertThat(lines.get(0).ingredient().totalRequiredAmount()).isEqualByComparingTo("500");
-        assertThat(lines.get(0).purchaseQuantity()).isEqualTo(2);
-        assertThat(lines.get(0).linePrice()).isEqualTo(5000L);
+        assertThat(lines.get(0).ingredient().totalRequiredAmount()).isEqualByComparingTo("200");
+        assertThat(lines.get(0).purchaseQuantity()).isEqualTo(1);
+        assertThat(lines.get(0).linePrice()).isEqualTo(2500L);
     }
 }
