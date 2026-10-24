@@ -27,7 +27,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 class OrderAcceptConcurrencyTest extends IntegrationTestSupport {
 
-    private static final Long MART_ID = 3L;
+    // data.sql의 시연 마트(삼청 마트). 주문 ID로만 조회하므로 다른 테스트와 격리할 필요가 없다
+    private static final Long MART_ID = 1L;
     private static final Long ADMIN_ID = 20L;
 
     @Autowired

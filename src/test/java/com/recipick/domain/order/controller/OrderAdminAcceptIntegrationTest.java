@@ -20,9 +20,7 @@ import com.recipick.global.security.SubjectType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +32,9 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     private static final Long SUPER_ADMIN_ID = 1L;
     private static final Long MART_ADMIN_ID = 2L;
     private static final Long MEMBER_ID = 7L;
+    // data.sql의 시연 마트 둘(삼청 마트, 하안 마트). 주문 ID로만 조회하므로 다른 테스트와 격리할 필요가 없다
+    private static final Long MART_A = 1L;
+    private static final Long MART_B = 2L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -46,15 +47,7 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private OrderStatusHistoryRepository historyRepository;
 
-    private Long martA;
-    private Long martB;
     private final List<Order> orders = new ArrayList<>();
-
-    @BeforeEach
-    void setUp() {
-        martA = ThreadLocalRandom.current().nextLong(1_000_000L, 2_000_000L);
-        martB = martA + 1;
-    }
 
     @AfterEach
     void cleanUp() {
@@ -68,10 +61,10 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("MART_ADMIN이 접수중인 본인 마트 주문을 수락하면 배송준비중이 되고 처리 관리자가 담긴 마트 주체 이력이 남는다")
     void acceptOrder_martAdmin() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.PAID, MartStatus.RECEIVED);
+        Order order = order(MART_A, OrderStatus.PAID, MartStatus.RECEIVED);
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -97,11 +90,11 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("같은 주문을 다시 수락하면 200으로 현재 상태를 돌려주고 이력은 늘지 않는다")
     void acceptOrder_repeated() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.PAID, MartStatus.RECEIVED);
-        accept(order.getId(), martAdminToken(martA));
+        Order order = order(MART_A, OrderStatus.PAID, MartStatus.RECEIVED);
+        accept(order.getId(), martAdminToken(MART_A));
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -113,7 +106,7 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("SUPER_ADMIN은 어느 마트의 주문이든 수락할 수 있고 처리 관리자로 기록된다")
     void acceptOrder_superAdmin() throws Exception {
         // given
-        Order order = order(martB, OrderStatus.PAID, MartStatus.RECEIVED);
+        Order order = order(MART_B, OrderStatus.PAID, MartStatus.RECEIVED);
 
         // when
         MockHttpServletResponse response = accept(order.getId(), superToken());
@@ -129,10 +122,10 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("MART_ADMIN이 다른 마트 주문을 수락하면 403 AUTH-005로 거절하고 상태는 그대로다")
     void acceptOrder_otherMart() throws Exception {
         // given
-        Order order = order(martB, OrderStatus.PAID, MartStatus.RECEIVED);
+        Order order = order(MART_B, OrderStatus.PAID, MartStatus.RECEIVED);
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(403);
@@ -145,10 +138,10 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("회원 취소가 진행 중인 주문을 수락하면 409 ORDER-014로 거절한다")
     void acceptOrder_cancelRequested() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.CANCEL_REQUESTED, MartStatus.RECEIVED);
+        Order order = order(MART_A, OrderStatus.CANCEL_REQUESTED, MartStatus.RECEIVED);
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(409);
@@ -160,10 +153,10 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("이미 배송 중인 주문을 수락하면 409 ORDER-014로 거절한다")
     void acceptOrder_shipping() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.PAID, MartStatus.SHIPPING);
+        Order order = order(MART_A, OrderStatus.PAID, MartStatus.SHIPPING);
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(409);
@@ -174,10 +167,10 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("결제 전 주문을 수락하면 없는 주문과 같이 404 ORDER-012로 응답한다")
     void acceptOrder_pendingOrder() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
+        Order order = order(MART_A, OrderStatus.PENDING_PAYMENT, MartStatus.NONE);
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), martAdminToken(martA));
+        MockHttpServletResponse response = accept(order.getId(), martAdminToken(MART_A));
 
         // then
         assertThat(response.getStatus()).isEqualTo(404);
@@ -199,7 +192,7 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     @DisplayName("회원 토큰으로 수락하면 403 AUTH-004로 거절한다")
     void acceptOrder_memberToken() throws Exception {
         // given
-        Order order = order(martA, OrderStatus.PAID, MartStatus.RECEIVED);
+        Order order = order(MART_A, OrderStatus.PAID, MartStatus.RECEIVED);
 
         // when
         MockHttpServletResponse response = accept(order.getId(), tokens.createMemberTokens(MEMBER_ID).accessToken());

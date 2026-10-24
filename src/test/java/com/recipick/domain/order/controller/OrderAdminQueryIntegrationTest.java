@@ -52,7 +52,8 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private OrderStatusHistoryRepository historyRepository;
 
-    // 다른 테스트가 남긴 주문과 섞이지 않도록 마트 ID를 실행마다 새로 뽑는다
+    // 마트별 목록을 정확히 비교해야 해서 다른 테스트가 남긴 주문과 섞이지 않도록 마트 ID를 실행마다 새로 뽑는다.
+    // ORDERS.mart_id에 FK가 없어 MART에 없는 ID도 저장되며, 마트 존재 여부는 이 테스트의 관심사가 아니다
     private Long martA;
     private Long martB;
     private final List<Order> orders = new ArrayList<>();
