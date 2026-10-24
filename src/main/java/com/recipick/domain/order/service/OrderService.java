@@ -7,6 +7,7 @@ import com.recipick.domain.order.dto.request.OrderSearchRequest;
 import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
 import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
 import com.recipick.domain.order.dto.response.OrderDetailResponse;
+import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
 import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
@@ -171,11 +172,31 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .filter(found -> found.getMartStatus() != MartStatus.NONE)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
-        if (role == AdminRole.MART_ADMIN && !order.getMartId().equals(adminMartId)) {
-            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
-        }
+        verifyMartScope(role, adminMartId, order);
         return OrderAdminDetailResponse.of(order, findOrderItems(orderId),
                 orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
+    }
+
+    // 주문 행만 잠근다. 회원 취소는 결제 → 주문 순서로 잠그므로 교착이 없고, 잠근 뒤 상태를 보므로 둘 중 하나만 성공한다
+    @Transactional
+    public OrderMartStatusResponse acceptByMart(AdminRole role, Long adminMartId, Long adminId, Long orderId) {
+        Order order = getOrderForUpdate(orderId);
+        // 결제 전 주문은 관리자 조회와 같이 없는 주문으로 답한다
+        if (order.getMartStatus() == MartStatus.NONE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        verifyMartScope(role, adminMartId, order);
+        // 같은 수락 요청이 반복되면 처음 결과를 그대로 돌려준다
+        if (order.getStatus() == OrderStatus.PAID && order.getMartStatus() == MartStatus.PREPARING) {
+            return OrderMartStatusResponse.from(order);
+        }
+
+        MartStatus fromMartStatus = order.getMartStatus();
+        order.acceptByMart();
+
+        orderStatusHistoryRepository.save(martHistory(
+                order, fromMartStatus.name(), order.getMartStatus().name(), adminId));
+        return OrderMartStatusResponse.from(order);
     }
 
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
@@ -320,6 +341,13 @@ public class OrderService {
         return requestedMartId;
     }
 
+    // 상품 도메인 관리자 API와 같은 규칙이다. MART_ADMIN은 소속 마트 주문만 다룬다
+    private void verifyMartScope(AdminRole role, Long adminMartId, Order order) {
+        if (role == AdminRole.MART_ADMIN && !order.getMartId().equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+    }
+
     private Order getOrderForUpdate(Long orderId) {
         return orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
@@ -328,6 +356,18 @@ public class OrderService {
     private OrderStatusHistory systemHistory(
             Order order, OrderStatusType statusType, String from, String to, String reason) {
         return history(order, statusType, from, to, OrderStatusActor.SYSTEM, reason);
+    }
+
+    // 마트 처리는 슈퍼 관리자가 대신해도 주체는 마트다. 누가 처리했는지는 changedByAdminId로 남긴다
+    private OrderStatusHistory martHistory(Order order, String from, String to, Long adminId) {
+        return OrderStatusHistory.builder()
+                .order(order)
+                .statusType(OrderStatusType.MART)
+                .fromStatus(from)
+                .toStatus(to)
+                .actor(OrderStatusActor.MART)
+                .changedByAdminId(adminId)
+                .build();
     }
 
     private OrderStatusHistory history(

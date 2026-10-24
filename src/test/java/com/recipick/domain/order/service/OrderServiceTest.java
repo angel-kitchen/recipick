@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
+import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.OrderStatusHistory;
@@ -355,6 +356,91 @@ class OrderServiceTest {
         Order order = paidOrder(MartStatus.RECEIVED);
         order.requestMemberCancel("단순 변심");
         return order;
+    }
+
+    @Test
+    @DisplayName("접수중인 결제 완료 주문을 수락하면 배송준비중으로 바꾸고 처리 관리자가 담긴 마트 주체 이력을 남긴다")
+    void acceptByMart() {
+        // given
+        Order order = receivedOrder(3L);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        OrderMartStatusResponse response = orderService.acceptByMart(AdminRole.MART_ADMIN, 3L, 20L, 1L);
+
+        // then
+        assertThat(response.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(response.martStatus()).isEqualTo(MartStatus.PREPARING);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.PREPARING);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        OrderStatusHistory history = historyCaptor.getValue();
+        assertThat(history.getStatusType()).isEqualTo(OrderStatusType.MART);
+        assertThat(history.getFromStatus()).isEqualTo("RECEIVED");
+        assertThat(history.getToStatus()).isEqualTo("PREPARING");
+        assertThat(history.getActor()).isEqualTo(OrderStatusActor.MART);
+        assertThat(history.getChangedByAdminId()).isEqualTo(20L);
+        assertThat(history.getReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 수락된 주문에 수락이 다시 오면 이력을 남기지 않고 현재 상태를 돌려준다")
+    void acceptByMart_alreadyPreparing() {
+        // given
+        Order order = receivedOrder(3L);
+        order.acceptByMart();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        OrderMartStatusResponse response = orderService.acceptByMart(AdminRole.SUPER_ADMIN, null, 10L, 1L);
+
+        // then
+        assertThat(response.martStatus()).isEqualTo(MartStatus.PREPARING);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("MART_ADMIN이 다른 마트 주문을 수락하면 소속 마트 데이터만 처리할 수 있다는 오류가 나고 상태는 그대로다")
+    void acceptByMart_otherMart() {
+        // given
+        Order order = receivedOrder(3L);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.acceptByMart(AdminRole.MART_ADMIN, 4L, 20L, 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회원 취소가 진행 중인 주문을 수락하면 수락할 수 없다는 오류가 난다")
+    void acceptByMart_cancelRequested() {
+        // given
+        Order order = receivedOrder(3L);
+        order.requestMemberCancel("단순 변심");
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.acceptByMart(AdminRole.MART_ADMIN, 3L, 20L, 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("결제 전 주문을 수락하면 주문을 찾을 수 없다는 오류가 난다")
+    void acceptByMart_pendingOrder() {
+        // given
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(pendingOrder()));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.acceptByMart(AdminRole.SUPER_ADMIN, null, 10L, 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
     }
 
     @Test
