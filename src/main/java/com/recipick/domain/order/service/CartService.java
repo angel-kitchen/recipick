@@ -11,6 +11,7 @@ import com.recipick.domain.order.repository.CartItemRepository;
 import com.recipick.global.common.TimeConstants;
 import com.recipick.global.exception.BusinessException;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -32,6 +33,14 @@ public class CartService {
 
     public List<Long> findProductIds(Long memberId) {
         return cartItemRepository.findProductIdsByMemberId(memberId);
+    }
+
+    public Map<Long, Integer> findQuantities(Long memberId, Collection<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return cartItemRepository.findAllByMemberIdAndProductIdIn(memberId, productIds).stream()
+            .collect(Collectors.toMap(CartItem::getProductId, CartItem::getQuantity));
     }
 
     // 상품 판매 가능 여부·마트 검증은 호출하는 Facade가 끝낸 뒤 들어온다.
