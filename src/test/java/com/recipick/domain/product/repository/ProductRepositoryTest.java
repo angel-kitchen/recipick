@@ -8,6 +8,7 @@ import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
+import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -224,5 +226,109 @@ class ProductRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("자기 자신을 제외한 중복 검사 : 같은 이름의 자기 자신은 중복이 아니다")
+    void existsDuplicateExcludingSelf_self() {
+        // given
+        Product zucchini = productRepository.findAll().stream()
+            .filter(p -> p.getName().equals("애호박") && p.getMart().getId().equals(martA.getId()))
+            .findFirst().orElseThrow();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(
+            martA.getId(), "애호박", null, zucchini.getId());
+
+        // then
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @DisplayName("자기 자신을 제외한 중복 검사 : 다른 상품과 이름이 같으면 중복이다")
+    void existsDuplicateExcludingSelf_other() {
+        // given
+        Product pepper = productRepository.findAll().stream()
+            .filter(p -> p.getName().equals("청양고추") && p.getMart().getId().equals(martA.getId()))
+            .findFirst().orElseThrow();
+
+        // when
+        boolean exists = productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(
+            martA.getId(), "애호박", null, pepper.getId());
+
+        // then
+        assertThat(exists).isTrue();
+    }
+
+    private void changePrice(String name, Long price) {
+        productRepository.findAll().stream()
+            .filter(p -> p.getName().equals(name))
+            .forEach(p -> p.changePrice(price));
+        em.flush();
+        em.clear();
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 이용 마트의 삭제되지 않은 상품만 조회된다")
+    void searchMemberProducts_martAndDeleted() {
+        // given
+        MemberProductSearchCondition condition =
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null);
+
+        // when
+        Page<Product> result = productRepository.searchMemberProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getTotalElements()).isEqualTo(3);
+        assertThat(result.getContent()).extracting(Product::getName)
+            .containsExactlyInAnyOrder("애호박", "청양고추", "삼겹살");
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 키워드·카테고리·가격 범위로 필터링한다")
+    void searchMemberProducts_filters() {
+        // given
+        changePrice("애호박", 3000L);
+        changePrice("청양고추", 1000L);
+        changePrice("삼겹살", 2000L);
+
+        // when
+        Page<Product> byKeyword = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), "호박", null, null, null), PageRequest.of(0, 20));
+        Page<Product> byCategory = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, meat.getId(), null, null), PageRequest.of(0, 20));
+        Page<Product> byPrice = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, 1500L, 2500L), PageRequest.of(0, 20));
+
+        // then
+        assertThat(byKeyword.getContent()).extracting(Product::getName).containsExactly("애호박");
+        assertThat(byCategory.getContent()).extracting(Product::getName).containsExactly("삼겹살");
+        assertThat(byPrice.getContent()).extracting(Product::getName).containsExactly("삼겹살");
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 가격순 정렬과 기본 최신순 정렬")
+    void searchMemberProducts_sort() {
+        // given
+        changePrice("애호박", 3000L);
+        changePrice("청양고추", 1000L);
+        changePrice("삼겹살", 2000L);
+        MemberProductSearchCondition condition =
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null);
+
+        // when
+        Page<Product> asc = productRepository.searchMemberProducts(
+            condition, PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "price")));
+        Page<Product> desc = productRepository.searchMemberProducts(
+            condition, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "price")));
+        Page<Product> latest = productRepository.searchMemberProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(asc.getContent()).extracting(Product::getName)
+            .containsExactly("청양고추", "삼겹살", "애호박");
+        assertThat(desc.getContent()).extracting(Product::getName)
+            .containsExactly("애호박", "삼겹살", "청양고추");
+        assertThat(latest.getContent()).extracting(Product::getName)
+            .containsExactly("삼겹살", "청양고추", "애호박");
     }
 }

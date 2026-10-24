@@ -4,8 +4,11 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductCreateRequest;
 import com.recipick.domain.product.dto.ProductIdResponse;
+import com.recipick.domain.product.dto.ProductPriceResponse;
+import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
 import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.ProductUpdateRequest;
 import com.recipick.domain.product.facade.ProductAdminFacade;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
 import com.recipick.domain.product.service.ProductService;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,6 +60,28 @@ public class ProductAdminController {
             AdminRole.valueOf(principal.role()), principal.martId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.success("등록되었습니다.", response));
+    }
+
+    @PutMapping("/{productId}")
+    public ResponseEntity<ApiResponse<ProductIdResponse>> updateProduct(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long productId,
+        @Valid @RequestBody ProductUpdateRequest request
+        ){
+        ProductIdResponse response = productAdminFacade.updateProduct(
+            AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
+        return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
+    }
+
+    @PatchMapping("/{productId}/price")
+    public ResponseEntity<ApiResponse<ProductPriceResponse>> updatePrice(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long productId,
+        @Valid @RequestBody ProductPriceUpdateRequest request
+        ){
+        ProductPriceResponse response = productService.updatePrice(
+            AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
+        return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
     }
 
     @PatchMapping("/{productId}/status")

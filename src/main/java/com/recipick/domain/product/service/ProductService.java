@@ -2,9 +2,15 @@ package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.ProductCreateRequest;
+import com.recipick.domain.product.dto.ProductDetailResponse;
 import com.recipick.domain.product.dto.ProductIdResponse;
+import com.recipick.domain.product.dto.ProductPriceResponse;
+import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.ProductSearchRequest;
+import com.recipick.domain.product.dto.ProductSearchResponse;
 import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.ProductUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -16,15 +22,20 @@ import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.dto.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
+import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,12 +75,12 @@ public class ProductService {
         Long adminMartId,
         Long productId,
         ProductStatusUpdateRequest request
-    ){
+    ) {
         Product product = productRepository.findByIdForUpdate(productId)
             .filter(p -> !p.isDeleted())
             .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
-        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+        if (role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)) {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
 
@@ -78,12 +89,12 @@ public class ProductService {
     }
 
     @Transactional
-    public void deleteProduct(AdminRole role, Long adminMartId, Long productId){
+    public void deleteProduct(AdminRole role, Long adminMartId, Long productId) {
         Product product = productRepository.findByIdForUpdate(productId)
             .filter(p -> !p.isDeleted())
             .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
-        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+        if (role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)) {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
 
@@ -110,15 +121,15 @@ public class ProductService {
             .collect(Collectors.toMap(ProductMartId::getProductId, ProductMartId::getMartId));
     }
 
-    private Long resolveMartId(AdminRole role, Long adminMartId, Long requestedMartId){
-        if (role == AdminRole.MART_ADMIN){
-            if(requestedMartId != null && !requestedMartId.equals(adminMartId)){
+    private Long resolveMartId(AdminRole role, Long adminMartId, Long requestedMartId) {
+        if (role == AdminRole.MART_ADMIN) {
+            if (requestedMartId != null && !requestedMartId.equals(adminMartId)) {
                 throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
             }
             return adminMartId;
         }
 
-        if(requestedMartId != null && !martRepository.existsById(requestedMartId)){
+        if (requestedMartId != null && !martRepository.existsById(requestedMartId)) {
             throw new BusinessException(ProductErrorCode.MART_NOT_FOUND);
         }
         return requestedMartId;
@@ -170,4 +181,95 @@ public class ProductService {
         return new ProductIdResponse(productRepository.save(product).getId());
     }
 
+    @Transactional
+    public ProductIdResponse updateProduct(
+        AdminRole role,
+        Long adminMartId,
+        Long productId,
+        ProductUpdateRequest request,
+        SaleUnit ingredientUnit
+    ) {
+        Product product = getProductForUpdate(role, adminMartId, productId);
+
+        if (request.saleUnitAmount().signum() <= 0) {
+            throw new BusinessException(ProductErrorCode.INVALID_SALE_UNIT);
+        }
+
+        Category category = categoryRepository.findById(request.categoryId())
+            .filter(c -> !c.isDeleted())
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
+
+        if (ingredientUnit != null && ingredientUnit != request.saleUnit()) {
+            throw new BusinessException(ProductErrorCode.UNIT_MISMATCH);
+        }
+
+        boolean nameOrBrandChanged = !Objects.equals(product.getName(), request.name()) ||
+            !Objects.equals(product.getBrand(), request.brand());
+        if (nameOrBrandChanged) {
+            martRepository.findByIdForUpdate(product.getMart().getId());
+            if (productRepository.existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(
+                product.getMart().getId(), request.name(), request.brand(), productId)) {
+                throw new BusinessException(ProductErrorCode.PRODUCT_NAME_DUPLICATED);
+            }
+        }
+
+        product.updateInfo(category, request.ingredientId(), request.name(), request.brand(),
+            request.description(), request.saleUnitAmount(), request.saleUnit(), request.imageUrl());
+        return new ProductIdResponse(product.getId());
+    }
+
+    @Transactional
+    public ProductPriceResponse updatePrice(
+        AdminRole role,
+        Long adminMartId,
+        Long productId,
+        ProductPriceUpdateRequest request
+    ) {
+        Product product = getProductForUpdate(role, adminMartId, productId);
+        product.changePrice(request.price());
+        return ProductPriceResponse.from(product);
+    }
+
+    private Product getProductForUpdate(AdminRole role, Long adminMartId, Long productId) {
+        Product product = productRepository.findByIdForUpdate(productId)
+            .filter(p -> !p.isDeleted())
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        if (role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+        return product;
+    }
+
+    private static final Set<String> SEARCH_SORT_PROPERTIES = Set.of("price", "createdAt");
+
+    public PageResponse<ProductSearchResponse> searchProducts(
+        Long martId,
+        ProductSearchRequest request,
+        Pageable pageable
+    ) {
+        if (request.minPrice() != null && request.maxPrice() != null
+            && request.minPrice() > request.maxPrice()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SEARCH_SORT_PROPERTIES.contains(order.getProperty())) {
+                throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+            }
+        }
+
+        MemberProductSearchCondition condition = new MemberProductSearchCondition(
+            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice());
+        return PageResponse.from(
+            productRepository.searchMemberProducts(condition, pageable)
+                .map(ProductSearchResponse::from)
+        );
+    }
+
+    public ProductDetailResponse getProduct(Long martId, Long productId) {
+        Product product = productRepository.findById(productId)
+            .filter(p -> !p.isDeleted() && p.getMart().getId().equals(martId))
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return ProductDetailResponse.from(product);
+    }
 }
