@@ -23,8 +23,20 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
     // 정렬은 요청의 sort와 관계없이 id 내림차순으로 고정한다. (member_id) 인덱스 끝에 PK가 붙어 인덱스 순서로 읽힌다
     @Override
     public Page<Order> searchByMember(Long memberId, OrderStatusGroup statusGroup, Pageable pageable) {
-        BooleanExpression[] where = {order.memberId.eq(memberId), statusGroupEq(statusGroup)};
+        return pageByIdDesc(pageable, order.memberId.eq(memberId), statusGroupEq(statusGroup));
+    }
 
+    // 결제 전(NONE) 주문은 마트가 처리할 대상이 아니라 항상 뺀다. martId가 null이면 전체 마트다.
+    // (mart_id, mart_status) 인덱스 끝에 PK가 붙어 인덱스 순서로 읽힌다
+    @Override
+    public Page<Order> searchByMart(Long martId, MartStatus martStatus, Pageable pageable) {
+        return pageByIdDesc(pageable,
+                martId == null ? null : order.martId.eq(martId),
+                martStatus == null ? null : order.martStatus.eq(martStatus),
+                order.martStatus.ne(MartStatus.NONE));
+    }
+
+    private Page<Order> pageByIdDesc(Pageable pageable, BooleanExpression... where) {
         List<Order> content = queryFactory
                 .selectFrom(order)
                 .where(where)
