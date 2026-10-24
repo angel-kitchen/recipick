@@ -201,6 +201,18 @@ public class Order extends BaseTimeEntity {
         this.cancelReasonDetail = reasonDetail;
     }
 
+    // 마트는 접수중인 결제 완료 주문만 수락한다. 취소 진행 중·종료된 주문과 이미 준비를 시작한 주문은 수락 대상이 아니다
+    public boolean isAcceptableByMart() {
+        return status == OrderStatus.PAID && martStatus.canTransitionTo(MartStatus.PREPARING);
+    }
+
+    public void acceptByMart() {
+        if (!isAcceptableByMart()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
+        }
+        this.martStatus = MartStatus.PREPARING;
+    }
+
     public void restorePaidAfterMemberCancelFailure() {
         // 마트 거절은 이미 처리할 수 없다고 판정됐으므로 PG 취소가 실패해도 정상 주문으로 되돌리지 않는다
         if (cancelReasonCode != CancelReasonCode.MEMBER_CANCELED || !status.canTransitionTo(OrderStatus.PAID)) {

@@ -28,6 +28,7 @@ class OrderRepositoryTest extends IntegrationTestSupport {
 
     private static final Long MEMBER_ID = 1L;
     private static final Long OTHER_MEMBER_ID = 2L;
+    // 마트별 목록을 정확히 비교하려고 시연 마트(1, 2)와 겹치지 않는 ID를 쓴다. mart_id에 FK가 없어 저장된다
     private static final Long MART_ID = 910L;
     private static final Long OTHER_MART_ID = 911L;
 

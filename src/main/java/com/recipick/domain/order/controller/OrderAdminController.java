@@ -4,6 +4,7 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
 import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
 import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
+import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
@@ -15,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +45,14 @@ public class OrderAdminController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getAdminOrder(
                 AdminRole.valueOf(principal.role()), principal.martId(), orderId)));
+    }
+
+    @PostMapping("/{orderId}/accept")
+    public ResponseEntity<ApiResponse<OrderMartStatusResponse>> acceptOrder(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.acceptByMart(
+                AdminRole.valueOf(principal.role()), principal.martId(), principal.id(), orderId)));
     }
 }
