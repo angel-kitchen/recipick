@@ -184,6 +184,60 @@ class OrderTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "PAID, RECEIVED, true",
+            "PAID, PREPARING, false",
+            "PAID, SHIPPING, false",
+            "PAID, DELIVERED, false",
+            "CANCEL_REQUESTED, RECEIVED, false",
+            "CANCEL_REQUESTED, REJECTED, false",
+            "REFUNDED, RECEIVED, false",
+            "PENDING_PAYMENT, NONE, false"
+    })
+    @DisplayName("결제 완료이면서 마트가 접수중일 때만 마트가 수락할 수 있다")
+    void isAcceptableByMart(OrderStatus status, MartStatus martStatus, boolean expected) {
+        // given
+        Order order = order(status, martStatus);
+
+        // when
+        boolean acceptable = order.isAcceptableByMart();
+
+        // then
+        assertThat(acceptable).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("마트가 수락하면 마트 처리 상태만 배송준비중이 되고 주문 상태는 결제 완료로 남는다")
+    void acceptByMart() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+
+        // when
+        order.acceptByMart();
+
+        // then
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.PREPARING);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getCancelReasonCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원 취소가 진행 중인 주문은 수락할 수 없고 상태도 그대로다")
+    void acceptByMart_cancelRequested() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.requestMemberCancel("단순 변심");
+
+        // when, then
+        assertThatThrownBy(order::acceptByMart)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
+    }
+
     @Test
     @DisplayName("회원 취소가 실패해 결제 완료로 되돌리면 취소 사유와 상세가 비워진다")
     void restorePaidAfterMemberCancelFailure() {
