@@ -1,7 +1,10 @@
 package com.recipick.domain.order.service;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.request.OrderSearchRequest;
+import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
 import com.recipick.domain.order.dto.response.OrderDetailResponse;
 import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.entity.Order;
@@ -19,6 +22,7 @@ import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockQuantity;
+import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
@@ -137,12 +141,20 @@ public class OrderService {
     public PageResponse<OrderSummaryResponse> searchMemberOrders(
             Long memberId, OrderSearchRequest request, Pageable pageable) {
         Page<Order> orders = orderRepository.searchByMember(memberId, request.statusGroup(), pageable);
-        // 주문마다 상품을 읽으면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 주문별로 나눈다
-        Map<Long, List<OrderItem>> itemsByOrderId = orderItemRepository.findAllByOrderIdInOrderByIdAsc(
-                        orders.getContent().stream().map(Order::getId).toList()).stream()
-                .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+        Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
         return PageResponse.from(orders.map(order ->
                 OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+    }
+
+    // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
+    // 없는 마트 ID는 다른 도메인을 조회하지 않고 빈 목록으로 답한다
+    public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
+            AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
+        Long martId = resolveMartId(role, adminMartId, request.martId());
+        Page<Order> orders = orderRepository.searchByMart(martId, request.martStatus(), pageable);
+        Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
+        return PageResponse.from(orders.map(order ->
+                OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
     }
 
     // 다른 회원의 주문이면 "그 주문은 있다"를 알리지 않도록 없는 주문과 같이 답한다
@@ -275,6 +287,24 @@ public class OrderService {
             return CommonErrorCode.DUPLICATE_REQUEST_IN_PROGRESS;
         }
         return OrderErrorCode.PENDING_ORDER_EXISTS;
+    }
+
+    // 주문마다 상품을 읽으면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 주문별로 나눈다
+    private Map<Long, List<OrderItem>> itemsByOrderId(List<Order> orders) {
+        return orderItemRepository.findAllByOrderIdInOrderByIdAsc(orders.stream().map(Order::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+    }
+
+    // 상품 도메인 관리자 API(ProductService.resolveMartId)와 같은 규칙이다. 다른 마트를 지정하면 403으로 거절한다
+    private Long resolveMartId(AdminRole role, Long adminMartId, Long requestedMartId) {
+        if (role == AdminRole.MART_ADMIN) {
+            if (requestedMartId != null && !requestedMartId.equals(adminMartId)) {
+                throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+            }
+            return adminMartId;
+        }
+        return requestedMartId;
     }
 
     private Order getOrderForUpdate(Long orderId) {

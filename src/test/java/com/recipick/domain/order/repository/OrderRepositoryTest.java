@@ -28,6 +28,8 @@ class OrderRepositoryTest extends IntegrationTestSupport {
 
     private static final Long MEMBER_ID = 1L;
     private static final Long OTHER_MEMBER_ID = 2L;
+    private static final Long MART_ID = 910L;
+    private static final Long OTHER_MART_ID = 911L;
 
     @Autowired
     OrderRepository orderRepository;
@@ -144,6 +146,56 @@ class OrderRepositoryTest extends IntegrationTestSupport {
         assertThat(page.getContent()).extracting(Order::getId).containsExactly(first.getId());
         assertThat(page.getTotalElements()).isEqualTo(3);
         assertThat(page.getTotalPages()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("마트 주문을 처리 상태로 거르고 최신 주문부터 돌려주며 결제 전 주문과 다른 마트 주문은 빼고 돌려준다")
+    void searchByMart() {
+        // given
+        Order received = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        Order preparing = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PAID, MartStatus.PREPARING));
+        orderRepository.save(newMartOrder(MART_ID, OrderStatus.PENDING_PAYMENT, MartStatus.NONE));
+        orderRepository.save(newMartOrder(OTHER_MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        em.flush();
+        em.clear();
+
+        // when
+        Page<Order> all = orderRepository.searchByMart(MART_ID, null, PageRequest.of(0, 20));
+        Page<Order> preparingOnly = orderRepository.searchByMart(MART_ID, MartStatus.PREPARING, PageRequest.of(0, 20));
+
+        // then
+        assertThat(all.getContent()).extracting(Order::getId).containsExactly(preparing.getId(), received.getId());
+        assertThat(all.getTotalElements()).isEqualTo(2);
+        assertThat(preparingOnly.getContent()).extracting(Order::getId).containsExactly(preparing.getId());
+        assertThat(preparingOnly.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("마트 ID 없이 조회하면 전체 마트의 결제 후 주문을 최신 주문부터 돌려준다")
+    void searchByMart_allMarts() {
+        // given
+        Order mine = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        Order others = orderRepository.save(newMartOrder(OTHER_MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        Order pending = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PENDING_PAYMENT, MartStatus.NONE));
+        em.flush();
+        em.clear();
+
+        // when
+        Page<Order> page = orderRepository.searchByMart(null, null, PageRequest.of(0, 100));
+
+        // then
+        assertThat(page.getContent()).extracting(Order::getId)
+                .containsSubsequence(others.getId(), mine.getId())
+                .doesNotContain(pending.getId());
+    }
+
+    private Order newMartOrder(Long martId, OrderStatus status, MartStatus martStatus) {
+        return Order.builder()
+                .memberId(MEMBER_ID)
+                .martId(martId)
+                .status(status)
+                .martStatus(martStatus)
+                .build();
     }
 
     private Order newOrder(Long memberId, OrderStatus status, MartStatus martStatus) {
