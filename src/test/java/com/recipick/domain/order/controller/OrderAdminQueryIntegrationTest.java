@@ -8,10 +8,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
+import com.recipick.domain.order.entity.OrderStatusHistory;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.entity.enums.OrderStatusActor;
+import com.recipick.domain.order.entity.enums.OrderStatusType;
 import com.recipick.domain.order.repository.OrderItemRepository;
 import com.recipick.domain.order.repository.OrderRepository;
+import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.security.AuthPrincipal;
 import com.recipick.global.security.JwtTokenProvider;
@@ -45,12 +49,15 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     private OrderRepository orderRepository;
     @Autowired
     private OrderItemRepository orderItemRepository;
+    @Autowired
+    private OrderStatusHistoryRepository historyRepository;
 
     // 다른 테스트가 남긴 주문과 섞이지 않도록 마트 ID를 실행마다 새로 뽑는다
     private Long martA;
     private Long martB;
     private final List<Order> orders = new ArrayList<>();
     private final List<OrderItem> orderItems = new ArrayList<>();
+    private final List<OrderStatusHistory> histories = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -60,6 +67,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        historyRepository.deleteAll(histories);
         orderItemRepository.deleteAll(orderItems);
         orderRepository.deleteAll(orders);
     }
@@ -204,6 +212,112 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
         assertThat(response.getStatus()).isEqualTo(400);
     }
 
+    @Test
+    @DisplayName("SUPER_ADMIN은 주문 상세를 회원·마트 ID, 상품, 배송지, 상태 변경 이력(오래된 순)과 함께 돌려준다")
+    void getOrder_superAdmin() throws Exception {
+        // given
+        Order order = order(martA, OrderStatus.PAID, MartStatus.PREPARING, "애호박", "두부");
+        history(order, OrderStatusType.ORDER, "PENDING_PAYMENT", "PAID", OrderStatusActor.SYSTEM, null, null);
+        history(order, OrderStatusType.MART, "NONE", "RECEIVED", OrderStatusActor.SYSTEM, null, null);
+        history(order, OrderStatusType.MART, "RECEIVED", "PREPARING", OrderStatusActor.MART, MART_ADMIN_ID, "수락");
+
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + order.getId(), superToken());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        JsonNode data = data(response);
+        assertThat(data.path("orderId").asLong()).isEqualTo(order.getId());
+        assertThat(data.path("orderNumber").asText()).isEqualTo(order.getOrderNumber());
+        assertThat(data.path("createdAt").asText()).endsWith("+09:00");
+        assertThat(data.path("status").asText()).isEqualTo("PAID");
+        assertThat(data.path("martStatus").asText()).isEqualTo("PREPARING");
+        assertThat(data.path("memberId").asLong()).isEqualTo(MEMBER_ID);
+        assertThat(data.path("martId").asLong()).isEqualTo(martA);
+        assertThat(data.path("orderName").asText()).isEqualTo("애호박 외 1건");
+        assertThat(data.path("items").findValuesAsText("productName")).containsExactly("애호박", "두부");
+        JsonNode item = data.path("items").get(0);
+        assertThat(item.path("unitPrice").asLong()).isEqualTo(2500L);
+        assertThat(item.path("saleUnitAmount").asText()).isEqualTo("500.00");
+        assertThat(item.path("quantity").asInt()).isEqualTo(2);
+        assertThat(item.path("lineAmount").asLong()).isEqualTo(5000L);
+        assertThat(data.path("productAmount").asLong()).isEqualTo(5000L);
+        assertThat(data.path("deliveryFee").asLong()).isEqualTo(3000L);
+        assertThat(data.path("payAmount").asLong()).isEqualTo(8000L);
+        assertThat(data.path("receiverName").asText()).isEqualTo("홍길동");
+        assertThat(data.path("receiverPhone").asText()).isEqualTo("01012345678");
+        assertThat(data.path("address").asText()).isEqualTo("서울 종로구 삼청로 1");
+        assertThat(data.path("detailAddress").asText()).isEqualTo("101호");
+        assertThat(data.path("cancelReasonCode").isNull()).isTrue();
+        assertThat(data.has("cancelable")).isFalse();
+        assertThat(data.has("portonePaymentId")).isFalse();
+        JsonNode histories = data.path("histories");
+        assertThat(histories).hasSize(3);
+        assertThat(histories.findValuesAsText("toStatus")).containsExactly("PAID", "RECEIVED", "PREPARING");
+        JsonNode accepted = histories.get(2);
+        assertThat(accepted.path("statusType").asText()).isEqualTo("MART");
+        assertThat(accepted.path("fromStatus").asText()).isEqualTo("RECEIVED");
+        assertThat(accepted.path("actor").asText()).isEqualTo("MART");
+        assertThat(accepted.path("changedByAdminId").asLong()).isEqualTo(MART_ADMIN_ID);
+        assertThat(accepted.path("reason").asText()).isEqualTo("수락");
+        assertThat(accepted.path("createdAt").asText()).endsWith("+09:00");
+        assertThat(histories.get(0).path("changedByAdminId").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("MART_ADMIN은 본인 마트 주문 상세를 조회할 수 있다")
+    void getOrder_martAdmin() throws Exception {
+        // given
+        Order order = order(martA, OrderStatus.PAID, MartStatus.RECEIVED, "애호박");
+
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + order.getId(), martAdminToken(martA));
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("martId").asLong()).isEqualTo(martA);
+        assertThat(data(response).path("histories")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("MART_ADMIN이 다른 마트 주문 상세를 조회하면 403 AUTH-005로 거절한다")
+    void getOrder_martAdminOtherMart() throws Exception {
+        // given
+        Order others = order(martB, OrderStatus.PAID, MartStatus.RECEIVED, "양파");
+
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + others.getId(), martAdminToken(martA));
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(code(response)).isEqualTo("AUTH-005");
+    }
+
+    @Test
+    @DisplayName("결제 전 주문 상세는 없는 주문과 같이 ORDER-012로 응답한다")
+    void getOrder_pendingOrder() throws Exception {
+        // given
+        Order pending = order(martA, OrderStatus.PENDING_PAYMENT, MartStatus.NONE, "대파");
+
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + pending.getId(), superToken());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(code(response)).isEqualTo("ORDER-012");
+    }
+
+    @Test
+    @DisplayName("없는 주문 상세는 ORDER-012로 응답한다")
+    void getOrder_notFound() throws Exception {
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + Long.MAX_VALUE, superToken());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(code(response)).isEqualTo("ORDER-012");
+    }
+
     private MockHttpServletResponse perform(String url, String token) throws Exception {
         return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
                 .andReturn().getResponse();
@@ -229,6 +343,19 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     private String memberToken() {
         return tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+    }
+
+    private void history(Order order, OrderStatusType statusType, String from, String to,
+            OrderStatusActor actor, Long changedByAdminId, String reason) {
+        histories.add(historyRepository.save(OrderStatusHistory.builder()
+                .order(order)
+                .statusType(statusType)
+                .fromStatus(from)
+                .toStatus(to)
+                .actor(actor)
+                .changedByAdminId(changedByAdminId)
+                .reason(reason)
+                .build()));
     }
 
     // 상품마다 2,500원 × 2개. 상품금액은 첫 상품 기준 5,000원, 배송비 3,000원으로 고정해 둔다

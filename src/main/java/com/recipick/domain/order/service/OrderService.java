@@ -4,6 +4,7 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.request.OrderSearchRequest;
+import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
 import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
 import com.recipick.domain.order.dto.response.OrderDetailResponse;
 import com.recipick.domain.order.dto.response.OrderSummaryResponse;
@@ -163,6 +164,18 @@ public class OrderService {
                 .filter(found -> found.getMemberId().equals(memberId))
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
         return OrderDetailResponse.of(order, findOrderItems(orderId));
+    }
+
+    // 결제 전(NONE) 주문은 마트가 처리할 대상이 아니라 없는 주문과 같이 답한다. 다른 마트 주문은 목록과 같은 규칙으로 403이다
+    public OrderAdminDetailResponse getAdminOrder(AdminRole role, Long adminMartId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .filter(found -> found.getMartStatus() != MartStatus.NONE)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (role == AdminRole.MART_ADMIN && !order.getMartId().equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+        return OrderAdminDetailResponse.of(order, findOrderItems(orderId),
+                orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
     }
 
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
