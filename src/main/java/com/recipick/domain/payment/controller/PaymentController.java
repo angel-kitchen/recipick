@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.controller;
 
+import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.dto.request.PaymentCancelRequest;
 import com.recipick.domain.payment.dto.request.PaymentConfirmRequest;
 import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
@@ -41,7 +42,7 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success("결제가 확정되었습니다.", response));
     }
 
-    // 결제 전·후 취소가 같은 엔드포인트다. 지금은 결제 전(IN_PROGRESS)만 처리하고 PAID는 Processor가 409로 막는다
+    // 결제 전·후 취소가 같은 엔드포인트다. 결과에 따라 200(끝남)·202(PortOne 결과 대기)로 갈린다
     @PostMapping("/api/payments/{paymentId}/cancel")
     public ResponseEntity<ApiResponse<PaymentCancelResponse>> cancel(
         @LoginMember Long memberId,
@@ -49,9 +50,18 @@ public class PaymentController {
         @RequestHeader("Idempotency-Key") String idempotencyKey,
         @Valid @RequestBody PaymentCancelRequest request
     ) {
-        PaymentCancelResponse response = paymentCancelFacade.cancel(
-            memberId, paymentId, idempotencyKey, request.reason());
-        return ResponseEntity.ok(ApiResponse.success("결제 대기 주문을 취소했습니다.", response));
+        PaymentCancelResult result = paymentCancelFacade.cancel(memberId, paymentId, idempotencyKey, request.reason());
+        return switch (result.outcome()) {
+            case CANCELED_BEFORE_PAY ->
+                ResponseEntity.ok(ApiResponse.success("결제 대기 주문을 취소했습니다.", result.response()));
+            case CANCELED ->
+                ResponseEntity.ok(ApiResponse.success("결제가 취소되었습니다.", result.response()));
+            case PENDING ->
+                ResponseEntity.accepted().body(ApiResponse.success("취소 결과를 확인하고 있습니다.", result.response()));
+            // 실패는 Facade가 예외로 바꿔 GlobalExceptionHandler가 409·500으로 답한다. 여기 오면 버그다
+            case PG_FAILED, REQUEST_REJECTED ->
+                throw new IllegalStateException("실패 outcome이 응답으로 넘어왔습니다: " + result.outcome());
+        };
     }
 
     @GetMapping("/api/payments/orders/{orderId}")

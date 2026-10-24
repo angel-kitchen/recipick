@@ -1,12 +1,14 @@
 package com.recipick.domain.payment.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import jakarta.persistence.EntityManager;
@@ -16,6 +18,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
@@ -65,6 +68,57 @@ class RefundRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("멱등키로 환불 한 건을 찾고, 없는 키는 비어 있다")
+    void findByIdempotencyKey() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(9L));
+        Refund saved = refundRepository.save(newMemberRefund(payment, "key_9_member"));
+        em.flush();
+        em.clear();
+
+        // when
+        Optional<Refund> found = refundRepository.findByIdempotencyKey("key_9_member");
+        Optional<Refund> missing = refundRepository.findByIdempotencyKey("key_9_unknown");
+
+        // then
+        assertThat(found).map(Refund::getId).contains(saved.getId());
+        assertThat(missing).isEmpty();
+    }
+
+    @Test
+    @DisplayName("같은 멱등키로 두 번째 환불을 flush하면 UNIQUE에 걸린다 — 다른 결제에 같은 키가 동시에 와도 한 건만 남는다")
+    void idempotencyKeyIsUnique() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(10L));
+        Payment otherPayment = paymentRepository.save(newFailedPayment(11L));
+        refundRepository.saveAndFlush(newMemberRefund(payment, "key_shared"));
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            refundRepository.saveAndFlush(newMemberRefund(otherPayment, "key_shared")));
+
+        // then
+        assertThat(thrown).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("환불 실패 종류가 이름 문자열로 저장된다")
+    void failureTypeStoredAsString() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(12L));
+        Refund refund = newMemberRefund(payment, "key_12");
+        refund.fail(null, RefundFailureType.REQUEST_REJECTED, "HTTP 401 UNAUTHORIZED");
+        Refund saved = refundRepository.save(refund);
+        em.flush();
+
+        // when
+        Object failureType = selectColumn("failure_type", saved.getId());
+
+        // then
+        assertThat(failureType).isEqualTo("REQUEST_REJECTED");
     }
 
     @Test

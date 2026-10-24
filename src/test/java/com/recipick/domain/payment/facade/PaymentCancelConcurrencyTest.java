@@ -11,12 +11,13 @@ import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.repository.OrderItemRepository;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
-import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
+import com.recipick.domain.payment.dto.PaymentCancelPreparation;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.repository.PaymentRepository;
+import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
@@ -43,6 +44,8 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
     private static final int THREADS = 5;
     private static final Long MEMBER_ID = 9102L;
     private static final String REASON = "동시 취소";
+    // 결제 전 취소는 키를 저장하지 않으므로 다섯 요청이 같은 키여도 서로를 "같은 키 재요청"으로 보지 않는다
+    private static final String KEY = "cancel-concurrency-key";
     private static final LocalDateTime EXPIRES_AT = LocalDateTime.of(2026, 10, 21, 10, 5);
     // 주문 생성 때 이미 차감된 뒤의 재고와 주문 수량. 복구가 한 번이면 7, 두 번 이상이면 9 이상이 된다
     private static final int STOCK_AFTER_ORDER = 5;
@@ -124,15 +127,15 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
         paymentId = paymentRepository.save(inProgressPayment(orderId)).getId();
 
         // when
-        List<PaymentCancelResponse> responses =
-            runConcurrently(() -> paymentCancelProcessor.cancelBeforePay(MEMBER_ID, paymentId, REASON));
+        List<PaymentCancelPreparation> preparations =
+            runConcurrently(() -> paymentCancelProcessor.prepare(MEMBER_ID, paymentId, KEY, REASON));
 
-        // then — 다섯 요청 모두 예외 없이 같은 종료 상태를 받는다
-        assertThat(responses).hasSize(THREADS);
-        assertThat(responses).allSatisfy(response -> {
-            assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
-            assertThat(response.failureReason()).isEqualTo(PaymentFailureReason.CANCELED_BEFORE_PAY);
-            assertThat(response.refundAmount()).isZero();
+        // then — 다섯 요청 모두 예외 없이 TX1에서 같은 종료 결과를 받고 PortOne은 부르지 않는다
+        assertThat(preparations).hasSize(THREADS);
+        assertThat(preparations).allSatisfy(preparation -> {
+            assertThat(preparation.requiresPortOneCall()).isFalse();
+            assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED_BEFORE_PAY);
+            assertThat(preparation.finishedResult().response().refundAmount()).isZero();
         });
 
         // 재고가 정확히 주문 수량만큼 한 번만 돌아왔다
@@ -156,11 +159,12 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
     }
 
     // 모든 스레드가 준비된 뒤 한 번에 출발시켜 실제로 같은 행을 두고 경쟁하게 만든다
-    private List<PaymentCancelResponse> runConcurrently(Callable<PaymentCancelResponse> task) throws Exception {
+    private List<PaymentCancelPreparation> runConcurrently(Callable<PaymentCancelPreparation> task)
+        throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(THREADS);
         CountDownLatch ready = new CountDownLatch(THREADS);
         CountDownLatch start = new CountDownLatch(1);
-        List<Future<PaymentCancelResponse>> futures = new ArrayList<>();
+        List<Future<PaymentCancelPreparation>> futures = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
             futures.add(executor.submit(() -> {
                 ready.countDown();
@@ -170,16 +174,17 @@ class PaymentCancelConcurrencyTest extends IntegrationTestSupport {
         }
         ready.await();
         start.countDown();
-        List<PaymentCancelResponse> responses = new ArrayList<>();
-        for (Future<PaymentCancelResponse> future : futures) {
-            responses.add(future.get(10, TimeUnit.SECONDS));
+        List<PaymentCancelPreparation> preparations = new ArrayList<>();
+        for (Future<PaymentCancelPreparation> future : futures) {
+            preparations.add(future.get(10, TimeUnit.SECONDS));
         }
         executor.shutdown();
-        return responses;
+        return preparations;
     }
 
     private long refundCount() {
-        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM refund WHERE payment_id = ?", Long.class, paymentId);
+        Long count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM refund WHERE payment_id = ?", Long.class, paymentId);
         return count == null ? 0 : count;
     }
 

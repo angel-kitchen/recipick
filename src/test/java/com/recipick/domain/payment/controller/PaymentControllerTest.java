@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
 import com.recipick.domain.payment.dto.response.PaymentConfirmResponse;
 import com.recipick.domain.payment.dto.response.PaymentDetailResponse;
@@ -26,12 +27,14 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.facade.PaymentCancelFacade;
 import com.recipick.domain.payment.facade.PaymentConfirmFacade;
 import com.recipick.domain.payment.facade.PaymentQueryFacade;
+import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.global.config.ClockConfig;
 import com.recipick.global.config.JacksonConfig;
 import com.recipick.global.config.JwtConfig;
 import com.recipick.global.config.SecurityConfig;
 import com.recipick.global.config.WebConfig;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.GlobalExceptionHandler;
 import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.JwtAccessDeniedHandler;
@@ -183,12 +186,13 @@ class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("회원 토큰·Idempotency-Key·사유가 있으면 토큰의 회원 ID로 Facade를 부르고 결제 전 취소 응답을 돌려준다")
+    @DisplayName("회원 토큰·Idempotency-Key·사유가 있으면 토큰의 회원 ID로 Facade를 부르고 결제 전 취소는 200으로 돌려준다")
     void cancel() throws Exception {
         // given
         given(paymentCancelFacade.cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심")).willReturn(
-            new PaymentCancelResponse(10L, 1L, PaymentStatus.FAILED, PaymentFailureReason.CANCELED_BEFORE_PAY,
-                null, null, 0L));
+            new PaymentCancelResult(PaymentCancelOutcome.CANCELED_BEFORE_PAY,
+                new PaymentCancelResponse(10L, 1L, PaymentStatus.FAILED, PaymentFailureReason.CANCELED_BEFORE_PAY,
+                    null, null, 0L)));
 
         // when
         ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
@@ -210,6 +214,100 @@ class PaymentControllerTest {
             .andExpect(jsonPath("$.data.refundStatus").value(nullValue()))
             .andExpect(jsonPath("$.data.refundAmount").value(0));
         verify(paymentCancelFacade).cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심");
+    }
+
+    @Test
+    @DisplayName("결제 후 취소가 끝나면 200과 취소 완료 메시지, 취소 시각·환불 완료 금액을 돌려준다")
+    void cancelAfterPay() throws Exception {
+        // given
+        LocalDateTime canceledAt = LocalDateTime.of(2026, 10, 23, 19, 8, 40);
+        given(paymentCancelFacade.cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심")).willReturn(
+            new PaymentCancelResult(PaymentCancelOutcome.CANCELED,
+                new PaymentCancelResponse(10L, 1L, PaymentStatus.CANCELED, null, canceledAt,
+                    RefundStatus.COMPLETED, 23800L)));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.message").value("결제가 취소되었습니다."))
+            .andExpect(jsonPath("$.data.paymentStatus").value("CANCELED"))
+            .andExpect(jsonPath("$.data.failureReason").value(nullValue()))
+            .andExpect(jsonPath("$.data.canceledAt").value("2026-10-23T19:08:40+09:00"))
+            .andExpect(jsonPath("$.data.refundStatus").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.refundAmount").value(23800));
+    }
+
+    @Test
+    @DisplayName("PortOne 결과를 아직 확정할 수 없으면 202와 확인 중 메시지, 취소 요청 상태를 돌려준다")
+    void cancelPending() throws Exception {
+        // given
+        given(paymentCancelFacade.cancel(MEMBER_ID, 10L, IDEMPOTENCY_KEY, "단순 변심")).willReturn(
+            new PaymentCancelResult(PaymentCancelOutcome.PENDING,
+                new PaymentCancelResponse(10L, 1L, PaymentStatus.CANCEL_REQUESTED, null, null,
+                    RefundStatus.REQUESTED, 23800L)));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then — 아직 REQUESTED여도 refundAmount는 이번 환불 작업의 금액(전액)이다
+        result.andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.message").value("취소 결과를 확인하고 있습니다."))
+            .andExpect(jsonPath("$.data.paymentStatus").value("CANCEL_REQUESTED"))
+            .andExpect(jsonPath("$.data.canceledAt").value(nullValue()))
+            .andExpect(jsonPath("$.data.refundStatus").value("REQUESTED"))
+            .andExpect(jsonPath("$.data.refundAmount").value(23800));
+    }
+
+    @Test
+    @DisplayName("Facade가 PAYMENT-009를 던지면 409 오류 봉투로 반환한다 — PortOne이 취소를 FAILED로 명시한 경우")
+    void cancelRejectedByPortOne() throws Exception {
+        // given
+        given(paymentCancelFacade.cancel(anyLong(), anyLong(), anyString(), anyString()))
+            .willThrow(new BusinessException(PaymentErrorCode.PAYMENT_CANCEL_REJECTED));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("PAYMENT-009"));
+    }
+
+    @Test
+    @DisplayName("Facade가 COMMON-008을 던지면 500 오류 봉투로 반환한다 — PortOne이 요청을 처리 전에 거절한 경우")
+    void cancelRejectedBeforeProcessing() throws Exception {
+        // given
+        given(paymentCancelFacade.cancel(anyLong(), anyLong(), anyString(), anyString()))
+            .willThrow(new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR));
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/payments/{paymentId}/cancel", 10L)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken())
+            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(CANCEL_BODY));
+
+        // then
+        result.andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("COMMON-008"));
     }
 
     @Test
