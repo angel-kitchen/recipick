@@ -11,4 +11,6 @@ public interface OrderRepositoryCustom {
     Page<Order> searchByMember(Long memberId, OrderStatusGroup statusGroup, Pageable pageable);
 
     Page<Order> searchByMart(Long martId, MartStatus martStatus, Pageable pageable);
+
+    boolean existsInProgressByMemberId(Long memberId);
 }

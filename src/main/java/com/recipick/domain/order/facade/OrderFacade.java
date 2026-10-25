@@ -59,6 +59,9 @@ public class OrderFacade {
         }
         String requestHash = request.requestHash();
 
+        // 탈퇴와 겹쳐도 한쪽만 성공하도록 첫 DB 작업으로 회원 행을 잠근다(락 순서는 MEMBER가 맨 앞).
+        // 스냅샷이 잠금 뒤에 만들어져 아래 중복·결제 대기 확인이 앞선 요청의 커밋 결과를 본다
+        memberService.getMemberForUpdate(memberId);
         // 재시도가 결제 대기 제한에 걸리지 않도록 같은 요청인지 먼저 확인한다
         Optional<Order> existing = orderService.findByIdempotencyKey(memberId, normalizedKey);
         if (existing.isPresent()) {

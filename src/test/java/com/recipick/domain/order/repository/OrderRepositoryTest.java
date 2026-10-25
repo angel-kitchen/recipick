@@ -15,6 +15,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -188,6 +189,33 @@ class OrderRepositoryTest extends IntegrationTestSupport {
         assertThat(page.getContent()).extracting(Order::getId)
                 .containsSubsequence(others.getId(), mine.getId())
                 .doesNotContain(pending.getId());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "PENDING_PAYMENT, NONE, true",
+            "PAID, RECEIVED, true",
+            "PAID, PREPARING, true",
+            "PAID, SHIPPING, true",
+            "CANCEL_REQUESTED, RECEIVED, true",
+            "CANCEL_REQUESTED, REJECTED, true",
+            "PAID, DELIVERED, false",
+            "CANCELED, NONE, false",
+            "REFUNDED, REJECTED, false"
+    })
+    @DisplayName("종료되지 않은 주문이 있을 때만 진행 중으로 판정하고 다른 회원의 주문은 보지 않는다")
+    void existsInProgressByMemberId(OrderStatus status, MartStatus martStatus, boolean expected) {
+        // given
+        orderRepository.save(newOrder(MEMBER_ID, status, martStatus));
+        orderRepository.save(newOrder(OTHER_MEMBER_ID, OrderStatus.PENDING_PAYMENT, MartStatus.NONE));
+        em.flush();
+        em.clear();
+
+        // when
+        boolean inProgress = orderRepository.existsInProgressByMemberId(MEMBER_ID);
+
+        // then
+        assertThat(inProgress).isEqualTo(expected);
     }
 
     private Order newMartOrder(Long martId, OrderStatus status, MartStatus martStatus) {
