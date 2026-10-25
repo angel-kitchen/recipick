@@ -28,7 +28,8 @@ public enum RecipeErrorCode implements ErrorCode {
     DUPLICATE_BOOKMARK(HttpStatus.CONFLICT, "RECIPE-017", "이미 찜한 레시피입니다."),
     INGREDIENT_IN_USE(HttpStatus.CONFLICT, "RECIPE-018", "레시피나 상품에 연결된 재료는 단위를 바꿀 수 없습니다."),
     INVALID_RECIPE_STEPS(HttpStatus.BAD_REQUEST, "RECIPE-019", "조리 순서는 1부터 빠짐없이 이어져야 합니다."),
-    INVALID_PRODUCT_SELECTION(HttpStatus.BAD_REQUEST, "RECIPE-020", "선택한 상품이 재료의 후보 상품이 아닙니다.");
+    INVALID_PRODUCT_SELECTION(HttpStatus.BAD_REQUEST, "RECIPE-020", "선택한 상품이 재료의 후보 상품이 아닙니다."),
+    AUTO_CART_MART_CHANGED(HttpStatus.CONFLICT, "RECIPE-021", "미리보기 이후 이용 마트가 바뀌었습니다. 다시 미리보기를 해 주세요.");
 
     private final HttpStatus status;
     private final String code;
