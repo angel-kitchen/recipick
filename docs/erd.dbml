@@ -176,6 +176,7 @@ Table REFUND {
   requested_by varchar(20)
   idempotency_key varchar(255) [unique]
   portone_cancellation_id varchar(255) [unique]
+  failure_type varchar(30)
   failure_reason varchar(500)
   requested_at datetime
   completed_at datetime
