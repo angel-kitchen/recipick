@@ -14,26 +14,17 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestClient;
 
-/**
- * PortOne 전용 RestClient 설정.
- *
- * <p>PortOne 응답 전용 ObjectMapper는 Spring 빈으로 등록하지 않는다. Boot의 ObjectMapper 자동구성은
- * ObjectMapper 빈이 하나라도 있으면 꺼지고, 그러면 MVC 메시지 컨버터가 이 매퍼를 주입받아
- * global JacksonConfig의 시간·BigDecimal 직렬화 규칙이 전 API에서 사라진다. 같은 이유로 Boot의
- * RestClient.Builder 빈도 쓰지 않고 독립 생성해 공유 상태와 접점을 없앤다.
- */
+// PortOne 전용 RestClient 설정.
+
 @Configuration
-@EnableConfigurationProperties(PortOneProperties.class)
+@EnableConfigurationProperties({PortOneProperties.class, PortOneWebhookProperties.class})
 public class PortOneClientConfig {
 
     public static final String REST_CLIENT_BEAN = "portOneRestClient";
 
     private static final String AUTHORIZATION_SCHEME = "PortOne ";
 
-    /**
-     * PortOne 응답만 관대하게 읽는 매퍼. 알 수 없는 필드는 무시하고, 알 수 없는 enum 값은
-     * {@code @JsonEnumDefaultValue}로 받아 PortOne이 상태 값을 추가해도 조회가 깨지지 않게 한다.
-     */
+    // PortOne 응답만 관대하게 읽는 매퍼. 알 수 없는 필드는 무시하고, 알 수 없는 enum 값은 {@code @JsonEnumDefaultValue}로 받아 PortOne이 상태 값을 추가해도 조회가 깨지지 않게 한다
     public static ObjectMapper newPortOneObjectMapper() {
         return JsonMapper.builder()
                 .addModule(new JavaTimeModule())

@@ -28,3 +28,6 @@ portone:
   read-timeout: 5s
   store-id: ""
   channel-key: ""
+  # 웹훅 시크릿은 관리자 콘솔 > 결제 연동 > 웹훅 탭에서 발급한다. 비어 있으면 앱은 뜨고 웹훅만 거절한다
+  webhook:
+    secret: ""

@@ -11,3 +11,6 @@ portone:
   read-timeout: 1s
   store-id: test-store-id
   channel-key: test-channel-key
+  # Standard Webhooks 공개 예제 키(실제 키 아님). 서명 검증 테스트가 같은 값을 쓴다
+  webhook:
+    secret: MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
