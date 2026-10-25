@@ -160,6 +160,50 @@ class RefundRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("PortOne 취소 ID로 환불 한 건을 찾고, 모르는 ID는 비어 있다 — 웹훅·재조회가 들어오는 경로")
+    void findByPortoneCancellationId() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(13L));
+        Refund refund = newMemberRefund(payment, "key_13");
+        refund.recordRequested("cancel_13");
+        Refund saved = refundRepository.save(refund);
+        em.flush();
+        em.clear();
+
+        // when
+        Refund found = refundRepository.findByPortoneCancellationId("cancel_13").orElseThrow();
+        Optional<Refund> unknown = refundRepository.findByPortoneCancellationId("cancel_unknown");
+
+        // then
+        assertThat(found.getId()).isEqualTo(saved.getId());
+        assertThat(found.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(unknown).isEmpty();
+    }
+
+    @Test
+    @DisplayName("결제의 REQUESTED인 MEMBER 환불만 찾는다 — 끝난 환불·SYSTEM 환불·다른 결제는 제외")
+    void findRequestedMemberRefundsByPaymentId() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(14L));
+        Payment otherPayment = paymentRepository.save(newFailedPayment(15L));
+        Refund requested = refundRepository.save(newMemberRefund(payment, "key_14_requested"));
+        refundRepository.save(newMemberRefund(payment, "key_14_failed", RefundStatus.FAILED));
+        refundRepository.save(newMemberRefund(payment, "key_14_completed", RefundStatus.COMPLETED));
+        refundRepository.save(Refund.requestedBySystem(
+            payment, 23800L, "결제 금액 불일치", "key_14_system",
+            LocalDateTime.of(2026, 10, 21, 10, 10)));
+        refundRepository.save(newMemberRefund(otherPayment, "key_15_requested"));
+        em.flush();
+        em.clear();
+
+        // when
+        List<Refund> found = refundRepository.findRequestedMemberRefundsByPaymentId(payment.getId());
+
+        // then
+        assertThat(found).extracting(Refund::getId).containsExactly(requested.getId());
+    }
+
+    @Test
     @DisplayName("여러 결제의 환불을 한 번에 조회하고 목록에 없는 결제의 환불은 제외한다")
     void findAllByPaymentIdIn() {
         // given

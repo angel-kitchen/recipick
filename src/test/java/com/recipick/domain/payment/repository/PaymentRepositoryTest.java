@@ -10,6 +10,7 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +77,24 @@ class PaymentRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(found.getOrderId()).isEqualTo(11L);
+    }
+
+    @Test
+    @DisplayName("PortOne 결제 ID로 결제 한 건을 찾고, 모르는 ID는 비어 있다 — 웹훅이 들어오는 경로")
+    void findByPortonePaymentId() {
+        // given
+        Payment saved = paymentRepository.save(newPayment(12L));
+        em.flush();
+        em.clear();
+
+        // when
+        Payment found = paymentRepository.findByPortonePaymentId("pay_12").orElseThrow();
+        Optional<Payment> unknown = paymentRepository.findByPortonePaymentId("pay_unknown");
+
+        // then
+        assertThat(found.getId()).isEqualTo(saved.getId());
+        assertThat(found.getOrderId()).isEqualTo(12L);
+        assertThat(unknown).isEmpty();
     }
 
     @Test
