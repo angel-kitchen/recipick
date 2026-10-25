@@ -20,6 +20,7 @@ import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -35,18 +36,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
-// 탈퇴 기능이 아직 없어, 회원 행을 잠근 채 기다렸다가 작업하고 커밋하는 트랜잭션으로 탈퇴 경합을 흉내 낸다
+// 탈퇴 기능이 아직 없어, 회원 행을 잠근 채 주문 생성이 잠금에 걸리길 기다렸다가 작업하고 커밋하는 트랜잭션으로 탈퇴 경합을 흉내 낸다
 class OrderCreateMemberLockTest extends IntegrationTestSupport {
 
     // data.sql 시연 데이터: 1번 마트는 삼청동(1111014000)
     private static final Long MART_ID = 1L;
     private static final String LEGAL_DONG_CODE = "1111014000";
-    private static final long HOLD_MILLIS = 500;
+    private static final long WAIT_SECONDS = 5;
+    private static final long POLL_MILLIS = 20;
 
     @Autowired
     private OrderFacade orderFacade;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private EntityManager em;
     @Autowired
     private MemberRepository memberRepository;
     @Autowired
@@ -88,13 +92,13 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         OrderCreateRequest request = prepare(10);
         CountDownLatch locked = new CountDownLatch(1);
         Future<?> withdrawal = lockMemberThen(locked, () -> memberRepository.deleteById(member.getId()));
-        assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(locked.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
         // when
         assertThatThrownBy(() -> orderFacade.createOrder(member.getId(), "key", request))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
-        withdrawal.get(5, TimeUnit.SECONDS);
+        withdrawal.get(WAIT_SECONDS, TimeUnit.SECONDS);
 
         // then
         assertThat(orderRepository.findIdsByMemberId(member.getId())).isEmpty();
@@ -109,11 +113,11 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         CountDownLatch locked = new CountDownLatch(1);
         Future<?> first = lockMemberThen(locked,
                 () -> orderFacade.createOrder(member.getId(), "same-key", request));
-        assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(locked.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
         // when
         OrderCreateResult retried = orderFacade.createOrder(member.getId(), "same-key", request);
-        first.get(5, TimeUnit.SECONDS);
+        first.get(WAIT_SECONDS, TimeUnit.SECONDS);
 
         // then: 잠금 뒤에 스냅샷이 만들어져야 앞 트랜잭션이 커밋한 주문을 멱등 조회로 찾는다
         assertThat(retried.created()).isFalse();
@@ -122,22 +126,43 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         assertThat(stock()).isEqualTo(8);
     }
 
-    // 회원 행을 잠그고 신호를 보낸 뒤 잠시 기다렸다가 작업하고 커밋한다. 기다리는 동안 테스트 스레드의 주문 생성이 잠금에 걸린다
+    // 회원 행을 잠그고 신호를 보낸 뒤, 테스트 스레드의 주문 생성이 그 잠금을 기다리는 것을 확인하고 나서 작업하고 커밋한다.
+    // 고정 시간만 기다리면 테스트 스레드가 늦을 때 경합 없이 통과할 수 있어서 대기 중인 요청을 직접 확인한다
     private Future<?> lockMemberThen(CountDownLatch locked, Runnable action) {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Future<?> future = executor.submit(() -> transactionTemplate.executeWithoutResult(status -> {
             memberRepository.findByIdForUpdate(member.getId()).orElseThrow();
             locked.countDown();
-            hold();
+            awaitMemberLockWaiter();
             action.run();
         }));
         executor.shutdown();
         return future;
     }
 
-    private static void hold() {
+    // 같은 계정의 연결은 PROCESSLIST에 보인다. 회원 행은 이 트랜잭션이 잠그고 있으므로 다른 연결의 회원 FOR UPDATE 문이
+    // 떠 있다는 것은 그 요청이 잠금 대기 중이라는 뜻이다
+    private void awaitMemberLockWaiter() {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
+        while (countMemberLockWaiters() == 0) {
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException("주문 생성이 회원 잠금을 기다리지 않습니다.");
+            }
+            sleepQuietly(POLL_MILLIS);
+        }
+    }
+
+    private long countMemberLockWaiters() {
+        Number count = (Number) em.createNativeQuery(
+                        "SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                                + "WHERE ID <> CONNECTION_ID() AND INFO LIKE '%from member %for update%'")
+                .getSingleResult();
+        return count.longValue();
+    }
+
+    private static void sleepQuietly(long millis) {
         try {
-            Thread.sleep(HOLD_MILLIS);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);
