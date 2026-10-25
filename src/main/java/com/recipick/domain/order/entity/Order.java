@@ -13,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
@@ -31,7 +32,12 @@ import lombok.NoArgsConstructor;
         uniqueConstraints = @UniqueConstraint(
                 name = Order.IDEMPOTENCY_KEY_CONSTRAINT,
                 columnNames = {"member_id", "idempotency_key"}
-        )
+        ),
+        // 목록은 id 내림차순으로 읽는다. 보조 인덱스 끝에 PK가 붙어 정렬까지 인덱스 순서로 해결된다
+        indexes = {
+                @Index(name = "idx_orders_member_id", columnList = "member_id"),
+                @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status")
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseTimeEntity {
@@ -193,6 +199,18 @@ public class Order extends BaseTimeEntity {
         this.status = OrderStatus.CANCEL_REQUESTED;
         this.cancelReasonCode = CancelReasonCode.MEMBER_CANCELED;
         this.cancelReasonDetail = reasonDetail;
+    }
+
+    // 마트는 접수중인 결제 완료 주문만 수락한다. 취소 진행 중·종료된 주문과 이미 준비를 시작한 주문은 수락 대상이 아니다
+    public boolean isAcceptableByMart() {
+        return status == OrderStatus.PAID && martStatus.canTransitionTo(MartStatus.PREPARING);
+    }
+
+    public void acceptByMart() {
+        if (!isAcceptableByMart()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
+        }
+        this.martStatus = MartStatus.PREPARING;
     }
 
     public void restorePaidAfterMemberCancelFailure() {

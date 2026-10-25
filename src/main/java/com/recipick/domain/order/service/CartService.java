@@ -62,6 +62,11 @@ public class CartService {
         return CartItemAddResponse.from(cartItem);
     }
 
+    // 담은 순서대로 돌려준다. 같은 상품을 다시 담아 합산해도 행이 그대로라 위치가 바뀌지 않는다
+    public List<CartItem> findAllCartItems(Long memberId) {
+        return cartItemRepository.findAllByMemberIdOrderByIdAsc(memberId);
+    }
+
     // 요청한 순서대로 돌려준다. 하나라도 없거나 다른 회원 소유면 주문 대상을 확정할 수 없다
     public List<CartItem> findCartItems(Long memberId, List<Long> cartItemIds) {
         Map<Long, CartItem> cartItems = cartItemRepository.findAllByMemberIdAndIdIn(memberId, cartItemIds).stream()

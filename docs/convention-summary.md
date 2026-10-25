@@ -24,6 +24,8 @@
 - 권한 표기: PUBLIC, MEMBER, MEMBERSHIP, SUPER_ADMIN, MART_ADMIN, WEBHOOK
 - 로그인 회원은 `@LoginMember Long memberId`, 관리자는 `@LoginAdmin Long adminId`
 - 회원 토큰과 관리자 토큰은 서로의 API를 호출할 수 없다.
+- 회원 토큰 인증·로그인·재발급에서 DB 탈퇴 상태를 확인한다. `global/security`의 인터페이스를 member가 구현하며, Redis 정리 실패 시에도 DB 상태로 차단한다.
+- 비밀번호 변경은 모든 기기 리프레시 토큰을 폐기하되 기존 액세스 토큰은 만료까지 유효하고, 탈퇴는 기존 액세스 토큰으로도 회원 API를 이용할 수 없다.
 - MART_ADMIN은 요청한 마트가 토큰의 `martId`와 같은지 서버에서 검사한다.
 - SUPER_ADMIN 전용 API는 `@PreAuthorize("hasRole('SUPER_ADMIN')")`
 - 다른 회원 소유 리소스는 403 대신 그 도메인의 404 코드로 응답한다.
@@ -32,7 +34,10 @@
 - 다른 도메인의 Entity·Repository를 직접 쓰지 않고 그 도메인의 Service를 호출한다.
 - Service끼리 직접 주입하지 않는다. 여러 도메인을 함께 처리하면 Facade에서 조립한다.
 - 강한 정합성이 필요한 변경(주문·결제·재고)은 Facade가 한 트랜잭션에서 동기 호출하고, `REQUIRES_NEW`는 쓰지 않는다.
-- `ApplicationEvent`는 알림·통계·로그처럼 일시적 불일치가 허용되는 후처리에만 쓴다.
+- `ApplicationEvent`는 일시적 불일치가 허용되는 후처리에만 쓴다. 관리자 감사 로그는 이번 합의에 따라 이벤트 대신 동기 기록 인터페이스를 사용한다.
+- `global/audit`의 `AdminAuditRecorder`를 member가 구현한다. Facade 등 업무 트랜잭션 경계에서 호출하고, 감사 기록 실패 시 업무도 롤백한다. 개인정보 관리자 조회도 쓰기 가능한 동일 트랜잭션으로 기록하며 실패 시 결과를 반환하지 않는다.
+- 외부 결제사 호출이 필요한 관리자 작업은 `요청 접수 상태 + 로그 → COMMIT → 외부 호출 → 결과 반영`으로 나눈다.
+- 탈퇴 연동은 각 도메인이 Boolean·DTO 조회와 정리 기능을 제공하고 회원 Facade가 조립한다. 실제 연동 전에는 임시 false로 탈퇴를 허용하지 않는다.
 
 ## 네이밍
 - 클래스 `{대상}{역할}` PascalCase (`RecipeService`, `OrderAdminController`)
@@ -47,7 +52,7 @@
 - enum은 `@Enumerated(EnumType.STRING)` + `@Column(columnDefinition = "varchar(20)")`(MySQL enum·CHECK 생성 방지), 연관관계는 `fetch = LAZY`
 - 금액 `Long`, 개수 `int`, 필요량·판매 단위 수치 `BigDecimal`
 - 시각은 `LocalDateTime`(한국 시간)으로 저장하고, API에는 `JacksonConfig`가 `+09:00`을 붙여 내보낸다.
-- `created_at`, `updated_at`은 `BaseTimeEntity` 상속
+- `created_at`, `updated_at`은 `BaseTimeEntity` 상속. `updated_at`이 없는 감사 로그·체험 차단 기록은 `@CreatedDate`와 `AuditingEntityListener`로 `createdAt`을 직접 선언한다. 새 부모 클래스는 만들지 않고 TRIAL_BLOCK의 만료 시각은 연장할 수 있다.
 
 ## DTO·Controller
 - DTO는 `record`, 엔티티를 응답으로 내보내지 않는다.
@@ -55,11 +60,13 @@
 - Controller는 `ResponseEntity<ApiResponse<T>>`를 반환하고 로직을 두지 않는다.
 
 ## 트랜잭션·동시성
-- 클래스에 `@Transactional(readOnly = true)`, 변경 메서드에만 `@Transactional`
+- 클래스는 `@Transactional(readOnly = true)`가 기본이고 변경 메서드는 `@Transactional`. 감사 저장이 있는 조회는 바깥 트랜잭션부터 쓰기 가능해야 한다.
 - 외부 호출(PortOne, AI)은 DB 트랜잭션 밖에서 한다. 락을 잡은 상태에서 외부 호출 금지. 흐름은 `내부 상태 저장 → COMMIT → 외부 호출 → 결과 반영 트랜잭션`
 - 낙관적 락(`@Version`) 금지. 동시 변경이 겹치는 자원은 비관적 락(`PESSIMISTIC_WRITE`)으로 잠근 뒤 검증·변경한다. `NOWAIT` 금지
 - 잠금 전용 조회는 `findByIdForUpdate`처럼 이름으로 구분한다.
-- 락 순서 고정: `PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고`, 같은 종류 여러 행은 PK 오름차순
+- 기존 결제 잠금 순서는 `PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고`, 회원 포함 시 `MEMBER`가 맨 앞이다. 같은 종류 여러 행은 PK 오름차순이며 신규 INSERT 순서를 뜻하지 않는다.
+- 탈퇴·신규 주문 생성·멤버십 지급·배송지 변경은 트랜잭션의 첫 DB 작업으로 회원을 잠그고 탈퇴를 검사한다. 잠금 전 일반 조회·회원 엔티티 선로딩을 피하며, 주문 생성의 회원 잠금은 멱등 키 조회보다 앞이다.
+- 탈퇴한 회원은 MemberService에서 MEMBER_NOT_FOUND. 탈퇴의 상태 조회를 일반 조회로 수행하려면 탈퇴 제한 상태를 새로 만드는 관련 경로도 회원 잠금을 공유해야 한다.
 - 신규 행 중복 생성은 UNIQUE 제약으로 최종 방어한다.
 - 락 대기 시간 초과는 `COMMON-010`(409), Idempotency-Key 충돌·처리 중은 `COMMON-006`(409)
 - 벌크 UPDATE는 Auditing을 거치지 않으므로 `updated_at`을 함께 갱신한다.
@@ -82,10 +89,13 @@
   - 404: 대상 없음, 다른 회원 소유
   - 409: 현재 상태와 맞지 않음, 중복
   - 500: 외부 서비스 오류(코드로 구분)
-- 접두어: member(MEMBER, ADDRESS, REGION, MEMBERSHIP), product(PRODUCT, CATEGORY, MART, STOCK), recipe(RECIPE, INGREDIENT, AUTO_CART, AI), order(CART, ORDER), payment(PAYMENT, REFUND, POINT, BILLING)
+- 접두어: member(MEMBER, ADDRESS, REGION, MEMBERSHIP, AUDIT), product(PRODUCT, CATEGORY, MART, STOCK), recipe(RECIPE, INGREDIENT, AUTO_CART, AI), order(CART, ORDER), payment(PAYMENT, REFUND, POINT, BILLING)
 - message는 사용자에게 그대로 보여줄 수 있는 문장으로 쓴다.
 - catch 후 무시 금지. 외부 API 실패는 WARN, 예상 못한 예외는 ERROR + 스택
 - 비밀번호, 토큰, 빌링키, 카드 정보, 휴대전화 원문은 로그에 남기지 않는다.
+- 감사 details에는 허용한 변경 항목의 전후 값만 저장하며 개인정보·비밀번호 해시·조회 응답·개인정보 검색어·자유 입력 원문을 제외하고 업무 이력 ID를 연결하지 않는다.
+- 감사 IP는 직접 접속 주소를 기본으로 하며, 배포 시 지정한 신뢰 프록시가 정리한 헤더만 사용한다.
+- 휴대전화 차단 해시는 정규화 후 HMAC-SHA-256을 사용하고, 키는 JWT와 분리해 외부 설정으로 관리한다.
 
 ## 테스트
 - 메서드 이름은 영어, `@DisplayName`은 한국어 문장, 본문은 `// given`, `// when`, `// then`

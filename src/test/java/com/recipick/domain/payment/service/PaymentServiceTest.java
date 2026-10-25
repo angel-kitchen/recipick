@@ -20,6 +20,7 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -37,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -160,6 +162,36 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("ID 잠금 조회는 findByIdForUpdate로 결제를 돌려준다")
+    void getByIdForUpdate() {
+        // given
+        Payment payment = failedPayment();
+        given(paymentRepository.findByIdForUpdate(PAYMENT_ID)).willReturn(Optional.of(payment));
+
+        // when
+        Payment found = paymentService.getByIdForUpdate(PAYMENT_ID);
+
+        // then
+        assertThat(found).isSameAs(payment);
+        verify(paymentRepository).findByIdForUpdate(PAYMENT_ID);
+    }
+
+    @Test
+    @DisplayName("ID 잠금 조회도 없는 결제면 PAYMENT_NOT_FOUND다")
+    void getByIdForUpdateNotFound() {
+        // given
+        given(paymentRepository.findByIdForUpdate(PAYMENT_ID)).willReturn(Optional.empty());
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.getByIdForUpdate(PAYMENT_ID));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
     @DisplayName("SYSTEM 환불이 없으면 PG 청구 금액·UUID 키·멈춘 시계의 시각으로 REQUESTED 행을 만든다")
     void requestSystemRefundCreatesFirstOne() {
         // given
@@ -208,6 +240,109 @@ class PaymentServiceTest {
         assertThat(refund.getStatus()).isEqualTo(status);
         assertThat(refund.getIdempotencyKey()).isEqualTo("key_existing");
         verify(refundRepository, never()).save(any(Refund.class));
+    }
+
+    @Test
+    @DisplayName("멱등키 조회는 Repository 결과를 그대로 돌려준다")
+    void findRefundByIdempotencyKey() {
+        // given
+        Payment payment = failedPayment();
+        Refund existing = refund(1L, payment, 23800L, RefundStatus.REQUESTED, RefundRequester.MEMBER);
+        given(refundRepository.findByIdempotencyKey("key_1")).willReturn(Optional.of(existing));
+
+        // when
+        Optional<Refund> found = paymentService.findRefundByIdempotencyKey("key_1");
+
+        // then
+        assertThat(found).containsSame(existing);
+    }
+
+    @Test
+    @DisplayName("환불 ID 조회는 행을 그대로 돌려준다")
+    void getRefundById() {
+        // given
+        Refund existing = refund(7L, failedPayment(), 23800L, RefundStatus.REQUESTED, RefundRequester.MEMBER);
+        given(refundRepository.findById(7L)).willReturn(Optional.of(existing));
+
+        // when
+        Refund found = paymentService.getRefundById(7L);
+
+        // then
+        assertThat(found).isSameAs(existing);
+    }
+
+    @Test
+    @DisplayName("TX1이 만든 환불 행이 TX2에 없으면 호출자 버그라 IllegalStateException이다")
+    void getRefundByIdNotFound() {
+        // given
+        given(refundRepository.findById(7L)).willReturn(Optional.empty());
+
+        // when
+        Throwable thrown = catchThrowable(() -> paymentService.getRefundById(7L));
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("회원 환불은 결제 금액 전액·클라이언트 키·멈춘 시계의 시각으로 REQUESTED 행을 만들고 즉시 flush한다")
+    void requestMemberRefund() {
+        // given
+        Payment payment = cancelRequestedPayment();
+        given(refundRepository.saveAndFlush(any(Refund.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        Refund refund = paymentService.requestMemberRefund(payment, "단순 변심", "client-key-1");
+
+        // then — save()가 아니라 saveAndFlush()여야 UNIQUE 충돌을 이 자리에서 받는다
+        verify(refundRepository).saveAndFlush(refundCaptor.capture());
+        verify(refundRepository, never()).save(any(Refund.class));
+        assertThat(refund).isSameAs(refundCaptor.getValue());
+        assertThat(refund.getPayment()).isSameAs(payment);
+        assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
+        assertThat(refund.getReason()).isEqualTo("단순 변심");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.MEMBER);
+        assertThat(refund.getIdempotencyKey()).isEqualTo("client-key-1");
+        assertThat(refund.getRequestedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("같은 멱등키가 UNIQUE에 걸리면 COMMON-011로 바꾸고 원인 예외를 붙인다")
+    void requestMemberRefundWhenKeyAlreadyUsed() {
+        // given — 다른 결제에 같은 키가 동시에 들어온 경쟁. 선조회는 둘 다 통과하고 DB가 한쪽을 거절한다
+        Payment payment = cancelRequestedPayment();
+        DataIntegrityViolationException cause = new DataIntegrityViolationException("Duplicate entry");
+        given(refundRepository.saveAndFlush(any(Refund.class))).willThrow(cause);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            paymentService.requestMemberRefund(payment, "단순 변심", "client-key-1"));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH))
+            .hasCause(cause);
+    }
+
+    @Test
+    @DisplayName("취소 요청 상태가 아닌 결제에는 회원 환불을 만들지 않고 저장도 하지 않는다")
+    void requestMemberRefundWhenPaymentNotCancelRequested() {
+        // given — Payment.requestCancel() 전에 부르면 엔티티가 막는다
+        Payment payment = failedPayment();
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            paymentService.requestMemberRefund(payment, "단순 변심", "client-key-1"));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+        verify(refundRepository, never()).saveAndFlush(any(Refund.class));
     }
 
     @Test
@@ -330,12 +465,20 @@ class PaymentServiceTest {
     }
 
     private Payment failedPayment(Long paymentId) {
+        return payment(paymentId, PaymentStatus.FAILED);
+    }
+
+    private Payment cancelRequestedPayment() {
+        return payment(PAYMENT_ID, PaymentStatus.CANCEL_REQUESTED);
+    }
+
+    private Payment payment(Long paymentId, PaymentStatus status) {
         Payment payment = Payment.builder()
             .orderId(paymentId)
             .paymentMethod(PaymentMethod.CARD)
             .portonePaymentId("pay_" + paymentId)
             .amount(23800L)
-            .status(PaymentStatus.FAILED)
+            .status(status)
             .expiresAt(LocalDateTime.of(2026, 10, 21, 10, 5))
             .build();
         // DB를 거치지 않아 id가 비어 있다. JPA가 채웠을 값을 흉내 내서 orderId와 섞이는 실수를 잡는다

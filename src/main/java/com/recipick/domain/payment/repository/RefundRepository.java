@@ -11,7 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
     @Query("""
-            SELECT r
+
+        SELECT r
             FROM Refund r
             WHERE r.payment.id = :paymentId
               AND r.requestedBy =
@@ -19,9 +20,12 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
             """)
     Optional<Refund> findSystemRefundByPaymentId(@Param("paymentId") Long paymentId);
 
-    // 주문 결제 조회(1-2)용 단건
+    // 결제 후 취소의 같은 키 재요청. idempotency_key가 UNIQUE라 최대 한 건이다
+    Optional<Refund> findByIdempotencyKey(String idempotencyKey);
+
+    // 주문 결제 조회용 단건
     List<Refund> findAllByPaymentIdOrderByIdDesc(Long paymentId);
 
-    // 결제 내역(1-3)용 배치. 결제별 묶음과 최신 판정은 Service가 하므로 정렬은 두지 않는다
+    // 결제 내역용 배치. 결제별 묶음과 최신 판정은 Service가 하므로 정렬은 두지 않는다
     List<Refund> findAllByPaymentIdIn(Collection<Long> paymentIds);
 }

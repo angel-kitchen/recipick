@@ -1,6 +1,14 @@
 package com.recipick.domain.order.service;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
+import com.recipick.domain.order.dto.request.OrderSearchRequest;
+import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
+import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
+import com.recipick.domain.order.dto.response.OrderDetailResponse;
+import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
+import com.recipick.domain.order.dto.response.OrderSummaryResponse;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.OrderStatusHistory;
@@ -16,9 +24,11 @@ import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockQuantity;
+import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
+import com.recipick.global.response.PageResponse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -29,6 +39,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +65,11 @@ public class OrderService {
 
     public boolean existsPendingOrder(Long memberId) {
         return orderRepository.existsByPendingMemberId(memberId);
+    }
+
+    // pending_member_id가 UNIQUE라 회원당 많아야 한 건이다
+    public Optional<Order> findPendingOrder(Long memberId) {
+        return orderRepository.findByPendingMemberId(memberId);
     }
 
     // 주문명이 첫 상품 기준이라 담은 순서대로 돌려준다
@@ -121,6 +138,65 @@ public class OrderService {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
                 .getMemberId();
+    }
+
+    public PageResponse<OrderSummaryResponse> searchMemberOrders(
+            Long memberId, OrderSearchRequest request, Pageable pageable) {
+        Page<Order> orders = orderRepository.searchByMember(memberId, request.statusGroup(), pageable);
+        Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
+        return PageResponse.from(orders.map(order ->
+                OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+    }
+
+    // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
+    // 없는 마트 ID는 다른 도메인을 조회하지 않고 빈 목록으로 답한다
+    public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
+            AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
+        Long martId = resolveMartId(role, adminMartId, request.martId());
+        Page<Order> orders = orderRepository.searchByMart(martId, request.martStatus(), pageable);
+        Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
+        return PageResponse.from(orders.map(order ->
+                OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+    }
+
+    // 다른 회원의 주문이면 "그 주문은 있다"를 알리지 않도록 없는 주문과 같이 답한다
+    public OrderDetailResponse getMemberOrder(Long memberId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .filter(found -> found.getMemberId().equals(memberId))
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        return OrderDetailResponse.of(order, findOrderItems(orderId));
+    }
+
+    // 결제 전(NONE) 주문은 마트가 처리할 대상이 아니라 없는 주문과 같이 답한다. 다른 마트 주문은 목록과 같은 규칙으로 403이다
+    public OrderAdminDetailResponse getAdminOrder(AdminRole role, Long adminMartId, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .filter(found -> found.getMartStatus() != MartStatus.NONE)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        verifyMartScope(role, adminMartId, order);
+        return OrderAdminDetailResponse.of(order, findOrderItems(orderId),
+                orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
+    }
+
+    // 주문 행만 잠근다. 회원 취소는 결제 → 주문 순서로 잠그므로 교착이 없고, 잠근 뒤 상태를 보므로 둘 중 하나만 성공한다
+    @Transactional
+    public OrderMartStatusResponse acceptByMart(AdminRole role, Long adminMartId, Long adminId, Long orderId) {
+        Order order = getOrderForUpdate(orderId);
+        // 결제 전 주문은 관리자 조회와 같이 없는 주문으로 답한다
+        if (order.getMartStatus() == MartStatus.NONE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        verifyMartScope(role, adminMartId, order);
+        // 같은 수락 요청이 반복되면 처음 결과를 그대로 돌려준다
+        if (order.getStatus() == OrderStatus.PAID && order.getMartStatus() == MartStatus.PREPARING) {
+            return OrderMartStatusResponse.from(order);
+        }
+
+        MartStatus fromMartStatus = order.getMartStatus();
+        order.acceptByMart();
+
+        orderStatusHistoryRepository.save(martHistory(
+                order, fromMartStatus.name(), order.getMartStatus().name(), adminId));
+        return OrderMartStatusResponse.from(order);
     }
 
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
@@ -247,6 +323,31 @@ public class OrderService {
         return OrderErrorCode.PENDING_ORDER_EXISTS;
     }
 
+    // 주문마다 상품을 읽으면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 주문별로 나눈다
+    private Map<Long, List<OrderItem>> itemsByOrderId(List<Order> orders) {
+        return orderItemRepository.findAllByOrderIdInOrderByIdAsc(orders.stream().map(Order::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+    }
+
+    // 상품 도메인 관리자 API(ProductService.resolveMartId)와 같은 규칙이다. 다른 마트를 지정하면 403으로 거절한다
+    private Long resolveMartId(AdminRole role, Long adminMartId, Long requestedMartId) {
+        if (role == AdminRole.MART_ADMIN) {
+            if (requestedMartId != null && !requestedMartId.equals(adminMartId)) {
+                throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+            }
+            return adminMartId;
+        }
+        return requestedMartId;
+    }
+
+    // 상품 도메인 관리자 API와 같은 규칙이다. MART_ADMIN은 소속 마트 주문만 다룬다
+    private void verifyMartScope(AdminRole role, Long adminMartId, Order order) {
+        if (role == AdminRole.MART_ADMIN && !order.getMartId().equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+    }
+
     private Order getOrderForUpdate(Long orderId) {
         return orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
@@ -255,6 +356,18 @@ public class OrderService {
     private OrderStatusHistory systemHistory(
             Order order, OrderStatusType statusType, String from, String to, String reason) {
         return history(order, statusType, from, to, OrderStatusActor.SYSTEM, reason);
+    }
+
+    // 마트 처리는 슈퍼 관리자가 대신해도 주체는 마트다. 누가 처리했는지는 changedByAdminId로 남긴다
+    private OrderStatusHistory martHistory(Order order, String from, String to, Long adminId) {
+        return OrderStatusHistory.builder()
+                .order(order)
+                .statusType(OrderStatusType.MART)
+                .fromStatus(from)
+                .toStatus(to)
+                .actor(OrderStatusActor.MART)
+                .changedByAdminId(adminId)
+                .build();
     }
 
     private OrderStatusHistory history(

@@ -9,18 +9,22 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -49,6 +53,13 @@ public class PaymentService {
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
     }
 
+    // 취소 흐름의 첫 줄. 결제 ID로 들어오는 API라 orderId 잠금 조회와 따로 둔다
+    @Transactional
+    public Payment getByIdForUpdate(Long paymentId) {
+        return paymentRepository.findByIdForUpdate(paymentId)
+            .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도
     // 기존 행(REQUESTED·COMPLETED·FAILED 무관)을 돌려주고 새 키를 만들지 않는다 (1차 문서 8절).
     // amount는 PG가 실제로 청구한 금액이다 — 금액 불일치면 PAYMENT.amount와 다르다. 호출 전에 PAYMENT 행이 잠겨 있어야 한다
@@ -61,6 +72,34 @@ public class PaymentService {
                 reason,
                 UUID.randomUUID().toString(),
                 LocalDateTime.now(clock))));
+    }
+
+    // 결제 후 취소의 같은 키 재요청 판정. PAYMENT를 잠근 TX1 안에서만 뜻이 있으므로 바깥 트랜잭션을 강제한다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Refund> findRefundByIdempotencyKey(String idempotencyKey) {
+        return refundRepository.findByIdempotencyKey(idempotencyKey);
+    }
+
+    // TX2가 PAYMENT를 잠근 뒤 TX1이 만든 환불 행을 새 영속성 컨텍스트에서 다시 읽는다.
+    // 환불 변경은 모두 PAYMENT 잠금 아래에서 하므로 환불 행은 따로 잠그지 않는다. 없으면 호출자 버그다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Refund getRefundById(Long refundId) {
+        return refundRepository.findById(refundId)
+            .orElseThrow(() -> new IllegalStateException("환불 행이 없습니다. refundId=" + refundId));
+    }
+
+    // 회원 환불은 환불 행이 곧 멱등 작업이라 클라이언트 키를 그대로 저장한다. PAYMENT·ORDER의 CANCEL_REQUESTED와 한 트랜잭션에
+    // 묶여야 하므로 바깥 트랜잭션(TX1)을 강제한다. 같은 키 선조회는 PAYMENT 잠금 아래에서 끝났지만, 다른 결제에 같은 키가
+    // 동시에 들어오면 서로 다른 PAYMENT를 잠가 둘 다 통과하므로 UNIQUE가 최종 판정한다. 즉시 flush해 충돌을 여기서 받는다.
+    // 새 MEMBER 환불의 non-null UNIQUE 값은 idempotencyKey뿐이다 — portoneCancellationId는 아직 null이라 이 충돌은 키 경쟁이다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Refund requestMemberRefund(Payment payment, String reason, String idempotencyKey) {
+        try {
+            return refundRepository.saveAndFlush(
+                Refund.requestedByMember(payment, reason, idempotencyKey, LocalDateTime.now(clock)));
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH, e);
+        }
     }
 
     // 내 결제 내역. 정렬은 호출자가 넘긴 Pageable이 정한다

@@ -1,4 +1,5 @@
-// 첨부 ERD 변환본. NULL/NOT NULL, 기본값, 자동 증가, 삭제/갱신 정책은 원본에 명시되지 않아 생략.
+// 기존 첨부 ERD 변환 부분의 NULL/NOT NULL, 기본값, 자동 증가, 삭제/갱신 정책은 원본에 명시되지 않아 생략.
+// 새 ADMIN_AUDIT_LOG·TRIAL_BLOCK은 필수·선택 여부와 자동 증가를 명시.
 // 여러 컬럼의 UK 표시는 아래 조합의 복합 UNIQUE로 해석함 (원본에서 인덱스 그룹명 확인 불가):
 // CART_ITEM(member_id, product_id), POINT_USAGE(point_earning_id, order_id),
 // RECIPE_INGREDIENT(recipe_id, ingredient_id), AUTO_CART_ITEM(auto_cart_request_id, ingredient_id),
@@ -11,6 +12,7 @@ Table REGION {
   name varchar(50)
 }
 
+// withdrawn_at이 NULL이면 이용 중이며, 탈퇴 시 기존 이메일·이름·휴대전화를 고유한 대체값으로 교체한다.
 Table MEMBER {
   id bigint [pk]
   email varchar(50) [unique]
@@ -22,6 +24,7 @@ Table MEMBER {
   location_agreed_at datetime
   terms_agreed_at datetime
   privacy_agreed_at datetime
+  withdrawn_at datetime [null]
   created_at datetime
   updated_at datetime
 }
@@ -49,6 +52,20 @@ Table ADMIN {
   updated_at datetime
 }
 
+// 감사 기록은 갱신하지 않으며, 1년이 지난 기록만 내부 배치로 삭제한다.
+// 대상이 여러 종류이므로 target_id는 특정 테이블의 FK가 아니다. 개인정보·비밀정보는 details에 넣지 않는다.
+Table ADMIN_AUDIT_LOG {
+  id bigint [pk, increment]
+  admin_id bigint [not null]
+  action varchar(64) [not null]
+  target_type varchar(32) [not null]
+  target_id bigint [null]
+  mart_id bigint [null]
+  details json [null]
+  ip_address varchar(45) [null]
+  created_at datetime [not null]
+}
+
 Table MEMBERSHIP {
   id bigint [pk]
   member_id bigint
@@ -66,6 +83,15 @@ Table MEMBERSHIP {
   terminated_at datetime
   created_at datetime
   updated_at datetime
+}
+
+// 정규화한 휴대전화의 HMAC-SHA-256을 hex 64자로 저장한다. 멤버십 이용 이력이 있는 탈퇴 회원만 대상이다.
+// 재탈퇴 정책에 따라 expires_at을 연장할 수 있다. updated_at은 없으며, 만료 기록은 내부 배치로 삭제한다.
+Table TRIAL_BLOCK {
+  id bigint [pk, increment]
+  phone_hash varchar(64) [not null, unique]
+  expires_at datetime [not null]
+  created_at datetime [not null]
 }
 
 Table CART_ITEM {
@@ -108,6 +134,8 @@ Table ORDERS {
   cancel_reason_detail varchar(500)
   indexes {
     (member_id, idempotency_key) [unique]
+    member_id
+    (mart_id, mart_status)
   }
 }
 
@@ -436,6 +464,8 @@ Ref: MEMBER.mart_id > MART.id
 Ref: MEMBER.selected_address_id > MEMBER_ADDRESS.id
 Ref: MEMBER_ADDRESS.member_id > MEMBER.id
 Ref: ADMIN.mart_id > MART.id
+Ref: ADMIN_AUDIT_LOG.admin_id > ADMIN.id
+Ref: ADMIN_AUDIT_LOG.mart_id > MART.id
 Ref: MEMBERSHIP.member_id > MEMBER.id
 Ref: MEMBERSHIP.granted_by_admin_id > ADMIN.id
 Ref: CART_ITEM.member_id > MEMBER.id
@@ -487,7 +517,9 @@ TableGroup member_admin_membership {
   MEMBER
   MEMBER_ADDRESS
   ADMIN
+  ADMIN_AUDIT_LOG
   MEMBERSHIP
+  TRIAL_BLOCK
 }
 TableGroup cart_order {
   CART_ITEM
