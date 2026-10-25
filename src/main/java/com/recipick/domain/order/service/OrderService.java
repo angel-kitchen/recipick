@@ -67,6 +67,12 @@ public class OrderService {
         return orderRepository.existsByPendingMemberId(memberId);
     }
 
+    // 회원 탈퇴 판단용. 종료된 주문은 진행 중으로 돌아오지 않고 진행 중으로 들어오는 입구는 회원 행을 잠그는 주문 생성뿐이라,
+    // 호출 측이 회원 행을 잠근 뒤라면 잠금 없이 조회해도 된다
+    public boolean existsInProgressOrder(Long memberId) {
+        return orderRepository.existsInProgressByMemberId(memberId);
+    }
+
     // pending_member_id가 UNIQUE라 회원당 많아야 한 건이다
     public Optional<Order> findPendingOrder(Long memberId) {
         return orderRepository.findByPendingMemberId(memberId);

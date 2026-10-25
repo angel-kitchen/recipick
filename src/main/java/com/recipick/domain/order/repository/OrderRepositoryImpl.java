@@ -36,6 +36,17 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 order.martStatus.ne(MartStatus.NONE));
     }
 
+    // 탈퇴 판단용. 종료(CANCELED, REFUNDED, PAID+DELIVERED)가 아니면 모두 진행 중이다.
+    // 회원 목록의 ONGOING 탭은 CANCEL_REQUESTED를 취소·환불 탭에 넣으므로 그 조건을 재사용하지 않는다
+    @Override
+    public boolean existsInProgressByMemberId(Long memberId) {
+        return queryFactory
+                .selectOne()
+                .from(order)
+                .where(order.memberId.eq(memberId), closed().not())
+                .fetchFirst() != null;
+    }
+
     private Page<Order> pageByIdDesc(Pageable pageable, BooleanExpression... where) {
         List<Order> content = queryFactory
                 .selectFrom(order)
@@ -51,6 +62,11 @@ public class OrderRepositoryImpl implements OrderRepositoryCustom {
                 .where(where);
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
+    }
+
+    private BooleanExpression closed() {
+        return order.status.in(OrderStatus.CANCELED, OrderStatus.REFUNDED)
+                .or(order.status.eq(OrderStatus.PAID).and(order.martStatus.eq(MartStatus.DELIVERED)));
     }
 
     private BooleanExpression statusGroupEq(OrderStatusGroup statusGroup) {
