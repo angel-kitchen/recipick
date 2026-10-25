@@ -1,24 +1,28 @@
 package com.recipick.domain.recipe.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
+import java.util.List;
+
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "auto_cart_request")
+@Table(name = "auto_cart_request",
+        indexes = {
+                @Index(name = "idx_auto_cart_request_status_created_at", columnList = "status, created_at"),
+                @Index(name = "idx_auto_cart_request_member_id_created_at", columnList = "member_id, created_at")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AutoCartRequest {
 
@@ -30,12 +34,13 @@ public class AutoCartRequest {
 
     private Long martId;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private AutoCartStatus status;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "json")
-    private String menus;
+    private List<AutoCartMenu> menus;
 
     private Long totalPrice;
 
@@ -46,11 +51,15 @@ public class AutoCartRequest {
     private LocalDateTime createdAt;
 
     @Builder
-    private AutoCartRequest(Long memberId, Long martId, String status, String menus, Long totalPrice) {
+    private AutoCartRequest(Long memberId, Long martId, List<AutoCartMenu> menus, Long totalPrice) {
         this.memberId = memberId;
         this.martId = martId;
-        this.status = status;
+        this.status = AutoCartStatus.PREVIEWED;
         this.menus = menus;
         this.totalPrice = totalPrice;
+    }
+
+    public boolean isConfirmed() {
+        return status == AutoCartStatus.CONFIRMED;
     }
 }
