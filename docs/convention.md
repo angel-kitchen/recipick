@@ -2,7 +2,7 @@
 
 ## 기준
 
-API 명세는 각자 형식으로 쓰되, 아래 공통 규칙과 에러 코드 체계는 모두 따릅니다. 기준 ERD는 '레시피 장보기 ERD 최종본(마트 통합안)'에 배송지 목록을 반영한 31개 테이블입니다.
+API 명세는 각자 형식으로 쓰되, 아래 공통 규칙과 에러 코드 체계는 모두 따릅니다. 기준 ERD는 '레시피 장보기 ERD 최종본(마트 통합안)'에 배송지 목록·관리자 감사 로그·탈퇴 후 체험 차단을 반영한 33개 테이블입니다.
 
 | 항목 | 따르는 쪽 | 결정 |
 | --- | --- | --- |
@@ -43,6 +43,8 @@ API 명세는 각자 형식으로 쓰되, 아래 공통 규칙과 에러 코드 
 ### 인증·인가
 
 - JWT는 Security Filter에서 한 번만 파싱하고, 인증 정보는 SecurityContext Principal(주체 유형, ID, role, martId)에 담습니다.
+- 회원 토큰은 인증 때 DB의 `MEMBER.withdrawn_at`을 확인해 탈퇴 회원의 접근을 거절합니다. `global/security`의 공통 인터페이스(예: `MemberStatusChecker`)를 member가 구현하며, 인증 필터는 도메인 Entity·Repository를 직접 참조하지 않습니다.
+- 탈퇴 계정의 로그인·재발급도 거절합니다. 탈퇴 상태 DB 변경과 Redis 세션 삭제는 원자적이지 않으므로 DB 검사를 차단의 최종 기준으로 삼고, 실패한 세션 정리는 재시도합니다.
 - 로그인 회원은 `@LoginMember Long memberId`, 로그인 관리자는 `@LoginAdmin Long adminId`로 받습니다. 회원 토큰과 관리자 토큰은 서로의 API를 호출할 수 없습니다.
 - 관리자 토큰은 `type=ADMIN`, `adminId`, `role`(SUPER_ADMIN, MART_ADMIN), MART_ADMIN만 `martId`를 담습니다.
 - `/api/admin/**`는 SUPER_ADMIN, MART_ADMIN 모두 Security를 통과하고, SUPER_ADMIN 전용 API(결제·환불 관리자 API 등)는 `@PreAuthorize("hasRole('SUPER_ADMIN')")`를 추가합니다.
@@ -131,6 +133,7 @@ com.{project}
 │  ├─ security                     // JWT, 인증 필터, Principal, @LoginMember·@LoginAdmin,
 │  │                               // EntryPoint·AccessDeniedHandler, 마트 관리자 권한 검사
 │  ├─ filter                       // 요청 로깅 필터(/api/webhooks/** 제외)
+│  ├─ audit                        // AdminAuditRecorder와 공통 입력 DTO(구현·저장은 member)
 │  ├─ exception                    // ErrorCode, CommonErrorCode, AuthErrorCode, BusinessException, GlobalExceptionHandler
 │  ├─ response                     // ApiResponse, ErrorResponse, PageResponse
 │  ├─ entity                       // BaseTimeEntity
@@ -167,7 +170,11 @@ com.{project}
 - 호출받는 Service는 기존 트랜잭션에 합류하며 `REQUIRES_NEW`를 사용하지 않습니다.
 - 재고 복구는 주문 상태 종료와 같은 트랜잭션에서 주문 도메인이 처리합니다.
 - PortOne 등 외부 시스템 호출은 DB 트랜잭션 밖에서 수행하고, 결과 확인 후 짧은 DB 트랜잭션으로 내부 상태를 반영합니다.
-- `ApplicationEvent`는 알림·통계·로그처럼 일시적인 불일치를 허용할 수 있는 후처리에만 사용합니다.
+- `ApplicationEvent`는 알림·통계·로그처럼 일시적인 불일치를 허용할 수 있는 후처리에만 사용합니다. 관리자 감사 로그는 이번 합의에 따라 이벤트가 아닌 동기 기록 인터페이스로 처리합니다.
+- 관리자 감사 로그는 `global/audit`의 `AdminAuditRecorder` 인터페이스로 기록하고 구현은 member가 제공합니다. 각 도메인은 다른 도메인의 구현 Service를 직접 주입하지 않고, 작업을 조립하는 Facade 등 트랜잭션 경계에서 공통 인터페이스를 호출합니다.
+- 내부 DB 변경과 감사 기록은 같은 쓰기 가능한 트랜잭션으로 묶고, 기록 실패 시 작업도 롤백합니다. 개인정보가 보이는 관리자 조회도 감사 기록과 함께 커밋한 뒤 결과를 반환하며, 기록 실패 시 결과를 반환하지 않습니다.
+- 외부 결제사 호출이 필요한 관리자 작업은 `요청 접수 상태 + 감사 기록 → COMMIT → 외부 호출 → 결과 반영 트랜잭션`으로 나눕니다. 이미 실행된 외부 처리는 DB 롤백으로 취소할 수 없습니다.
+- 탈퇴에 필요한 주문·결제·환불·포인트 조회 및 정리는 각 도메인 Service가 Boolean·DTO 등으로 제공하고 회원 Facade가 조립합니다. 실제 연동 전에는 임시 false 응답으로 탈퇴를 허용하지 않습니다.
 
 ### 네이밍
 
@@ -191,7 +198,7 @@ com.{project}
 - enum은 `@Enumerated(EnumType.STRING)`, 연관관계는 `fetch = LAZY`가 기본입니다.
 - enum 컬럼은 `@Column(columnDefinition = "varchar(20)")`처럼 varchar로 매핑합니다. 지정하지 않으면 Hibernate가 MySQL enum 타입이나 CHECK 제약을 만들어, 값을 추가할 때마다 DDL을 바꿔야 합니다.
 - 금액 `Long`, 개수 `int`, 필요량·판매 단위 수치 `BigDecimal`을 씁니다.
-- `created_at`, `updated_at`은 `BaseTimeEntity` 상속과 JPA Auditing으로 채웁니다.
+- `created_at`, `updated_at`은 `BaseTimeEntity` 상속과 JPA Auditing으로 채웁니다. `updated_at`이 없는 `ADMIN_AUDIT_LOG`·`TRIAL_BLOCK`은 이를 상속하지 않고 `@CreatedDate`와 `AuditingEntityListener`로 `createdAt`만 직접 선언합니다. 생성 시각 전용 부모 클래스는 추가하지 않습니다. 감사 로그는 갱신하지 않지만 체험 차단 기록의 만료 시각은 정책에 따라 연장할 수 있습니다.
 
 ```java
 // 지양: 서비스에서 상태를 직접 바꿈
@@ -232,10 +239,14 @@ public ResponseEntity<ApiResponse<AutoCartPreviewResponse>> preview(
 
 ### 트랜잭션·동시성
 
-- 클래스에는 `@Transactional(readOnly = true)` 를 기본으로 적용하고, 상태를 변경하는 메서드에만 `@Transactional`을 적용합니다.
+- 클래스에는 `@Transactional(readOnly = true)` 를 기본으로 적용하고, 상태 변경 메서드에는 `@Transactional`을 적용합니다. 감사 기록을 함께 저장하는 관리자 조회의 바깥 트랜잭션도 쓰기 가능하도록 선언합니다. 안쪽 기록 메서드의 선언만으로 이미 시작된 readOnly 트랜잭션을 바꾸려 하지 않습니다.
 - PortOne, AI 등 외부 시스템 호출은 DB 트랜잭션 밖에서 수행하고, 외부 결과를 받은 뒤 짧은 DB 트랜잭션으로 내부 상태를 반영합니다.
 - 낙관적 락(`@Version`)은 쓰지 않습니다. 재고·포인트 잔액·주문·결제·마트 상태처럼 동시 요청이 겹칠 수 있는 핵심 변경은 **비관적 락(`PESSIMISTIC_WRITE`, `SELECT ... FOR UPDATE`)으로 대상 행을 잠근 뒤** 현재 상태를 검증하고 변경합니다.
-- 여러 자원을 함께 잠그는 트랜잭션은 **락 순서를 고정**합니다. 결제 관련 핵심 흐름은 기존에 존재하는 잠금 대상에 대해 `PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고` 순서로 락을 획득합니다. 같은 종류의 행을 여러 개 잠글 때는 PK 등 고정된 기준의 오름차순으로 조회해 잠금 순서를 일치시킵니다.
+- 여러 자원을 함께 잠그는 트랜잭션은 **락 순서를 고정**합니다. 회원 잠금이 없는 기존 결제 흐름은 `PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고`를 따르며, 회원을 포함하면 `MEMBER → PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고` 순서로 기존 행 잠금을 획득합니다. 같은 종류의 여러 행은 PK 오름차순으로 잠급니다. 이는 기존 행의 잠금 획득 순서이며 신규 주문·결제 INSERT 순서를 일률적으로 바꾸는 규칙은 아닙니다.
+- 탈퇴·신규 주문 생성·멤버십 지급·배송지 변경 등 회원 행 잠금이 필요한 흐름은 해당 트랜잭션의 첫 DB 작업으로 회원 행을 잠근 뒤 탈퇴 여부를 확인합니다. 같은 트랜잭션에서 잠금 전에 일반 조회로 스냅샷을 만들거나 회원 엔티티를 미리 로딩하지 않습니다.
+- 주문 생성의 회원 잠금은 같은 멱등 키의 기존 주문 조회보다 앞에 둡니다. 요청 형식 검증·해시 계산 등 DB를 사용하지 않는 처리는 잠금 전에 수행할 수 있습니다.
+- 탈퇴한 회원은 `MemberService`의 일반·잠금 조회에서 `MEMBER_NOT_FOUND`로 처리합니다. 인증 단계의 거절과 별개로 상태 변경 진입점에서도 확인합니다.
+- 탈퇴는 회원 잠금 후 진행 중 주문·미해결 결제와 환불·활성 멤버십을 확인합니다. 일반 조회만으로 이 상태를 검사하려면 탈퇴 제한 상태를 새로 만드는 관련 흐름도 같은 회원 잠금 규칙에 참여해야 합니다. 상태를 종료하는 모든 처리에 일괄적으로 회원 잠금을 추가하지 않고, 추가가 필요한 경로는 담당 도메인과 잠금 순서를 확인합니다.
 - 장바구니의 이전 마트 상품 일괄 삭제와 담기는 같은 트랜잭션에서 처리하며, 회원의 CART_ITEM 행을 id 오름차순으로 잠근 뒤 진행합니다.
 - 주문·결제 생성처럼 아직 존재하지 않는 신규 엔티티에는 비관적 락을 적용할 수 없으므로, 기존에 존재하는 공유 자원에만 잠금을 적용하고 신규 행의 중복 생성은 UNIQUE 제약으로 최종 방어합니다.
 - ORDERS에는 `pending_member_id`와 (member_id, idempotency_key) 두 UNIQUE가 있습니다. 충돌 예외가 나면 Facade에서 롤백된 트랜잭션 밖에서 키로 다시 조회합니다. 행이 있으면 기존 주문을 반환하고, 없으면 결제 대기 중복 오류로 처리합니다.
@@ -287,6 +298,9 @@ public void deductStock(Long productId, int quantity) {
 - `catch` 후 무시하지 않습니다. 외부 API 실패는 `WARN`, 예상하지 못한 예외는 `ERROR`와 스택으로 남깁니다.
 - 비밀번호, 토큰, 빌링키, 카드 정보, 휴대전화 번호 원문은 로그에 남기지 않습니다.
 - 개인정보가 담긴 응답 본문(예: 내 정보 조회의 휴대전화 원문)은 요청 로깅 필터에 남기지 않습니다.
+- 감사 로그의 `details`에는 허용한 변경 항목의 전후 값만 넣고 개인정보·비밀번호 해시·토큰·빌링키·비밀키·조회 응답 본문·개인정보 검색어·자유 입력 원문은 넣지 않습니다. 기존 업무 이력 ID를 연결하지 않습니다.
+- 감사 로그 IP는 직접 연결받은 주소를 기본으로 합니다. 전달 헤더는 배포 구성에서 지정한 신뢰 프록시가 외부 입력을 정리한 경우에만 사용합니다.
+- 체험 차단용 휴대전화는 정규화 후 HMAC-SHA-256으로 계산합니다. HMAC 키는 JWT 키와 분리해 외부 설정으로 관리하고 코드·Git·로그에 남기지 않으며, 키 변경 시 기존 차단 기록 조회 방식을 함께 설계합니다.
 
 ### 테스트
 
@@ -432,7 +446,7 @@ public void deductStock(Long productId, int quantity) {
 
 | 패키지 | 접두어 |
 | --- | --- |
-| member | MEMBER, ADDRESS, REGION, MEMBERSHIP |
+| member | MEMBER, ADDRESS, REGION, MEMBERSHIP, AUDIT |
 | product | PRODUCT, CATEGORY, MART, STOCK |
 | recipe | RECIPE, INGREDIENT, AUTO_CART, AI |
 | order | CART, ORDER |
