@@ -19,7 +19,7 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
             WHERE ri.recipe.id IN :recipeIds
             ORDER BY ri.recipe.id ASC, ri.required DESC , ri.id ASC
             """)
-    List<RecipeIngredient> findAllWithIngredientByRecipesIds(@Param("recipeIds") Collection<Long> recipeIds);
+    List<RecipeIngredient> findAllWithIngredientByRecipeIds(@Param("recipeIds") Collection<Long> recipeIds);
 
     @Query("""
             SELECT ri

@@ -39,12 +39,12 @@ public class AutoCartService {
         }
         Map<Long, Recipe> recipes = recipeRepository.findAllById(recipeIds).stream()
             .collect(Collectors.toMap(Recipe::getId, Function.identity()));
-        Map<Long, Set<Long>> optionalIds = recipeIngredientRepository.findAllWithIngredientByRecipesIds(recipeIds)
+        Map<Long, Set<Long>> optionalIds = recipeIngredientRepository.findAllWithIngredientByRecipeIds(recipeIds)
             .stream()
             .filter(recipeIngredient -> !recipeIngredient.isRequired())
             .collect(Collectors.groupingBy(
                 recipeIngredient -> recipeIngredient.getRecipe().getId(),
-                Collectors.mapping(recipeIngredient -> recipeIngredient.getRecipe().getId(), Collectors.toSet())
+                Collectors.mapping(recipeIngredient -> recipeIngredient.getIngredient().getId(), Collectors.toSet())
             ));
 
         return menus.stream()
@@ -57,7 +57,7 @@ public class AutoCartService {
         Map<Long, AutoCartMenu> menuByRecipeId = menus.stream()
             .collect(Collectors.toMap(AutoCartMenu::recipeId, Function.identity()));
         Map<Long, RequiredIngredient> totals = new LinkedHashMap<>();
-        for (RecipeIngredient recipeIngredient : recipeIngredientRepository.findAllWithIngredientByRecipesIds(
+        for (RecipeIngredient recipeIngredient : recipeIngredientRepository.findAllWithIngredientByRecipeIds(
             menuByRecipeId.keySet())) {
             AutoCartMenu menu = menuByRecipeId.get(recipeIngredient.getRecipe().getId());
             Long ingredientId = recipeIngredient.getIngredient().getId();
