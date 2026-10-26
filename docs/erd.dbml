@@ -294,6 +294,7 @@ Table STOCK_ADJUSTMENT {
   reason varchar(500)
   admin_id bigint
   created_at datetime
+  updated_at datetime
 }
 
 Table MART {
