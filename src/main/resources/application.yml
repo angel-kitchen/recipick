@@ -68,3 +68,13 @@ spring:
       data-locations:
         - classpath:data.sql
         - classpath:data-admin-local.sql
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  structured:
+    # 운영은 로그를 수집·검색하기 쉽게 JSON으로 남긴다(MDC의 traceId가 함께 출력된다)
+    format:
+      console: logstash
