@@ -47,7 +47,8 @@ public class MemberLoginService {
         if (attemptStore.isLocked(SUBJECT_TYPE, request.email())) {
             throw new BusinessException(AuthErrorCode.LOGIN_LOCKED);
         }
-        Member member = memberRepository.findByEmailIgnoreCase(request.email()).orElse(null);
+        Member member = memberRepository.findByEmailIgnoreCase(request.email())
+                .filter(value -> !value.isWithdrawn()).orElse(null);
         // DB가 같은 계정으로 비교하는 표기가 달라도 잠금은 저장된 이메일로 모은다.
         String attemptId = member == null ? request.email()
                 : member.getEmail().trim().toLowerCase(Locale.ROOT);

@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.IntegrationTestSupport;
+import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderStatusHistory;
 import com.recipick.domain.order.entity.enums.MartStatus;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
 
@@ -36,6 +39,8 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     private static final Long MART_A = 1L;
     private static final Long MART_B = 2L;
 
+    @Autowired
+    private MemberRepository members;
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -189,13 +194,18 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @Transactional
     @DisplayName("회원 토큰으로 수락하면 403 AUTH-004로 거절한다")
     void acceptOrder_memberToken() throws Exception {
         // given
         Order order = order(MART_A, OrderStatus.PAID, MartStatus.RECEIVED);
 
+        String unique = UUID.randomUUID().toString().replace("-", "");
+        Member activeMember = members.saveAndFlush(Member.builder().email(unique + "@role.test")
+                .name("권한 검증 회원").phone(unique.substring(0, 20)).passwordHash("hash").build());
+
         // when
-        MockHttpServletResponse response = accept(order.getId(), tokens.createMemberTokens(MEMBER_ID).accessToken());
+        MockHttpServletResponse response = accept(order.getId(), tokens.createMemberTokens(activeMember.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(403);

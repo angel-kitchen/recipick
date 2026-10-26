@@ -73,7 +73,7 @@ public class MembershipService {
         if (memberId == null) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
         }
-        if (!memberRepository.existsById(memberId)) {
+        if (!memberRepository.existsByIdAndWithdrawnAtIsNull(memberId)) {
             throw new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND);
         }
     }

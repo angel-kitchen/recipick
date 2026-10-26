@@ -13,6 +13,7 @@ import com.recipick.global.config.ClockConfig;
 import com.recipick.global.config.JacksonConfig;
 import com.recipick.global.config.JwtConfig;
 import com.recipick.global.config.SecurityConfig;
+import com.recipick.global.security.MemberStatusChecker;
 import com.recipick.global.config.WebConfig;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.GlobalExceptionHandler;
@@ -65,6 +66,9 @@ class PortOneConfigControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private MemberStatusChecker memberStatusChecker;
 
     @MockitoBean
     private PortOneConfigService portOneConfigService;
