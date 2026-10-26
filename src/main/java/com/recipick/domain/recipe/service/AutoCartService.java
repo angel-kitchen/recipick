@@ -5,6 +5,7 @@ import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
 import com.recipick.domain.recipe.entity.AutoCartItem;
 import com.recipick.domain.recipe.entity.AutoCartMenu;
 import com.recipick.domain.recipe.entity.AutoCartRequest;
+import com.recipick.domain.recipe.entity.AutoCartStatus;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
@@ -127,6 +128,11 @@ public class AutoCartService {
 
     public List<AutoCartItem> findItems(Long autoCartRequestId) {
         return autoCartItemRepository.findAllWithIngredient(autoCartRequestId);
+    }
+
+    @Transactional
+    public int deleteExpiredPreviews(LocalDateTime before) {
+        return autoCartRequestRepository.deleteByStatusAndCreatedAtBefore(AutoCartStatus.PREVIEWED, before);
     }
 
     private AutoCartItem toItem(AutoCartRequest request, AutoCartLine line) {
