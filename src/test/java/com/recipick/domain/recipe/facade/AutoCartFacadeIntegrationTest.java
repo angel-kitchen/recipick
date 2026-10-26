@@ -11,11 +11,18 @@ import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.dto.response.MemberMeResponse.MembershipSummary;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
+import com.recipick.domain.order.entity.CartAddHistory;
+import com.recipick.domain.order.entity.CartItem;
+import com.recipick.domain.order.entity.enums.CartAddSource;
+import com.recipick.domain.order.repository.CartAddHistoryRepository;
+import com.recipick.domain.order.repository.CartItemRepository;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
+import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
+import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
 import com.recipick.domain.recipe.entity.AutoCartMenu;
 import com.recipick.domain.recipe.entity.AutoCartRequest;
@@ -25,6 +32,7 @@ import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.entity.UnavailableReason;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.AutoCartItemRepository;
 import com.recipick.domain.recipe.repository.AutoCartRequestRepository;
 import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
@@ -32,8 +40,15 @@ import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +65,12 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
     AutoCartFacade autoCartFacade;
     @Autowired
     AutoCartRequestRepository autoCartRequestRepository;
+    @Autowired
+    AutoCartItemRepository autoCartItemRepository;
+    @Autowired
+    CartItemRepository cartItemRepository;
+    @Autowired
+    CartAddHistoryRepository cartAddHistoryRepository;
     @Autowired
     RecipeRepository recipeRepository;
     @Autowired
@@ -115,6 +136,12 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        cartAddHistoryRepository.deleteAll(cartAddHistoryRepository.findAll().stream()
+            .filter(history -> history.getMemberId().equals(MEMBER_ID))
+            .toList());
+        cartItemRepository.deleteAll(cartItemRepository.findAllByMemberIdAndProductIdIn(
+            MEMBER_ID, List.of(tofuProduct.getId())));
+        autoCartItemRepository.deleteAll();
         autoCartRequestRepository.deleteAll();
         productRepository.deleteById(tofuProduct.getId());
         martRepository.deleteById(mart.getId());
@@ -183,5 +210,190 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(thrown)
             .isInstanceOfSatisfying(BusinessException.class, exception ->
                 assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.AUTO_CART_REQUEST_NOT_FOUND));
+    }
+
+    private Long previewId() {
+        return autoCartFacade.preview(MEMBER_ID, previewRequest(5, List.of(pepper.getId()))).autoCartRequestId();
+    }
+
+    private void assertErrorCode(Throwable thrown, Object errorCode) {
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(errorCode));
+    }
+
+    @Test
+    @DisplayName("확정: 구매 가능한 상품만 장바구니에 합산하고 자동 담기 경로·요청 번호로 이력을 남긴다")
+    void confirm() {
+        // given
+        Long autoCartRequestId = previewId();
+        cartItemRepository.save(CartItem.builder()
+            .memberId(MEMBER_ID)
+            .productId(tofuProduct.getId())
+            .quantity(1)
+            .build());
+
+        // when
+        AutoCartConfirmResponse response = autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+
+        // then
+        assertThat(response.status()).isEqualTo(AutoCartStatus.CONFIRMED);
+        assertThat(response.addedItems())
+            .extracting(AutoCartConfirmResponse.AddedItem::addedQuantity,
+                AutoCartConfirmResponse.AddedItem::cartQuantity)
+            .containsExactly(tuple(2, 3));
+        assertThat(response.excludedItems())
+            .extracting(AutoCartConfirmResponse.ExcludedItem::reason)
+            .containsExactly(UnavailableReason.NOT_SOLD_IN_MART);
+        assertThat(response.priceChanged()).isFalse();
+
+        List<CartAddHistory> histories = cartAddHistoryRepository.findAll().stream()
+            .filter(history -> history.getMemberId().equals(MEMBER_ID))
+            .toList();
+        assertThat(histories)
+            .extracting(CartAddHistory::getSource, CartAddHistory::getAutoCartRequestId,
+                CartAddHistory::getQuantity)
+            .containsExactly(tuple(CartAddSource.AUTO_CART, autoCartRequestId, 2));
+    }
+
+    @Test
+    @DisplayName("확정 뒤 다시 조회하면 가격이 바뀌어도 확정 시점 결과를 그대로 돌려준다")
+    void getAutoCart_confirmedSnapshot() {
+        // given
+        Long autoCartRequestId = previewId();
+        autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+        ReflectionTestUtils.setField(tofuProduct, "price", 9000L);
+        productRepository.save(tofuProduct);
+
+        // when
+        AutoCartPreviewResponse response = autoCartFacade.getAutoCart(MEMBER_ID, autoCartRequestId);
+
+        // then
+        assertThat(response.status()).isEqualTo(AutoCartStatus.CONFIRMED);
+        assertThat(response.totalPrice()).isEqualTo(5000L);
+        assertThat(response.items())
+            .extracting(AutoCartPreviewResponse.Item::ingredientId, AutoCartPreviewResponse.Item::unavailableReason)
+            .containsExactly(tuple(tofu.getId(), null), tuple(pepper.getId(), UnavailableReason.NOT_SOLD_IN_MART));
+        assertThat(response.items().get(0).expectedRemainingAmount().toPlainString()).isEqualTo("100");
+    }
+
+    @Test
+    @DisplayName("확정: 미리보기 뒤 가격이 바뀌었으면 priceChanged가 true다")
+    void confirm_priceChanged() {
+        // given
+        Long autoCartRequestId = previewId();
+        ReflectionTestUtils.setField(tofuProduct, "price", 3000L);
+        productRepository.save(tofuProduct);
+
+        // when
+        AutoCartConfirmResponse response = autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+
+        // then
+        assertThat(response.totalAddedPrice()).isEqualTo(6000L);
+        assertThat(response.priceChanged()).isTrue();
+    }
+
+    @Test
+    @DisplayName("확정: 이미 확정한 요청이면 AUTO_CART_INVALID_STATUS 예외를 던진다")
+    void confirm_alreadyConfirmed() {
+        // given
+        Long autoCartRequestId = previewId();
+        autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.AUTO_CART_INVALID_STATUS);
+    }
+
+    @Test
+    @DisplayName("확정: 미리보기 뒤 이용 마트가 바뀌었으면 AUTO_CART_MART_CHANGED 예외를 던진다")
+    void confirm_martChanged() {
+        // given
+        Long autoCartRequestId = previewId();
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(mart.getId() + 1));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.AUTO_CART_MART_CHANGED);
+    }
+
+    @Test
+    @DisplayName("확정: 재계산 결과 담을 상품이 없으면 장바구니에 담지 않고 NO_PURCHASABLE_INGREDIENTS 예외를 던진다")
+    void confirm_noPurchasable() {
+        // given
+        Long autoCartRequestId = previewId();
+        ReflectionTestUtils.setField(tofuProduct, "totalQuantity", 0);
+        productRepository.save(tofuProduct);
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.NO_PURCHASABLE_INGREDIENTS);
+        assertThat(cartItemRepository.findByMemberIdAndProductId(MEMBER_ID, tofuProduct.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("확정: 후보에 없는 상품을 고르면 INVALID_PRODUCT_SELECTION 예외를 던진다")
+    void confirm_invalidSelection() {
+        // given
+        Long autoCartRequestId = previewId();
+        AutoCartConfirmRequest request = new AutoCartConfirmRequest(
+            List.of(new AutoCartConfirmRequest.ProductSelection(tofu.getId(), tofuProduct.getId() + 1000)));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, request));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.INVALID_PRODUCT_SELECTION);
+    }
+
+    @Test
+    @DisplayName("확정: 같은 요청을 5건 동시에 확정해도 장바구니에는 한 번만 합산된다")
+    void confirm_concurrent() throws Exception {
+        // given
+        Long autoCartRequestId = previewId();
+        int threads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger invalidStatus = new AtomicInteger();
+
+        // when
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+                    success.incrementAndGet();
+                } catch (BusinessException e) {
+                    if (e.getErrorCode() == RecipeErrorCode.AUTO_CART_INVALID_STATUS) {
+                        invalidStatus.incrementAndGet();
+                    }
+                }
+                return null;
+            }));
+        }
+        ready.await();
+        start.countDown();
+        for (Future<?> future : futures) {
+            future.get(10, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        // then
+        assertThat(success.get()).isEqualTo(1);
+        assertThat(invalidStatus.get()).isEqualTo(threads - 1);
+        assertThat(cartItemRepository.findByMemberIdAndProductId(MEMBER_ID, tofuProduct.getId()))
+            .get()
+            .extracting(CartItem::getQuantity)
+            .isEqualTo(2);
     }
 }

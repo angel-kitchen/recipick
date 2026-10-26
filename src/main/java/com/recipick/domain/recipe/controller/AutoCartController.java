@@ -1,6 +1,8 @@
 package com.recipick.domain.recipe.controller;
 
+import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
+import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
 import com.recipick.domain.recipe.facade.AutoCartFacade;
 import com.recipick.global.response.ApiResponse;
@@ -36,5 +38,14 @@ public class AutoCartController {
         @PathVariable Long autoCartRequestId
     ) {
         return ResponseEntity.ok(ApiResponse.success(autoCartFacade.getAutoCart(memberId, autoCartRequestId)));
+    }
+
+    @PostMapping("/{autoCartRequestId}/confirm")
+    public ResponseEntity<ApiResponse<AutoCartConfirmResponse>> confirm(
+        @LoginMember Long memberId,
+        @PathVariable Long autoCartRequestId,
+        @Valid @RequestBody(required = false) AutoCartConfirmRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(autoCartFacade.confirm(memberId, autoCartRequestId, request)));
     }
 }

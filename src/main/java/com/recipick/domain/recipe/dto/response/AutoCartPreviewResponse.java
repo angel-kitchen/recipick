@@ -1,6 +1,7 @@
 package com.recipick.domain.recipe.dto.response;
 
 import com.recipick.domain.product.dto.ProductSummary;
+import com.recipick.domain.recipe.entity.AutoCartItem;
 import com.recipick.domain.recipe.entity.AutoCartMenu;
 import com.recipick.domain.recipe.entity.AutoCartRequest;
 import com.recipick.domain.recipe.entity.AutoCartStatus;
@@ -23,7 +24,15 @@ public record AutoCartPreviewResponse(
 ) {
 
     public static AutoCartPreviewResponse of(AutoCartRequest request, String martName, List<AutoCartLine> lines) {
-        List<Item> items = lines.stream().map(Item::from).toList();
+        return create(request, martName, lines.stream().map(Item::from).toList());
+    }
+
+    public static AutoCartPreviewResponse ofSnapshot(
+        AutoCartRequest request, String martName, List<AutoCartItem> autoCartItems) {
+        return create(request, martName, autoCartItems.stream().map(Item::from).toList());
+    }
+
+    private static AutoCartPreviewResponse create(AutoCartRequest request, String martName, List<Item> items) {
         int purchasableCount = (int) items.stream().filter(Item::purchasable).count();
         return new AutoCartPreviewResponse(
             request.getId(),
@@ -73,6 +82,25 @@ public record AutoCartPreviewResponse(
                 line.linePrice(),
                 line.purchasable() ? null : line.unavailableReason(),
                 line.candidates().stream().map(option -> Candidate.from(option.product())).toList()
+            );
+        }
+
+        static Item from(AutoCartItem item) {
+            SaleUnit unit = item.getIngredient().getUnit();
+            BigDecimal remaining = item.calculateExpectedRemainingAmount();
+            return new Item(
+                item.getIngredient().getId(),
+                item.getIngredient().getName(),
+                item.getRequiredAmount().stripTrailingZeros(),
+                unit,
+                item.isPurchasable(),
+                item.getProductId() == null ? null : new Product(item.getProductId(), item.getProductName(),
+                    item.getSaleUnitAmount().stripTrailingZeros(), unit, item.getUnitPrice()),
+                item.getPurchaseQuantity(),
+                remaining == null ? null : remaining.stripTrailingZeros(),
+                item.getLinePrice(),
+                item.getUnavailableReason(),
+                List.of()
             );
         }
     }

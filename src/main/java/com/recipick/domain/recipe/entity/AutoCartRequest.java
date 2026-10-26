@@ -1,7 +1,17 @@
 package com.recipick.domain.recipe.entity;
 
-import jakarta.persistence.*;
-
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.global.exception.BusinessException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -61,5 +71,19 @@ public class AutoCartRequest {
 
     public boolean isConfirmed() {
         return status == AutoCartStatus.CONFIRMED;
+    }
+
+    public void validateConfirmable() {
+        if (status != AutoCartStatus.PREVIEWED) {
+            throw new BusinessException(RecipeErrorCode.AUTO_CART_INVALID_STATUS);
+        }
+    }
+
+    // 확정 뒤 기록 화면은 확정 시점 합계를 보여줘야 하므로 미리보기 합계를 확정 합계로 바꾼다
+    public void confirm(long totalPrice, LocalDateTime confirmedAt) {
+        validateConfirmable();
+        this.status = AutoCartStatus.CONFIRMED;
+        this.totalPrice = totalPrice;
+        this.confirmedAt = confirmedAt;
     }
 }

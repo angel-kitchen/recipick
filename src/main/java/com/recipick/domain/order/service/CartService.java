@@ -46,6 +46,18 @@ public class CartService {
     // 상품 판매 가능 여부·마트 검증은 호출하는 Facade가 끝낸 뒤 들어온다.
     @Transactional
     public CartItemAddResponse addCartItem(Long memberId, Long productId, int quantity, int stock) {
+        return addCartItem(memberId, productId, quantity, stock, CartAddSource.DIRECT, null);
+    }
+
+    // 자동 구성으로 담은 상품을 어느 요청에서 담았는지 담기 이력으로 추적할 수 있게 요청 번호를 함께 남긴다.
+    @Transactional
+    public CartItemAddResponse addAutoCartItem(
+            Long memberId, Long productId, int quantity, int stock, Long autoCartRequestId) {
+        return addCartItem(memberId, productId, quantity, stock, CartAddSource.AUTO_CART, autoCartRequestId);
+    }
+
+    private CartItemAddResponse addCartItem(
+            Long memberId, Long productId, int quantity, int stock, CartAddSource source, Long autoCartRequestId) {
         // 없는 행을 UPDATE하면 MySQL이 갭 락을 잡아 동시 insert끼리 데드락이 나므로, 있을 때만 UPDATE한다.
         CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
                 .map(existing -> increaseQuantity(existing, quantity, stock))
@@ -56,7 +68,8 @@ public class CartService {
         cartAddHistoryRepository.save(CartAddHistory.builder()
                 .memberId(memberId)
                 .productId(productId)
-                .source(CartAddSource.DIRECT)
+                .source(source)
+                .autoCartRequestId(autoCartRequestId)
                 .quantity(quantity)
                 .build());
         return CartItemAddResponse.from(cartItem);
