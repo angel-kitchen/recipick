@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -103,7 +104,9 @@ class AdminAuditRequestContextTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"localhost", "example.com", "999.1.1.1", "::::", "127.0.0.1:8080"})
+    @ValueSource(strings = {"localhost", "example.com", "999.1.1.1", "256.0.0.1", "01.2.3.4", "127.1", "::::", "127.0.0.1:8080",
+            "2001::db8::1", "1:2:3:4:5:6:7:8:9", "1:2:3:4:5:6:7::8", "::ffff:999.1.1.1",
+            "fe80::1%eth0", "[::1]", "", "1:2:3:4:5:6:7", "12345::1", "::1:"})
     @DisplayName("호스트 이름이나 잘못된 주소는 DNS로 조회하지 않고 기록에서 제외한다")
     void ignoresInvalidAddress(String address) {
         // given
@@ -116,6 +119,31 @@ class AdminAuditRequestContextTest {
 
         // then
         assertThat(result).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "0.0.0.0, 0.0.0.0",
+            "255.255.255.255, 255.255.255.255",
+            "::, 0:0:0:0:0:0:0:0",
+            "::1, 0:0:0:0:0:0:0:1",
+            "2001:DB8:0:0:0:0:0:1, 2001:db8:0:0:0:0:0:1",
+            "1:2:3:4:5:6:7:8, 1:2:3:4:5:6:7:8",
+            "::ffff:192.0.2.1, 192.0.2.1",
+            "2001:db8::192.0.2.1, 2001:db8:0:0:0:0:c000:201"
+    })
+    @DisplayName("정상 IPv4와 압축·혼합 IPv6 주소를 DNS 없이 정규화한다")
+    void normalizesNumericAddresses(String address, String expected) {
+        // given
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr(address);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        // when
+        String result = context.clientIp();
+
+        // then
+        assertThat(result).isEqualTo(expected);
     }
 
     private void authenticate(AuthPrincipal principal) {
