@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 /**
  * recipes.csv를 읽어 로컬·시연용 레시피 초기 데이터 SQL(data-recipe-local.sql)을 만든다.
  *
- * <p>프로젝트 루트에서 컴파일 없이 실행한다 (JDK 11 이상의 단일 파일 실행).
+ * <p>프로젝트 루트에서 컴파일 없이 실행한다 (JDK 17 이상의 단일 파일 실행. record·Stream.toList()를 쓴다).
  * <pre>
  * java scripts/recipe-seed/GenerateRecipeSeed.java
  * java scripts/recipe-seed/GenerateRecipeSeed.java --allow-missing   # 다 채우기 전, 채운 행만 먼저 확인할 때
@@ -130,6 +130,10 @@ public class GenerateRecipeSeed {
             .map(String::strip)
             .filter(step -> !step.isEmpty())
             .toList();
+        // " | "처럼 구분자만 있으면 빈칸 검사를 통과해 조리 순서가 없는 레시피([])가 들어가므로 여기서 막는다
+        if (steps.isEmpty()) {
+            throw new IllegalArgumentException("조리 순서를 한 단계 이상 적어야 합니다");
+        }
         return new Recipe(name, cuisine, dishType, baseServings, cookTimeMin, difficulty, spicyLevel,
             extractVideoId(row.get("youtube_url")), steps);
     }
