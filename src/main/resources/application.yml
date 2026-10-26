@@ -82,3 +82,17 @@ logging:
     # 운영은 로그를 수집·검색하기 쉽게 JSON으로 남긴다(MDC의 traceId가 함께 출력된다)
     format:
       console: logstash
+
+---
+# 레시피 초기 데이터는 시연 화면용이라 로컬에서만 넣는다. 테스트에 넣으면 레시피 검색 결과 건수가 달라져 기존 테스트가 흔들린다.
+# 목록 값은 문서끼리 합쳐지지 않고 마지막 문서 값으로 덮이므로, 위 SQL 두 개를 다시 적는다.
+spring:
+  config:
+    activate:
+      on-profile: "local & !test & !prod & !production"
+  sql:
+    init:
+      data-locations:
+        - classpath:data.sql
+        - classpath:data-admin-local.sql
+        - optional:classpath:data-recipe-local.sql
