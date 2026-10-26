@@ -84,6 +84,7 @@
 - 운영 JSON 로그 예:
 ```json
 {"message":"요청 처리 GET /api/products status=401 132ms","level":"WARN","traceId":"a5864564-...","method":"GET","path":"/api/products","status":401,"durationMs":132}
+```
 
 ## 3. Prometheus·Grafana 구성과 대시보드
 
