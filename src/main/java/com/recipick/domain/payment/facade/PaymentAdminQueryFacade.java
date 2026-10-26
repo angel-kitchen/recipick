@@ -34,10 +34,19 @@ public class PaymentAdminQueryFacade {
 
     @Transactional
     public PageResponse<PaymentAdminSummaryResponse> findPayments(PaymentAdminSearchRequest request) {
-        PageResponse<PaymentAdminSummaryResponse> response = search(request, request.toPageable());
+        PageResponse<PaymentAdminSummaryResponse> response =
+            search(request, request.toPageable());
+
         // 결과가 0건이어도 실제 관리자 조회이므로 기록한다. 검색 조건은 감사 로그에 복사하지 않는다
         adminAuditRecorder.record(
-            new AdminAuditCommand(AdminAuditAction.PAYMENT_LIST_VIEW, null, null, null));
+            new AdminAuditCommand(
+                AdminAuditAction.PAYMENT_LIST_VIEW,
+                null,
+                null,
+                null
+            )
+        );
+
         return response;
     }
 
@@ -45,40 +54,95 @@ public class PaymentAdminQueryFacade {
     public PaymentAdminDetailResponse getPayment(Long paymentId) {
         // 결제가 없으면 여기서 PAYMENT-001로 끝나고 감사 기록도 남지 않는다
         Payment payment = paymentService.getById(paymentId);
+
         // 결제가 있으면 주문도 반드시 있다(주문 생성 트랜잭션에서 함께 만들어진다)
         Long memberId = orderService.getMemberIdOf(payment.getOrderId());
+
         List<Refund> refunds = paymentService.findRefundsOf(paymentId);
-        PaymentAdminDetailResponse response = PaymentAdminDetailResponse.of(payment, memberId, refunds);
+
+        PaymentAdminDetailResponse response =
+            PaymentAdminDetailResponse.of(payment, memberId, refunds);
 
         adminAuditRecorder.record(
-            new AdminAuditCommand(AdminAuditAction.PAYMENT_DETAIL_VIEW, paymentId, null, null));
+            new AdminAuditCommand(
+                AdminAuditAction.PAYMENT_DETAIL_VIEW,
+                paymentId,
+                null,
+                null
+            )
+        );
+
         return response;
     }
 
-    private PageResponse<PaymentAdminSummaryResponse> search(PaymentAdminSearchRequest request, Pageable pageable) {
+    private PageResponse<PaymentAdminSummaryResponse> search(
+        PaymentAdminSearchRequest request,
+        Pageable pageable
+    ) {
         // PAYMENT에는 회원 정보가 없다. 회원 조건은 주문 도메인이 주는 주문 ID 목록으로 바꿔 건다
         List<Long> orderIds = null;
+
         if (request.memberId() != null) {
             orderIds = orderService.findOrderIdsOf(request.memberId());
+
             if (orderIds.isEmpty()) {
                 return PageResponse.from(Page.empty(pageable));
             }
         }
 
         PaymentAdminSearchCondition condition = new PaymentAdminSearchCondition(
-            request.toPaymentStatus(), orderIds, request.toFromAt(), request.toToExclusive());
-        Page<Payment> payments = paymentService.searchForAdmin(condition, pageable);
+            request.toPaymentStatus(),
+            orderIds,
+            request.toFromAt(),
+            request.toToExclusive()
+        );
 
-        // 결제마다 환불·회원을 조회하면 페이지 크기만큼 쿼리가 늘어난다. 이번 페이지 것만 한 번씩 묶어 읽는다
+        Page<Payment> payments =
+            paymentService.searchForAdmin(condition, pageable);
+
+        // 결제마다 환불·회원을 조회하면 페이지 크기만큼 쿼리가 늘어난다.
+        // 이번 페이지 것만 한 번씩 묶어 읽는다
         List<Payment> content = payments.getContent();
-        Map<Long, RefundSummary> summaries = paymentService.getRefundSummaries(
-            content.stream().map(Payment::getId).toList());
-        Map<Long, Long> memberIds = orderService.findMemberIdsOf(
-            content.stream().map(Payment::getOrderId).toList());
 
-        return PageResponse.from(payments.map(payment -> PaymentAdminSummaryResponse.of(
-            payment,
-            memberIds.get(payment.getOrderId()),
-            summaries.getOrDefault(payment.getId(), RefundSummary.NONE))));
+        Map<Long, RefundSummary> summaries =
+            paymentService.getRefundSummaries(
+                content.stream()
+                    .map(Payment::getId)
+                    .toList()
+            );
+
+        Map<Long, Long> memberIds =
+            orderService.findMemberIdsOf(
+                content.stream()
+                    .map(Payment::getOrderId)
+                    .toList()
+            );
+
+        return PageResponse.from(
+            payments.map(payment ->
+                PaymentAdminSummaryResponse.of(
+                    payment,
+                    requireMemberId(memberIds, payment.getOrderId()),
+                    summaries.getOrDefault(
+                        payment.getId(),
+                        RefundSummary.NONE
+                    )
+                )
+            )
+        );
+    }
+
+    // Payment가 존재하는데 대응 주문의 회원 정보를 찾을 수 없다면 DB 정합성이 깨진 상태다.
+    // memberId=null로 조용히 응답하지 않고 서버 오류로 드러낸다.
+    private Long requireMemberId(Map<Long, Long> memberIds, Long orderId) {
+        Long memberId = memberIds.get(orderId);
+
+        if (memberId == null) {
+            throw new IllegalStateException(
+                "결제에 대응하는 주문 회원 정보를 찾을 수 없습니다. orderId=" + orderId
+            );
+        }
+
+        return memberId;
     }
 }
