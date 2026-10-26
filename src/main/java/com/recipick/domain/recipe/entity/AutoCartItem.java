@@ -1,15 +1,7 @@
 package com.recipick.domain.recipe.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
+
 import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -42,33 +34,58 @@ public class AutoCartItem {
 
     private Long productId;
 
+    @Column(length = 100)
+    private String productName;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal saleUnitAmount;
+
+    private Long unitPrice;
+
     @Column(precision = 10, scale = 2)
     private BigDecimal requiredAmount;
 
     private int purchaseQuantity;
 
-    private Long price;
+    private Long linePrice;
 
-    // TODO: 값 목록 확정 후 enum으로 교체
-    @Column(length = 20)
-    private String unavailableReason;
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private UnavailableReason unavailableReason;
 
     @Builder
     private AutoCartItem(
             AutoCartRequest autoCartRequest,
             Ingredient ingredient,
             Long productId,
+            String productName,
+            BigDecimal saleUnitAmount,
+            Long unitPrice,
             BigDecimal requiredAmount,
             int purchaseQuantity,
-            Long price,
-            String unavailableReason
+            Long linePrice,
+            UnavailableReason unavailableReason
     ) {
         this.autoCartRequest = autoCartRequest;
         this.ingredient = ingredient;
         this.productId = productId;
+        this.productName = productName;
+        this.saleUnitAmount = saleUnitAmount;
+        this.unitPrice = unitPrice;
         this.requiredAmount = requiredAmount;
         this.purchaseQuantity = purchaseQuantity;
-        this.price = price;
+        this.linePrice = linePrice;
         this.unavailableReason = unavailableReason;
+    }
+
+    public boolean isPurchasable() {
+        return unavailableReason == null;
+    }
+
+    public BigDecimal calculateExpectedRemainingAmount() {
+        if (!isPurchasable()) {
+            return null;
+        }
+        return saleUnitAmount.multiply(BigDecimal.valueOf(purchaseQuantity)).subtract(requiredAmount);
     }
 }

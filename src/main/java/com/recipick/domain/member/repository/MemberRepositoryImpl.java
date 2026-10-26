@@ -30,6 +30,7 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
     public Page<MemberAdminRow> searchMembers(String email, Boolean membershipActive, LocalDateTime now,
             Pageable pageable) {
         BooleanExpression[] conditions = {
+                member.withdrawnAt.isNull(),
                 StringUtils.hasText(email) ? member.email.containsIgnoreCase(email) : null,
                 membershipActiveEq(membershipActive, now)
         };

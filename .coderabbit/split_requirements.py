@@ -25,7 +25,7 @@ DOMAIN_FEATURES = {
     "member": [
         "회원가입·로그인", "이용 가능 지역 판정", "배송지 관리", "마이페이지", "멤버십 기능 제한", "멤버십 활성 검증",
         "관리자 로그인", "멤버십 관리", "유료 구독", "무료체험", "해지 예약", "즉시 해지", "결제 결과에 따른 전환",
-        "회원별 멤버십 이력 조회",
+        "회원별 멤버십 이력 조회", "비밀번호 변경", "회원 탈퇴", "관리자 감사 로그",
     ],
     "product": ["상품 검색·조회", "마트 관리", "상품 관리", "재료·상품 연결", "재고 관리"],
     "recipe": [
@@ -53,6 +53,27 @@ EXTRA_DOMAINS = {
     "마트 주문 거절·자동 환불": ["payment"],
     "회원가입·로그인": ["auth"],
     "관리자 로그인": ["auth"],
+    "비밀번호 변경": ["auth"],
+    "회원 탈퇴": ["auth", "order", "payment", "recipe"],
+    "관리자 감사 로그": ["product", "recipe", "order", "payment"],
+}
+
+# 공유 기능을 전달받은 도메인이 전체 기능의 구현 담당으로 오해하지 않도록 연동 책임을 구분한다.
+FEATURE_RESPONSIBILITIES = {
+    "회원 탈퇴": {
+        "member": "담당: 채빈 — 탈퇴 기능·회원 정보 정리·체험 차단",
+        "auth": "담당: 채빈 — 탈퇴 계정 인증·토큰 재발급 차단",
+        "order": "담당: 준희 — 주문·장바구니 연동, 탈퇴 기능: 채빈",
+        "payment": "담당: 정윤 — 결제·환불·포인트·결제수단 연동, 탈퇴 기능: 채빈",
+        "recipe": "담당: 보민 — 찜 등 레시피 도메인 데이터 정리 연동, 탈퇴 기능: 채빈",
+    },
+    "관리자 감사 로그": {
+        "member": "담당: 채빈 — 공통 감사 기능·회원 및 멤버십 기록 연동",
+        "product": "담당: 태헌 — 마트·상품·카테고리·재고 기록 연동, 공통 감사 기능: 채빈",
+        "recipe": "담당: 보민 — 레시피·재료 기록 연동, 공통 감사 기능: 채빈",
+        "order": "담당: 준희 — 주문 기록 연동, 공통 감사 기능: 채빈",
+        "payment": "담당: 정윤 — 결제·포인트 조회 및 환불 재처리 기록 연동, 공통 감사 기능: 채빈",
+    },
 }
 
 FEATURE_PATTERN = re.compile(r"- \*\*(.+?)\*\*")
@@ -111,7 +132,12 @@ def render(domain, sections):
         if section["note"]:
             out += section["note"] + [""]
         for item in section["items"]:
-            out += item
+            title = FEATURE_PATTERN.match(item[0]).group(1)
+            responsibility = FEATURE_RESPONSIBILITIES.get(title, {}).get(domain)
+            if responsibility:
+                out += [f"- **{title}** ({responsibility})", *item[1:]]
+            else:
+                out += item
         out.append("")
     return "\n".join(out).rstrip() + "\n"
 

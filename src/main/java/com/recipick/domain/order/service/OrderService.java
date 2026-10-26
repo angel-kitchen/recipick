@@ -67,6 +67,12 @@ public class OrderService {
         return orderRepository.existsByPendingMemberId(memberId);
     }
 
+    // 회원 탈퇴 판단용. 종료된 주문은 진행 중으로 돌아오지 않고 진행 중으로 들어오는 입구는 회원 행을 잠그는 주문 생성뿐이라,
+    // 호출 측이 회원 행을 잠근 뒤라면 잠금 없이 조회해도 된다
+    public boolean existsInProgressOrder(Long memberId) {
+        return orderRepository.existsInProgressByMemberId(memberId);
+    }
+
     // pending_member_id가 UNIQUE라 회원당 많아야 한 건이다
     public Optional<Order> findPendingOrder(Long memberId) {
         return orderRepository.findByPendingMemberId(memberId);
@@ -97,7 +103,7 @@ public class OrderService {
                 .detailAddress(request.detailAddress())
                 .regionId(regionId)
                 .build();
-        // 앞선 중복 확인은 잠금 없이 읽어 동시 요청이 함께 통과할 수 있으므로 UNIQUE 제약으로 최종 판정한다.
+        // 같은 회원의 요청은 Facade가 회원 행을 잠가 직렬화하지만, 신규 행 중복은 UNIQUE 제약으로 최종 방어한다.
         // 재고를 잠그기 전에 flush해 중복 요청이 상품 락을 기다리지 않고 바로 끝나게 한다
         try {
             orderRepository.saveAndFlush(order);

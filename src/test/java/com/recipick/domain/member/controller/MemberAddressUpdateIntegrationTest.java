@@ -185,7 +185,7 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
         assertThat(mapper.readTree(unowned.getContentAsString()).path("code").asText()).isEqualTo("ADDRESS-001");
         assertThat(missing.getStatus()).isEqualTo(404);
         assertThat(mapper.readTree(missing.getContentAsString()).path("code").asText()).isEqualTo("ADDRESS-001");
-        assertThat(missingMember.getStatus()).isEqualTo(404);
+        assertThat(missingMember.getStatus()).isEqualTo(401);
         assertThat(address.getLabel()).isEqualTo("집");
     }
 

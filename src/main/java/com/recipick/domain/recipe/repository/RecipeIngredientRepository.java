@@ -1,6 +1,7 @@
 package com.recipick.domain.recipe.repository;
 
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import jakarta.persistence.criteria.From;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -10,6 +11,15 @@ import java.util.Collection;
 import java.util.List;
 
 public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredient, Long> {
+
+    @Query("""
+            SELECT ri
+            FROM RecipeIngredient ri
+            JOIN FETCH ri.ingredient
+            WHERE ri.recipe.id IN :recipeIds
+            ORDER BY ri.recipe.id ASC, ri.required DESC , ri.id ASC
+            """)
+    List<RecipeIngredient> findAllWithIngredientByRecipeIds(@Param("recipeIds") Collection<Long> recipeIds);
 
     @Query("""
             SELECT ri

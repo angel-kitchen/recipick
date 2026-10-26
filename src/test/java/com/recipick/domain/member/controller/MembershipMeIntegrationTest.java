@@ -222,8 +222,8 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(anonymous.getStatus()).isEqualTo(401);
         assertThat(administrator.getStatus()).isEqualTo(403);
-        assertThat(missingMember.getStatus()).isEqualTo(404);
-        assertThat(body(missingMember).path("code").asText()).isEqualTo("MEMBER-001");
+        assertThat(missingMember.getStatus()).isEqualTo(401);
+        assertThat(body(missingMember).path("code").asText()).isEqualTo("AUTH-011");
     }
 
     private String timestamp(LocalDateTime value) {

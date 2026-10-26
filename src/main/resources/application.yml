@@ -38,6 +38,17 @@ security:
     lock-duration: 10m
     refresh-cookie-secure: true
 
+management:
+  server:
+    # 헬스 체크·지표는 앱 포트와 분리한 관리 포트에서만 연다. 이 포트는 외부(인터넷)에 공개하지 않는다
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
 ---
 spring:
   config:
