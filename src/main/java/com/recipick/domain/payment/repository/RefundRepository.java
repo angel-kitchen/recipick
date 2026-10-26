@@ -4,6 +4,7 @@ import com.recipick.domain.payment.entity.Refund;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -30,9 +31,13 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
     List<Refund> findAllByPaymentIdIn(Collection<Long> paymentIds);
 
     // 웹훅·재조회가 PortOne 취소 ID로 환불을 찾는다. portone_cancellation_id가 UNIQUE라 최대 한 건이다
+    // 정합화 Facade가 조회 트랜잭션 밖에서 refund.getPayment()를 읽으므로 결제를 함께 읽어 둔다(payment가 LAZY)
+    @EntityGraph(attributePaths = "payment")
     Optional<Refund> findByPortoneCancellationId(String portoneCancellationId);
 
     // 취소 ID를 아직 못 받은 회원 환불을 찾는 2차 경로. 정합화는 정확히 한 건일 때만 자동 반영하므로 목록으로 돌려준다
+    // 위와 같은 이유로 결제를 함께 읽는다
+    @EntityGraph(attributePaths = "payment")
     @Query("""
         SELECT r
             FROM Refund r

@@ -60,6 +60,22 @@ public class PaymentService {
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
     }
 
+    // 웹훅은 PortOne 결제 ID로 들어온다. 없으면 우리 결제가 아니므로 예외 대신 빈 값을 돌려주고 호출자가 IGNORED로 적는다
+    public Optional<Payment> findByPortonePaymentId(String portonePaymentId) {
+        return paymentRepository.findByPortonePaymentId(portonePaymentId);
+    }
+
+    // 정합화의 환불 찾기 ①. portone_cancellation_id가 UNIQUE라 최대 한 건이다.
+    // 잠금 없는 스냅샷이고 최종 판정은 PaymentCancelProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
+    public Optional<Refund> findRefundByPortoneCancellationId(String portoneCancellationId) {
+        return refundRepository.findByPortoneCancellationId(portoneCancellationId);
+    }
+
+    // 정합화의 환불 찾기 ②. 취소 ID를 아직 못 받은 회원 환불. 정확히 한 건일 때만 자동 반영하므로 판단은 호출자가 한다
+    public List<Refund> findRequestedMemberRefunds(Long paymentId) {
+        return refundRepository.findRequestedMemberRefundsByPaymentId(paymentId);
+    }
+
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도
     // 기존 행(REQUESTED·COMPLETED·FAILED 무관)을 돌려주고 새 키를 만들지 않는다 (1차 문서 8절).
     // amount는 PG가 실제로 청구한 금액이다 — 금액 불일치면 PAYMENT.amount와 다르다. 호출 전에 PAYMENT 행이 잠겨 있어야 한다

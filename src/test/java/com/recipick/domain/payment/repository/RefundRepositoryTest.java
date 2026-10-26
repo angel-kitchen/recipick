@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -160,7 +161,7 @@ class RefundRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("PortOne 취소 ID로 환불 한 건을 찾고, 모르는 ID는 비어 있다 — 웹훅·재조회가 들어오는 경로")
+    @DisplayName("PortOne 취소 ID로 환불 한 건을 결제와 함께 찾고, 모르는 ID는 비어 있다 — 웹훅·재조회가 들어오는 경로")
     void findByPortoneCancellationId() {
         // given
         Payment payment = paymentRepository.save(newFailedPayment(13L));
@@ -174,14 +175,16 @@ class RefundRepositoryTest extends IntegrationTestSupport {
         Refund found = refundRepository.findByPortoneCancellationId("cancel_13").orElseThrow();
         Optional<Refund> unknown = refundRepository.findByPortoneCancellationId("cancel_unknown");
 
-        // then
+        // then — clear 뒤라 결제가 영속성 컨텍스트에 없다. 그래도 초기화돼 있으면 조회가 함께 읽어 온 것이다
         assertThat(found.getId()).isEqualTo(saved.getId());
         assertThat(found.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(Hibernate.isInitialized(found.getPayment())).isTrue();
+        assertThat(found.getPayment().getId()).isEqualTo(payment.getId());
         assertThat(unknown).isEmpty();
     }
 
     @Test
-    @DisplayName("결제의 REQUESTED인 MEMBER 환불만 찾는다 — 끝난 환불·SYSTEM 환불·다른 결제는 제외")
+    @DisplayName("결제의 REQUESTED인 MEMBER 환불만 결제와 함께 찾는다 — 끝난 환불·SYSTEM 환불·다른 결제는 제외")
     void findRequestedMemberRefundsByPaymentId() {
         // given
         Payment payment = paymentRepository.save(newFailedPayment(14L));
@@ -199,8 +202,9 @@ class RefundRepositoryTest extends IntegrationTestSupport {
         // when
         List<Refund> found = refundRepository.findRequestedMemberRefundsByPaymentId(payment.getId());
 
-        // then
+        // then — 정합화가 조회 트랜잭션 밖에서 결제 ID를 비교하므로 결제까지 읽혀 있어야 한다
         assertThat(found).extracting(Refund::getId).containsExactly(requested.getId());
+        assertThat(Hibernate.isInitialized(found.get(0).getPayment())).isTrue();
     }
 
     @Test
