@@ -15,6 +15,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long> {
 
+    // 수신 Facade의 중복 판정 보조. webhook_id는 UNIQUE라 인덱스로 바로 찾는다
+    boolean existsByWebhookId(String webhookId);
+
     // Worker의 claim 전용. 같은 이벤트를 두 Worker가 동시에 잡지 않게 행을 잠근 뒤 상태를 다시 본다
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM WebhookEvent e WHERE e.id = :id")

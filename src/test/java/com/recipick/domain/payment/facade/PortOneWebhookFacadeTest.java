@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -254,16 +255,34 @@ class PortOneWebhookFacadeTest {
 
         // then
         assertThat(outcome).isEqualTo(WebhookReceiveOutcome.DUPLICATE);
+        verify(webhookEventService, never()).existsByWebhookId(anyString());
         verifyNoInteractions(paymentDelayQueue);
     }
 
     @Test
-    @DisplayName("다른 제약 위반은 재전송으로 오인하지 않고 그대로 던진다 — 500으로 PortOne이 다시 보낸다")
+    @DisplayName("제약 이름이 달라도 같은 webhook_id가 이미 있으면 DUPLICATE다 — 예전 자동 이름 UNIQUE 인덱스가 남은 DB")
+    void duplicateWithLegacyConstraintName() {
+        // given
+        givenVerified();
+        given(webhookEventService.save(any())).willThrow(duplicate("webhook_event.UK_legacy_auto_name"));
+        given(webhookEventService.existsByWebhookId(WEBHOOK_ID)).willReturn(true);
+
+        // when
+        WebhookReceiveOutcome outcome = facade.receive(WEBHOOK_ID, TIMESTAMP, SIGNATURE, PAID_BODY);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookReceiveOutcome.DUPLICATE);
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("다른 제약 위반이고 같은 webhook_id도 없으면 재전송으로 오인하지 않고 그대로 던진다 — 500으로 PortOne이 다시 보낸다")
     void otherConstraintViolation() {
         // given
         givenVerified();
         DataIntegrityViolationException other = duplicate("uk_something_else");
         given(webhookEventService.save(any())).willThrow(other);
+        given(webhookEventService.existsByWebhookId(WEBHOOK_ID)).willReturn(false);
 
         // when
         Throwable thrown = catchThrowable(() -> facade.receive(WEBHOOK_ID, TIMESTAMP, SIGNATURE, PAID_BODY));

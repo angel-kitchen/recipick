@@ -26,6 +26,11 @@ public class WebhookEventService {
         return webhookEventRepository.saveAndFlush(event);
     }
 
+    // 수신 Facade의 중복 판정 보조. 저장이 UNIQUE에 걸렸는데 제약 이름으로 판정하지 못했을 때만 부른다
+    public boolean existsByWebhookId(String webhookId) {
+        return webhookEventRepository.existsByWebhookId(webhookId);
+    }
+
     // TX-A. 행을 잠근 뒤 처리 가능한 상태인지 다시 보고 PROCESSING으로 바꾼다. 잡지 못하면 빈 값(끝났거나 처리 중이거나 없음).
     // 커밋과 함께 잠금이 풀리므로 호출자는 이 뒤에 PortOne을 기다려도 다른 요청을 막지 않는다.
     // 돌려준 이벤트의 attemptCount가 이 Worker의 처리권 번호다 — 결과를 기록할 때 그대로 넘긴다

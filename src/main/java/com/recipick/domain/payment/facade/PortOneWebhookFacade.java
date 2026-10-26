@@ -28,8 +28,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-// PortOne 웹훅 수신(inbox)의 진입점. 요청 스레드는 검증 → 저장 → 200까지만 하고 결제·환불 반영은 지연 큐 Worker가 한다.
-// PortOne은 30초 안에 응답이 없으면 재전송하므로 여기서 PortOne 재조회나 잠금을 잡지 않는다.
+// PortOne 웹훅 수신(inbox)의 진입점. 요청 스레드는 검증 → 저장 → 큐 등록 → 200까지만 하고 결제·환불 반영은
+// 지연 큐 Worker가 한다. PortOne은 30초 안에 응답이 없으면 재전송하므로 여기서 PortOne 재조회나 잠금을 잡지 않는다.
+// 트랜잭션을 걸지 않는다. 저장은 Service의 짧은 TX 하나이고, webhook_id UNIQUE 충돌 판정은 그 TX 밖(여기)에서 해야
+// rollback-only에 걸리지 않는다. 충돌은 "이미 받은 웹훅"이므로 200이다. 제약 이름으로 판정하고, 이름이 다르면 webhook_id로 한 번 더 확인한다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -68,7 +70,9 @@ public class PortOneWebhookFacade {
         try {
             saved = webhookEventService.save(toEvent(webhookId, parsed.get(), body));
         } catch (DataIntegrityViolationException e) {
-            if (isDuplicateWebhookId(e)) {
+            // 제약 이름이 다르게 남은 DB(예: 예전 @Column(unique = true)의 자동 이름 인덱스)에서도 재전송을 500으로 돌려보내지 않게
+            // 같은 webhook_id가 이미 있는지 한 번 더 본다. 저장 TX는 이미 롤백됐으므로 새 읽기 TX로 확인한다
+            if (isDuplicateWebhookId(e) || webhookEventService.existsByWebhookId(webhookId)) {
                 log.info("이미 받은 PortOne 웹훅 재전송: webhookId={}", webhookId);
                 return WebhookReceiveOutcome.DUPLICATE;
             }
