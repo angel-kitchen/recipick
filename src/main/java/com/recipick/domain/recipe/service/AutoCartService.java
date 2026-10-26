@@ -15,6 +15,10 @@ import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -110,6 +114,15 @@ public class AutoCartService {
         autoCartItemRepository.saveAll(lines.stream()
             .map(line -> toItem(request, line))
             .toList());
+    }
+
+    public Page<AutoCartRequest> findRequests(Long memberId, Pageable pageable) {
+        Pageable latestFirst = PageRequest.of(
+            pageable.getPageNumber(),
+            pageable.getPageSize(),
+            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))
+        );
+        return autoCartItemRepository.findByMemberId(memberId, latestFirst);
     }
 
     public List<AutoCartItem> findItems(Long autoCartRequestId) {

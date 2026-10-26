@@ -16,6 +16,7 @@ import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
 import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
+import com.recipick.domain.recipe.dto.response.AutoCartSummaryResponse;
 import com.recipick.domain.recipe.entity.AutoCartMenu;
 import com.recipick.domain.recipe.entity.AutoCartRequest;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
@@ -24,12 +25,16 @@ import com.recipick.domain.recipe.service.AutoCartLine;
 import com.recipick.domain.recipe.service.AutoCartService;
 import com.recipick.domain.recipe.service.RequiredIngredient;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.response.PageResponse;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,6 +108,18 @@ public class AutoCartFacade {
             totalPrice,
             priceChanged
         );
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<AutoCartSummaryResponse> findAutoCarts(Long memberId, Pageable pageable)
+    {
+        Page<AutoCartRequest> requests = autoCartService.findRequests(memberId, pageable);
+        Map<Long, String> martNames = requests.stream()
+            .map(AutoCartRequest::getMartId)
+            .distinct()
+            .collect(Collectors.toMap(Function.identity(), this::getMartName));
+        return PageResponse.from(requests.map(request ->
+            AutoCartSummaryResponse.of(request, martNames.get(request.getMartId()))));
     }
 
     private List<AutoCartLine> calculate(
