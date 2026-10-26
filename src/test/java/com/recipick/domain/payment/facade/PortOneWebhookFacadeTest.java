@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
+import com.recipick.domain.payment.service.PaymentDelayQueue;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.WebhookEventService;
 import com.recipick.domain.payment.service.WebhookReceiveOutcome;
 import com.recipick.global.exception.AuthErrorCode;
@@ -24,6 +27,7 @@ import com.recipick.infra.portone.PortOneWebhookVerifier;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import org.hibernate.exception.ConstraintViolationException;
@@ -39,6 +43,8 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class PortOneWebhookFacadeTest {
@@ -49,6 +55,8 @@ class PortOneWebhookFacadeTest {
     private static final String STORE_ID = "store-1";
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 25, 21, 0);
+    private static final Instant NOW_INSTANT = NOW.atZone(SEOUL).toInstant();
+    private static final Long EVENT_ID = 100L;
     private static final String PAID_BODY = body("Transaction.Paid", STORE_ID, "\"pay_1\"");
 
     @Mock
@@ -56,6 +64,9 @@ class PortOneWebhookFacadeTest {
 
     @Mock
     private WebhookEventService webhookEventService;
+
+    @Mock
+    private PaymentDelayQueue paymentDelayQueue;
 
     @Captor
     private ArgumentCaptor<WebhookEvent> eventCaptor;
@@ -131,6 +142,23 @@ class PortOneWebhookFacadeTest {
         assertThat(saved.getPortonePaymentId()).isEqualTo("pay_1");
         assertThat(saved.getPayload()).isEqualTo(PAID_BODY);
         assertThat(saved.getFinishedAt()).isNull();
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.webhookProcess(EVENT_ID), NOW_INSTANT);
+    }
+
+    @Test
+    @DisplayName("큐 등록이 실패해도 RECEIVED로 끝난다 — DB에 남은 행을 Fallback이 다시 등록하므로 500으로 재전송을 부르지 않는다")
+    void receivedEvenIfEnqueueFails() {
+        // given
+        givenValid();
+        willThrow(new RedisConnectionFailureException("redis down"))
+            .given(paymentDelayQueue).enqueueIfEarlier(any(), any());
+
+        // when
+        WebhookReceiveOutcome outcome = facade.receive(WEBHOOK_ID, TIMESTAMP, SIGNATURE, PAID_BODY);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookReceiveOutcome.RECEIVED);
+        assertThat(savedEvent().getStatus()).isEqualTo(WebhookEventStatus.RECEIVED);
     }
 
     @Test
@@ -150,6 +178,7 @@ class PortOneWebhookFacadeTest {
         assertThat(saved.getType()).isEqualTo("BillingKey.Issued");
         assertThat(saved.getFailureReason()).contains("BillingKey.Issued");
         assertThat(saved.getFinishedAt()).isEqualTo(NOW);
+        verifyNoInteractions(paymentDelayQueue);
     }
 
     @Test
@@ -225,6 +254,7 @@ class PortOneWebhookFacadeTest {
 
         // then
         assertThat(outcome).isEqualTo(WebhookReceiveOutcome.DUPLICATE);
+        verifyNoInteractions(paymentDelayQueue);
     }
 
     @Test
@@ -247,10 +277,14 @@ class PortOneWebhookFacadeTest {
             .willReturn(PortOneWebhookVerification.VALID);
     }
 
-    // 저장은 받은 엔티티를 그대로 돌려준다. ID는 없지만 Facade는 상태만 본다
+    // 저장은 받은 엔티티에 DB가 매긴 ID를 붙여 돌려준다. ID는 @GeneratedValue라 테스트에서 직접 넣는다
     private void givenValid() {
         givenVerified();
-        given(webhookEventService.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(webhookEventService.save(any())).willAnswer(invocation -> {
+            WebhookEvent event = invocation.getArgument(0);
+            ReflectionTestUtils.setField(event, "id", EVENT_ID);
+            return event;
+        });
     }
 
     private WebhookEvent savedEvent() {
@@ -263,7 +297,8 @@ class PortOneWebhookFacadeTest {
             "test-secret", "https://api.portone.io", Duration.ofSeconds(1), Duration.ofSeconds(1), storeId, "channel");
         Clock clock = Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL);
         return new PortOneWebhookFacade(
-            portOneWebhookVerifier, new PortOneWebhookParser(), properties, webhookEventService, clock);
+            portOneWebhookVerifier, new PortOneWebhookParser(), properties, webhookEventService,
+            paymentDelayQueue, clock);
     }
 
     // Spring이 Hibernate 예외를 감싼 모양 그대로 만든다. MySQL은 제약 이름 앞에 테이블명을 붙인다

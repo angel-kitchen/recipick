@@ -9,6 +9,8 @@ import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.repository.WebhookEventRepository;
+import com.recipick.domain.payment.service.PaymentDelayQueue;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.infra.portone.PortOneWebhookProperties;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -41,15 +44,22 @@ class PortOneWebhookIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private PortOneWebhookProperties webhookProperties;
 
+    @Autowired
+    private StringRedisTemplate redis;
+
+    // 이 테스트가 만든 행과 그 행의 큐 작업만 지운다. 큐 키 전체를 지우면 다른 테스트의 작업까지 사라진다
     @AfterEach
     void tearDown() {
-        webhookEventRepository.deleteAll(webhookEventRepository.findAll().stream()
+        List<WebhookEvent> rows = webhookEventRepository.findAll().stream()
             .filter(event -> event.getWebhookId().startsWith(WEBHOOK_ID_PREFIX))
-            .toList());
+            .toList();
+        rows.forEach(event -> redis.opsForZSet()
+            .remove(PaymentDelayQueue.QUEUE_KEY, PaymentDelayTask.webhookProcess(event.getId()).member()));
+        webhookEventRepository.deleteAll(rows);
     }
 
     @Test
-    @DisplayName("서명이 맞는 Transaction.Paid는 200이고 원문 그대로 RECEIVED 한 행이 남는다")
+    @DisplayName("서명이 맞는 Transaction.Paid는 200이고 원문 그대로 RECEIVED 한 행이 남으며, 큐에 지금 실행할 작업이 등록된다")
     void receiveAndStore() throws Exception {
         // given
         String webhookId = WEBHOOK_ID_PREFIX + "paid";
@@ -69,22 +79,28 @@ class PortOneWebhookIntegrationTest extends IntegrationTestSupport {
         assertThat(saved.getPortonePaymentId()).isEqualTo("pay_it_1");
         assertThat(saved.getPayload()).isEqualTo(body);
         assertThat(saved.getAttemptCount()).isZero();
+        assertThat(queueScoreOf(saved)).isNotNull();
     }
 
     @Test
-    @DisplayName("같은 webhook_id가 다시 와도 200이고 행은 하나다 — 재전송은 UNIQUE가 막고 응답은 성공이다")
+    @DisplayName("같은 webhook_id가 다시 와도 200이고 행은 하나이며, 미뤄 둔 재시도 시각을 앞당기지 않는다")
     void duplicateIsAcceptedOnce() throws Exception {
-        // given
+        // given — 첫 수신 뒤 Worker가 실패해 10분 뒤로 미뤄 둔 상황
         String webhookId = WEBHOOK_ID_PREFIX + "dup";
         String body = body("Transaction.Paid", STORE_ID, "pay_it_2");
         send(webhookId, body, body).andExpect(status().isOk());
+        WebhookEvent saved = rowsOf(webhookId).get(0);
+        long retryAt = Instant.now().plusSeconds(600).toEpochMilli();
+        redis.opsForZSet().add(
+            PaymentDelayQueue.QUEUE_KEY, PaymentDelayTask.webhookProcess(saved.getId()).member(), retryAt);
 
         // when
         ResultActions result = send(webhookId, body, body);
 
-        // then
+        // then — 재전송은 재처리 신호가 아니다. 백오프는 우리 재시도 정책이 정한다
         result.andExpect(status().isOk());
         assertThat(rowsOf(webhookId)).hasSize(1);
+        assertThat(queueScoreOf(saved)).isEqualTo((double) retryAt);
     }
 
     @Test
@@ -121,6 +137,7 @@ class PortOneWebhookIntegrationTest extends IntegrationTestSupport {
         assertThat(saved.getStatus()).isEqualTo(WebhookEventStatus.IGNORED);
         assertThat(saved.getFinishedAt()).isNotNull();
         assertThat(saved.getFailureReason()).contains("BillingKey.Issued");
+        assertThat(queueScoreOf(saved)).isNull();
     }
 
     @Test
@@ -157,6 +174,12 @@ class PortOneWebhookIntegrationTest extends IntegrationTestSupport {
         mac.init(new SecretKeySpec(Base64.getDecoder().decode(encodedKey), HMAC_ALGORITHM));
         byte[] signature = mac.doFinal((webhookId + "." + timestamp + "." + body).getBytes(StandardCharsets.UTF_8));
         return "v1," + Base64.getEncoder().encodeToString(signature);
+    }
+
+    // 큐에 있으면 실행 시각(score), 없으면 null
+    private Double queueScoreOf(WebhookEvent event) {
+        return redis.opsForZSet()
+            .score(PaymentDelayQueue.QUEUE_KEY, PaymentDelayTask.webhookProcess(event.getId()).member());
     }
 
     private List<WebhookEvent> rowsOf(String webhookId) {

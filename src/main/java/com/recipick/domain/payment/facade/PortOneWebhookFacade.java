@@ -3,6 +3,8 @@ package com.recipick.domain.payment.facade;
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
+import com.recipick.domain.payment.service.PaymentDelayQueue;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.WebhookEventService;
 import com.recipick.domain.payment.service.WebhookReceiveOutcome;
 import com.recipick.global.exception.AuthErrorCode;
@@ -13,16 +15,15 @@ import com.recipick.infra.portone.PortOneWebhookParser;
 import com.recipick.infra.portone.PortOneWebhookVerification;
 import com.recipick.infra.portone.PortOneWebhookVerifier;
 import com.recipick.infra.portone.dto.PortOneWebhook;
-
+import com.recipick.infra.portone.dto.PortOneWebhookType;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
-
-import com.recipick.infra.portone.dto.PortOneWebhookType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -38,6 +39,7 @@ public class PortOneWebhookFacade {
     private final PortOneWebhookParser portOneWebhookParser;
     private final PortOneProperties portOneProperties;
     private final WebhookEventService webhookEventService;
+    private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
 
     public WebhookReceiveOutcome receive(
@@ -75,8 +77,19 @@ public class PortOneWebhookFacade {
         if (saved.getStatus() == WebhookEventStatus.IGNORED) {
             return WebhookReceiveOutcome.IGNORED;
         }
-        // 4단계: 여기서 지연 큐에 WEBHOOK_PROCESS:{saved.getId()}를 등록한다. 등록 실패는 ERROR 로그 + 200 (DB가 원본)
+        enqueueProcess(saved);
         return WebhookReceiveOutcome.RECEIVED;
+    }
+
+    // DB 커밋 뒤에 등록한다 — 먼저 등록하고 DB가 롤백되면 큐가 없는 작업을 처리한다.
+    // Redis 연결·명령 실패(DataAccessException)는 200으로 넘긴다. RECEIVED 행이 DB에 남아 Fallback Sweep(6단계)이 다시
+    // 등록하고, 500을 주면 PortOne 재전송이 UNIQUE에 걸려 아무것도 못 한다. 직렬화 오류·코드 버그는 숨기지 않는다
+    private void enqueueProcess(WebhookEvent saved) {
+        try {
+            paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.webhookProcess(saved.getId()), clock.instant());
+        } catch (DataAccessException e) {
+            log.error("웹훅 처리 작업을 큐에 등록하지 못했습니다. Fallback이 복구합니다. webhookEventId={}", saved.getId(), e);
+        }
     }
 
     // 처리 대상이 아닌 웹훅도 저장한다. 저장해야 같은 webhook_id 재전송이 UNIQUE에 걸려 조회 없이 200으로 끝난다
