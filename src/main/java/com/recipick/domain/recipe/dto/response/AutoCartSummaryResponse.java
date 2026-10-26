@@ -29,7 +29,6 @@ public record AutoCartSummaryResponse(
 
     private static String summarize(List<AutoCartMenu> menus) {
         AutoCartMenu first = menus.get(0);
-        AutoCartMenu second = menus.get(1);
         String summary = first.recipeName() + " " + first.servings() + "인분";
         if (menus.size() == 1) {
             return summary;
