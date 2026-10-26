@@ -30,10 +30,12 @@
 | Spring Security / JJWT | JJWT 0.13.0 | JWT 인증과 회원·관리자·마트 권한 검사 |
 | PortOne | V2 연동 | 외부 카드 결제 조회·취소 연동 |
 | JUnit / Mockito / MockMvc / Testcontainers | Gradle 의존성 기준 | 단위 검증과 실제 MySQL·Redis 기반 통합·동시성 검증 |
+| Actuator / Micrometer Prometheus | Spring Boot 관리 버전 | 내부 관리 포트에서 상태·지표 수집 경로 제공 |
 | Docker Compose / GitHub Actions | 저장소 설정 기준 | 로컬 DB 실행 구성 공유 및 PR 자동 테스트 |
 
 정확한 의존성은 [build.gradle](build.gradle), 자동 검증은 [CI 설정](.github/workflows/ci.yml)을 따릅니다.
-프론트·운영 배포·모니터링·성능 개선 결과는 확정 후 이 문서와 상세 보고서에 반영합니다.
+현재 상태·지표 공개 규칙은 [모니터링 문서](docs/monitoring.md)에 정리되어 있습니다.
+프론트·운영 배포·추가 모니터링·성능 개선 결과는 확정 후 반영합니다.
 
 ## 구조
 
