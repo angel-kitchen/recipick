@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: recipick
+    folder: Recipick
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
