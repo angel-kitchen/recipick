@@ -8,11 +8,11 @@ import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-// 결제 지연 큐 소비자. 실행 시각이 된 작업을 Redis에서 꺼내 종류별 Facade에 넘기기만 한다 ㅡ 업무 판단은 여기 없음
-// 한 작업의 예외가 같은 배치의 다른 작업을 막지 않게 작업 단위로 잡는다. 큐에서는 이미 빠졌지만 원본은 DB에 있어 Fallback Sweep이 다시 등록한다
+// 결제 지연 큐 소비자. 실행 시각이 된 작업을 Redis에서 꺼내 종류별 Facade에 넘기기만 한다 — 업무 판단은 여기 없다.
+// 한 작업의 예외가 같은 배치의 다른 작업을 막지 않게 작업 단위로 잡는다. 큐에서는 이미 빠졌지만 원본은 DB에 있어
+// Fallback Sweep이 다시 등록한다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -26,9 +26,8 @@ public class PaymentDelayQueueWorker {
     private final RefundReconciliationFacade refundReconciliationFacade;
     private final Clock clock;
 
-    // 이전 실행이 끝난 뒤 1초 쉬고 다시 본다(fixedDelay). 한 인스턴스 안에서는 겹쳐 돌지 않고,
+    // 실행 시각이 된 작업을 꺼내 처리한다. 주기 실행은 PaymentScheduledTasks가 맡고, 테스트는 이 메서드를 직접 부른다.
     // 여러 인스턴스가 함께 돌아도 popDue가 원자적이라 같은 작업을 둘이 꺼내지 않는다
-    @Scheduled(fixedDelay = 1000)
     public void poll() {
         List<PaymentDelayTask> due = paymentDelayQueue.popDue(clock.instant(), BATCH_SIZE);
         for (PaymentDelayTask task : due) {

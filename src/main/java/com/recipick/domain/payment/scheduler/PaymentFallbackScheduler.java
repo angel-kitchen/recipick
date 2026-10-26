@@ -14,7 +14,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 // 지연 큐 유실 복구용 저빈도 Sweep. MySQL이 원본이고 Redis는 실행 신호일 뿐이라, 큐에서 사라진 작업을 DB 상태로 다시 등록한다.
@@ -39,8 +38,7 @@ public class PaymentFallbackScheduler {
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
 
-    // 1시간마다. 앱이 뜬 직후 1분 뒤 한 번 돌아 재시작 전 유실분을 바로 잡는다
-    @Scheduled(fixedDelay = 3_600_000, initialDelay = 60_000)
+    // 한 번 훑어 큐에 다시 넣는다. 주기 실행(1시간)은 PaymentScheduledTasks가 맡고, 테스트는 이 메서드를 직접 부른다
     public void sweep() {
         LocalDateTime now = LocalDateTime.now(clock);
         Instant executeAt = clock.instant();

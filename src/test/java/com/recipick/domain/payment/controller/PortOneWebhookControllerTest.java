@@ -24,6 +24,7 @@ import com.recipick.global.security.JwtAccessDeniedHandler;
 import com.recipick.global.security.JwtAuthenticationEntryPoint;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.global.security.LoginPrincipalArgumentResolver;
+import com.recipick.global.security.MemberStatusChecker;
 import com.recipick.global.security.SecurityErrorResponseWriter;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Encoders;
@@ -67,6 +68,9 @@ class PortOneWebhookControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private MemberStatusChecker memberStatusChecker;
 
     @MockitoBean
     private PortOneWebhookFacade portOneWebhookFacade;
