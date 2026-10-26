@@ -1,9 +1,13 @@
 package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.Refund;
+
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -48,4 +52,26 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
                   com.recipick.domain.payment.entity.enums.RefundStatus.REQUESTED
             """)
     List<Refund> findRequestedMemberRefundsByPaymentId(@Param("paymentId") Long paymentId);
+
+
+    // 환불 재확인용. Facade가 조회 트랜잭션 밖에서 결제 ID·PortOne 결제 ID를 읽으므로 결제를 함께 읽는다
+    @EntityGraph(attributePaths = "payment")
+    Optional<Refund> findWithPaymentById(Long id);
+
+    // Fallback Sweep용. 큐에 다시 넣을 ID만 읽고, id 기준으로 이어 읽어(afterId) 처리 중 행이 바뀌어도 건너뛰지 않는다
+    @Query("""
+        SELECT r.id
+            FROM Refund r
+            WHERE r.id > :afterId
+              AND r.requestedBy =
+                  com.recipick.domain.payment.entity.enums.RefundRequester.MEMBER
+              AND r.status =
+                  com.recipick.domain.payment.entity.enums.RefundStatus.REQUESTED
+              AND r.requestedAt <= :requestedBefore
+            ORDER BY r.id
+            """)
+    List<Long> findStaleRequestedMemberRefundIds(
+        @Param("afterId") Long afterId,
+        @Param("requestedBefore") LocalDateTime requestedBefore,
+        Pageable pageable);
 }

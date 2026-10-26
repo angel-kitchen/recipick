@@ -1,0 +1,34 @@
+package com.recipick.domain.payment.facade;
+
+import com.recipick.domain.payment.entity.Refund;
+import com.recipick.infra.portone.dto.PortOneCancellation;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
+import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
+import com.recipick.infra.portone.dto.PortOnePayment;
+import java.util.Objects;
+
+// PortOne 조회의 취소 내역을 회원 환불 행에 묶을 때의 판정 규칙. 웹훅 정합화와 환불 재확인이 같은 규칙을 써야
+// 같은 취소를 두 경로가 다르게 판정하지 않는다. 판정만 하고 상태는 바꾸지 않는다
+final class RefundCancellationRules {
+
+    private RefundCancellationRules() {
+    }
+
+    // 레시픽 서버가 API로 요청한 전액 취소인지. 콘솔·관리자·차지백 취소는 회원 환불 행과 묶지 않는다
+    static boolean isServerFullCancellation(PortOneCancellation cancellation, Refund refund) {
+        return cancellation.trigger() == PortOneCancellationTrigger.API && matchesAmount(cancellation, refund);
+    }
+
+    // 전액 취소만 허용한다. 금액이 환불과 다르면 이 환불의 취소로 볼 수 없다
+    static boolean matchesAmount(PortOneCancellation cancellation, Refund refund) {
+        return Objects.equals(cancellation.totalAmount(), refund.getAmount());
+    }
+
+    // 고른 취소 말고 성공한 취소가 또 있으면 실제 결제는 이미 취소됐을 수 있다. 예: API 취소는 FAILED인데
+    // 콘솔 취소가 SUCCEEDED면, 고른 것만 반영해 PAID로 되돌리는 순간 PortOne의 CANCELED와 어긋난다.
+    // 같은 목록에서 꺼낸 객체라 참조로 비교한다. ID로 비교하면 ID가 비어 있는 취소끼리 같은 것으로 보인다
+    static boolean hasOtherSucceededCancellation(PortOnePayment portOnePayment, PortOneCancellation selected) {
+        return portOnePayment.cancellations().stream()
+            .anyMatch(candidate -> candidate != selected && candidate.status() == PortOneCancellationStatus.SUCCEEDED);
+    }
+}

@@ -31,6 +31,8 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
+import com.recipick.domain.payment.service.PaymentDelayQueue;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
@@ -50,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 // Mockito 단위 테스트는 "Processor가 예외 대신 값을 돌려준다"까지만 증명한다. "Spring이 TX2를 정말 커밋한 뒤 Facade 예외가
@@ -87,6 +90,8 @@ class PaymentCancelFacadeIntegrationTest extends IntegrationTestSupport {
     ProductRepository productRepository;
     @Autowired
     MartRepository martRepository;
+    @Autowired
+    StringRedisTemplate redis;
 
     private Long martId;
     private Long productId;
@@ -131,7 +136,11 @@ class PaymentCancelFacadeIntegrationTest extends IntegrationTestSupport {
     @AfterEach
     void cleanUp() {
         if (paymentId != null) {
-            refundRepository.deleteAll(refundRepository.findAllByPaymentIdIn(List.of(paymentId)));
+            // PENDING이면 취소 Facade가 테스트 Redis에 환불 재확인을 남긴다. JVM 전체가 공유하므로 자기 작업만 지운다
+            List<Refund> refunds = refundRepository.findAllByPaymentIdIn(List.of(paymentId));
+            refunds.forEach(refund -> redis.opsForZSet().remove(
+                PaymentDelayQueue.QUEUE_KEY, PaymentDelayTask.refundReconcile(refund.getId()).member()));
+            refundRepository.deleteAll(refunds);
             paymentRepository.deleteById(paymentId);
         }
         if (orderId != null) {
@@ -275,6 +284,9 @@ class PaymentCancelFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
             .isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(stock()).isEqualTo(STOCK_AFTER_ORDER);
+        // 결과가 미확정이라 실제 Redis에 환불 재확인이 예약됐다
+        assertThat(redis.opsForZSet().score(
+            PaymentDelayQueue.QUEUE_KEY, PaymentDelayTask.refundReconcile(refund.getId()).member())).isNotNull();
 
         // 같은 키 재요청 — 취소 ID가 이미 있으니 PortOne을 다시 묻지 않고 PENDING이다 (웹훅·재조회 1-5 몫)
         PaymentCancelResult replayed = paymentCancelFacade.cancel(MEMBER_ID, paymentId, KEY, REASON);

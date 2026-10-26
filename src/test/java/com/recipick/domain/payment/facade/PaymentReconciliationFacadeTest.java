@@ -671,7 +671,7 @@ class PaymentReconciliationFacadeTest {
     @Test
     @DisplayName("고른 취소 외에 성공한 취소가 또 있으면 apply하지 않고 MANUAL_REVIEW — API 실패 + 콘솔 성공을 PAID로 되돌리지 않는다")
     void manualReviewWhenOtherSucceededCancellationExists() {
-        // given — 우리 API 취소는 FAILED, 그 뒤 운영자가 콘솔에서 취소해 성공했다
+        // given — API 취소는 FAILED, 그 뒤 운영자가 콘솔에서 취소해 성공했다
         givenClaimed(claimedEvent(CANCELED, CANCELLATION_ID));
         givenOurPayment();
         given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID))
@@ -717,7 +717,7 @@ class PaymentReconciliationFacadeTest {
     // ---------- apply 결과 → 웹훅 결과 ----------
 
     @Test
-    @DisplayName("취소가 아직 처리 중(REQUESTED)이면 취소 ID를 기록한 것으로 이 웹훅은 PROCESSED — 같은 웹훅을 다시 돌리지 않는다")
+    @DisplayName("취소가 아직 처리 중(REQUESTED)이면 이 웹훅은 PROCESSED로 끝내고 환불 재확인을 5분 뒤로 예약한다")
     void processedWhenCancellationStillRequested() {
         // given
         givenClaimed(claimedEvent(CANCEL_PENDING, CANCELLATION_ID));
@@ -736,9 +736,36 @@ class PaymentReconciliationFacadeTest {
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
+        // then — 이 웹훅은 끝내고, 환불 완료 확인은 5분 뒤 환불 재확인에 넘긴다
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verify(paymentDelayQueue).enqueueIfEarlier(
+            PaymentDelayTask.refundReconcile(REFUND_ID), NOW_INSTANT.plus(Duration.ofMinutes(5)));
+    }
+
+    @Test
+    @DisplayName("환불 재확인 예약이 실패해도 웹훅은 PROCESSED — 환불이 REQUESTED로 남아 Fallback이 다시 넣는다")
+    void processedEvenIfRefundReconcileScheduleFails() {
+        // given
+        givenClaimed(claimedEvent(CANCEL_PENDING, CANCELLATION_ID));
+        givenOurPayment();
+        Refund refund = memberRefund(payment, null);
+        given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(refund));
+        PortOneCancellation cancellation = cancellation(
+            CANCELLATION_ID, PortOneCancellationStatus.REQUESTED, AMOUNT, null, PortOneCancellationTrigger.API);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.PAID, cancellation));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, cancellation.toCancelResult()))
+            .willReturn(applied(PaymentCancelOutcome.PENDING, refund));
+        willThrow(new RedisConnectionFailureException("redis down"))
+            .given(paymentDelayQueue).enqueueIfEarlier(any(), any());
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
-        verifyNoInteractions(paymentDelayQueue);
     }
 
     @Test
@@ -761,9 +788,10 @@ class PaymentReconciliationFacadeTest {
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
-        // then
+        // then — 확정 근거가 없으니 환불 재확인도 예약하지 않는다
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
         verify(webhookEventService, never()).markProcessed(anyLong(), anyInt(), any());
+        verifyNoInteractions(paymentDelayQueue);
     }
 
     @Test

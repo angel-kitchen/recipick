@@ -5,8 +5,10 @@ import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.repository.WebhookEventRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +63,13 @@ public class WebhookEventService {
         Optional<WebhookEvent> owned = findOwnedForUpdate(webhookEventId, expectedAttemptCount);
         owned.ifPresent(event -> event.markManualReview(reason, now));
         return owned.isPresent();
+    }
+
+    // Fallback Sweep용. 상태별 기준 시각보다 오래된 미완료 이벤트 ID를 afterId 다음부터 limit건 읽는다
+    public List<Long> findRecoverableIds(LocalDateTime receivedBefore, LocalDateTime retryBefore,
+                                         LocalDateTime processingBefore, Long afterId, int limit) {
+        return webhookEventRepository.findRecoverableIds(
+            afterId, receivedBefore, retryBefore, processingBefore, PageRequest.ofSize(limit));
     }
 
     // 잠금 아래에서 처리권을 확인한다. claim할 때마다 attemptCount가 1씩 오르므로 번호가 같으면 그 뒤 아무도 다시 잡지 않았다.

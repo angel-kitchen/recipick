@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
+import com.recipick.domain.payment.facade.RefundReconciliationFacade;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import java.time.Clock;
@@ -22,9 +23,10 @@ public class PaymentDelayQueueWorker {
 
     private final PaymentDelayQueue paymentDelayQueue;
     private final PaymentReconciliationFacade paymentReconciliationFacade;
+    private final RefundReconciliationFacade refundReconciliationFacade;
     private final Clock clock;
 
-    // 이전 실행이 끝난 뒤 1초 쉬고 다시 본다(fixedDelay). 한 인스턴스 안에서는 겹쳐 돌지 않고
+    // 이전 실행이 끝난 뒤 1초 쉬고 다시 본다(fixedDelay). 한 인스턴스 안에서는 겹쳐 돌지 않고,
     // 여러 인스턴스가 함께 돌아도 popDue가 원자적이라 같은 작업을 둘이 꺼내지 않는다
     @Scheduled(fixedDelay = 1000)
     public void poll() {
@@ -33,11 +35,12 @@ public class PaymentDelayQueueWorker {
             run(task);
         }
     }
+
     private void run(PaymentDelayTask task) {
         try {
             switch (task.type()) {
                 case WEBHOOK_PROCESS -> paymentReconciliationFacade.processWebhook(task.id());
-                case REFUND_RECONCILE -> log.warn("아직 처리하지 않는 지연 큐 작업:{}", task.member());
+                case REFUND_RECONCILE -> refundReconciliationFacade.reconcile(task.id());
             }
         } catch (RuntimeException e) {
             log.error("지연 큐 작업 처리 중 예외: task={}", task.member(), e);

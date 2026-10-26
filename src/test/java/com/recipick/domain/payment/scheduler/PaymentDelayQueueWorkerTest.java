@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
+import com.recipick.domain.payment.facade.RefundReconciliationFacade;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import java.time.Clock;
@@ -20,7 +21,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-// Worker는 꺼내서 넘기기만 한다. 큐의 원자성은 RedisDelayQueueTest, 정합화 판정은 PaymentReconciliationFacadeTest가 맡는다
+// Worker는 꺼내서 넘기기만 한다. 큐의 원자성은 RedisDelayQueueTest, 판정은 각 Facade 테스트가 맡는다
 @ExtendWith(MockitoExtension.class)
 class PaymentDelayQueueWorkerTest {
 
@@ -32,12 +33,15 @@ class PaymentDelayQueueWorkerTest {
     @Mock
     private PaymentReconciliationFacade paymentReconciliationFacade;
 
+    @Mock
+    private RefundReconciliationFacade refundReconciliationFacade;
+
     private PaymentDelayQueueWorker worker;
 
     @BeforeEach
     void setUp() {
-        worker = new PaymentDelayQueueWorker(
-            paymentDelayQueue, paymentReconciliationFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+        worker = new PaymentDelayQueueWorker(paymentDelayQueue, paymentReconciliationFacade,
+            refundReconciliationFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
     }
 
     @Test
@@ -72,8 +76,8 @@ class PaymentDelayQueueWorkerTest {
     }
 
     @Test
-    @DisplayName("REFUND_RECONCILE은 아직 처리하지 않는다(6단계) — Facade를 부르지 않고 버린다")
-    void dropRefundReconcileForNow() {
+    @DisplayName("REFUND_RECONCILE은 환불 재확인 Facade에 넘긴다")
+    void dispatchRefundReconcile() {
         // given
         given(paymentDelayQueue.popDue(NOW, PaymentDelayQueueWorker.BATCH_SIZE))
             .willReturn(List.of(PaymentDelayTask.refundReconcile(5L)));
@@ -82,6 +86,7 @@ class PaymentDelayQueueWorkerTest {
         worker.poll();
 
         // then
+        verify(refundReconciliationFacade).reconcile(5L);
         verifyNoInteractions(paymentReconciliationFacade);
     }
 
@@ -95,6 +100,6 @@ class PaymentDelayQueueWorkerTest {
         worker.poll();
 
         // then
-        verifyNoInteractions(paymentReconciliationFacade);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade);
     }
 }

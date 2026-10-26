@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
@@ -230,6 +231,55 @@ class RefundRepositoryTest extends IntegrationTestSupport {
             .containsOnly(first.getId(), second.getId());
     }
 
+    @Test
+    @DisplayName("환불 재확인용 단건 조회는 결제를 함께 읽는다 — Facade가 트랜잭션 밖에서 PortOne 결제 ID를 쓴다")
+    void findWithPaymentById() {
+        // given
+        Payment payment = paymentRepository.save(newFailedPayment(16L));
+        Refund saved = refundRepository.save(newMemberRefund(payment, "key_16"));
+        em.flush();
+        em.clear();
+
+        // when
+        Refund found = refundRepository.findWithPaymentById(saved.getId()).orElseThrow();
+
+        // then
+        assertThat(Hibernate.isInitialized(found.getPayment())).isTrue();
+        assertThat(found.getPayment().getPortonePaymentId()).isEqualTo("pay_16");
+    }
+
+    @Test
+    @DisplayName("Fallback용 조회는 기준 시각 이전에 요청된 회원 REQUESTED 환불 ID만 id 순으로 돌려준다")
+    void findStaleRequestedMemberRefundIds() {
+        // given — 기준 12:00. 오래된 회원 REQUESTED 2건만 대상이다
+        LocalDateTime requestedBefore = LocalDateTime.of(2026, 10, 26, 12, 0);
+        Payment payment = paymentRepository.save(newFailedPayment(17L));
+        Refund oldFirst = refundRepository.save(
+            memberRefundAt(payment, "key_17_a", RefundStatus.REQUESTED, requestedBefore.minusMinutes(30)));
+        Refund boundary = refundRepository.save(
+            memberRefundAt(payment, "key_17_b", RefundStatus.REQUESTED, requestedBefore));
+        refundRepository.save(
+            memberRefundAt(payment, "key_17_c", RefundStatus.REQUESTED, requestedBefore.plusMinutes(1)));
+        refundRepository.save(
+            memberRefundAt(payment, "key_17_d", RefundStatus.COMPLETED, requestedBefore.minusHours(1)));
+        refundRepository.save(Refund.requestedBySystem(
+            payment, 23800L, "결제 금액 불일치", "key_17_system", requestedBefore.minusHours(1)));
+        em.flush();
+        em.clear();
+        // 앞선 테스트 클래스가 남긴 행과 섞이지 않게 이번에 만든 행부터 읽는다
+        long afterId = oldFirst.getId() - 1;
+
+        // when
+        List<Long> all = refundRepository.findStaleRequestedMemberRefundIds(
+            afterId, requestedBefore, PageRequest.ofSize(100));
+        List<Long> nextPage = refundRepository.findStaleRequestedMemberRefundIds(
+            oldFirst.getId(), requestedBefore, PageRequest.ofSize(1));
+
+        // then — 기준 시각과 같으면 포함한다. afterId 다음부터 limit건만 읽는다
+        assertThat(all).containsExactly(oldFirst.getId(), boundary.getId());
+        assertThat(nextPage).containsExactly(boundary.getId());
+    }
+
     private Payment newFailedPayment(Long orderId) {
         return Payment.builder()
             .orderId(orderId)
@@ -254,6 +304,19 @@ class RefundRepositoryTest extends IntegrationTestSupport {
             .requestedBy(RefundRequester.MEMBER)
             .idempotencyKey(idempotencyKey)
             .requestedAt(LocalDateTime.of(2026, 10, 21, 10, 10))
+            .build();
+    }
+
+    private Refund memberRefundAt(Payment payment, String idempotencyKey, RefundStatus status,
+                                  LocalDateTime requestedAt) {
+        return Refund.builder()
+            .payment(payment)
+            .amount(23800L)
+            .reason("회원 취소")
+            .status(status)
+            .requestedBy(RefundRequester.MEMBER)
+            .idempotencyKey(idempotencyKey)
+            .requestedAt(requestedAt)
             .build();
     }
 

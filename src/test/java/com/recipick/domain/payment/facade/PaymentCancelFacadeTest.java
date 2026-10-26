@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,13 +19,20 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
+import com.recipick.domain.payment.service.PaymentDelayQueue;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
 import com.recipick.infra.portone.PortOnePaymentClient;
 import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,13 +41,15 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentCancelFacadeTest {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final Instant NOW_INSTANT = Instant.parse("2026-10-23T10:08:30Z");
     private static final Long MEMBER_ID = 7L;
     private static final Long PAYMENT_ID = 10L;
     private static final Long ORDER_ID = 1L;
@@ -57,6 +67,12 @@ class PaymentCancelFacadeTest {
         PaymentCancelOutcome.CANCELED,
         new PaymentCancelResponse(PAYMENT_ID, ORDER_ID, PaymentStatus.CANCELED, null, CANCELED_AT,
             RefundStatus.COMPLETED, 23800L));
+    private static final PortOneCancelResult PORTONE_REQUESTED =
+        new PortOneCancelResult(PortOneCancelOutcome.REQUESTED, "cancel_1", null, "cancellation REQUESTED");
+    private static final PaymentCancelResult PENDING_RESULT = new PaymentCancelResult(
+        PaymentCancelOutcome.PENDING,
+        new PaymentCancelResponse(PAYMENT_ID, ORDER_ID, PaymentStatus.CANCEL_REQUESTED, null, null,
+            RefundStatus.REQUESTED, 23800L));
 
     @Mock
     private PaymentCancelProcessor paymentCancelProcessor;
@@ -64,8 +80,17 @@ class PaymentCancelFacadeTest {
     @Mock
     private PortOnePaymentClient portOnePaymentClient;
 
-    @InjectMocks
+    @Mock
+    private PaymentDelayQueue paymentDelayQueue;
+
     private PaymentCancelFacade facade;
+
+    @BeforeEach
+    void setUp() {
+        // Clock은 mock이 아니라 @InjectMocks로는 못 넣는다. 시계를 멈춰 두고 직접 조립한다
+        facade = new PaymentCancelFacade(paymentCancelProcessor, portOnePaymentClient, paymentDelayQueue,
+            Clock.fixed(NOW_INSTANT, SEOUL));
+    }
 
     @ParameterizedTest
     @NullAndEmptySource
@@ -127,6 +152,61 @@ class PaymentCancelFacadeTest {
         inOrder.verify(paymentCancelProcessor).prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON);
         inOrder.verify(portOnePaymentClient).cancelPayment("pay_1", "recipick-refund-55", REASON, 23800L);
         inOrder.verify(paymentCancelProcessor).apply(PAYMENT_ID, REFUND_ID, PORTONE_SUCCEEDED);
+        // 확정됐으니 환불 재확인을 예약하지 않는다
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("TX2가 PENDING이면 5분 뒤 환불 재확인(REFUND_RECONCILE)을 예약하고 PENDING을 그대로 돌려준다")
+    void schedulesRefundReconcileWhenPending() {
+        // given
+        given(paymentCancelProcessor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON))
+            .willReturn(PaymentCancelPreparation.callPortOne(REFUND_ID, "pay_1", 23800L));
+        given(portOnePaymentClient.cancelPayment("pay_1", "recipick-refund-55", REASON, 23800L))
+            .willReturn(PORTONE_REQUESTED);
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, PORTONE_REQUESTED)).willReturn(PENDING_RESULT);
+
+        // when
+        PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+
+        // then
+        assertThat(result).isSameAs(PENDING_RESULT);
+        verify(paymentDelayQueue).enqueueIfEarlier(
+            PaymentDelayTask.refundReconcile(REFUND_ID), NOW_INSTANT.plus(Duration.ofMinutes(5)));
+    }
+
+    @Test
+    @DisplayName("재확인 예약이 실패해도 취소 응답은 PENDING 그대로다 — 환불이 REQUESTED로 남아 Fallback이 다시 넣는다")
+    void pendingEvenIfScheduleFails() {
+        // given
+        given(paymentCancelProcessor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON))
+            .willReturn(PaymentCancelPreparation.callPortOne(REFUND_ID, "pay_1", 23800L));
+        given(portOnePaymentClient.cancelPayment("pay_1", "recipick-refund-55", REASON, 23800L))
+            .willReturn(PORTONE_REQUESTED);
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, PORTONE_REQUESTED)).willReturn(PENDING_RESULT);
+        willThrow(new RedisConnectionFailureException("redis down"))
+            .given(paymentDelayQueue).enqueueIfEarlier(any(), any());
+
+        // when
+        PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+
+        // then
+        assertThat(result).isSameAs(PENDING_RESULT);
+    }
+
+    @Test
+    @DisplayName("같은 키 재요청이 TX1에서 PENDING을 재현하면 다시 예약하지 않는다 — 첫 요청이 예약했고 놓쳤으면 Fallback 몫이다")
+    void noScheduleForReplayedPending() {
+        // given
+        given(paymentCancelProcessor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON))
+            .willReturn(PaymentCancelPreparation.finished(PENDING_RESULT));
+
+        // when
+        PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+
+        // then
+        assertThat(result).isSameAs(PENDING_RESULT);
+        verifyNoInteractions(portOnePaymentClient, paymentDelayQueue);
     }
 
     @ParameterizedTest
