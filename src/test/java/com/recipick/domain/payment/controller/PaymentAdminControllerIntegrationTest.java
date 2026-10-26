@@ -294,12 +294,15 @@ class PaymentAdminControllerIntegrationTest extends IntegrationTestSupport {
     @ValueSource(strings = {
         "status=DONE",
         "memberId=0",
+        "memberId=abc",
         "from=2020/01/01",
         "from=2020-02-30",
         "from=2020-01-02&to=2020-01-01",
         "page=-1",
+        "page=abc",
         "size=0",
         "size=101",
+        "size=abc",
         "sort=amount,desc",
         "sort=createdAt,up"
     })
