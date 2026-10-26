@@ -28,7 +28,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith(WEBHOOK_PATH_PREFIX);
+        String uri = request.getRequestURI();
+        return uri.equals("/api/webhooks") || uri.startsWith(WEBHOOK_PATH_PREFIX);
     }
 
     @Override
