@@ -23,6 +23,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final SecurityErrorResponseWriter responseWriter;
+    private final MemberStatusChecker memberStatusChecker;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -44,6 +45,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
             }
             principal = tokenProvider.parseAccessToken(header.substring(7).trim());
+            if (principal.type() == SubjectType.MEMBER) {
+                memberStatusChecker.requireActive(principal.id());
+            }
         } catch (BusinessException exception) {
             SecurityContextHolder.clearContext();
             responseWriter.write(response, exception.getErrorCode());

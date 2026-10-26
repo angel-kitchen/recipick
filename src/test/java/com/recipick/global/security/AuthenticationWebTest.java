@@ -77,6 +77,8 @@ class AuthenticationWebTest {
     @MockitoSpyBean
     private JwtTokenProvider tokenProvider;
     @MockitoBean
+    private MemberStatusChecker memberStatusChecker;
+    @MockitoBean
     private RecipeService recipeService;
     @MockitoBean
     private RecipeBookmarkService bookmarkService;

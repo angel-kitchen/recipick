@@ -159,7 +159,7 @@ class MemberAddressSelectIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("토큰의 회원이 없으면 MEMBER-001로 거절하고 선택을 변경하지 않는다")
+    @DisplayName("토큰의 회원이 없으면 AUTH-011로 거절하고 선택을 변경하지 않는다")
     void rejectsMissingMember() throws Exception {
         // given
         MemberAddress address = address(member, "1111014000");
@@ -169,8 +169,8 @@ class MemberAddressSelectIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse response = select(address.getId(), missingMember);
 
         // then
-        assertThat(response.getStatus()).isEqualTo(404);
-        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("MEMBER-001");
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("AUTH-011");
         assertThat(member.getSelectedAddress()).isNull();
         assertThat(member.getMartId()).isNull();
     }
