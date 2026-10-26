@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * difficulty(EASY/NORMAL/HARD), spicy_level(0~3), youtube_url, steps
  * <br>steps는 조리 순서를 " | "로 구분해 적는다. 예) 멸치 육수를 낸다 | 된장을 푼다 | 두부를 넣고 끓인다
  */
-public class GenerateRecipeSeed {
+public class GenerateRecipeSeed가 {
 
     private static final Path CSV_PATH = Path.of("scripts/recipe-seed/recipes.csv");
     private static final Path SQL_PATH = Path.of("src/main/resources/data-recipe-local.sql");
@@ -77,8 +77,14 @@ public class GenerateRecipeSeed {
         List<String> errors = new ArrayList<>();
 
         for (int i = 1; i < rows.size(); i++) {
-            Map<String, String> row = toMap(header, rows.get(i));
             int line = i + 1;
+            // 따옴표 없이 쉼표를 쓰면 열이 늘어나 뒤쪽 내용이 버려진 채 통과하므로, 매핑 전에 열 개수부터 맞춰 본다
+            if (rows.get(i).size() != header.size()) {
+                errors.add(line + "행: CSV 열 개수가 헤더와 다릅니다 (헤더 " + header.size() + "개, 이 행 "
+                    + rows.get(i).size() + "개). 쉼표가 들어간 칸은 큰따옴표로 감싸 주세요");
+                continue;
+            }
+            Map<String, String> row = toMap(header, rows.get(i));
             if (row.get("youtube_url").isBlank() || row.get("steps").isBlank()) {
                 missing.add(line + "행 " + row.get("name"));
                 continue;
