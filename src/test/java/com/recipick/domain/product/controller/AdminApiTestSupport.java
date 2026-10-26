@@ -3,6 +3,9 @@ package com.recipick.domain.product.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.IntegrationTestSupport;
+import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.repository.MemberRepository;
+import java.util.UUID;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -30,6 +33,8 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
     protected static final Long MART_ADMIN_ID = 2L;
 
     @Autowired
+    protected MemberRepository members;
+    @Autowired
     protected MockMvc mockMvc;
     @Autowired
     protected ObjectMapper mapper;
@@ -53,7 +58,10 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
     }
 
     protected String memberToken() {
-        return tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+        String unique = UUID.randomUUID().toString().replace("-", "");
+        Member member = members.saveAndFlush(Member.builder().email(unique + "@role.test")
+                .name("권한 검증 회원").phone(unique.substring(0, 20)).passwordHash("hash").build());
+        return tokens.createMemberTokens(member.getId()).accessToken();
     }
 
     protected MockHttpServletResponse get(String url, String token) throws Exception {

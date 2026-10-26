@@ -10,7 +10,9 @@ import com.recipick.global.exception.BusinessException;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -22,11 +24,13 @@ public class MemberService {
     // 현재 배송지가 없거나 서비스 지역 밖이면 이용 마트가 없으므로 empty를 돌려준다.
     public Optional<Long> getMartId(Long memberId) {
         Member member = memberRepository.findById(memberId)
+                .filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
         return Optional.ofNullable(member.getMartId());
     }
     public MemberProfile getProfile(Long memberId) {
         Member member = memberRepository.findById(memberId)
+                .filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
         MemberAddress address = member.getSelectedAddress();
         MemberAddressData currentAddress = address == null ? null : new MemberAddressData(
@@ -38,6 +42,7 @@ public class MemberService {
 
     public Optional<Long> getSelectedAddressId(Long memberId) {
         Member member = memberRepository.findById(memberId)
+                .filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
         return Optional.ofNullable(member.getSelectedAddress()).map(MemberAddress::getId);
     }
@@ -45,6 +50,15 @@ public class MemberService {
     @Transactional
     public Member getMemberForUpdate(Long memberId) {
         return memberRepository.findByIdForUpdate(memberId)
+                .filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockActiveMember(Long memberId) {
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("회원 잠금은 쓰기 가능한 바깥 트랜잭션이 필요합니다.");
+        }
+        getMemberForUpdate(memberId);
     }
 }

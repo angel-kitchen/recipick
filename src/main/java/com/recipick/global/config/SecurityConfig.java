@@ -4,6 +4,7 @@ import com.recipick.global.security.JwtAccessDeniedHandler;
 import com.recipick.global.security.JwtAuthenticationEntryPoint;
 import com.recipick.global.security.JwtAuthenticationFilter;
 import com.recipick.global.security.JwtTokenProvider;
+import com.recipick.global.security.MemberStatusChecker;
 import com.recipick.global.security.SecurityErrorResponseWriter;
 import com.recipick.global.security.SecurityRequestMatchers;
 import jakarta.servlet.DispatcherType;
@@ -22,6 +23,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 
 @Configuration
 @EnableConfigurationProperties({LoginProperties.class, CorsProperties.class})
@@ -30,7 +32,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenProvider tokenProvider,
-            SecurityErrorResponseWriter responseWriter, JwtAuthenticationEntryPoint entryPoint,
+            SecurityErrorResponseWriter responseWriter, MemberStatusChecker memberStatusChecker,
+            JwtAuthenticationEntryPoint entryPoint,
             JwtAccessDeniedHandler deniedHandler, CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -41,10 +44,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(deniedHandler))
-                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, responseWriter),
+                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, responseWriter, memberStatusChecker),
                         UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers(EndpointRequest.to("health", "prometheus")).permitAll()
                         .requestMatchers(SecurityRequestMatchers.PUBLIC).permitAll()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "MART_ADMIN")

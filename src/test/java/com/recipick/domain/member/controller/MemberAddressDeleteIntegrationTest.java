@@ -170,7 +170,7 @@ class MemberAddressDeleteIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse anonymous = deleteAddress(target.getId(), null);
 
         // then
-        assertError(missingMember, 404, "MEMBER-001");
+        assertError(missingMember, 401, "AUTH-011");
         assertError(administrator, 403, "AUTH-004");
         assertError(anonymous, 401, "AUTH-001");
         assertThat(addresses.existsById(target.getId())).isTrue();

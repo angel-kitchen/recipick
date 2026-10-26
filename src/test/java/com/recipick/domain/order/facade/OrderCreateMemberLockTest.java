@@ -106,6 +106,27 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("회원 행을 잠근 트랜잭션이 탈퇴 상태를 저장하고 끝나면 기다리던 주문 생성은 회원 없음으로 거절되고 재고도 그대로다")
+    void createOrder_rejectsMemberWithdrawnWhileWaiting() throws Exception {
+        // given
+        OrderCreateRequest request = prepare(10);
+        CountDownLatch locked = new CountDownLatch(1);
+        Future<?> withdrawal = lockMemberThen(locked, () -> em.createNativeQuery("UPDATE member SET withdrawn_at = CURRENT_TIMESTAMP WHERE id = :id")
+                        .setParameter("id", member.getId()).executeUpdate());
+        assertThat(locked.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        assertThatThrownBy(() -> orderFacade.createOrder(member.getId(), "key", request))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
+        withdrawal.get(WAIT_SECONDS, TimeUnit.SECONDS);
+
+        // then
+        assertThat(orderRepository.findIdsByMemberId(member.getId())).isEmpty();
+        assertThat(stock()).isEqualTo(10);
+    }
+
+    @Test
     @DisplayName("회원 행을 잠근 트랜잭션이 같은 키의 주문을 만들고 끝나면 기다리던 요청은 새로 만들지 않고 기존 주문을 돌려준다")
     void createOrder_returnsOrderCommittedWhileWaiting() throws Exception {
         // given

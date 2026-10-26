@@ -65,7 +65,7 @@ public class TokenManagementService {
     private AuthPrincipal currentPrincipal(RefreshTokenDetails details) {
         AuthPrincipal principal = details.principal();
         if (principal.type() == SubjectType.MEMBER) {
-            if (!memberRepository.existsById(principal.id())) {
+            if (!memberRepository.existsByIdAndWithdrawnAtIsNull(principal.id())) {
                 throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
             }
             return principal;

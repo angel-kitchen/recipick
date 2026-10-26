@@ -1,0 +1,78 @@
+# 성능 측정용 시드 데이터
+
+## 1. 상황
+
+- 부하 테스트(필수 8)·병목 개선(필수 9)·캐싱(필수 10)은 모두 Before → After 수치로 평가한다.
+- 기존 시드(`data.sql`)는 지역 2·마트 2뿐이고 상품이 없다. 상품이 없으면 EXPLAIN에서 인덱스 효과가 보이지 않고 부하 테스트도 의미가 없다.
+- 상품 검색(`ProductRepositoryImpl.searchMemberProducts`)은 이름 포함 검색(`LIKE '%키워드%'`), 카테고리·가격 범위 필터, 가격순·최신순 정렬을 조합해 조회한다. 데이터가 이 조건들을 모두 의미 있게 걸러 낼 수 있어야 한다.
+
+## 2. 후보와 선택
+
+### 생성 방식
+
+| 후보 | 장점 | 단점 |
+| --- | --- | --- |
+| Java 코드(`CommandLineRunner`, 별도 프로필) | 엔티티 검증을 거침 | 10만 건 INSERT가 느리고, 앱 코드에 측정용 코드가 섞임 |
+| 테스트 코드 | 코드 재사용 | 일회성 데이터를 테스트로 만드는 것은 목적에 맞지 않음 |
+| **SQL 스크립트(선택)** | 10만 건을 수십 초에 입력, 앱 코드 변경 없음, 누구나 같은 명령으로 재현 | 엔티티 검증을 거치지 않으므로 컬럼 값은 스크립트가 직접 보장해야 함 |
+
+SQL 스크립트를 선택했다. `RAND()`를 쓰지 않고 상품 번호 `n`으로 값을 계산해서 **다시 실행해도 같은 데이터**가 나온다. Before와 After를 같은 데이터로 비교하기 위해서다. 카테고리·이름·브랜드는 `n % 숫자`로 정하면 값들이 같이 움직이므로(예: 판매 중지 상품이 한 카테고리에만 몰림) 번호를 MD5 해시로 섞어서 정한다. 같은 입력은 항상 같은 값이라 재현성은 유지된다. 판매 상태(`n % 20`)와 삭제(`n % 50`)는 건수를 정확히 맞추기 위해 번호 계산을 그대로 쓴다.
+
+### 시연 DB와의 분리
+
+시연 DB(`recipick`)와 섞이지 않도록 별도 DB `recipick_perf`를 쓴다. `.env`의 `MYSQL_DATABASE=recipick_perf`로 컨테이너를 띄우면 처음부터 분리된다. 서버(AWS)에서 측정하기 전에는 백업·복원 절차를 별도로 문서화한다.
+
+## 3. 데이터 규모와 분포
+
+| 항목 | 값 | 이유 |
+| --- | --- | --- |
+| 마트 | 기존 2곳(`data.sql`) | 새로 만들지 않고 시연과 같은 구성을 사용 |
+| 카테고리 | 20개(`성능카테고리1~20`) | 카테고리 필터가 전체의 약 5%를 걸러 내는 선택성 확인 |
+| 상품 | 마트당 50,000개, 총 100,000개 | 로컬에서 인덱스 유무에 따른 EXPLAIN 차이가 드러나고, 측정과 재생성이 부담스럽지 않은 규모. **실제 마트의 취급 품목 수를 근거로 한 값이 아닌 측정용 가정** |
+| 판매 중지 | 5% | 상태 조건 |
+| 삭제됨 | 2% | `deleted` 조건(조회에서 제외되는 데이터) |
+| 가격 | 500~50,400원, 100원 단위, 고르게 분포 | 가격 범위 필터와 가격순 정렬 |
+| 생성일 | 최근 365일에 분산 | 최신순 정렬(기본 정렬) |
+| 이름 | 접두어 6종 × 품목 12종(72가지 조합) + 번호 | 키워드 검색에서 선택성이 다른 검색어(예: `대파` 약 8.5%, `유기농` 약 16.5%)를 만들 수 있음 |
+| 카테고리·상태 분포 | 카테고리는 해시로 분산, 상태·삭제와 독립 | 판매 중지 상품이 20개 카테고리에 104~137건씩 퍼짐(카테고리 + 상태 조건 결합 측정 가능) |
+| 브랜드 | 30종 | |
+| 판매 단위 | G·ML·EA 순환 | |
+| 재료 연결 | 없음(null) | 재료 시드가 없고 상품 검색 성능과 직접 관련이 적음 |
+| 구분 표시 | `description = 'PERF_SEED'` | 재실행 시 이 값으로 기존 시드를 지움 |
+
+## 4. 생성과 확인 방법
+
+스크립트: `scripts/perf/seed-products.sql`. 같은 스크립트를 다시 실행하면 기존 성능 시드 상품을 지우고 다시 만든다(카테고리는 `INSERT IGNORE`). 삭제와 생성은 하나의 트랜잭션이라 중간에 실패하면 기존 시드가 그대로 남는다.
+
+1. `.env`의 `MYSQL_DATABASE`를 `recipick_perf`로 두고 `docker compose up -d`로 MySQL·Redis를 띄운다.
+   - **이미 MySQL 볼륨이 있으면** `MYSQL_DATABASE` 변경은 적용되지 않는다(볼륨을 처음 만들 때만 적용). 아래 명령으로 DB와 권한을 직접 만든다.
+     ```bash
+     docker exec recipick-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS recipick_perf CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON recipick_perf.* TO \"$MYSQL_USER\"@\"%\";"'
+     ```
+   - `application-local.yml`의 `spring.datasource.url`을 `jdbc:mysql://localhost:3306/recipick_perf?serverTimezone=Asia/Seoul&characterEncoding=UTF-8`로 지정한다(예시 파일은 `recipick`을 가리킨다).
+2. 앱을 한 번 실행해 테이블(`ddl-auto: update`)과 마트 2곳(`data.sql`)을 만들고 종료한다.
+3. Git Bash에서 레포 루트에서 실행한다.
+   ```bash
+   docker exec -i recipick-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 recipick_perf' < scripts/perf/seed-products.sql
+   ```
+4. 건수를 확인한다.
+   ```sql
+   SELECT mart_id, COUNT(*), SUM(deleted), SUM(status = 'STOPPED') FROM product GROUP BY mart_id;
+   ```
+
+## 5. 결과(2026-10-26, 로컬)
+
+| mart_id | 상품 | 삭제됨 | 판매 중지 |
+| --- | --- | --- | --- |
+| 1 | 50,000 | 1,000 | 2,500 |
+| 2 | 50,000 | 1,000 | 2,500 |
+
+- 카테고리 20개, 한글 이름·브랜드·생성일 분산 정상.
+- 시연 DB(`recipick`)는 건드리지 않았다.
+
+## 6. 트레이드오프와 한계
+
+- 데이터가 인위적이다. 실제 사용자 검색어, 가격 분포, 카테고리별 편중은 반영하지 않았다.
+- 재고 조정 이력(`stock_adjustment`), 재료 연결, 주문·장바구니 데이터는 만들지 않았다. 해당 쿼리는 이 데이터로 측정하지 않는다.
+- 로컬(Docker MySQL) 수치는 서버의 절대 수치와 다르다. **같은 조건에서 Before와 After를 비교하는 용도**로 쓰고, 서버가 확정되면 같은 시나리오로 다시 측정한다.
+- 이 규모에서 결과가 충분히 의미가 없으면(예: 인덱스 차이가 안 보임) 상품 수를 늘려 다시 생성한다. 규모를 바꾸면 이 문서에 변경 이유와 함께 기록한다
