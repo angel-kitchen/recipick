@@ -423,4 +423,28 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
                 tuple(second, "자동구성 테스트 마트", "자동구성 된장찌개 2인분"),
                 tuple(first, "자동구성 테스트 마트", "자동구성 된장찌개 5인분"));
     }
+
+    @Test
+    @DisplayName("기록 목록: 크기 1로 나눠 조회하면 페이지마다 다른 요청이 최근 순으로 나온다")
+    void findAutoCarts_paging() {
+        // given
+        Long first = previewId();
+        Long second = previewId();
+
+        // when
+        PageResponse<AutoCartSummaryResponse> firstPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(0, 1));
+        PageResponse<AutoCartSummaryResponse> secondPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(1, 1));
+
+        // then
+        assertThat(firstPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(second);
+        assertThat(secondPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(first);
+        assertThat(firstPage.totalElements()).isEqualTo(2);
+        assertThat(firstPage.totalPages()).isEqualTo(2);
+    }
 }
