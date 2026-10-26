@@ -162,7 +162,7 @@ class MemberAddressListIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("존재하지 않는 회원 토큰이면 빈 목록 대신 MEMBER-001을 반환한다")
+    @DisplayName("존재하지 않는 회원 토큰이면 빈 목록 대신 AUTH-011을 반환한다")
     void rejectsMissingMember() throws Exception {
         // given
         String token = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
@@ -171,8 +171,8 @@ class MemberAddressListIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse response = request(token);
 
         // then
-        assertThat(response.getStatus()).isEqualTo(404);
-        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("MEMBER-001");
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("AUTH-011");
     }
 
     @Test

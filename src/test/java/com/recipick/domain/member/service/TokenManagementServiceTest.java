@@ -46,7 +46,7 @@ class TokenManagementServiceTest {
                 Duration.ofMinutes(30), Duration.ofDays(14));
         given(tokenProvider.parseRefreshToken("old-refresh"))
                 .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id"));
-        given(members.existsById(1L)).willReturn(true);
+        given(members.existsByIdAndWithdrawnAtIsNull(1L)).willReturn(true);
         given(tokenProvider.rotateTokens(principal, "session-id")).willReturn(pair);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Redis unavailable");
         given(store.rotate("MEMBER", 1L, "session-id", "old-refresh", "new-refresh", Duration.ofDays(14)))

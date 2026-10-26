@@ -220,7 +220,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("유효한 회원 토큰이어도 회원이 없으면 MEMBER-001을 반환한다")
+    @DisplayName("유효한 회원 토큰이어도 회원이 없으면 AUTH-011을 반환한다")
     void rejectsMissingMember() throws Exception {
         // given
         String token = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
@@ -229,8 +229,8 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse response = request(token);
 
         // then
-        assertThat(response.getStatus()).isEqualTo(404);
-        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("MEMBER-001");
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo("AUTH-011");
     }
 
     @Test

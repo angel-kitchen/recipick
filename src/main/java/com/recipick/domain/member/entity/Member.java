@@ -55,6 +55,12 @@ public class Member extends BaseTimeEntity {
 
     private LocalDateTime privacyAgreedAt;
 
+    private LocalDateTime withdrawnAt;
+
+    public boolean isWithdrawn() {
+        return withdrawnAt != null;
+    }
+
     @Builder
     private Member(
             String email,

@@ -294,7 +294,7 @@ class MemberAddressCreateIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("없는 회원은 MEMBER-001이고 관리자와 비로그인은 등록할 수 없다")
+    @DisplayName("없는 회원은 AUTH-011이고 관리자와 비로그인은 등록할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
         String missing = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
@@ -306,9 +306,9 @@ class MemberAddressCreateIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse anonymous = request(body("1111014000"), null);
 
         // then
-        assertThat(missingResponse.getStatus()).isEqualTo(404);
+        assertThat(missingResponse.getStatus()).isEqualTo(401);
         assertThat(mapper.readTree(missingResponse.getContentAsString()).path("code").asText())
-                .isEqualTo("MEMBER-001");
+                .isEqualTo("AUTH-011");
         assertThat(adminResponse.getStatus()).isEqualTo(403);
         assertThat(anonymous.getStatus()).isEqualTo(401);
     }

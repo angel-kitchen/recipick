@@ -38,7 +38,7 @@ class MembershipAccessServiceTest {
     @DisplayName("활성 검증은 주입된 한국 시간 Clock을 기준으로 조회하고 활성 회원을 허용한다")
     void usesInjectedClockAndAllowsActiveMember() {
         // given
-        given(members.existsById(1L)).willReturn(true);
+        given(members.existsByIdAndWithdrawnAtIsNull(1L)).willReturn(true);
         Membership membership = Membership.builder().type(MembershipType.TRIAL).source(MembershipSource.TRIAL)
                 .startAt(NOW).endAt(NOW.plusDays(7)).build();
         given(memberships.findActiveMemberships(1L, NOW, PageRequest.of(0, 1))).willReturn(List.of(membership));
@@ -56,7 +56,7 @@ class MembershipAccessServiceTest {
     @DisplayName("활성 이용권이 없는 회원의 전용 기능 검증은 MEMBERSHIP-001로 거절한다")
     void rejectsInactiveMember() {
         // given
-        given(members.existsById(1L)).willReturn(true);
+        given(members.existsByIdAndWithdrawnAtIsNull(1L)).willReturn(true);
         given(memberships.findActiveMemberships(1L, NOW, PageRequest.of(0, 1))).willReturn(List.of());
 
         // when
