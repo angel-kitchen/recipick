@@ -38,10 +38,12 @@ import com.recipick.domain.recipe.repository.AutoCartRequestRepository;
 import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
+import com.recipick.domain.recipe.service.AutoCartService;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -57,6 +59,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -68,6 +71,10 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
     AutoCartFacade autoCartFacade;
     @Autowired
     AutoCartRequestRepository autoCartRequestRepository;
+    @Autowired
+    AutoCartService autoCartService;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
     @Autowired
     AutoCartItemRepository autoCartItemRepository;
     @Autowired
@@ -446,5 +453,29 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .containsExactly(first);
         assertThat(firstPage.totalElements()).isEqualTo(2);
         assertThat(firstPage.totalPages()).isEqualTo(2);
+    }
+
+
+    @Test
+    @DisplayName("정리 배치: 기준 시각보다 먼저 만든 미리보기만 지우고 확정한 요청은 남긴다")
+    void deleteExpiredPreviews() {
+        // given
+        Long expired = previewId();
+        Long confirmed = previewId();
+        autoCartFacade.confirm(MEMBER_ID, confirmed, null);
+        Long recent = previewId();
+        LocalDateTime before = LocalDateTime.now().minusDays(7);
+        // created_at은 생성 뒤 바꿀 수 없는 컬럼이라 SQL로 직접 과거 시각을 넣는다
+        jdbcTemplate.update("UPDATE auto_cart_request SET created_at = ? WHERE id IN (?, ?)",
+            before.minusDays(1), expired, confirmed);
+
+        // when
+        int deleted = autoCartService.deleteExpiredPreviews(before);
+
+        // then
+        assertThat(deleted).isEqualTo(1);
+        assertThat(autoCartRequestRepository.findAllById(List.of(expired, confirmed, recent)))
+            .extracting(AutoCartRequest::getId)
+            .containsExactlyInAnyOrder(confirmed, recent);
     }
 }
