@@ -62,7 +62,15 @@ public class GenerateRecipeSeed {
             System.exit(1);
         }
 
-        List<List<String>> rows = parseCsv(Files.readString(CSV_PATH, StandardCharsets.UTF_8));
+        List<List<String>> rows;
+        try {
+            rows = parseCsv(Files.readString(CSV_PATH, StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException e) {
+            System.err.println("SQL을 만들지 않았습니다. CSV 형식을 고쳐 주세요.");
+            System.err.println("  - " + e.getMessage());
+            System.exit(1);
+            return;
+        }
         List<String> header = rows.get(0);
         List<Recipe> recipes = new ArrayList<>();
         List<String> missing = new ArrayList<>();
@@ -288,6 +296,11 @@ public class GenerateRecipeSeed {
             } else {
                 cell.append(c);
             }
+        }
+        // 여는 큰따옴표가 닫히지 않으면 나머지 내용이 모두 한 칸으로 합쳐진 채 검사를 통과할 수 있어 여기서 막는다
+        if (quoted) {
+            throw new IllegalArgumentException(
+                (rows.size() + 1) + "행에서 연 큰따옴표(\")가 파일 끝까지 닫히지 않았습니다");
         }
         if (cell.length() > 0 || !row.isEmpty()) {
             row.add(cell.toString());
