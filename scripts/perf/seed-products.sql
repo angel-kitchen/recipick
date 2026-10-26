@@ -1,6 +1,8 @@
 SET NAMES utf8mb4;
 SET SESSION cte_max_recursion_depth = 100000;
 
+START TRANSACTION;
+
 DELETE FROM product WHERE description = 'PERF_SEED';
 
 -- 카테고리 20개
@@ -28,11 +30,11 @@ SELECT
     m.id,
     c.id,
     CONCAT(
-        ELT(s.n % 6 + 1, '국내산 ', '유기농 ', '냉동 ', '신선 ', '무항생제 ', '프리미엄 '),
-        ELT(s.n % 12 + 1, '양파', '대파', '감자', '당근', '두부', '계란', '우유', '닭가슴살', '돼지고기', '소고기', '쌀', '김치'),
+        ELT(CONV(LEFT(MD5(CONCAT('p', s.n)), 8), 16, 10) % 6 + 1, '국내산 ', '유기농 ', '냉동 ', '신선 ', '무항생제 ', '프리미엄 '),
+        ELT(CONV(LEFT(MD5(CONCAT('i', s.n)), 8), 16, 10) % 12 + 1, '양파', '대파', '감자', '당근', '두부', '계란', '우유', '닭가슴살', '돼지고기', '소고기', '쌀', '김치'),
         ' ', s.n
     ),
-    CONCAT('브랜드', s.n % 30),
+    CONCAT('브랜드', CONV(LEFT(MD5(CONCAT('b', s.n)), 8), 16, 10) % 30),
     'PERF_SEED',
     ELT(s.n % 5 + 1, 100, 200, 500, 1000, 1500),
     ELT(s.n % 3 + 1, 'G', 'ML', 'EA'),
@@ -44,4 +46,6 @@ SELECT
     NOW()
 FROM seq s
 JOIN mart m ON m.id IN (1, 2)
-JOIN cat c ON c.idx = s.n % 20;
+JOIN cat c ON c.idx = CONV(LEFT(MD5(CONCAT('c', s.n)), 8), 16, 10) % 20;
+
+COMMIT;
