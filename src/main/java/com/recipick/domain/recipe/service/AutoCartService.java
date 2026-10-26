@@ -122,7 +122,7 @@ public class AutoCartService {
             pageable.getPageSize(),
             Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))
         );
-        return autoCartItemRepository.findByMemberId(memberId, latestFirst);
+        return autoCartRequestRepository.findByMemberId(memberId, latestFirst);
     }
 
     public List<AutoCartItem> findItems(Long autoCartRequestId) {
