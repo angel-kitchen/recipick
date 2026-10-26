@@ -58,6 +58,9 @@ public class PaymentAdminQueryFacade {
         // 결제가 있으면 주문도 반드시 있다(주문 생성 트랜잭션에서 함께 만들어진다)
         Long memberId = orderService.getMemberIdOf(payment.getOrderId());
 
+        // 상세 감사 기록(PAYMENT_DETAIL_VIEW)은 마트 ID가 필수다. 결제 한 건이 속한 주문 당시의 마트를 남긴다
+        Long martId = orderService.getMartIdOf(payment.getOrderId());
+
         List<Refund> refunds = paymentService.findRefundsOf(paymentId);
 
         PaymentAdminDetailResponse response =
@@ -67,7 +70,7 @@ public class PaymentAdminQueryFacade {
             new AdminAuditCommand(
                 AdminAuditAction.PAYMENT_DETAIL_VIEW,
                 paymentId,
-                null,
+                martId,
                 null
             )
         );
