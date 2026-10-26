@@ -2,6 +2,9 @@ package com.recipick.infra.portone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.recipick.infra.portone.dto.PortOneCancellation;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
+import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentAmount;
 import com.recipick.infra.portone.dto.PortOnePaymentFailure;
@@ -9,6 +12,7 @@ import com.recipick.infra.portone.dto.PortOnePaymentResponse;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +60,7 @@ class PortOnePaymentTest {
             "KRW",
             null,
             null,
+            null,
             null
         );
 
@@ -67,6 +72,7 @@ class PortOnePaymentTest {
         assertThat(payment.totalAmount()).isNull();
         assertThat(payment.customDataOrderId()).isNull();
         assertThat(payment.failureSummary()).isNull();
+        assertThat(payment.cancellations()).isEmpty();
     }
 
     @Test
@@ -100,7 +106,8 @@ class PortOnePaymentTest {
             null,
             null,
             null,
-            new PortOnePaymentFailure("card declined", "E001", "한도 초과")
+            new PortOnePaymentFailure("card declined", "E001", "한도 초과"),
+            null
         );
 
         // when
@@ -143,6 +150,49 @@ class PortOnePaymentTest {
         assertThat(summary).hasSize(500);
     }
 
+    @Test
+    @DisplayName("취소 내역을 순서대로 옮기고 시각을 한국 시간으로 바꾼다")
+    void copyCancellations() {
+        // given
+        PortOnePaymentResponse response = new PortOnePaymentResponse(
+            "pay_1",
+            "tx_1",
+            PortOnePaymentStatus.CANCELED,
+            new PortOnePaymentAmount(23800L, 23800L),
+            "KRW",
+            null,
+            null,
+            null,
+            List.of(new PortOnePaymentResponse.Cancellation(
+                "cancel_1",
+                PortOneCancellationStatus.SUCCEEDED,
+                23800L,
+                OffsetDateTime.parse("2026-10-25T03:00:00Z"),
+                OffsetDateTime.parse("2026-10-25T03:00:10Z"),
+                PortOneCancellationTrigger.API))
+        );
+
+        // when
+        PortOnePayment payment = PortOnePayment.from(response);
+
+        // then
+        assertThat(payment.cancellations()).hasSize(1);
+        PortOneCancellation cancellation = payment.cancellations().get(0);
+        assertThat(cancellation.id()).isEqualTo("cancel_1");
+        assertThat(cancellation.canceledAt()).isEqualTo(LocalDateTime.of(2026, 10, 25, 12, 0, 10));
+    }
+
+    @Test
+    @DisplayName("취소 내역 없이 만드는 결제 확정용 생성자는 빈 목록을 갖는다")
+    void emptyCancellationsByDefault() {
+        // when
+        PortOnePayment payment = new PortOnePayment(
+            "pay_1", "tx_1", PortOnePaymentStatus.PAID, 23800L, "KRW", null, null, null);
+
+        // then
+        assertThat(payment.cancellations()).isEmpty();
+    }
+
     private static PortOnePaymentResponse paidResponse(OffsetDateTime paidAt) {
         return new PortOnePaymentResponse(
             "pay_1",
@@ -152,6 +202,7 @@ class PortOnePaymentTest {
             "KRW",
             paidAt,
             "{\"orderId\":10}",
+            null,
             null
         );
     }

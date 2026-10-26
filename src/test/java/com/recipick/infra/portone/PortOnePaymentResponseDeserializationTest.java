@@ -3,6 +3,8 @@ package com.recipick.infra.portone;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
+import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePaymentResponse;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
 import java.time.OffsetDateTime;
@@ -138,5 +140,55 @@ class PortOnePaymentResponseDeserializationTest {
 
         // then
         assertThat(response.amount().total()).isEqualTo(100L);
+    }
+
+    @Test
+    @DisplayName("cancellations의 상태·금액·시각·경로를 읽는다 — PortOne 키 cancelledAt, 모르는 값은 UNKNOWN")
+    void deserializeCancellations() throws Exception {
+        // given — PAID 결제에도 아직 끝나지 않은 취소 내역이 온다
+        String json = """
+                {
+                  "status": "PAID",
+                  "id": "pay_1",
+                  "cancellations": [
+                    { "status": "REQUESTED", "id": "cancel_1", "totalAmount": 23800,
+                      "requestedAt": "2026-10-25T03:00:00Z", "trigger": "API", "reason": "단순 변심" },
+                    { "status": "SUCCEEDED", "id": "cancel_2", "totalAmount": 23800,
+                      "requestedAt": "2026-10-25T03:00:00Z", "cancelledAt": "2026-10-25T03:00:10Z",
+                      "trigger": "CONSOLE", "pgCancellationId": "pg_1" },
+                    { "status": "SOMETHING_NEW", "id": "cancel_3", "trigger": "SOMETHING_NEW" }
+                  ]
+                }
+                """;
+
+        // when
+        PortOnePaymentResponse response = mapper.readValue(json, PortOnePaymentResponse.class);
+
+        // then
+        assertThat(response.cancellations()).hasSize(3);
+        PortOnePaymentResponse.Cancellation requested = response.cancellations().get(0);
+        assertThat(requested.status()).isEqualTo(PortOneCancellationStatus.REQUESTED);
+        assertThat(requested.id()).isEqualTo("cancel_1");
+        assertThat(requested.totalAmount()).isEqualTo(23800L);
+        assertThat(requested.requestedAt()).isEqualTo(OffsetDateTime.parse("2026-10-25T03:00:00Z"));
+        assertThat(requested.canceledAt()).isNull();
+        assertThat(requested.trigger()).isEqualTo(PortOneCancellationTrigger.API);
+        PortOnePaymentResponse.Cancellation succeeded = response.cancellations().get(1);
+        assertThat(succeeded.canceledAt()).isEqualTo(OffsetDateTime.parse("2026-10-25T03:00:10Z"));
+        assertThat(succeeded.trigger()).isEqualTo(PortOneCancellationTrigger.CONSOLE);
+        PortOnePaymentResponse.Cancellation unknown = response.cancellations().get(2);
+        assertThat(unknown.status()).isEqualTo(PortOneCancellationStatus.UNKNOWN);
+        assertThat(unknown.trigger()).isEqualTo(PortOneCancellationTrigger.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("cancellations가 없는 응답은 null로 읽는다")
+    void deserializeWithoutCancellations() throws Exception {
+        // when
+        PortOnePaymentResponse response =
+            mapper.readValue("{\"status\":\"PAID\",\"id\":\"pay_1\"}", PortOnePaymentResponse.class);
+
+        // then
+        assertThat(response.cancellations()).isNull();
     }
 }

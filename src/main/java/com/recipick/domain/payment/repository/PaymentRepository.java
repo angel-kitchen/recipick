@@ -27,4 +27,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     // 정렬을 메서드 이름에 박지 않는다. 호출자가 넘긴 Pageable의 Sort만 적용돼 ORDER BY가 하나로 유지된다.
     Page<Payment> findByOrderIdIn(Collection<Long> orderIds, Pageable pageable);
+
+    // 웹훅은 PortOne 결제 ID로 들어온다. portone_payment_id가 UNIQUE라 최대 한 건이다. 잠금은 찾은 id로 다시 건다
+    Optional<Payment> findByPortonePaymentId(String portonePaymentId);
 }

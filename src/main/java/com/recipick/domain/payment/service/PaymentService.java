@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -58,6 +59,32 @@ public class PaymentService {
     public Payment getByIdForUpdate(Long paymentId) {
         return paymentRepository.findByIdForUpdate(paymentId)
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    // 웹훅은 PortOne 결제 ID로 들어온다. 없으면 레시픽 결제가 아니므로 예외 대신 빈 값을 돌려주고 호출자가 IGNORED로 적는다
+    public Optional<Payment> findByPortonePaymentId(String portonePaymentId) {
+        return paymentRepository.findByPortonePaymentId(portonePaymentId);
+    }
+
+    // 정합화의 환불 찾기 ①. portone_cancellation_id가 UNIQUE라 최대 한 건이다.
+    // 잠금 없는 스냅샷이고 최종 판정은 PaymentCancelProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
+    public Optional<Refund> findRefundByPortoneCancellationId(String portoneCancellationId) {
+        return refundRepository.findByPortoneCancellationId(portoneCancellationId);
+    }
+
+    // 정합화의 환불 찾기 ②. 취소 ID를 아직 못 받은 회원 환불. 정확히 한 건일 때만 자동 반영하므로 판단은 호출자가 한다
+    public List<Refund> findRequestedMemberRefunds(Long paymentId) {
+        return refundRepository.findRequestedMemberRefundsByPaymentId(paymentId);
+    }
+
+    // 환불 재확인용. 결제를 함께 읽어 트랜잭션 밖에서 결제 ID·PortOne 결제 ID를 쓸 수 있다. 잠금 없는 스냅샷이다
+    public Optional<Refund> findRefundWithPayment(Long refundId) {
+        return refundRepository.findWithPaymentById(refundId);
+    }
+
+    // Fallback Sweep용. requestedBefore 이전에 요청된 회원 REQUESTED 환불 ID를 afterId 다음부터 limit건 읽는다
+    public List<Long> findStaleMemberRefundIds(LocalDateTime requestedBefore, Long afterId, int limit) {
+        return refundRepository.findStaleRequestedMemberRefundIds(afterId, requestedBefore, PageRequest.ofSize(limit));
     }
 
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도
