@@ -19,6 +19,7 @@ public enum PaymentErrorCode implements ErrorCode {
     ORDER_ALREADY_PREPARING(HttpStatus.CONFLICT, "PAYMENT-008", "배송 준비가 시작되어 결제를 취소할 수 없습니다."),
     PAYMENT_CANCEL_REJECTED(HttpStatus.CONFLICT, "PAYMENT-009", "결제 취소가 거절되었습니다."),
     PORTONE_CONFIG_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-010", "결제 공개 설정을 불러올 수 없습니다."),
+    WEBHOOK_NOT_CONFIGURED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-011", "웹훅 설정이 없어 요청을 처리할 수 없습니다."),
     INVALID_BILLING_KEY(HttpStatus.BAD_REQUEST, "BILLING-001", "유효하지 않은 자동결제 수단입니다."),
     BILLING_KEY_ALREADY_USED(HttpStatus.CONFLICT, "BILLING-002", "이미 사용 중인 빌링키입니다."),
     MEMBERSHIP_PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "BILLING-003", "멤버십 결제 정보를 찾을 수 없습니다.");
