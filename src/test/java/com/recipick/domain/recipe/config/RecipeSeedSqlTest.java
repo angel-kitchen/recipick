@@ -57,6 +57,9 @@ class RecipeSeedSqlTest extends IntegrationTestSupport {
     @Test
     @DisplayName("레시피 초기 데이터 SQL을 두 번 실행해도 한식 70개·양식 30개만 조리 순서와 영상을 갖고 들어간다")
     void seedSql_loadsOnceWithStepsAndVideo() {
+        // given
+        // 기존 레시피 ID는 setUp()에서 저장해 두고, 이번에 새로 들어간 레시피만 골라 검증·정리한다
+
         // when
         runSeedSql();
         runSeedSql();
