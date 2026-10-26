@@ -24,6 +24,7 @@ import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
 import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
+import com.recipick.domain.recipe.dto.response.AutoCartSummaryResponse;
 import com.recipick.domain.recipe.entity.AutoCartMenu;
 import com.recipick.domain.recipe.entity.AutoCartRequest;
 import com.recipick.domain.recipe.entity.AutoCartStatus;
@@ -39,6 +40,7 @@ import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.response.PageResponse;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +56,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -395,5 +398,53 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .get()
             .extracting(CartItem::getQuantity)
             .isEqualTo(2);
+    }
+
+
+    @Test
+    @DisplayName("기록 목록: 본인 요청만 최근 요청부터 보여준다")
+    void findAutoCarts() {
+        // given
+        Long first = previewId();
+        Long second = autoCartFacade.preview(MEMBER_ID, previewRequest(2, List.of())).autoCartRequestId();
+        given(memberService.getMartId(MEMBER_ID + 1)).willReturn(Optional.of(mart.getId()));
+        given(membershipService.getSummary(eq(MEMBER_ID + 1), any()))
+            .willReturn(new MembershipSummary(true, "PAID", null));
+        autoCartFacade.preview(MEMBER_ID + 1, previewRequest(2, List.of()));
+
+        // when
+        PageResponse<AutoCartSummaryResponse> response = autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(0, 20));
+
+        // then
+        assertThat(response.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId, AutoCartSummaryResponse::martName,
+                AutoCartSummaryResponse::menuSummary)
+            .containsExactly(
+                tuple(second, "자동구성 테스트 마트", "자동구성 된장찌개 2인분"),
+                tuple(first, "자동구성 테스트 마트", "자동구성 된장찌개 5인분"));
+    }
+
+    @Test
+    @DisplayName("기록 목록: 크기 1로 나눠 조회하면 페이지마다 다른 요청이 최근 순으로 나온다")
+    void findAutoCarts_paging() {
+        // given
+        Long first = previewId();
+        Long second = previewId();
+
+        // when
+        PageResponse<AutoCartSummaryResponse> firstPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(0, 1));
+        PageResponse<AutoCartSummaryResponse> secondPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(1, 1));
+
+        // then
+        assertThat(firstPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(second);
+        assertThat(secondPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(first);
+        assertThat(firstPage.totalElements()).isEqualTo(2);
+        assertThat(firstPage.totalPages()).isEqualTo(2);
     }
 }

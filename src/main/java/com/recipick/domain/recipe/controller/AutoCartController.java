@@ -4,11 +4,14 @@ import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
 import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
+import com.recipick.domain.recipe.dto.response.AutoCartSummaryResponse;
 import com.recipick.domain.recipe.facade.AutoCartFacade;
 import com.recipick.global.response.ApiResponse;
+import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.LoginMember;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +34,15 @@ public class AutoCartController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(autoCartFacade.preview(memberId, request)));
     }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<AutoCartSummaryResponse>>> findAutoCarts(
+        @LoginMember Long memberId,
+        Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(autoCartFacade.findAutoCarts(memberId, pageable)));
+    }
+
 
     @GetMapping("/{autoCartRequestId}")
     public ResponseEntity<ApiResponse<AutoCartPreviewResponse>> getAutoCart(
