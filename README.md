@@ -51,7 +51,7 @@ src/main/java/com/recipick
 
 요청은 Controller에서 받아 Service로 처리하고, 여러 도메인을 조립하는 흐름은 Facade가 트랜잭션 경계를 관리합니다.
 다른 도메인의 정보와 변경은 공개 Service 계약을 통해 요청합니다.
-상세 구조·호출 규칙은 [컨벤션](docs/convention.md#도메인-간-호출), 테이블 구조는 [ERD](docs/erd.dbml)를 확인해 주세요.
+선택 이유와 실제 요청 흐름은 [아키텍처 근거](docs/adr/layered-architecture.md), 상세 구조·호출 규칙은 [컨벤션](docs/convention.md#도메인-간-호출), 테이블 구조는 [ERD](docs/erd.dbml)를 확인해 주세요.
 
 ## 로컬 실행
 
