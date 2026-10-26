@@ -1,6 +1,6 @@
 # 모니터링
 
-> 2-B 단계(Actuator·Prometheus 도입)까지의 기록입니다. 대시보드(2-C)는 이어서 추가합니다.
+>  2-C 단계(Prometheus·Grafana 구성과 기본 대시보드)까지의 기록입니다. 부하 테스트·병목 개선의 Before → After 수치는 이 대시보드로 확인합니다.
 
 ## 1. 엔드포인트 공개 규칙
 
@@ -84,3 +84,63 @@
 - 운영 JSON 로그 예:
 ```json
 {"message":"요청 처리 GET /api/products status=401 132ms","level":"WARN","traceId":"a5864564-...","method":"GET","path":"/api/products","status":401,"durationMs":132}
+
+## 3. Prometheus·Grafana 구성과 대시보드
+
+### 상황
+- 2-A에서 지표를 열었지만 수집·저장·시각화 도구가 없어 수치를 볼 수 없다.
+- 부하 테스트(필수 8)와 병목 개선(필수 9)은 Before → After를 그래프와 수치로 보여 주어야 한다.
+- 팀원 누구나, 서버에서도 같은 화면을 재현할 수 있어야 한다.
+
+### 후보
+| 후보 | 장점 | 단점 |
+| --- | --- | --- |
+| Actuator 응답(JSON)만 직접 확인 | 도구 설치 없음 | 시간에 따른 변화·p95·비교가 불가능 |
+| 클라우드 모니터링 서비스(CloudWatch 등) | 서버 구성과 연동 | 로컬 측정이 어렵고, 서버가 확정되기 전에는 쓸 수 없음 |
+| **Prometheus + Grafana(선택)** | Micrometer·Spring Boot와 표준 조합, 로컬에서 같은 구성으로 재현, 대시보드를 파일로 관리 | 컨테이너 2개가 늘고 쿼리 언어(PromQL)를 알아야 함 |
+
+### 선택과 이유
+- **수집 방식**: Prometheus가 관리 포트(8081)의 `/actuator/prometheus`를 5초마다 가져간다(pull). 앱은 창구만 열어 두면 되고 별도 전송 코드가 필요 없다.
+- **파일 구성**: `docker-compose.monitoring.yml`을 기존 `docker-compose.yml`과 분리했다. 모니터링이 필요 없는 팀원의 로컬 환경과 CI에 영향을 주지 않는다.
+- **대시보드는 파일로 관리**(Grafana 프로비저닝): 데이터소스와 대시보드를 `monitoring/grafana/` 설정 파일로 등록한다. 화면에서 손으로 만든 대시보드는 컨테이너를 지우면 사라지지만, 파일은 레포에 남아 누구나 같은 화면을 얻고 변경 이력도 남는다.
+- **응답 시간 분위수**: p95·p99를 계산하려면 응답 시간 구간별 건수(히스토그램)가 필요해서 `application.yml`에 `management.metrics.distribution.percentiles-histogram.http.server.requests: true`를 추가했다. 평균은 아주 느린 요청을 가리므로 p95·p99를 함께 본다.
+- **접근 범위**: Prometheus(9090)와 Grafana(3000) 포트는 `127.0.0.1`에 묶어 내 컴퓨터에서만 접속한다.
+
+### 실행 방법
+1. 앱을 실행한다(앱 포트 8080, 관리 포트 8081).
+2. `docker compose -f docker-compose.monitoring.yml up -d`
+3. `http://localhost:9090/targets`에서 `recipick`이 UP인지 확인한다.
+4. `http://localhost:3000`(계정 `admin`, 비밀번호는 환경 변수 `GRAFANA_ADMIN_PASSWORD`, 없으면 `admin`)에서 Recipick 폴더의 "Recipick 개요" 대시보드를 연다.
+5. 종료는 `docker compose -f docker-compose.monitoring.yml down`.
+
+### 대시보드 패널
+| 패널 | 지표 | 용도 |
+| --- | --- | --- |
+| 초당 요청 수(경로별) | `http_server_requests_seconds_count`의 `rate` | 처리량, 부하 테스트 중 요청 수 확인 |
+| 응답 시간 p95·p99 | `http_server_requests_seconds_bucket`의 `histogram_quantile` | 느린 요청, 개선 전후 비교의 핵심 지표 |
+| 5xx 에러율 | 5xx 요청 수 / 전체 요청 수 | 부하 중 장애 발생 여부 |
+| 평균 응답 시간(경로별) | `_sum` / `_count` | 느린 API 식별 |
+| JVM 힙 사용량 | `jvm_memory_used_bytes`, `jvm_memory_max_bytes` | 메모리 부족·캐시 도입 영향 |
+| DB 커넥션 풀 | `hikaricp_connections_active`, `pending`, `max` | 커넥션 대기·고갈 여부 |
+| CPU 사용률 | `process_cpu_usage`, `system_cpu_usage` | 서버 자원 한계 |
+
+보민님의 AI 지표는 같은 Prometheus에 수집되므로 이 대시보드에 패널로 추가한다.
+
+### 트레이드오프
+- 이 구성은 **로컬 측정용**이다. 수집 주소가 `host.docker.internal:8081`(호스트에서 실행 중인 앱)이라 서버(AWS) 배포 구성에서는 그대로 쓸 수 없다. 서버에서의 수집 구성은 운영 Compose(배포 기반 구성)와 맞춰 별도로 정한다.
+- 관리 포트는 인증이 없으므로(1절) 서버에서 Prometheus가 있는 내부 대역에만 열어야 한다.
+- Prometheus는 최근 지표를 로컬 볼륨에 저장한다. `down -v`로 지우면 이전 측정값이 사라지므로, Before/After 수치는 스크린샷과 `docs/performance/`의 문서에 별도로 남긴다.
+- Grafana 기본 계정은 로컬 전용이다. 서버에 올릴 때는 반드시 비밀번호를 변경한다.
+- 히스토그램 버킷이 켜지면 지표 수가 늘어 수집·저장량이 조금 증가한다.
+
+### 결과
+로컬에서 직접 띄워 확인했다.
+
+| 확인 항목 | 결과 |
+| --- | --- |
+| Prometheus Targets(`recipick`) | UP |
+| Grafana 데이터소스·대시보드 자동 등록 | 등록됨(수동 설정 없음) |
+| 패널 7개 쿼리 | 모두 값 반환 |
+| 요청을 보낼 때 그래프 변화 | 요청 수·응답 시간·커넥션 풀 그래프 갱신 |
+
+- 5xx가 한 건도 없으면 에러율 쿼리가 "데이터 없음"이 되어 `or vector(0)`을 붙여 0%로 표시한다.
