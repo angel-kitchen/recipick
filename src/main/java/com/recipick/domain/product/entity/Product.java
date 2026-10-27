@@ -42,6 +42,10 @@ import lombok.NoArgsConstructor;
             columnList = "mart_id, category_id, deleted, price, id"
         ),
         @Index(
+            name= "idx_product_mart_category_price_asc",
+            columnList = "mart_id, category_id, deleted, price ASC, id DESC"
+        ),
+        @Index(
             name = "idx_product_mart_created",
             columnList = "mart_id, deleted, created_at, id"
         )
