@@ -61,6 +61,7 @@ public class PaymentReconciliationFacade {
     private final PortOneWebhookParser portOneWebhookParser;
     private final PaymentConfirmProcessor paymentConfirmProcessor;
     private final PaymentCancelProcessor paymentCancelProcessor;
+    private final SystemRefundExecutionFacade systemRefundExecutionFacade;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
 
@@ -126,6 +127,9 @@ public class PaymentReconciliationFacade {
     private Decision confirm(Payment payment, PortOnePayment portOnePayment) {
         PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(payment.getOrderId(), portOnePayment);
         log.info("웹훅 결제 확정 판정: orderId={}, outcome={}", payment.getOrderId(), outcome);
+        // Processor가 커밋한 뒤라 SYSTEM 환불 행이 보인다. 예약 실패는 웹훅 판정과 무관하다 — 환불이 REQUESTED로 남아
+        // Fallback이 다시 등록한다
+        systemRefundExecutionFacade.scheduleAfterConfirm(payment.getId(), outcome);
         return switch (outcome) {
             // 지금 끝냈거나 이미 끝난 결제. 실패 판정(PG_FAILED·만료·금액 불일치)도 Processor가 반영을 마쳤으니 웹훅 몫은 끝이다
             case APPROVED, ALREADY_PAID, PG_FAILED, AMOUNT_MISMATCH, EXPIRED, ALREADY_CLOSED, INVALID_STATUS ->

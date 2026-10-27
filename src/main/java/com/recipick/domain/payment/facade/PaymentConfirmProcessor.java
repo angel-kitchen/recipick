@@ -80,15 +80,16 @@ public class PaymentConfirmProcessor {
         return outcome;
     }
 
-    // 돈이 PG에 남은 채 결제가 실패로 끝나는 자리다. 행으로 남기고(1차 문서 8절) 운영이 볼 수 있게 WARN을 남긴다.
-    // 재진입이면 기존 행이 돌아오므로 "생성"이 아니라 "필요 상태"로 적는다
+    // 돈이 PG에 남은 채 결제가 실패로 끝나는 자리다. 행으로 남기고 운영이 볼 수 있게 WARN을 남긴다.
+    // 재진입이면 기존 행이 돌아오므로 "생성"이 아니라 "필요 상태"로 적는다.
+    // 실제 취소는 이 트랜잭션 커밋 뒤 호출한 쪽(확정 API·웹훅)이 SystemRefundExecutionFacade.scheduleAfterConfirm으로 예약한다
     private void requestSystemRefund(Payment payment, Long amount, String reason) {
         paymentService.requestSystemRefund(payment, amount, reason);
         log.warn("SYSTEM 환불 필요 상태: paymentId={}, orderId={}, amount={}, reason={}",
             payment.getId(), payment.getOrderId(), amount, reason);
     }
 
-    // 락 순서 PAYMENT → ORDERS → (2차: MEMBER_POINT → POINT_EARNING) → 재고. 주문 종료와 재고 복구 사이가 포인트 자리다
+    // 락 순서 PAYMENT → ORDERS → (MEMBER_POINT → POINT_EARNING) → 재고. 주문 종료와 재고 복구 사이가 포인트 자리다
     private void closeOrder(Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
         List<StockQuantity> items = orderFacade.closeByPaymentFailure(orderId, reasonCode, reasonDetail);
         orderFacade.restoreStock(items);

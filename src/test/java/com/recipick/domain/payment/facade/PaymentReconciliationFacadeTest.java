@@ -98,6 +98,9 @@ class PaymentReconciliationFacadeTest {
     private PaymentCancelProcessor paymentCancelProcessor;
 
     @Mock
+    private SystemRefundExecutionFacade systemRefundExecutionFacade;
+
+    @Mock
     private PaymentDelayQueue paymentDelayQueue;
 
     private PaymentReconciliationFacade facade;
@@ -108,8 +111,8 @@ class PaymentReconciliationFacadeTest {
     void setUp() {
         Clock fixedClock = Clock.fixed(NOW_INSTANT, SEOUL);
         facade = new PaymentReconciliationFacade(webhookEventService, paymentService, portOnePaymentClient,
-            new PortOneWebhookParser(), paymentConfirmProcessor, paymentCancelProcessor, paymentDelayQueue,
-            fixedClock);
+            new PortOneWebhookParser(), paymentConfirmProcessor, paymentCancelProcessor, systemRefundExecutionFacade,
+            paymentDelayQueue, fixedClock);
         // Facade는 결제 상태를 읽지 않는다. 회원 환불 행을 붙일 수 있는 상태(CANCEL_REQUESTED)로 하나만 만들어 공유한다
         payment = payment(PAYMENT_ID, ORDER_ID);
     }
@@ -358,7 +361,7 @@ class PaymentReconciliationFacadeTest {
     @ParameterizedTest
     @EnumSource(value = PaymentApprovalOutcome.class, names = {
         "APPROVED", "ALREADY_PAID", "PG_FAILED", "AMOUNT_MISMATCH", "EXPIRED", "ALREADY_CLOSED", "INVALID_STATUS"})
-    @DisplayName("결제 확정 Processor가 반영을 끝낸 판정은 모두 PROCESSED — 실패 판정도 Processor가 이미 집행했다")
+    @DisplayName("결제 확정 Processor가 반영을 끝낸 판정은 모두 PROCESSED — 실패 판정도 Processor가 이미 집행했고 환불 실행 예약 여부 판단은 판정과 함께 맡긴다")
     void processedOnFinalApprovalOutcomes(PaymentApprovalOutcome approvalOutcome) {
         // given
         givenClaimed(claimedEvent(PAID, null));
@@ -373,6 +376,7 @@ class PaymentReconciliationFacadeTest {
 
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, approvalOutcome);
         verifyNoInteractions(paymentCancelProcessor, paymentDelayQueue);
     }
 
@@ -395,6 +399,7 @@ class PaymentReconciliationFacadeTest {
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
         verify(paymentDelayQueue).reschedule(
             PaymentDelayTask.webhookProcess(EVENT_ID), NOW_INSTANT.plus(Duration.ofMinutes(1)));
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.NOT_PAID);
     }
 
     @Test
@@ -415,6 +420,7 @@ class PaymentReconciliationFacadeTest {
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
         verifyNoInteractions(paymentDelayQueue);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.ORDER_MISMATCH);
     }
 
     // ---------- Cancelled · CancelPending → 환불 찾기 ----------

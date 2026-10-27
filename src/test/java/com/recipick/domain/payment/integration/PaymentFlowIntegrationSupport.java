@@ -138,7 +138,10 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
 
         if (!paymentIds.isEmpty()) {
             List<Refund> refunds = refundRepository.findAllByPaymentIdIn(paymentIds);
-            refunds.forEach(refund -> removeTask(PaymentDelayTask.refundReconcile(refund.getId())));
+            refunds.forEach(refund -> {
+                removeTask(PaymentDelayTask.refundReconcile(refund.getId()));
+                removeTask(PaymentDelayTask.systemRefundExecute(refund.getId()));
+            });
             refundRepository.deleteAll(refunds);
             paymentRepository.deleteAllById(paymentIds);
         }

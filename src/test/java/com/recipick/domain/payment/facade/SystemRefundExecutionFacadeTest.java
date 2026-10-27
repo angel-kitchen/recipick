@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -17,6 +18,7 @@ import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
+import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.PaymentService;
@@ -42,10 +44,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -455,6 +460,76 @@ class SystemRefundExecutionFacadeTest {
 
         // then
         assertThat(outcome).isEqualTo(RefundReconcileOutcome.STALLED);
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    // ---------- 확정 뒤 실행 예약 ----------
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentApprovalOutcome.class, names = {"AMOUNT_MISMATCH", "EXPIRED", "ALREADY_CLOSED"})
+    @DisplayName("SYSTEM 환불을 만들 수 있는 판정이고 REQUESTED 환불이 있으면 지금 시각으로 실행을 예약한다")
+    void scheduleNowAfterConfirm(PaymentApprovalOutcome approvalOutcome) {
+        // given
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID))
+            .willReturn(Optional.of(systemRefund(failedPayment(), NOW)));
+
+        // when
+        facade.scheduleAfterConfirm(PAYMENT_ID, approvalOutcome);
+
+        // then
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), NOW_INSTANT);
+        verifyNoInteractions(portOnePaymentClient, systemRefundProcessor);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentApprovalOutcome.class, mode = EnumSource.Mode.EXCLUDE,
+        names = {"AMOUNT_MISMATCH", "EXPIRED", "ALREADY_CLOSED"})
+    @DisplayName("SYSTEM 환불을 만들지 않는 판정이면 환불을 조회하지도 예약하지도 않는다")
+    void noScheduleForOutcomesWithoutSystemRefund(PaymentApprovalOutcome approvalOutcome) {
+        // when
+        facade.scheduleAfterConfirm(PAYMENT_ID, approvalOutcome);
+
+        // then
+        verifyNoInteractions(paymentService, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("늦은 승인이어도 REQUESTED SYSTEM 환불이 없으면(만들지 않았거나 이미 끝남) 예약하지 않는다")
+    void noScheduleWhenNoRequestedSystemRefund() {
+        // given
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID)).willReturn(Optional.empty());
+
+        // when
+        facade.scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.ALREADY_CLOSED);
+
+        // then
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("실행 예약이 Redis 오류로 실패해도 예외를 던지지 않는다 — 확정 응답·웹훅 판정을 바꾸지 않는다")
+    void scheduleAfterConfirmSwallowsRedisFailure() {
+        // given
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID))
+            .willReturn(Optional.of(systemRefund(failedPayment(), NOW)));
+        willThrow(new RedisConnectionFailureException("redis down"))
+            .given(paymentDelayQueue).enqueueIfEarlier(any(), any());
+
+        // when · then
+        assertThatCode(() -> facade.scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.EXPIRED))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("환불 조회가 DB 오류로 실패해도 예외를 던지지 않고 예약하지 않는다")
+    void scheduleAfterConfirmSwallowsLookupFailure() {
+        // given
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID))
+            .willThrow(new QueryTimeoutException("query timeout"));
+
+        // when · then
+        assertThatCode(() -> facade.scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.EXPIRED))
+            .doesNotThrowAnyException();
         verifyNoInteractions(paymentDelayQueue);
     }
 

@@ -5,6 +5,7 @@ import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
+import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.PaymentService;
@@ -53,6 +54,33 @@ public class SystemRefundExecutionFacade {
     private final SystemRefundProcessor systemRefundProcessor;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
+
+    // 결제 확정(API·웹훅)이 Processor 커밋 뒤에 부른다. SYSTEM 환불을 만들 수 있는 판정이고 그 환불이 REQUESTED면
+    // 바로 실행을 예약한다. Processor 트랜잭션 안에서 예약하지 않는다 — 롤백되면 없는 환불의 작업만 남고,
+    // 커밋 전에 Worker가 꺼내면 아직 보이지 않는 환불이라 SKIPPED로 끝난다.
+    // 예약 실패는 호출한 쪽의 결과를 바꾸지 않는다. 환불이 REQUESTED로 남아 Fallback이 다시 등록한다
+    public void scheduleAfterConfirm(Long paymentId, PaymentApprovalOutcome outcome) {
+        // 값을 받는 switch 식이라 판정이 늘면 컴파일이 실패한다. 그 판정이 SYSTEM 환불을 만드는지 그때 정한다
+        boolean mayRequestRefund = switch (outcome) {
+            case AMOUNT_MISMATCH, EXPIRED, ALREADY_CLOSED -> true;
+            case APPROVED, ALREADY_PAID, NOT_PAID, PG_FAILED, ORDER_MISMATCH, INVALID_STATUS -> false;
+        };
+        if (!mayRequestRefund) {
+            return;
+        }
+        try {
+            // ALREADY_CLOSED는 결제·PG 상태나 PG 금액에 따라 환불을 만들지 않았을 수 있다. 이미 끝난 환불도 여기서 빠진다
+            Optional<Refund> refund = paymentService.findRequestedSystemRefund(paymentId);
+            if (refund.isEmpty()) {
+                return;
+            }
+            Long refundId = refund.get().getId();
+            paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(refundId), clock.instant());
+            log.info("SYSTEM 환불 실행 예약: paymentId={}, refundId={}, outcome={}", paymentId, refundId, outcome);
+        } catch (DataAccessException e) {
+            log.error("SYSTEM 환불 실행 예약 실패: paymentId={}, outcome={}", paymentId, outcome, e);
+        }
+    }
 
     public RefundReconcileOutcome execute(Long refundId) {
         // 스냅샷
