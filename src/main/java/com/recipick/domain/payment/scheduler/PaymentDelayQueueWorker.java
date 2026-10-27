@@ -2,6 +2,7 @@ package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
+import com.recipick.domain.payment.facade.SystemRefundExecutionFacade;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import java.time.Clock;
@@ -24,6 +25,7 @@ public class PaymentDelayQueueWorker {
     private final PaymentDelayQueue paymentDelayQueue;
     private final PaymentReconciliationFacade paymentReconciliationFacade;
     private final RefundReconciliationFacade refundReconciliationFacade;
+    private final SystemRefundExecutionFacade systemRefundExecutionFacade;
     private final Clock clock;
 
     // 실행 시각이 된 작업을 꺼내 처리한다. 주기 실행은 PaymentScheduledTasks가 맡고, 테스트는 이 메서드를 직접 부른다.
@@ -37,10 +39,13 @@ public class PaymentDelayQueueWorker {
 
     private void run(PaymentDelayTask task) {
         try {
-            switch (task.type()) {
+            // 값을 받는 switch 식이라 작업 종류가 늘었는데 라우팅을 빠뜨리면 컴파일이 실패한다. default를 두지 않는다
+            Object outcome = switch (task.type()) {
                 case WEBHOOK_PROCESS -> paymentReconciliationFacade.processWebhook(task.id());
                 case REFUND_RECONCILE -> refundReconciliationFacade.reconcile(task.id());
-            }
+                case SYSTEM_REFUND_EXECUTE -> systemRefundExecutionFacade.execute(task.id());
+            };
+            log.debug("지연 큐 작업 처리: task={}, outcome={}", task.member(), outcome);
         } catch (RuntimeException e) {
             log.error("지연 큐 작업 처리 중 예외: task={}", task.member(), e);
         }

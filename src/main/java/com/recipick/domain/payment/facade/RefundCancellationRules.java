@@ -7,8 +7,8 @@ import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import java.util.Objects;
 
-// PortOne 조회의 취소 내역을 회원 환불 행에 묶을 때의 판정 규칙. 웹훅 정합화와 환불 재확인이 같은 규칙을 써야
-// 같은 취소를 두 경로가 다르게 판정하지 않는다. 판정만 하고 상태는 바꾸지 않는다
+// PortOne 조회의 취소 내역을 환불 행에 연결할 때의 공통 판정 규칙. 회원 환불 재확인·웹훅 정합화·SYSTEM 환불 실행이 같은 규칙을 써야
+// 같은 취소를 경로마다 다르게 판정하지 않는다. 판정만 하고 상태는 바꾸지 않는다
 final class RefundCancellationRules {
 
     private RefundCancellationRules() {
