@@ -26,11 +26,15 @@ public class TokenManagementService {
     public JwtTokenPair reissue(String refreshToken) {
         RefreshTokenDetails details = tokenProvider.parseRefreshToken(refreshToken);
         AuthPrincipal principal = currentPrincipal(details);
-        JwtTokenPair tokens = tokenProvider.rotateTokens(principal, details.sessionId());
+        JwtTokenPair tokens = tokenProvider.rotateTokens(principal, details.sessionId(), details.refreshTokenVersion());
         boolean rotated = refreshTokenStore.rotate(principal.type().name(), principal.id(), details.sessionId(),
                 refreshToken, tokens.refreshToken(), tokens.refreshExpiration());
         if (!rotated) {
             throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
+        }
+        // Redis 교체 중 비밀번호가 변경됐으면 이미 무효화된 토큰을 성공 응답으로 내보내지 않는다.
+        if (principal.type() == SubjectType.MEMBER) {
+            currentPrincipal(details);
         }
         return tokens;
     }
@@ -65,7 +69,9 @@ public class TokenManagementService {
     private AuthPrincipal currentPrincipal(RefreshTokenDetails details) {
         AuthPrincipal principal = details.principal();
         if (principal.type() == SubjectType.MEMBER) {
-            if (!memberRepository.existsByIdAndWithdrawnAtIsNull(principal.id())) {
+            if (memberRepository.findById(principal.id())
+                    .filter(member -> !member.isWithdrawn()
+                            && member.getRefreshTokenVersion() == details.refreshTokenVersion()).isEmpty()) {
                 throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
             }
             return principal;

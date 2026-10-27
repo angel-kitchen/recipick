@@ -19,6 +19,7 @@ Table MEMBER {
   name varchar(50)
   phone varchar(20) [unique]
   password_hash varchar(255)
+  refresh_token_version bigint [not null, default: 0, note: '회원 리프레시 토큰 전체 무효화 버전. 액세스 토큰에는 적용하지 않음']
   mart_id bigint
   selected_address_id bigint
   location_agreed_at datetime

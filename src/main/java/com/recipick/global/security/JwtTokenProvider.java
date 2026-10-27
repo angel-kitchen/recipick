@@ -47,7 +47,11 @@ public class JwtTokenProvider {
             if (!sessionId.matches("[A-Za-z0-9-]{1,128}")) {
                 throw new IllegalArgumentException("로그인 세션 식별자가 올바르지 않습니다.");
             }
-            return new RefreshTokenDetails(principal, claims.getId(), sessionId);
+            Long version = claims.get("refreshVersion", Long.class);
+            if (version != null && version < 0) {
+                throw new IllegalArgumentException("리프레시 버전이 올바르지 않습니다.");
+            }
+            return new RefreshTokenDetails(principal, claims.getId(), sessionId, version == null ? 0 : version);
         } catch (JwtException | IllegalArgumentException | NullPointerException exception) {
             throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
         }
@@ -81,27 +85,44 @@ public class JwtTokenProvider {
     }
 
     public JwtTokenPair createMemberTokens(Long memberId) {
-        return createTokens(new AuthPrincipal(SubjectType.MEMBER, memberId, null, null));
+        return createMemberTokens(memberId, 0);
+    }
+
+    public JwtTokenPair createMemberTokens(Long memberId, long refreshTokenVersion) {
+        if (refreshTokenVersion < 0) {
+            throw new IllegalArgumentException("리프레시 버전이 올바르지 않습니다.");
+        }
+        String refreshId = UUID.randomUUID().toString();
+        return issueTokens(new AuthPrincipal(SubjectType.MEMBER, memberId, null, null),
+                refreshId, refreshId, refreshTokenVersion);
     }
 
     public JwtTokenPair createTokens(AuthPrincipal principal) {
         String refreshId = UUID.randomUUID().toString();
-        return issueTokens(principal, refreshId, refreshId);
+        return issueTokens(principal, refreshId, refreshId, 0);
     }
 
     public JwtTokenPair rotateTokens(AuthPrincipal principal, String sessionId) {
+        return rotateTokens(principal, sessionId, 0);
+    }
+
+    public JwtTokenPair rotateTokens(AuthPrincipal principal, String sessionId, long refreshTokenVersion) {
         if (sessionId == null || !sessionId.matches("[A-Za-z0-9-]{1,128}")) {
             throw new IllegalArgumentException("로그인 세션 식별자가 올바르지 않습니다.");
         }
-        return issueTokens(principal, UUID.randomUUID().toString(), sessionId);
+        return issueTokens(principal, UUID.randomUUID().toString(), sessionId, refreshTokenVersion);
     }
 
-    private JwtTokenPair issueTokens(AuthPrincipal principal, String refreshId, String sessionId) {
+    private JwtTokenPair issueTokens(AuthPrincipal principal, String refreshId, String sessionId, long version) {
         Instant now = clock.instant();
         String accessToken = builder(principal, "ACCESS", UUID.randomUUID().toString(), sessionId,
                 now, properties.accessTokenExpiration()).compact();
-        String refreshToken = builder(principal, "REFRESH", refreshId, sessionId,
-                now, properties.refreshTokenExpiration()).compact();
+        JwtBuilder refreshBuilder = builder(principal, "REFRESH", refreshId, sessionId,
+                now, properties.refreshTokenExpiration());
+        if (principal.type() == SubjectType.MEMBER) {
+            refreshBuilder.claim("refreshVersion", version);
+        }
+        String refreshToken = refreshBuilder.compact();
         return new JwtTokenPair(accessToken, refreshToken, refreshId,
                 properties.accessTokenExpiration(), properties.refreshTokenExpiration());
     }

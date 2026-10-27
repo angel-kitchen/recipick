@@ -6,8 +6,11 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.repository.MemberRepository;
+import com.recipick.global.exception.AuthErrorCode;
+import com.recipick.global.exception.BusinessException;
 import com.recipick.global.security.AuthPrincipal;
 import com.recipick.global.security.JwtTokenPair;
 import com.recipick.global.security.JwtTokenProvider;
@@ -15,6 +18,7 @@ import com.recipick.global.security.RefreshTokenDetails;
 import com.recipick.global.security.SubjectType;
 import com.recipick.infra.redis.RedisRefreshTokenStore;
 import java.time.Duration;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +42,31 @@ class TokenManagementServiceTest {
     private TokenManagementService service;
 
     @Test
+    @DisplayName("Redis 교체 도중 비밀번호 버전이 바뀌면 새 토큰도 성공으로 반환하지 않는다")
+    void rejectsRotationWhenPasswordChangesDuringRedisUpdate() {
+        // given
+        AuthPrincipal principal = new AuthPrincipal(SubjectType.MEMBER, 1L, null, null, "session-id");
+        Member before = Member.builder().passwordHash("old-hash").build();
+        Member after = Member.builder().passwordHash("old-hash").build();
+        after.changePasswordHash("new-hash");
+        given(tokenProvider.parseRefreshToken("old-refresh"))
+                .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id"));
+        given(members.findById(1L)).willReturn(Optional.of(before), Optional.of(after));
+        JwtTokenPair pair = new JwtTokenPair("access", "new-refresh", "new-id",
+                Duration.ofMinutes(30), Duration.ofDays(14));
+        given(tokenProvider.rotateTokens(principal, "session-id", 0)).willReturn(pair);
+        given(store.rotate("MEMBER", 1L, "session-id", "old-refresh", "new-refresh", Duration.ofDays(14)))
+                .willReturn(true);
+
+        // when
+        Throwable thrown = catchThrowable(() -> service.reissue("old-refresh"));
+
+        // then
+        assertThat(thrown).isInstanceOfSatisfying(BusinessException.class,
+                error -> assertThat(error.getErrorCode()).isEqualTo(AuthErrorCode.RELOGIN_REQUIRED));
+    }
+
+    @Test
     @DisplayName("Redis 토큰 교체에 실패하면 새 토큰을 성공 결과로 반환하지 않는다")
     void propagatesRotationFailure() {
         // given
@@ -46,8 +75,9 @@ class TokenManagementServiceTest {
                 Duration.ofMinutes(30), Duration.ofDays(14));
         given(tokenProvider.parseRefreshToken("old-refresh"))
                 .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id"));
-        given(members.existsByIdAndWithdrawnAtIsNull(1L)).willReturn(true);
-        given(tokenProvider.rotateTokens(principal, "session-id")).willReturn(pair);
+        given(members.findById(1L)).willReturn(Optional.of(
+                Member.builder().passwordHash("hash").build()));
+        given(tokenProvider.rotateTokens(principal, "session-id", 0)).willReturn(pair);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Redis unavailable");
         given(store.rotate("MEMBER", 1L, "session-id", "old-refresh", "new-refresh", Duration.ofDays(14)))
                 .willThrow(failure);

@@ -31,6 +31,24 @@ class JwtTokenProviderTest {
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
+    @DisplayName("리프레시 세션 버전은 발급·회전 때 유지하고 액세스 토큰에는 넣지 않는다")
+    void preservesRefreshVersionWithoutChangingAccessClaims() {
+        // given
+        JwtTokenPair pair = provider.createMemberTokens(1L, 3);
+        RefreshTokenDetails parsed = provider.parseRefreshToken(pair.refreshToken());
+
+        // when
+        JwtTokenPair rotated = provider.rotateTokens(parsed.principal(), parsed.sessionId(),
+                parsed.refreshTokenVersion());
+
+        // then
+        assertThat(parsed.refreshTokenVersion()).isEqualTo(3);
+        assertThat(provider.parseRefreshToken(rotated.refreshToken()).refreshTokenVersion()).isEqualTo(3);
+        assertThat(Jwts.parser().verifyWith(key).clock(() -> Date.from(NOW)).build()
+                .parseSignedClaims(pair.accessToken()).getPayload()).doesNotContainKey("refreshVersion");
+    }
+
+    @Test
     @DisplayName("발급한 회원 액세스 토큰에서 회원 ID와 MEMBER 권한을 얻는다")
     void parsesIssuedAccessToken() {
         // given

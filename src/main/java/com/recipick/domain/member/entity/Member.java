@@ -43,6 +43,9 @@ public class Member extends BaseTimeEntity {
 
     private String passwordHash;
 
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long refreshTokenVersion;
+
     private Long martId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -80,6 +83,14 @@ public class Member extends BaseTimeEntity {
         this.locationAgreedAt = locationAgreedAt;
         this.termsAgreedAt = termsAgreedAt;
         this.privacyAgreedAt = privacyAgreedAt;
+    }
+
+    public void changePasswordHash(String encodedPassword) {
+        if (encodedPassword == null || encodedPassword.isBlank()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        this.passwordHash = encodedPassword;
+        this.refreshTokenVersion = Math.addExact(refreshTokenVersion, 1);
     }
 
     public void selectAddress(MemberAddress address, Long martId) {
