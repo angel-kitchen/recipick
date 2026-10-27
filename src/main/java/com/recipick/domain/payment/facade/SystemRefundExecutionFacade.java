@@ -39,8 +39,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SystemRefundExecutionFacade {
 
-    // 아직 미확정일 때 다음 실행까지
-    static final Duration RECHECK_DELAY = Duration.ofMinutes(10);
+    // 아직 미확정일 때 다음 실행까지. Fallback도 같은 시간이 지난 REQUESTED 환불을 복구 대상으로 고르므로 공개한다
+    public static final Duration RECHECK_DELAY = Duration.ofMinutes(10);
 
     // requestedAt부터 이 시간이 지나면 고빈도 재실행을 멈추고 Fallback 주기에 맡긴다. 회원 환불 재확인과 같은 기준이다.
     // 실패 확정 기준이 아니고, 지나도 GET으로 취소가 없음을 확인하면 POST할 수 있다

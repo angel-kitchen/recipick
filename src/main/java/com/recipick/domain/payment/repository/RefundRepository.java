@@ -77,4 +77,21 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
         @Param("afterId") Long afterId,
         @Param("requestedBefore") LocalDateTime requestedBefore,
         Pageable pageable);
+
+    // SYSTEM 환불 Fallback Sweep용. 회원 환불과 같은 방식으로 큐에 다시 넣을 ID만 id 순으로 이어 읽는다
+    @Query("""
+        SELECT r.id
+            FROM Refund r
+            WHERE r.id > :afterId
+              AND r.requestedBy =
+                  com.recipick.domain.payment.entity.enums.RefundRequester.SYSTEM
+              AND r.status =
+                  com.recipick.domain.payment.entity.enums.RefundStatus.REQUESTED
+              AND r.requestedAt <= :requestedBefore
+            ORDER BY r.id
+            """)
+    List<Long> findStaleRequestedSystemRefundIds(
+        @Param("afterId") Long afterId,
+        @Param("requestedBefore") LocalDateTime requestedBefore,
+        Pageable pageable);
 }

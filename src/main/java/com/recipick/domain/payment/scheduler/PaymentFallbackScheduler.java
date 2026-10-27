@@ -2,6 +2,7 @@ package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
+import com.recipick.domain.payment.facade.SystemRefundExecutionFacade;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.PaymentService;
@@ -44,9 +45,11 @@ public class PaymentFallbackScheduler {
         Instant executeAt = clock.instant();
         try {
             int webhookEvents = recoverWebhookEvents(now, executeAt);
-            int refunds = recoverRefunds(now, executeAt);
-            if (webhookEvents + refunds > 0) {
-                log.warn("Fallback Sweep 재등록: webhookEvents={}, refunds={}", webhookEvents, refunds);
+            int memberRefunds = recoverMemberRefunds(now, executeAt);
+            int systemRefunds = recoverSystemRefunds(now, executeAt);
+            if (webhookEvents + memberRefunds + systemRefunds > 0) {
+                log.warn("Fallback Sweep 재등록: webhookEvents={}, memberRefunds={}, systemRefunds={}",
+                    webhookEvents, memberRefunds, systemRefunds);
             }
         } catch (DataAccessException e) {
             // DB·Redis 장애면 남은 건도 같은 이유로 실패한다. 한 번만 남기고 다음 주기에 다시 한다
@@ -77,7 +80,7 @@ public class PaymentFallbackScheduler {
 
     // 회원 환불 REQUESTED. 첫 재확인 시각이 지난 것만 넣는다. 고빈도 재확인 중인 환불의 예약을 최대 한 번 앞당길 수 있지만
     // 재확인은 조회뿐이고 apply가 잠금 아래에서 멱등이라 결과는 같다
-    private int recoverRefunds(LocalDateTime now, Instant executeAt) {
+    private int recoverMemberRefunds(LocalDateTime now, Instant executeAt) {
         LocalDateTime requestedBefore = now.minus(RefundReconciliationFacade.INITIAL_DELAY);
         int count = 0;
         long afterId = 0L;
@@ -85,6 +88,26 @@ public class PaymentFallbackScheduler {
             List<Long> ids = paymentService.findStaleMemberRefundIds(requestedBefore, afterId, BATCH_SIZE);
             for (Long id : ids) {
                 paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.refundReconcile(id), executeAt);
+            }
+            count += ids.size();
+            if (ids.size() < BATCH_SIZE) {
+                return count;
+            }
+            afterId = ids.get(ids.size() - 1);
+        }
+    }
+
+    // SYSTEM 환불 REQUESTED. 확정 직후 바로 실행되므로 재실행 간격(10분)이 지나도 남아 있으면 예약이 사라졌을 수 있다.
+    // 고빈도 재실행 중이거나 3시간이 지나 멈춘 환불도 함께 넣는다 — 실행 Facade가 항상 GET부터 하고 Processor가 잠금 아래에서
+    // 멱등이라 겹쳐도 취소를 다시 요청하지 않는다
+    private int recoverSystemRefunds(LocalDateTime now, Instant executeAt) {
+        LocalDateTime requestedBefore = now.minus(SystemRefundExecutionFacade.RECHECK_DELAY);
+        int count = 0;
+        long afterId = 0L;
+        while (true) {
+            List<Long> ids = paymentService.findStaleSystemRefundIds(requestedBefore, afterId, BATCH_SIZE);
+            for (Long id : ids) {
+                paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(id), executeAt);
             }
             count += ids.size();
             if (ids.size() < BATCH_SIZE) {

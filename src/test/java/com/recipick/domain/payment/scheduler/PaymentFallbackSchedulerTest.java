@@ -75,7 +75,7 @@ class PaymentFallbackSchedulerTest {
 
     @Test
     @DisplayName("첫 재확인 시각(5분)이 지난 회원 REQUESTED 환불 ID를 지금 시각의 REFUND_RECONCILE로 넣는다")
-    void recoverRefunds() {
+    void recoverMemberRefunds() {
         // given
         given(webhookEventService.findRecoverableIds(
             NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
@@ -87,6 +87,45 @@ class PaymentFallbackSchedulerTest {
 
         // then
         verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.refundReconcile(55L), NOW_INSTANT);
+    }
+
+    @Test
+    @DisplayName("재실행 간격(10분)이 지난 SYSTEM REQUESTED 환불 ID를 지금 시각의 SYSTEM_REFUND_EXECUTE로 넣는다 — 회원 환불 재확인으로 넣지 않는다")
+    void recoverSystemRefunds() {
+        // given
+        given(webhookEventService.findRecoverableIds(
+            NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
+            .willReturn(List.of());
+        given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of(77L));
+
+        // when
+        scheduler.sweep();
+
+        // then
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(77L), NOW_INSTANT);
+        verify(paymentDelayQueue, never()).enqueueIfEarlier(PaymentDelayTask.refundReconcile(77L), NOW_INSTANT);
+    }
+
+    @Test
+    @DisplayName("SYSTEM 환불도 한 번에 BATCH_SIZE건이 차면 마지막 ID 다음부터 이어 읽고, 덜 차면 멈춘다")
+    void continueSystemRefundsAfterFullBatch() {
+        // given — 첫 묶음 1~100, 두 번째 묶음 101
+        List<Long> firstBatch = LongStream.rangeClosed(1, BATCH).boxed().toList();
+        given(webhookEventService.findRecoverableIds(
+            NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
+            .willReturn(List.of());
+        given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(firstBatch);
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), (long) BATCH, BATCH))
+            .willReturn(List.of(101L));
+
+        // when
+        scheduler.sweep();
+
+        // then
+        verify(paymentDelayQueue, times(BATCH + 1)).enqueueIfEarlier(any(), any());
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(101L), NOW_INSTANT);
     }
 
     @Test
@@ -111,13 +150,14 @@ class PaymentFallbackSchedulerTest {
     }
 
     @Test
-    @DisplayName("웹훅을 먼저, 환불을 나중에 복구한다")
+    @DisplayName("웹훅 → 회원 환불 → SYSTEM 환불 순서로 복구한다")
     void recoverWebhookEventsBeforeRefunds() {
         // given
         given(webhookEventService.findRecoverableIds(
             NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
             .willReturn(List.of(3L));
         given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of(55L));
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of(77L));
 
         // when
         scheduler.sweep();
@@ -126,6 +166,7 @@ class PaymentFallbackSchedulerTest {
         InOrder inOrder = inOrder(paymentDelayQueue);
         inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.webhookProcess(3L), NOW_INSTANT);
         inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.refundReconcile(55L), NOW_INSTANT);
+        inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(77L), NOW_INSTANT);
     }
 
     @Test
