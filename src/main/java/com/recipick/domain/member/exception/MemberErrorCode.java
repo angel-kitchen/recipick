@@ -1,7 +1,6 @@
 package com.recipick.domain.member.exception;
 
 import com.recipick.global.exception.ErrorCode;
-
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +13,8 @@ public enum MemberErrorCode implements ErrorCode {
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "MEMBER-002", "이미 가입된 이메일입니다."),
     DUPLICATE_PHONE(HttpStatus.CONFLICT, "MEMBER-003", "이미 가입된 휴대전화 번호입니다."),
     REQUIRED_AGREEMENT_MISSING(HttpStatus.BAD_REQUEST, "MEMBER-004", "필수 약관에 동의해 주세요."),
+
+    INVALID_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "MEMBER-005", "현재 비밀번호가 올바르지 않습니다."),
 
     REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "REGION-001", "지역을 찾을 수 없습니다."),
     REGION_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "REGION-002", "서비스 지역이 아닌 주소입니다."),
