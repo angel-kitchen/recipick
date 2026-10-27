@@ -1,6 +1,6 @@
 # AWS 콘솔 설정 순서
 
-`deploy/README.md` 2절(AWS 준비)을 콘솔에서 그대로 누를 수 있게 순서·이름·정책 JSON으로 풀어 적었다. 브라우저 에이전트(Claude in Chrome)에게 이 문서를 그대로 주고 진행할 수 있다. 끝나면 9절의 기록표를 채운다.
+`deploy/README.md` 2절(AWS 준비)을 콘솔에서 그대로 누를 수 있게 순서·이름·정책 JSON으로 풀어 적었다. 브라우저 에이전트(Claude in Chrome)에게 이 문서를 그대로 주고 진행할 수 있다. 예산 알림(1-1)을 가장 먼저 만들고, 끝나면 8절의 기록표를 채운다. 기록표의 실제 값은 이 파일에 커밋하지 않는다(공개 저장소).
 
 ## 0. 작업 규칙
 
@@ -18,7 +18,29 @@
 3. 같은 화면에서 계정이 **Free plan**인지 **Paid plan**인지 본다. Free plan에서 t3.medium이나 Elastic IP 생성이 막히면 Paid plan으로 전환한다. 전환해도 크레딧은 그대로 쓰인다. 전환은 비용이 바로 발생하는 일이 아니므로 막혔을 때만 한다.
 4. 루트 사용자 MFA가 꺼져 있으면 켠다(IAM → 대시보드 보안 권장 사항).
 
-예상 비용(서울 리전, 온디맨드): t3.medium 약 0.052달러/시간 + gp3 30GB 약 0.1달러/일 + Elastic IP 0.005달러/시간. 하루 약 1.5달러, 10/27~11/13 약 27달러. 크레딧 안에서 끝난다.
+### 1-1. 예산 알림 (리소스를 만들기 전에)
+
+**Billing and Cost Management → Budgets → Create budget → Use a template → Monthly cost budget**
+- Budget name: `recipick-monthly`
+- Budgeted amount: `60`(USD)
+- Email recipients: 본인 메일
+- 기본 템플릿이 실제 85%·100%, 예측 100%에서 알린다.
+
+크레딧이 비용을 상쇄해도 예산은 크레딧 적용 전 금액으로 알려 준다. 크레딧 소진 속도를 보는 용도다.
+
+### 1-2. 예상 비용 (서울 리전, 온디맨드, 확인 시점의 요금표 기준 대략치)
+
+| 항목 | 단가 | 하루 |
+| --- | --- | --- |
+| EC2 t3.medium | 약 0.052달러/시간 | 약 1.25달러 |
+| EBS gp3 30GB | 약 0.0912달러/GB·월 | 약 0.09달러 |
+| 공인 IPv4(Elastic IP) | 0.005달러/시간. 인스턴스에 붙어 있어도 부과 | 0.12달러 |
+| ECR 저장 | 0.10달러/GB·월. 이미지 10개면 2GB 안팎 | 0.01달러 미만 |
+| S3 저장·요청 | 설정 묶음과 덤프 30일분. 수십 MB | 0.01달러 미만 |
+| 데이터 전송(인터넷 방향) | 월 100GB까지 무료 | 0 |
+| **합계** | | **약 1.5달러** (10/27~11/13 약 27달러) |
+
+추가로 생길 수 있는 비용은 T3의 추가 CPU다. T3는 기본이 **unlimited** 모드라 CPU 크레딧이 바닥난 뒤에도 성능을 유지하고, 기준(20%)을 넘겨 쓴 만큼 vCPU·시간당 약 0.05달러를 청구한다. 평소에는 크레딧이 남지만 부하 테스트를 길게 돌리면 붙는다(2 vCPU를 1시간 내내 100%로 쓰면 약 0.08달러). 부하 테스트에서 CPU가 제한되면 측정값이 왜곡되므로 unlimited를 유지하고, 테스트 시간을 기록해 둔다.
 
 ## 2. ECR 저장소 (5분)
 
@@ -187,15 +209,7 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
 
 역할의 **ARN**(`arn:aws:iam::ACCOUNT_ID:role/recipick-github-deploy`)을 적어 둔다 → `AWS_DEPLOY_ROLE_ARN`.
 
-## 8. 예산 알림 (5분)
-
-**Billing and Cost Management → Budgets → Create budget → Use a template → Monthly cost budget**
-- Budget name: `recipick-monthly`
-- Budgeted amount: `60`(USD)
-- Email recipients: 본인 메일
-- 기본 템플릿이 실제 85%·100%, 예측 100%에서 알린다.
-
-## 9. 기록표 (끝나면 채운다)
+## 8. 기록표 (끝나면 채운다)
 
 | 이름 | 값 | 쓰는 곳 |
 | --- | --- | --- |
@@ -208,14 +222,23 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
 
 레포 변수 6개의 값은 이 표에서 나온다(`README.md` 3절). `DEPLOY_BRANCH=dev`, `AWS_REGION=ap-northeast-2`, `ECR_REPOSITORY=recipick`은 고정값이다.
 
-## 10. 접속 확인
+## 9. 접속 확인
 
 1. **Systems Manager → Fleet Manager**(또는 Session Manager → Start session)에서 `recipick-server`가 **Online**으로 보여야 한다. 인스턴스 기동 후 몇 분 걸릴 수 있다. 보이지 않으면 5절의 IAM instance profile이 붙어 있는지 확인하고 인스턴스를 재부팅한다.
 2. **Start session**으로 셸이 열리면 `sudo -i` 후 `README.md` 4절(서버 초기화)로 넘어간다.
 
-## 11. 나중에: 팀원 접속 (팀 결정 후)
+## 10. 나중에: 팀원 접속과 백업 다운로드 (팀 결정 후)
 
-팀원 5명이 서버 로그를 보려면 IAM 사용자가 필요하다. 그룹 `recipick-team`에 아래 정책을 붙이고 사용자를 추가한다. 콘솔 로그인만 주고 액세스 키는 만들지 않는다. MFA를 켜게 한다.
+Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 나눌 수 없다. `docker logs`를 쓰려면 docker 그룹이 필요하고 그것이 사실상 root이기 때문이다. 그래서 권한을 두 단계로 둔다.
+
+| 그룹 | 사람 | 할 수 있는 것 |
+| --- | --- | --- |
+| `recipick-admin` | 배포 담당과 1명(대리) | 서버 셸(Session Manager), 백업 내려받기 |
+| 나머지 팀원 | 4명 | IAM 사용자를 만들지 않는다. 배포 결과와 서버 출력은 Actions 로그(deploy 작업의 "서버 표준 출력")에서 본다. 그 밖의 로그가 필요하면 관리자에게 요청한다 |
+
+로그만 따로 열어야 할 만큼 요청이 잦아지면, `docker logs`만 실행하는 사용자 정의 SSM 문서를 만들어 그 문서에 대한 `ssm:SendCommand`만 허용하는 그룹을 추가한다.
+
+`recipick-admin` 그룹에 아래 정책을 붙인다. 콘솔 로그인만 주고 액세스 키는 만들지 않는다. MFA를 켜게 한다. 백업 내려받기는 콘솔의 S3 화면에서 `backups/` 아래 파일을 받는다.
 
 ```json
 {
@@ -226,7 +249,8 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
       "Action": "ssm:StartSession",
       "Resource": [
         "arn:aws:ec2:ap-northeast-2:ACCOUNT_ID:instance/INSTANCE_ID",
-        "arn:aws:ssm:ap-northeast-2::document/SSM-SessionManagerRunShell"
+        "arn:aws:ssm:ap-northeast-2::document/SSM-SessionManagerRunShell",
+        "arn:aws:ssm:ap-northeast-2::document/AWS-StartPortForwardingSessionToRemoteHost"
       ]
     },
     {
@@ -238,7 +262,9 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
       "Effect": "Allow",
       "Action": ["ssm:DescribeSessions", "ssm:GetConnectionStatus", "ssm:DescribeInstanceInformation", "ec2:DescribeInstances"],
       "Resource": "*"
-    }
+    },
+    { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::BUCKET", "Condition": { "StringLike": { "s3:prefix": "backups/*" } } },
+    { "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET/backups/*" }
   ]
 }
 ```
