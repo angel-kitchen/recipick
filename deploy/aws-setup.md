@@ -209,6 +209,8 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
 
 역할의 **ARN**(`arn:aws:iam::ACCOUNT_ID:role/recipick-github-deploy`)을 적어 둔다 → `AWS_DEPLOY_ROLE_ARN`.
 
+**11/9 최종 승격 때 신뢰 정책에서 `dev` 줄을 지운다.** 배포 대상이 main으로 바뀐 뒤에도 dev를 신뢰하면, dev에 워크플로 변경을 머지하는 것만으로 이 역할을 가정해 시연 서버에 명령을 보낼 수 있다. 지운 뒤 dev 머지의 deploy 작업은 변수 조건에서 이미 건너뛰므로 영향이 없다.
+
 ## 8. 기록표 (끝나면 채운다)
 
 | 이름 | 값 | 쓰는 곳 |
@@ -266,7 +268,8 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
       "Action": ["ssm:DescribeSessions", "ssm:GetConnectionStatus", "ssm:DescribeInstanceInformation", "ec2:DescribeInstances"],
       "Resource": "*"
     },
-    { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::BUCKET", "Condition": { "StringLike": { "s3:prefix": "backups/*" } } },
+    { "Effect": "Allow", "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"], "Resource": "*" },
+    { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::BUCKET", "Condition": { "StringLike": { "s3:prefix": ["", "backups/", "backups/*"] } } },
     { "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET/backups/*" }
   ]
 }

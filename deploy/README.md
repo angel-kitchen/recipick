@@ -34,7 +34,7 @@
 
 | 변수 | 값 |
 | --- | --- |
-| `DEPLOY_BRANCH` | `dev`. 11/9에 `main` |
+| `DEPLOY_BRANCH` | `dev`. 11/9에 `main`으로 바꾸고, 같은 날 배포 역할의 신뢰 정책에서 dev를 지운다(`aws-setup.md` 7-3) |
 | `AWS_REGION` | `ap-northeast-2` |
 | `AWS_DEPLOY_ROLE_ARN` | 배포 역할 ARN |
 | `ECR_REPOSITORY` | `recipick` |
@@ -86,7 +86,11 @@
 
 ## 5. HTTPS 전환 (10/30 목표)
 
-1. 도메인의 A 레코드를 Elastic IP로 연결한다. 연결되면 서버 `.env`의 `PROXY_CHECK_URL`을 `http://<도메인>/api/categories`로 바꾼다. 배포 확인이 리다이렉트를 따라가 최종 200을 보므로, 이후 HTTPS로 바꿔도 이 값은 그대로 두면 인증서까지 확인된다.
+HTTP 단계는 인증서 발급과 첫 응답 확인을 위한 짧은 구간이다. 요청이 평문으로 오가므로 테스트 계정만 쓰고 실제 사용자·결제를 받지 않는다. 운영 리프레시 쿠키가 `Secure`라 이 단계에서는 토큰 재발급도 동작하지 않는다.
+
+1. 도메인의 A 레코드를 Elastic IP로 연결한다. 연결되면 서버 `.env`에서 두 값을 바꾼다.
+   - `PROXY_CHECK_URL=http://<도메인>/api/categories`. 배포 확인이 리다이렉트를 따라가 최종 200을 보므로, 이후 HTTPS로 바꿔도 그대로 두면 인증서까지 확인된다.
+   - `CORS_ALLOWED_ORIGINS`를 프론트 도메인으로. 이 값은 앱 컨테이너가 만들어질 때 들어가므로, 4번의 HTTPS 배포보다 먼저 넣어야 그 배포에 반영된다. 배포 없이 바로 적용하려면 `docker compose up -d --no-deps app`으로 앱을 다시 만든다.
 2. 발급 시험. 실제 발급은 도메인당 주 5회 제한이 있으므로 먼저 `--dry-run`으로 확인한다.
    ```bash
    cd /opt/recipick
@@ -94,7 +98,7 @@
    ```
 3. 성공하면 `--dry-run`을 빼고 실제 발급한다.
 4. 저장소에서 `nginx/conf.d/app-https.conf.disabled`의 `DOMAIN`을 실제 도메인으로 바꾸고, 이름을 `app-https.conf`로, `app.conf`는 `app.conf.disabled`로 바꿔 머지한다. 배포가 옛 `app.conf`를 지우고 `nginx -t` 후 reload한 뒤, http 주소에서 https로 넘어가 최종 200인지 확인한다. 인증서가 없거나 HTTPS 블록이 틀리면 이전 설정으로 돌아간다.
-5. 서버 `.env`의 `CORS_ALLOWED_ORIGINS`를 프론트 도메인으로 바꾼다.
+5. `.env`를 고친 뒤에는 다음 배포나 앱 재생성 전까지 실행 중인 앱에 반영되지 않는다. 1번에서 CORS를 넣었는지 다시 확인한다.
 6. 확인한다.
    - `curl -I http://<도메인>/api/categories`가 301로 https를 가리킨다
    - `curl -vI https://<도메인>/api/categories`의 인증서 발급자가 Let's Encrypt이고 만료일이 90일 뒤다
@@ -142,15 +146,19 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
    docker exec -it recipick-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
    # ALTER TABLE <테이블> MODIFY <컬럼> <타입> NULL;  또는 DEFAULT 지정
    ```
-2. 전체 복원은 데이터가 깨졌을 때만 한다. 덤프 이후의 데이터는 사라진다.
+2. 전체 복원은 데이터가 깨졌을 때만 한다. 덤프 이후의 데이터는 사라진다. 아래는 한 덩어리로 붙여 넣는다. `bash -euo pipefail`로 실행해 점검·삭제·가져오기 중 하나라도 실패하면 그 자리에서 멈추고, 앱은 가져오기가 성공했을 때만 다시 배포한다. 점검한 파일과 가져오는 파일이 같도록 경로는 `DUMP` 하나로 쓴다.
    ```bash
    cd /opt/recipick
-   ./scripts/restore-check.sh backups/pre-deploy-<시각>-<문제 배포 SHA>.sql.gz   # 먼저 덤프가 복원되는지 확인
-   docker compose stop app
-   docker exec recipick-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -e "DROP DATABASE \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\`"'
-   gunzip -c backups/<파일>.sql.gz | docker exec -i recipick-mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql "$MYSQL_DATABASE"'
-   bash releases/<이전 SHA>/scripts/deploy.sh <이전 SHA>
+   DUMP=backups/pre-deploy-<시각>-<문제 배포 SHA>.sql.gz PREV=<이전 SHA> bash -euo pipefail -c '
+     ./scripts/restore-check.sh "$DUMP"
+     docker compose stop app
+     docker exec recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql -e \"DROP DATABASE \$MYSQL_DATABASE; CREATE DATABASE \$MYSQL_DATABASE\""
+     gunzip -c "$DUMP" | docker exec -i recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql \$MYSQL_DATABASE"
+     echo "가져오기 성공. 앱을 다시 배포한다"
+     bash "releases/$PREV/scripts/deploy.sh" "$PREV"
+   ' || echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"
    ```
+   중간에 실패하면 DB가 비었거나 일부만 들어간 상태일 수 있다. 앱을 그 상태로 띄우지 않는 것이 이 순서의 목적이다.
    pre-deploy 덤프의 이름 끝은 **그 덤프 직후에 배포한 SHA**다. 문제 배포의 SHA가 붙은 덤프가 문제 배포 직전 상태다.
 
 ## 8. 자주 쓰는 명령
