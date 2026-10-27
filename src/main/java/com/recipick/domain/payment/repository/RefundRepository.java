@@ -15,6 +15,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface RefundRepository extends JpaRepository<Refund, Long> {
 
+    // 한 결제의 SYSTEM 환불(최대 한 건). 실행 예약·취소 웹훅이 조회 트랜잭션 밖에서 refund.getPayment()를 읽으므로
+    // 결제를 함께 읽어 둔다(payment가 LAZY)
+    @EntityGraph(attributePaths = "payment")
     @Query("""
 
         SELECT r
@@ -71,6 +74,23 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
             ORDER BY r.id
             """)
     List<Long> findStaleRequestedMemberRefundIds(
+        @Param("afterId") Long afterId,
+        @Param("requestedBefore") LocalDateTime requestedBefore,
+        Pageable pageable);
+
+    // SYSTEM 환불 Fallback Sweep용. 회원 환불과 같은 방식으로 큐에 다시 넣을 ID만 id 순으로 이어 읽는다
+    @Query("""
+        SELECT r.id
+            FROM Refund r
+            WHERE r.id > :afterId
+              AND r.requestedBy =
+                  com.recipick.domain.payment.entity.enums.RefundRequester.SYSTEM
+              AND r.status =
+                  com.recipick.domain.payment.entity.enums.RefundStatus.REQUESTED
+              AND r.requestedAt <= :requestedBefore
+            ORDER BY r.id
+            """)
+    List<Long> findStaleRequestedSystemRefundIds(
         @Param("afterId") Long afterId,
         @Param("requestedBefore") LocalDateTime requestedBefore,
         Pageable pageable);

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
+import com.recipick.domain.payment.facade.SystemRefundExecutionFacade;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import java.time.Clock;
@@ -36,12 +37,15 @@ class PaymentDelayQueueWorkerTest {
     @Mock
     private RefundReconciliationFacade refundReconciliationFacade;
 
+    @Mock
+    private SystemRefundExecutionFacade systemRefundExecutionFacade;
+
     private PaymentDelayQueueWorker worker;
 
     @BeforeEach
     void setUp() {
         worker = new PaymentDelayQueueWorker(paymentDelayQueue, paymentReconciliationFacade,
-            refundReconciliationFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+            refundReconciliationFacade, systemRefundExecutionFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
     }
 
     @Test
@@ -87,7 +91,22 @@ class PaymentDelayQueueWorkerTest {
 
         // then
         verify(refundReconciliationFacade).reconcile(5L);
-        verifyNoInteractions(paymentReconciliationFacade);
+        verifyNoInteractions(paymentReconciliationFacade, systemRefundExecutionFacade);
+    }
+
+    @Test
+    @DisplayName("SYSTEM_REFUND_EXECUTE는 SYSTEM 환불 실행 Facade에 넘긴다 — 같은 환불 ID라도 회원 환불 재확인으로 보내지 않는다")
+    void dispatchSystemRefundExecute() {
+        // given
+        given(paymentDelayQueue.popDue(NOW, PaymentDelayQueueWorker.BATCH_SIZE))
+            .willReturn(List.of(PaymentDelayTask.systemRefundExecute(77L)));
+
+        // when
+        worker.poll();
+
+        // then
+        verify(systemRefundExecutionFacade).execute(77L);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade);
     }
 
     @Test
@@ -100,6 +119,6 @@ class PaymentDelayQueueWorkerTest {
         worker.poll();
 
         // then
-        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade);
     }
 }

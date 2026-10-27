@@ -7,8 +7,8 @@ import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import java.util.Objects;
 
-// PortOne 조회의 취소 내역을 회원 환불 행에 묶을 때의 판정 규칙. 웹훅 정합화와 환불 재확인이 같은 규칙을 써야
-// 같은 취소를 두 경로가 다르게 판정하지 않는다. 판정만 하고 상태는 바꾸지 않는다
+// PortOne 조회의 취소 내역을 환불 행에 연결할 때의 공통 판정 규칙. 회원 환불 재확인·웹훅 정합화·SYSTEM 환불 실행이 같은 규칙을 써야
+// 같은 취소를 경로마다 다르게 판정하지 않는다. 판정만 하고 상태는 바꾸지 않는다
 final class RefundCancellationRules {
 
     private RefundCancellationRules() {
@@ -30,5 +30,14 @@ final class RefundCancellationRules {
     static boolean hasOtherSucceededCancellation(PortOnePayment portOnePayment, PortOneCancellation selected) {
         return portOnePayment.cancellations().stream()
             .anyMatch(candidate -> candidate != selected && candidate.status() == PortOneCancellationStatus.SUCCEEDED);
+    }
+
+    // 콘솔·PortOne 관리자·차지백 등 API가 아닌 취소 중 실패로 끝나지 않은 것이 있는지. 처리 중·성공·알 수 없는 상태는 결과가
+    // 살아 있어 결제 전체의 최종 취소 상태를 단정할 수 없다. 실패로 끝난 과거 시도는 막지 않는다.
+    // SYSTEM 환불 실행(POST 전·기존 취소 반영 전)과 웹훅의 SYSTEM 환불 반영이 같은 기준으로 멈춘다
+    static boolean hasActiveNonApiCancellation(PortOnePayment portOnePayment) {
+        return portOnePayment.cancellations().stream()
+            .anyMatch(candidate -> candidate.trigger() != PortOneCancellationTrigger.API
+                && candidate.status() != PortOneCancellationStatus.FAILED);
     }
 }

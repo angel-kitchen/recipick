@@ -28,6 +28,11 @@ public record PaymentDelayTask(
         return new PaymentDelayTask(PaymentDelayTaskType.REFUND_RECONCILE, refundId);
     }
 
+    // 회원 환불 재확인(REFUND_RECONCILE)과 같은 REFUND.id를 쓰지만 접두사가 달라 큐에서 서로 다른 member다
+    public static PaymentDelayTask systemRefundExecute(Long refundId) {
+        return new PaymentDelayTask(PaymentDelayTaskType.SYSTEM_REFUND_EXECUTE, refundId);
+    }
+
     // Redis ZSET member. 예: WEBHOOK_PROCRESS:100
     public String member() {
         return type.name() + DELIMITER + id;

@@ -15,11 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/**
- * 결제 확정 API(1-1)의 진입점. 트랜잭션을 걸지 않는다 — 가운데 PortOne 조회가 있어서다.
- * 선검증 구간(각 Service의 짧은 readOnly 읽기) → PortOne 조회 → 상태 변경(Processor의 TX-2) 순이다.
- * 결제 상태에 따른 판정은 여기서 하지 않는다 — Verifier가 잠금 아래에서 한 번만 한다.
- */
+// 결제 확정 API(1-1)의 진입점. 트랜잭션을 걸지 않는다 — 가운데 PortOne 조회가 있어서다.
+// 선검증 구간(각 Service의 짧은 readOnly 읽기) → PortOne 조회 → 상태 변경(Processor의 TX-2) 순이다.
+// 결제 상태에 따른 판정은 여기서 하지 않는다 — Verifier가 잠금 아래에서 한 번만 한다.
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -29,6 +27,7 @@ public class PaymentConfirmFacade {
     private final OrderService orderService;
     private final PortOnePaymentClient portOnePaymentClient;
     private final PaymentConfirmProcessor paymentConfirmProcessor;
+    private final SystemRefundExecutionFacade systemRefundExecutionFacade;
 
     public PaymentConfirmResponse confirm(Long memberId, Long orderId, String portonePaymentId) {
         // 검증 1~3. 셋 다 404 PAYMENT-001로 답해 남의 주문인지·번호가 틀린지를 구분해 주지 않는다
@@ -46,7 +45,10 @@ public class PaymentConfirmFacade {
 
         PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(orderId, portOnePayment);
 
-        // 여기 도달했으면 TX-2는 이미 커밋됐다. 지금 예외를 던져도 FAILED·환불 행은 남는다
+        // 여기 도달했으면 TX-2는 이미 커밋됐다. 지금 예외를 던져도 FAILED·환불 행은 남는다.
+        // 만료·금액 불일치·늦은 승인은 오류로 응답하지만 돈은 PG에 남아 있으므로 예외를 던지기 전에 환불 실행을 예약한다
+        systemRefundExecutionFacade.scheduleAfterConfirm(payment.getId(), outcome);
+
         Optional<ErrorCode> errorCode = outcome.errorCode();
         if (errorCode.isPresent()) {
             throw new BusinessException(errorCode.get());

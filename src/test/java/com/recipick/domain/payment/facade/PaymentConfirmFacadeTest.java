@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +54,9 @@ class PaymentConfirmFacadeTest {
 
     @Mock
     private PaymentConfirmProcessor paymentConfirmProcessor;
+
+    @Mock
+    private SystemRefundExecutionFacade systemRefundExecutionFacade;
 
     @InjectMocks
     private PaymentConfirmFacade facade;
@@ -78,6 +82,7 @@ class PaymentConfirmFacadeTest {
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(response.paidAt()).isEqualTo(PAID_AT);
         verify(paymentService, times(2)).getByOrderId(ORDER_ID);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.APPROVED);
     }
 
     @Test
@@ -96,6 +101,7 @@ class PaymentConfirmFacadeTest {
         // then
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
         verify(paymentService, times(2)).getByOrderId(ORDER_ID);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.ALREADY_PAID);
     }
 
     @Test
@@ -110,7 +116,7 @@ class PaymentConfirmFacadeTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
-        verifyNoInteractions(orderService, portOnePaymentClient, paymentConfirmProcessor);
+        verifyNoInteractions(orderService, portOnePaymentClient, paymentConfirmProcessor, systemRefundExecutionFacade);
     }
 
     @Test
@@ -125,7 +131,7 @@ class PaymentConfirmFacadeTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
-        verifyNoInteractions(portOnePaymentClient, paymentConfirmProcessor);
+        verifyNoInteractions(portOnePaymentClient, paymentConfirmProcessor, systemRefundExecutionFacade);
     }
 
     @Test
@@ -140,7 +146,7 @@ class PaymentConfirmFacadeTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
-        verifyNoInteractions(portOnePaymentClient, paymentConfirmProcessor);
+        verifyNoInteractions(portOnePaymentClient, paymentConfirmProcessor, systemRefundExecutionFacade);
     }
 
     @Test
@@ -158,13 +164,13 @@ class PaymentConfirmFacadeTest {
         // then
         assertErrorCode(thrown, CommonErrorCode.EXTERNAL_SERVICE_ERROR);
         verify(paymentService, times(1)).getByOrderId(ORDER_ID);
-        verifyNoInteractions(paymentConfirmProcessor);
+        verifyNoInteractions(paymentConfirmProcessor, systemRefundExecutionFacade);
     }
 
     @ParameterizedTest
     @EnumSource(value = PaymentApprovalOutcome.class, names = {
         "NOT_PAID", "PG_FAILED", "ORDER_MISMATCH", "AMOUNT_MISMATCH", "EXPIRED", "ALREADY_CLOSED", "INVALID_STATUS"})
-    @DisplayName("오류 결과는 Processor 커밋 뒤 그 결과의 오류 코드로 바꿔 던지고, 결제를 다시 읽지 않는다")
+    @DisplayName("오류 결과는 Processor 커밋 뒤 SYSTEM 환불 실행 예약 여부 판단을 맡긴 다음 그 결과의 오류 코드로 바꿔 던지고, 결제를 다시 읽지 않는다")
     void failedOutcomeBecomesError(PaymentApprovalOutcome outcome) {
         // given
         PortOnePayment portOne = paidPortOne();
@@ -178,7 +184,27 @@ class PaymentConfirmFacadeTest {
 
         // then
         assertErrorCode(thrown, outcome.errorCode().orElseThrow());
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, outcome);
         verify(paymentService, times(1)).getByOrderId(ORDER_ID);
+    }
+
+    @Test
+    @DisplayName("Processor가 실패하면(락 대기 초과 등) 커밋된 판정이 없으므로 예약 여부를 판단하지 않고 예외를 그대로 올린다")
+    void processorFailureSkipsSchedule() {
+        // given
+        PortOnePayment portOne = paidPortOne();
+        given(paymentService.getByOrderId(ORDER_ID)).willReturn(inProgressPayment());
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne);
+        given(paymentConfirmProcessor.process(ORDER_ID, portOne))
+            .willThrow(new CannotAcquireLockException("lock wait timeout"));
+
+        // when
+        Throwable thrown = catchThrowable(() -> facade.confirm(MEMBER_ID, ORDER_ID, PORTONE_PAYMENT_ID));
+
+        // then
+        assertThat(thrown).isInstanceOf(CannotAcquireLockException.class);
+        verifyNoInteractions(systemRefundExecutionFacade);
     }
 
     private Payment inProgressPayment() {

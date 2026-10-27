@@ -50,10 +50,12 @@ class RefundRepositoryTest extends IntegrationTestSupport {
         // when
         Refund found = refundRepository.findSystemRefundByPaymentId(payment.getId()).orElseThrow();
 
-        // then
+        // then — 취소 웹훅이 트랜잭션 밖에서 결제를 읽으므로 결제를 함께 읽어 온다
         assertThat(found.getId()).isEqualTo(system.getId());
         assertThat(found.getRequestedBy()).isEqualTo(RefundRequester.SYSTEM);
         assertThat(found.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(Hibernate.isInitialized(found.getPayment())).isTrue();
+        assertThat(found.getPayment().getId()).isEqualTo(payment.getId());
     }
 
     @Test
@@ -280,6 +282,39 @@ class RefundRepositoryTest extends IntegrationTestSupport {
         assertThat(nextPage).containsExactly(boundary.getId());
     }
 
+    @Test
+    @DisplayName("SYSTEM Fallback용 조회는 기준 시각 이전에 요청된 SYSTEM REQUESTED 환불 ID만 id 순으로 돌려준다")
+    void findStaleRequestedSystemRefundIds() {
+        // given — 기준 12:00. 오래된 SYSTEM REQUESTED 2건만 대상이다. SYSTEM 환불은 결제당 한 건이라 결제를 따로 만든다
+        LocalDateTime requestedBefore = LocalDateTime.of(2026, 10, 26, 12, 0);
+        Refund oldFirst = refundRepository.save(systemRefundAt(paymentRepository.save(newFailedPayment(18L)),
+            "key_18_system", RefundStatus.REQUESTED, requestedBefore.minusMinutes(30)));
+        Refund boundary = refundRepository.save(systemRefundAt(paymentRepository.save(newFailedPayment(19L)),
+            "key_19_system", RefundStatus.REQUESTED, requestedBefore));
+        refundRepository.save(systemRefundAt(paymentRepository.save(newFailedPayment(20L)),
+            "key_20_system", RefundStatus.REQUESTED, requestedBefore.plusMinutes(1)));
+        refundRepository.save(systemRefundAt(paymentRepository.save(newFailedPayment(21L)),
+            "key_21_system", RefundStatus.COMPLETED, requestedBefore.minusHours(1)));
+        refundRepository.save(systemRefundAt(paymentRepository.save(newFailedPayment(22L)),
+            "key_22_system", RefundStatus.FAILED, requestedBefore.minusHours(1)));
+        refundRepository.save(memberRefundAt(paymentRepository.save(newFailedPayment(23L)),
+            "key_23_member", RefundStatus.REQUESTED, requestedBefore.minusHours(1)));
+        em.flush();
+        em.clear();
+        // 앞선 테스트 클래스가 남긴 행과 섞이지 않게 이번에 만든 행부터 읽는다
+        long afterId = oldFirst.getId() - 1;
+
+        // when
+        List<Long> all = refundRepository.findStaleRequestedSystemRefundIds(
+            afterId, requestedBefore, PageRequest.ofSize(100));
+        List<Long> nextPage = refundRepository.findStaleRequestedSystemRefundIds(
+            oldFirst.getId(), requestedBefore, PageRequest.ofSize(1));
+
+        // then — 기준 시각과 같으면 포함한다. afterId 다음부터 limit건만 읽는다
+        assertThat(all).containsExactly(oldFirst.getId(), boundary.getId());
+        assertThat(nextPage).containsExactly(boundary.getId());
+    }
+
     private Payment newFailedPayment(Long orderId) {
         return Payment.builder()
             .orderId(orderId)
@@ -315,6 +350,20 @@ class RefundRepositoryTest extends IntegrationTestSupport {
             .reason("회원 취소")
             .status(status)
             .requestedBy(RefundRequester.MEMBER)
+            .idempotencyKey(idempotencyKey)
+            .requestedAt(requestedAt)
+            .build();
+    }
+
+    // 상태를 직접 정한 SYSTEM 환불. 끝난 환불을 실제 전이로 만들려면 PortOne 결과가 필요해 빌더로 만든다
+    private Refund systemRefundAt(Payment payment, String idempotencyKey, RefundStatus status,
+                                  LocalDateTime requestedAt) {
+        return Refund.builder()
+            .payment(payment)
+            .amount(23800L)
+            .reason("결제 대기 5분 만료")
+            .status(status)
+            .requestedBy(RefundRequester.SYSTEM)
             .idempotencyKey(idempotencyKey)
             .requestedAt(requestedAt)
             .build();

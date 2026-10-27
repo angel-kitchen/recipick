@@ -84,6 +84,14 @@ public class PaymentService {
         return refundRepository.findRequestedMemberRefundsByPaymentId(paymentId);
     }
 
+    // SYSTEM 환불 실행 예약·취소 웹훅용. 한 결제에 SYSTEM 환불은 최대 한 건이라(requestSystemRefund) 아직 REQUESTED인 것만 돌려준다.
+    // 취소 웹훅이 트랜잭션 밖에서 refund.getPayment()를 읽으므로 결제를 함께 조회한다.
+    // 잠금 없는 스냅샷이고 최종 판정은 SystemRefundProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
+    public Optional<Refund> findRequestedSystemRefund(Long paymentId) {
+        return refundRepository.findSystemRefundByPaymentId(paymentId)
+            .filter(refund -> refund.getStatus() == RefundStatus.REQUESTED);
+    }
+
     // 환불 재확인용. 결제를 함께 읽어 트랜잭션 밖에서 결제 ID·PortOne 결제 ID를 쓸 수 있다. 잠금 없는 스냅샷이다
     public Optional<Refund> findRefundWithPayment(Long refundId) {
         return refundRepository.findWithPaymentById(refundId);
@@ -92,6 +100,11 @@ public class PaymentService {
     // Fallback Sweep용. requestedBefore 이전에 요청된 회원 REQUESTED 환불 ID를 afterId 다음부터 limit건 읽는다
     public List<Long> findStaleMemberRefundIds(LocalDateTime requestedBefore, Long afterId, int limit) {
         return refundRepository.findStaleRequestedMemberRefundIds(afterId, requestedBefore, PageRequest.ofSize(limit));
+    }
+
+    // SYSTEM 환불 Fallback Sweep용. requestedBefore 이전에 요청된 SYSTEM REQUESTED 환불 ID를 afterId 다음부터 limit건 읽는다
+    public List<Long> findStaleSystemRefundIds(LocalDateTime requestedBefore, Long afterId, int limit) {
+        return refundRepository.findStaleRequestedSystemRefundIds(afterId, requestedBefore, PageRequest.ofSize(limit));
     }
 
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도

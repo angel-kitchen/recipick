@@ -26,7 +26,7 @@ import java.net.http.HttpTimeoutException;
 import java.util.concurrent.TimeoutException;
 
 //PortOne V2 결제 단건 조회와 전액 취소. 외부 호출만 담당하고 승인 가능 여부 같은 업무 판단은 domain Service가 한다.
- // DB 트랜잭션 밖에서 호출해야 한다.
+// DB 트랜잭션 밖에서 호출해야 한다.
 
 @Slf4j
 @Component
@@ -71,17 +71,28 @@ public class PortOnePaymentClient {
         }
     }
 
-    // PortOne 전액 취소를 호출하고, 응답을 예외로 던지지 않고 결과 상태로 분류해 반환한다.
-    // 호출 전에 취소 요청 상태가 이미 커밋되므로, 어떤 응답이 와도 이후 TX2에서 상태를 정리할 수 있어야 한다.
-    // idempotencyKey는 환불 행마다 고정된 서버 키이고, cancellableAmount는 현재 취소 가능 잔액 검증에 사용한다.
+    // 회원 취소. requester=CUSTOMER로 보낸다. 호출 규칙은 cancel()과 같다
     public PortOneCancelResult cancelPayment(
         String portonePaymentId, String idempotencyKey, String reason, Long cancellableAmount) {
+        return cancel(portonePaymentId, idempotencyKey, PortOneCancelRequest.byCustomer(reason, cancellableAmount));
+    }
+
+    // SYSTEM 환불의 사후 반환. 고객 요청이 아니라 서버 판단이라 requester=ADMIN으로 보낸다. 호출 규칙은 cancel()과 같다
+    public PortOneCancelResult cancelPaymentByAdmin(
+        String portonePaymentId, String idempotencyKey, String reason, Long cancellableAmount) {
+        return cancel(portonePaymentId, idempotencyKey, PortOneCancelRequest.byAdmin(reason, cancellableAmount));
+    }
+
+    // PortOne 전액 취소를 호출하고, 응답을 예외로 던지지 않고 결과 상태로 분류해 반환한다.
+    // 호출 전에 취소 요청 상태가 이미 커밋되므로, 어떤 응답이 와도 이후 TX2에서 상태를 정리할 수 있어야 한다.
+    // idempotencyKey는 환불 행마다 고정된 서버 키이고, 본문의 currentCancellableAmount는 현재 취소 가능 잔액 검증에 사용한다.
+    private PortOneCancelResult cancel(String portonePaymentId, String idempotencyKey, PortOneCancelRequest body) {
         try {
             PortOneCancelResult result = restClient.post()
                 .uri("/payments/{paymentId}/cancel", portonePaymentId)
                 .header(IDEMPOTENCY_KEY_HEADER, "\"" + idempotencyKey + "\"")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(PortOneCancelRequest.byCustomer(reason, cancellableAmount))
+                .body(body)
                 // 4xx·5xx도 예외가 아니라 분류 대상이라 retrieve() 대신 응답을 직접 받는다
                 .exchange((request, response) -> {
                     if (response.getStatusCode().is2xxSuccessful()) {

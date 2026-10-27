@@ -18,23 +18,28 @@ class PaymentDelayTaskTest {
         // when
         String webhook = PaymentDelayTask.webhookProcess(100L).member();
         String refund = PaymentDelayTask.refundReconcile(55L).member();
+        String systemRefund = PaymentDelayTask.systemRefundExecute(77L).member();
 
         // then
         assertThat(webhook).isEqualTo("WEBHOOK_PROCESS:100");
         assertThat(refund).isEqualTo("REFUND_RECONCILE:55");
+        assertThat(systemRefund).isEqualTo("SYSTEM_REFUND_EXECUTE:77");
     }
 
     @Test
     @DisplayName("member를 다시 읽으면 같은 작업이다")
     void parseRoundTrip() {
         // given
-        PaymentDelayTask task = PaymentDelayTask.refundReconcile(55L);
+        PaymentDelayTask refund = PaymentDelayTask.refundReconcile(55L);
+        PaymentDelayTask systemRefund = PaymentDelayTask.systemRefundExecute(77L);
 
         // when
-        Optional<PaymentDelayTask> parsed = PaymentDelayTask.parse(task.member());
+        Optional<PaymentDelayTask> parsedRefund = PaymentDelayTask.parse(refund.member());
+        Optional<PaymentDelayTask> parsedSystemRefund = PaymentDelayTask.parse(systemRefund.member());
 
         // then
-        assertThat(parsed).contains(task);
+        assertThat(parsedRefund).contains(refund);
+        assertThat(parsedSystemRefund).contains(systemRefund);
     }
 
     @ParameterizedTest
