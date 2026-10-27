@@ -225,11 +225,24 @@ public class Order extends BaseTimeEntity {
     }
 
     public void markRefunded() {
-        // 환불 완료 이력에 남길 취소 사유가 없으면 어떤 취소로 끝났는지 알 수 없다
-        if (!status.canTransitionTo(OrderStatus.REFUNDED) || cancelReasonCode == null) {
+        // 환불 완료 이력에 남길 취소 사유가 없으면 어떤 취소로 끝났는지 알 수 없다.
+        // PAID → REFUNDED는 외부 취소 전용이라 여기서 받지 않는다
+        if (status != OrderStatus.CANCEL_REQUESTED || cancelReasonCode == null) {
             throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         }
         this.status = OrderStatus.REFUNDED;
         this.canceledAt = LocalDateTime.now();
+    }
+
+    // PG가 이미 취소를 끝낸 외부 취소는 기다릴 PG 결과가 없어 CANCEL_REQUESTED를 거치지 않는다.
+    // 취소 진행 중인 주문은 그 취소의 완료이므로 markRefunded로 끝낸다
+    public void closeByExternalCancel(String reasonDetail) {
+        if (status != OrderStatus.PAID) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        this.status = OrderStatus.REFUNDED;
+        this.canceledAt = LocalDateTime.now();
+        this.cancelReasonCode = CancelReasonCode.EXTERNAL_CANCELED;
+        this.cancelReasonDetail = reasonDetail;
     }
 }
