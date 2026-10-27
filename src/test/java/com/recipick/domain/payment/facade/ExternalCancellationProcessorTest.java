@@ -50,6 +50,7 @@ class ExternalCancellationProcessorTest {
     private static final Long ORDER_ID = 1L;
     private static final Long REFUND_ID = 7L;
     private static final Long AMOUNT = 23800L;
+    private static final Long CHARGED_AMOUNT = 25000L;
     private static final String CANCELLATION_ID = "cancel_console";
     private static final LocalDateTime REQUESTED_AT = LocalDateTime.of(2026, 10, 27, 21, 0);
     private static final LocalDateTime CANCELED_AT = LocalDateTime.of(2026, 10, 27, 21, 0, 10);
@@ -339,7 +340,7 @@ class ExternalCancellationProcessorTest {
 
     @ParameterizedTest
     @MethodSource("unconfirmedCancellations")
-    @DisplayName("완료가 확정되지 않았거나 전액이 아닌 외부 취소를 넘기면 예외로 막는다")
+    @DisplayName("완료가 확정되지 않은 외부 취소를 넘기면 환불을 조회하기 전에 예외로 막는다")
     void rejectUnconfirmedCancellation(PortOneCancellation cancellation) {
         // given
         Payment payment = givenLocked(PaymentStatus.PAID);
@@ -353,7 +354,7 @@ class ExternalCancellationProcessorTest {
         assertNothingChanged(payment, PaymentStatus.PAID);
     }
 
-    // 처리 중, ID 없음, 완료 시각 없음, 부분 금액
+    // 처리 중, ID 없음, 완료 시각 없음
     static Stream<PortOneCancellation> unconfirmedCancellations() {
         return Stream.of(
             new PortOneCancellation(CANCELLATION_ID, PortOneCancellationStatus.REQUESTED, AMOUNT, REQUESTED_AT,
@@ -361,9 +362,65 @@ class ExternalCancellationProcessorTest {
             new PortOneCancellation(null, PortOneCancellationStatus.SUCCEEDED, AMOUNT, REQUESTED_AT,
                 CANCELED_AT, PortOneCancellationTrigger.CONSOLE),
             new PortOneCancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, REQUESTED_AT,
-                null, PortOneCancellationTrigger.CONSOLE),
-            new PortOneCancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, 10000L, REQUESTED_AT,
-                CANCELED_AT, PortOneCancellationTrigger.CONSOLE));
+                null, PortOneCancellationTrigger.CONSOLE));
+    }
+
+    @Test
+    @DisplayName("같은 취소 ID의 환불이 없는데 취소 금액이 결제 금액과 다르면 진행 중 환불을 조회하기 전에 예외로 막는다")
+    void rejectAmountMismatchWithoutExistingRefund() {
+        // given — 새 EXTERNAL 환불은 결제 전액을 돌려준 취소에만 만든다
+        Payment payment = givenLocked(PaymentStatus.PAID);
+        given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.empty());
+        PortOneCancellation partial = new PortOneCancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED,
+            10000L, REQUESTED_AT, CANCELED_AT, PortOneCancellationTrigger.CONSOLE);
+
+        // when
+        Throwable thrown = catchThrowable(() -> processor.apply(PAYMENT_ID, partial));
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
+        verify(paymentService, never()).findRequestedMemberRefunds(any());
+        verify(paymentService, never()).findRequestedSystemRefund(any());
+        assertNothingChanged(payment, PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("금액 불일치로 생긴 SYSTEM 환불은 결제 금액이 아니라 환불 금액으로 비교해 재전송을 ALREADY_RECONCILED로 끝낸다")
+    void alreadyReconciledWhenSystemRefundAmountDiffersFromPayment() {
+        // given — PG 청구액 25,000원을 돌려준 SYSTEM 환불. 결제 금액은 서버가 기대한 23,800원이다
+        Payment payment = givenLocked(PaymentStatus.FAILED);
+        givenSameCancellation(refund(payment, RefundStatus.COMPLETED, RefundRequester.SYSTEM, CANCELLATION_ID,
+            CHARGED_AMOUNT));
+        PortOneCancellation charged = new PortOneCancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED,
+            CHARGED_AMOUNT, REQUESTED_AT, CANCELED_AT, PortOneCancellationTrigger.CONSOLE);
+
+        // when
+        ExternalCancellationResult result = processor.apply(PAYMENT_ID, charged);
+
+        // then — 첫 전달이 PROCESSED였던 같은 웹훅의 재전송도 같은 결과로 끝난다
+        assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.ALREADY_RECONCILED);
+        assertNothingChanged(payment, PaymentStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("같은 취소 ID의 환불이 있는데 취소 금액이 그 환불 금액과 다르면 예외로 막는다")
+    void rejectAmountMismatchWithExistingRefund() {
+        // given — 판정 규칙을 통과했다면 나올 수 없는 호출이다
+        Payment payment = givenLocked(PaymentStatus.FAILED);
+        givenSameCancellation(refund(payment, RefundStatus.COMPLETED, RefundRequester.SYSTEM, CANCELLATION_ID,
+            CHARGED_AMOUNT));
+        PortOneCancellation mismatched = new PortOneCancellation(CANCELLATION_ID,
+            PortOneCancellationStatus.SUCCEEDED, 24000L, REQUESTED_AT, CANCELED_AT,
+            PortOneCancellationTrigger.CONSOLE);
+
+        // when
+        Throwable thrown = catchThrowable(() -> processor.apply(PAYMENT_ID, mismatched));
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
+        verify(paymentService, never()).findRequestedMemberRefunds(any());
+        verify(paymentService, never()).findRequestedSystemRefund(any());
+        assertNothingChanged(payment, PaymentStatus.FAILED);
     }
 
     // ---------- 준비 ----------
@@ -420,12 +477,18 @@ class ExternalCancellationProcessorTest {
         return payment;
     }
 
-    // 상태·취소 ID를 자유롭게 맞추려고 빌더와 필드 주입을 쓴다. 전이 규칙은 RefundTest가 따로 검증한다
     private static Refund refund(Payment payment, RefundStatus status, RefundRequester requestedBy,
                                  String cancellationId) {
+        return refund(payment, status, requestedBy, cancellationId, AMOUNT);
+    }
+
+    // 상태·취소 ID를 자유롭게 맞추려고 빌더와 필드 주입을 쓴다. 전이 규칙은 RefundTest가 따로 검증한다.
+    // 금액 불일치로 생긴 SYSTEM 환불처럼 환불 금액이 결제 금액과 다른 경우를 만들려고 금액도 받는다
+    private static Refund refund(Payment payment, RefundStatus status, RefundRequester requestedBy,
+                                 String cancellationId, Long amount) {
         Refund refund = Refund.builder()
             .payment(payment)
-            .amount(AMOUNT)
+            .amount(amount)
             .reason("테스트 환불")
             .status(status)
             .requestedBy(requestedBy)

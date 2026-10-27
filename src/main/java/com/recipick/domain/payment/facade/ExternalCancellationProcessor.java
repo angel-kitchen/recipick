@@ -37,13 +37,23 @@ public class ExternalCancellationProcessor {
     @Transactional
     public ExternalCancellationResult apply(Long paymentId, PortOneCancellation cancellation) {
         Payment payment = paymentService.getByIdForUpdate(paymentId);
-        requireReconcilable(payment, cancellation);
+        requireCompletedExternalCancellation(cancellation);
 
         // 같은 취소가 이미 어느 환불에 묶여 있으면 그 환불의 상태로 끝낸다. 웹훅 재전송·동시 처리의 멱등 기준이다
         Optional<Refund> sameCancellation = paymentService.findRefundByPortoneCancellationId(cancellation.id());
         if (sameCancellation.isPresent()) {
-            return judgeSameCancellation(payment, sameCancellation.get());
+            Refund refund = sameCancellation.get();
+            if (!refund.getPayment().getId().equals(payment.getId())) {
+                return notApplicable(payment, "PortOne 취소 ID가 다른 결제의 환불에 연결됨: refundId=" + refund.getId());
+            }
+            // 기존 환불이 대표하는 PG 취소 금액은 환불 금액이다. 금액 불일치로 생긴 SYSTEM 환불은 결제 금액과 다르므로
+            // 결제 금액으로 비교하면 같은 웹훅의 재전송이 멱등 성공이 아니라 오류가 된다
+            requireAmount(cancellation.totalAmount(), refund.getAmount());
+            return judgeSameCancellation(payment, refund);
         }
+
+        // 새 EXTERNAL 환불은 결제 전액을 돌려준 취소에만 만든다
+        requireAmount(cancellation.totalAmount(), payment.getAmount());
 
         // 판정과 잠금 사이에 회원 취소 등이 새 환불을 만들었을 수 있다. 기존 환불이 우선이라 EXTERNAL을 만들지 않는다
         List<Refund> requested = new ArrayList<>(paymentService.findRequestedMemberRefunds(paymentId));
@@ -72,25 +82,34 @@ public class ExternalCancellationProcessor {
         return ExternalCancellationResult.reconciled();
     }
 
-    // 판정 규칙을 통과한 취소만 받는다. 아니면 PG에서 확정되지 않은 취소로 돈과 주문을 바꾸게 되므로 호출자 버그로 막는다
-    private static void requireReconcilable(Payment payment, PortOneCancellation cancellation) {
-        if (!RefundCancellationRules.isAutoReconcilableExternalTrigger(cancellation.trigger())
-            || cancellation.status() != PortOneCancellationStatus.SUCCEEDED
-            || !StringUtils.hasText(cancellation.id())
-            || cancellation.canceledAt() == null
-            || !Objects.equals(cancellation.totalAmount(), payment.getAmount())) {
-            throw new IllegalStateException("자동 반영할 수 없는 외부 취소입니다. paymentId=" + payment.getId()
-                + ", cancellationId=" + cancellation.id() + ", trigger=" + cancellation.trigger()
-                + ", status=" + cancellation.status() + ", amount=" + cancellation.totalAmount());
+    // 판정 규칙을 통과한 완료 외부 취소만 받는다. 아니면 PG에서 확정되지 않은 취소로 돈과 주문을 바꾸게 되므로 호출자 버그로 막는다.
+    // 금액은 기준이 경로마다 달라(기존 환불 금액·결제 금액) 여기서 보지 않는다
+    private static void requireCompletedExternalCancellation(PortOneCancellation cancellation) {
+        if (!RefundCancellationRules.isAutoReconcilableExternalTrigger(cancellation.trigger())) {
+            throw new IllegalStateException("자동 반영 대상 외부 취소가 아닙니다: trigger=" + cancellation.trigger());
+        }
+        if (cancellation.status() != PortOneCancellationStatus.SUCCEEDED) {
+            throw new IllegalStateException("완료된 외부 취소가 아닙니다: status=" + cancellation.status());
+        }
+        if (!StringUtils.hasText(cancellation.id())) {
+            throw new IllegalStateException("외부 취소 ID가 없습니다: trigger=" + cancellation.trigger());
+        }
+        if (cancellation.canceledAt() == null) {
+            throw new IllegalStateException("외부 취소 완료 시각이 없습니다: cancellationId=" + cancellation.id());
+        }
+    }
+
+    // 전액 취소만 반영한다. Long은 참조 비교가 되지 않게 Objects.equals로 보고, 금액이 비어 있어도 같은 예외로 막는다
+    private static void requireAmount(Long cancellationAmount, Long expectedAmount) {
+        if (!Objects.equals(cancellationAmount, expectedAmount)) {
+            throw new IllegalStateException("외부 취소 금액이 기준 금액과 다릅니다: expected=" + expectedAmount
+                + ", cancellation=" + cancellationAmount);
         }
     }
 
     // 같은 취소 ID의 환불이 있다. 결제 상태·요청 주체가 정상 조합일 때만 멱등 성공으로 본다 —
     // 이상 데이터를 "이미 반영됨"으로 덮으면 정합화가 불일치를 숨기게 된다
     private ExternalCancellationResult judgeSameCancellation(Payment payment, Refund refund) {
-        if (!refund.getPayment().getId().equals(payment.getId())) {
-            return notApplicable(payment, "PortOne 취소 ID가 다른 결제의 환불에 연결됨: refundId=" + refund.getId());
-        }
         return switch (refund.getStatus()) {
             case COMPLETED -> isSettled(payment, refund)
                 ? alreadyReconciled(payment, refund)
