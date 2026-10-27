@@ -207,6 +207,43 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
         return track(new Flow(memberId, order.getId(), payment.getId(), portonePaymentId, null, now.minusSeconds(10)));
     }
 
+    // 결제 확정 전 + 재고·품목: 주문 생성으로 재고가 7에서 5로 이미 줄어든 PENDING_PAYMENT 주문 + IN_PROGRESS 결제.
+    // 만료·늦은 승인이 재고를 정확히 한 번 되돌리는지 보는 자리다. 만료 시각은 실제 시계 기준으로 호출한 쪽이 정한다
+    protected Flow pendingPaymentWithStock(LocalDateTime expiresAt) {
+        long memberId = MEMBER_SEQUENCE.incrementAndGet();
+        Mart mart = saveMart();
+        Product product = productRepository.save(Product.builder()
+            .mart(mart)
+            .name("애호박")
+            .totalQuantity(STOCK_AFTER_ORDER)
+            .deleted(false)
+            .build());
+        productIds.add(product.getId());
+        Order order = orderRepository.save(Order.builder()
+            .memberId(memberId)
+            .martId(mart.getId())
+            .pendingMemberId(memberId)
+            .status(OrderStatus.PENDING_PAYMENT)
+            .martStatus(MartStatus.NONE)
+            .build());
+        orderIds.add(order.getId());
+        orderItemRepository.save(OrderItem.builder()
+            .order(order)
+            .productId(product.getId())
+            .quantity(ORDER_QUANTITY)
+            .build());
+        String portonePaymentId = "pay_flow_" + order.getId();
+        Payment payment = paymentRepository.save(Payment.builder()
+            .orderId(order.getId())
+            .paymentMethod(PaymentMethod.CARD)
+            .portonePaymentId(portonePaymentId)
+            .amount(AMOUNT)
+            .status(PaymentStatus.IN_PROGRESS)
+            .expiresAt(expiresAt)
+            .build());
+        return track(new Flow(memberId, order.getId(), payment.getId(), portonePaymentId, product.getId(), null));
+    }
+
     // 결제 완료 후: PAID 주문(마트 접수) + PAID 결제 + 재고·품목. 회원 취소가 들어오는 자리다
     protected Flow paidPaymentWithStock() {
         long memberId = MEMBER_SEQUENCE.incrementAndGet();
