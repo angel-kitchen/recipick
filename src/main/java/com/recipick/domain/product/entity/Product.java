@@ -32,10 +32,24 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
     name = "product",
-    indexes = @Index(
-        name = "idx_product_mart_id_ingredient_id",
-        columnList = "mart_id, ingredient_id"
-    )
+    indexes = {
+        @Index(
+            name = "idx_product_mart_id_ingredient_id",
+            columnList = "mart_id, ingredient_id"
+        ),
+        @Index(
+            name = "idx_product_mart_category_price",
+            columnList = "mart_id, category_id, deleted, price, id"
+        ),
+        @Index(
+            name= "idx_product_mart_category_price_asc",
+            columnList = "mart_id, category_id, deleted, price ASC, id DESC"
+        ),
+        @Index(
+            name = "idx_product_mart_created",
+            columnList = "mart_id, deleted, created_at, id"
+        )
+    }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product extends BaseTimeEntity {
