@@ -5,6 +5,8 @@
 # 실패하면 0이 아닌 코드로 끝나고, .env에 ALERT_WEBHOOK_URL이 있으면 그 주소로 알린다(Discord·Slack 웹훅 형식).
 set -Eeuo pipefail
 umask 077
+# cron의 PATH는 /usr/bin:/bin뿐이라 snap으로 깐 aws를 찾지 못한다
+export PATH="$PATH:/usr/local/bin:/snap/bin"
 
 main() {
     KIND="${1:?사용: backup.sh <pre-deploy|nightly> [꼬리표]}"

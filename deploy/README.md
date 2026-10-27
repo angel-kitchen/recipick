@@ -22,7 +22,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | EC2 | Ubuntu 24.04, t3.medium, 루트 볼륨 30GB gp3, Elastic IP. 보안 그룹 인바운드는 80·443만(22 없음) |
-| 인스턴스 프로파일 | `AmazonSSMManagedInstanceCore` + ECR pull + `s3:GetObject`(`deploy/*`) + `s3:PutObject`(`backups/*`) |
+| 인스턴스 프로파일 | `AmazonSSMManagedInstanceCore` + ECR pull + `s3:GetObject`(`deploy/*`) + `s3:PutObject`·`s3:GetObject`(`backups/*`, 업로드 후 크기 확인에 GetObject가 필요) |
 | ECR | 저장소 `recipick`. 수명 정책으로 최근 10개만 유지 |
 | S3 | 버킷 하나. `deploy/`(설정 묶음)와 `backups/`(nightly 덤프). 퍼블릭 접근 차단, 30일 뒤 만료 |
 | GitHub OIDC | 배포 역할 `recipick-github-deploy`. 신뢰 정책은 dev·main 브랜치만. ECR push, `s3:PutObject`(`deploy/*`), `ssm:SendCommand`, `ssm:GetCommandInvocation` |
@@ -47,7 +47,9 @@
 
 1. Session Manager로 접속해 `sudo -i`.
    ```bash
-   apt-get update && apt-get install -y docker.io docker-compose-v2 awscli rsync
+   apt-get update && apt-get install -y docker.io docker-compose-v2 rsync
+   # Ubuntu 24.04 저장소에는 awscli 패키지가 없다. snap으로 설치하면 /snap/bin/aws에 깔린다(스크립트가 이 경로를 PATH에 넣는다)
+   snap install aws-cli --classic
    systemctl enable --now docker
    docker network create recipick
    mkdir -p /opt/recipick/releases

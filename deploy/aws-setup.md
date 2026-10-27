@@ -95,7 +95,7 @@
       "Resource": "arn:aws:ecr:ap-northeast-2:ACCOUNT_ID:repository/recipick"
     },
     { "Sid": "S3DeployRead", "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET/deploy/*" },
-    { "Sid": "S3BackupWrite", "Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::BUCKET/backups/*" }
+    { "Sid": "S3BackupWrite", "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject"], "Resource": "arn:aws:s3:::BUCKET/backups/*" }
   ]
 }
 ```
@@ -238,6 +238,8 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
 
 로그만 따로 열어야 할 만큼 요청이 잦아지면, `docker logs`만 실행하는 사용자 정의 SSM 문서를 만들어 그 문서에 대한 `ssm:SendCommand`만 허용하는 그룹을 추가한다.
 
+셸 문서 `SSM-SessionManagerRunShell`은 계정 안에 생기는 문서라 ARN에 `ACCOUNT_ID`가 들어간다. 포트 포워딩 문서 `AWS-StartPortForwardingSessionToRemoteHost`는 AWS 공용 문서라 계정 자리가 비어 있는 것이 맞다. 세션 데이터 채널(`ssmmessages:OpenDataChannel`)도 허용해야 셸이 열린다.
+
 `recipick-admin` 그룹에 아래 정책을 붙인다. 콘솔 로그인만 주고 액세스 키는 만들지 않는다. MFA를 켜게 한다. 백업 내려받기는 콘솔의 S3 화면에서 `backups/` 아래 파일을 받는다.
 
 ```json
@@ -249,7 +251,7 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
       "Action": "ssm:StartSession",
       "Resource": [
         "arn:aws:ec2:ap-northeast-2:ACCOUNT_ID:instance/INSTANCE_ID",
-        "arn:aws:ssm:ap-northeast-2::document/SSM-SessionManagerRunShell",
+        "arn:aws:ssm:ap-northeast-2:ACCOUNT_ID:document/SSM-SessionManagerRunShell",
         "arn:aws:ssm:ap-northeast-2::document/AWS-StartPortForwardingSessionToRemoteHost"
       ]
     },
@@ -258,6 +260,7 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
       "Action": ["ssm:TerminateSession", "ssm:ResumeSession"],
       "Resource": "arn:aws:ssm:*:*:session/${aws:username}-*"
     },
+    { "Effect": "Allow", "Action": "ssmmessages:OpenDataChannel", "Resource": "arn:aws:ssm:*:*:session/${aws:username}-*" },
     {
       "Effect": "Allow",
       "Action": ["ssm:DescribeSessions", "ssm:GetConnectionStatus", "ssm:DescribeInstanceInformation", "ec2:DescribeInstances"],

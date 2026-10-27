@@ -82,6 +82,7 @@ jobs:
             executionTimeout: ["900"],
             commands: [
               "set -eu",
+              "export PATH=\"$PATH:/usr/local/bin:/snap/bin\"",
               "mkdir -p /opt/recipick/releases",
               "exec 9>/opt/recipick/.deploy.lock",
               "flock -n 9 || { echo \"다른 배포가 진행 중이라 중단\"; exit 1; }",

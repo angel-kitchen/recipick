@@ -12,6 +12,8 @@
 #
 # 본문을 main 함수로 감싼다. bash는 함수를 끝까지 읽은 뒤 실행하므로, 실행 중에 scripts/가 교체되어도 안전하다.
 set -euo pipefail
+# cron·SSM의 PATH에는 /snap/bin(snap으로 깐 aws)과 /usr/local/bin(공식 설치 프로그램)이 없을 수 있다
+export PATH="$PATH:/usr/local/bin:/snap/bin"
 
 main() {
     local TAG="${1:?사용: deploy.sh <이미지 태그>}"
