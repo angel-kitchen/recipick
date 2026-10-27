@@ -22,3 +22,99 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew test
+
+  # 배포 대상 브랜치(레포 변수 DEPLOY_BRANCH)로 push됐을 때만 돈다. 11/9에 변수를 dev에서 main으로 바꾼다.
+  # 필요한 레포 변수: DEPLOY_BRANCH, AWS_REGION, AWS_DEPLOY_ROLE_ARN, ECR_REPOSITORY, DEPLOY_BUCKET, EC2_INSTANCE_ID
+  # 시크릿은 없다. AWS 인증은 OIDC로 역할을 가정하고, 서버 접속은 SSM Run Command다.
+  deploy:
+    if: github.event_name == 'push' && github.ref_name == vars.DEPLOY_BRANCH
+    needs: test
+    runs-on: ubuntu-latest
+    # 서버가 한 대라 배포는 한 번에 하나만. 뒤에 온 배포는 기다린다
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 실행 jar 빌드 (테스트는 test 작업에서 끝났다)
+        run: ./gradlew bootJar -x test
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 이미지 빌드·푸시 (태그 = 커밋 SHA)
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+        run: |
+          docker build -t "$IMAGE:$GITHUB_SHA" .
+          docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: 서버 설정 파일 업로드 (deploy/ → S3)
+        run: |
+          tar -czf deploy.tar.gz -C deploy --exclude=.env --exclude=backups --exclude=certbot --exclude=.deploy.lock .
+          aws s3 cp deploy.tar.gz "s3://$DEPLOY_BUCKET/deploy/$GITHUB_SHA.tar.gz"
+
+      - name: SSM Run Command로 서버에서 배포 스크립트 실행
+        id: ssm
+        run: |
+          jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
+            executionTimeout: ["900"],
+            commands: [
+              "set -e",
+              "aws s3 cp s3://\($bucket)/deploy/\($sha).tar.gz /tmp/deploy.tar.gz",
+              "mkdir -p /opt/recipick && tar -xzf /tmp/deploy.tar.gz -C /opt/recipick",
+              "chmod +x /opt/recipick/scripts/deploy.sh",
+              "/opt/recipick/scripts/deploy.sh \($sha)"
+            ]
+          }' > params.json
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $GITHUB_SHA" \
+            --parameters file://params.json \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+      - name: 완료 대기, 서버 출력 수집 (AWS 권한 없는 팀원도 여기서 원인을 본다)
+        env:
+          COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
+        run: |
+          status=Pending
+          for i in $(seq 1 90); do
+            status=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          echo "::group::서버 표준 출력"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "::endgroup::"
+          echo "::group::서버 표준 오류"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+          echo "::endgroup::"
+          if [ "$status" != "Success" ]; then
+            echo "::error::배포 실패. SSM 상태: $status"
+            exit 1
+          fi
