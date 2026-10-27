@@ -1,5 +1,5 @@
 -- 부하 테스트용 회원 100명을 만든다. 모두 같은 로컬 테스트용 비밀번호(k6 스크립트의 PERF_PASSWORD)를 쓰고 삼청 마트(1)에 배정된다.
--- 재실행해도 회원 번호와 연결된 데이터가 유지되도록 이메일이 같으면 갱신하고 없으면 추가한다.
+-- 재실행해도 회원 번호와 연결된 데이터가 유지되도록 이메일 또는 전화번호가 같으면 갱신하고 없으면 추가한다. 성능 전용 DB에서만 실행한다.
 -- 실행(Git Bash, 레포 루트):
 --   docker exec -i recipick-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 recipick_perf' < scripts/perf/seed-members.sql
 SET SESSION cte_max_recursion_depth = 1000;
