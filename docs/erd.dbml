@@ -386,10 +386,14 @@ Table AUTO_CART_ITEM {
   }
 }
 
+// auto_cart_request_id는 AI로 미리보기를 만든 경우에만 채운다. 7일 지난 PREVIEWED 요청을 정리할 때는
+// 같은 트랜잭션에서 이 값을 먼저 NULL로 바꾼 뒤 요청을 삭제한다(FK에 ON DELETE를 두지 않고 배치가 처리).
+// success는 AI 응답을 받아 결과에 썼는지를 뜻한다: PREVIEWED·NEEDS_SELECTION·NO_MATCH·RECOMMENDED는 true,
+// FALLBACK은 false이고 failure_reason을 채운다.
 Table AI_REQUEST_LOG {
   id bigint [pk]
   member_id bigint
-  auto_cart_request_id bigint
+  auto_cart_request_id bigint [null]
   request_type varchar(20)
   raw_text text
   parsed_result json
