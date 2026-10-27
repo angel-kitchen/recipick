@@ -31,8 +31,8 @@ public class MemberAdminService {
 
     public PageResponse<MemberAdminResponse> findMembers(MemberAdminSearchRequest request) {
         LocalDateTime now = LocalDateTime.now(clock);
-        Page<MemberAdminRow> page = memberRepository.searchMembers(request.email(), request.membershipActive(),
-                now, request.toPageable());
+        Page<MemberAdminRow> page = memberRepository.searchMembers(request.email(), request.name(), request.membershipActive(),
+                request.membershipType(), request.membershipSource(), now, request.toPageable());
         List<Long> ids = page.getContent().stream().map(MemberAdminRow::memberId).toList();
         Map<Long, MemberMembershipData> active = ids.isEmpty() ? Map.of()
                 : membershipRepository.findActiveMembershipsForMembers(ids, now).stream()
