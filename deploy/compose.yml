@@ -1,6 +1,8 @@
 # 앱과 리버스 프록시. 배포 스크립트는 이 파일만 다룬다(docker compose up -d 는 이 파일만 읽는다).
-# 서버 배치: /opt/recipick/{compose*.yml, .env, nginx/, certbot/}. 처음 한 번 `docker network create recipick`.
-# 재시작 방식 배포: IMAGE_TAG를 .env에 쓰고 `docker compose up -d --no-deps app`. nginx는 업스트림 DNS를 다시 조회하므로 reload가 필요 없다.
+# 서버 배치는 scripts/deploy.sh 머리말. 처음 한 번 `docker network create recipick`.
+# 재시작 방식 배포: IMAGE_TAG를 .env에 쓰고 `docker compose up -d --no-deps app nginx` 후 nginx 검사·reload.
+# nginx는 업스트림 DNS를 다시 조회하므로 앱 IP가 바뀌어도 따라가지만, conf.d 파일 변경은 reload해야 반영된다.
+# 필수 값은 ${VAR:?}로 둔다. 비어 있으면 compose가 실행 전에 그 이름을 대며 멈춘다.
 name: recipick-app
 
 x-logging: &logging
@@ -28,7 +30,7 @@ services:
     logging: *logging
 
   app:
-    image: ${IMAGE}:${IMAGE_TAG}
+    image: ${IMAGE:?IMAGE가 비었다}:${IMAGE_TAG:?IMAGE_TAG가 비었다}
     container_name: recipick-app
     restart: unless-stopped
     # 앱 포트는 호스트에 노출하지 않는다. nginx만 recipick 네트워크로 접근한다
@@ -37,14 +39,14 @@ services:
     # 앱에 필요한 값만 넘긴다(.env의 MySQL 루트 비밀번호 등은 넘기지 않는다)
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL이 비었다}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME이 비었다}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD가 비었다}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET이 비었다}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
-      PORTONE_API_SECRET: ${PORTONE_API_SECRET}
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:?PORTONE_API_SECRET이 비었다}
       PORTONE_STORE_ID: ${PORTONE_STORE_ID:-}
       PORTONE_CHANNEL_KEY: ${PORTONE_CHANNEL_KEY:-}
     healthcheck:
@@ -54,10 +56,13 @@ services:
       timeout: 5s
       retries: 6
       start_period: 40s
+    # Spring graceful shutdown이 20초(application-prod.yml)라 그보다 길게 기다린 뒤 강제 종료한다. Docker 기본은 10초
+    stop_grace_period: 30s
     deploy:
       resources:
         limits:
-          # 힙은 이 값의 75%(Dockerfile의 JAVA_TOOL_OPTIONS). 블루그린 교체 순간 둘이 떠도 4GB 안에 들어오는 크기
+          # 힙은 이 값의 75%(Dockerfile의 JAVA_TOOL_OPTIONS). 상한 합계는 app 1280 + mysql 1024 + redis 256 + 모니터링 약 700MiB.
+          # 앱 두 개를 동시에 띄우는 블루그린은 4GiB에서 안전하다고 보지 않는다. 실제 사용량을 잰 뒤 판단한다(전략 문서 8절)
           memory: 1280m
     logging: *logging
 
