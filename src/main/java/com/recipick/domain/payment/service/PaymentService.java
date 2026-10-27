@@ -8,6 +8,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
+import com.recipick.domain.payment.repository.dto.PaymentAdminSearchCondition;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
@@ -47,6 +48,12 @@ public class PaymentService {
         return PaymentCreated.from(getByOrderId(orderId));
     }
 
+    // 관리자 결제 상세용. 상태를 바꾸지 않으므로 잠그지 않는다
+    public Payment getById(Long paymentId) {
+        return paymentRepository.findById(paymentId)
+            .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    }
+
     // 상태를 바꾸는 흐름의 첫 줄에서 부른다. 호출자 트랜잭션에 참여해야 잠금이 유지된다
     @Transactional
     public Payment getByOrderIdForUpdate(Long orderId) {
@@ -66,13 +73,13 @@ public class PaymentService {
         return paymentRepository.findByPortonePaymentId(portonePaymentId);
     }
 
-    // 정합화의 환불 찾기 ①. portone_cancellation_id가 UNIQUE라 최대 한 건이다.
+    // 정합화의 환불 찾기 1. portone_cancellation_id가 UNIQUE라 최대 한 건이다.
     // 잠금 없는 스냅샷이고 최종 판정은 PaymentCancelProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
     public Optional<Refund> findRefundByPortoneCancellationId(String portoneCancellationId) {
         return refundRepository.findByPortoneCancellationId(portoneCancellationId);
     }
 
-    // 정합화의 환불 찾기 ②. 취소 ID를 아직 못 받은 회원 환불. 정확히 한 건일 때만 자동 반영하므로 판단은 호출자가 한다
+    // 정합화의 환불 찾기 2. 취소 ID를 아직 못 받은 회원 환불. 정확히 한 건일 때만 자동 반영하므로 판단은 호출자가 한다
     public List<Refund> findRequestedMemberRefunds(Long paymentId) {
         return refundRepository.findRequestedMemberRefundsByPaymentId(paymentId);
     }
@@ -134,9 +141,19 @@ public class PaymentService {
         return paymentRepository.findByOrderIdIn(orderIds, pageable);
     }
 
+    // 관리자 결제 목록. 회원 ID → 주문 ID 변환은 Facade가 주문 Service로 끝내고 조건만 넘긴다
+    public Page<Payment> searchForAdmin(PaymentAdminSearchCondition condition, Pageable pageable) {
+        return paymentRepository.searchForAdmin(condition, pageable);
+    }
+
     // 주문 결제 조회용 단건 요약
     public RefundSummary getRefundSummary(Long paymentId) {
         return summarize(refundRepository.findAllByPaymentIdOrderByIdDesc(paymentId));
+    }
+
+    // 관리자 결제 상세용 환불 전체 이력. 실패 후 재시도한 시도까지 모두, 최신 시도부터 돌려준다
+    public List<Refund> findRefundsOf(Long paymentId) {
+        return refundRepository.findAllByPaymentIdOrderByIdDesc(paymentId);
     }
 
     // 결제 내역용 배치 요약. 결제마다 부르면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 여기서 나눈다.
