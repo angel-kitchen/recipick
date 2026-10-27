@@ -26,6 +26,8 @@ spring:
         max-page-size: 100
 
 security:
+  trial-block:
+    secret: ${TRIAL_BLOCK_HMAC_SECRET:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   jwt:

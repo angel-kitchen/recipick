@@ -85,6 +85,23 @@ public class Member extends BaseTimeEntity {
         this.privacyAgreedAt = privacyAgreedAt;
     }
 
+    public void withdraw(LocalDateTime now) {
+        if (now == null || id == null || isWithdrawn()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        String replacement = "withdrawn-" + id;
+        // 가입 이메일 형식으로는 입력할 수 없는 값으로 교체해 기존 계정과의 충돌을 막는다.
+        email = replacement;
+        name = replacement;
+        phone = "w" + id;
+        passwordHash = "!withdrawn";
+        selectedAddress = null;
+        martId = null;
+        locationAgreedAt = null;
+        refreshTokenVersion = Math.addExact(refreshTokenVersion, 1);
+        withdrawnAt = now;
+    }
+
     public void changePasswordHash(String encodedPassword) {
         if (encodedPassword == null || encodedPassword.isBlank()) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
