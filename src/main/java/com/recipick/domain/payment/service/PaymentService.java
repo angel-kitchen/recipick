@@ -85,6 +85,7 @@ public class PaymentService {
     }
 
     // SYSTEM 환불 실행 예약·취소 웹훅용. 한 결제에 SYSTEM 환불은 최대 한 건이라(requestSystemRefund) 아직 REQUESTED인 것만 돌려준다.
+    // 취소 웹훅이 트랜잭션 밖에서 refund.getPayment()를 읽으므로 결제를 함께 조회한다.
     // 잠금 없는 스냅샷이고 최종 판정은 SystemRefundProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
     public Optional<Refund> findRequestedSystemRefund(Long paymentId) {
         return refundRepository.findSystemRefundByPaymentId(paymentId)
