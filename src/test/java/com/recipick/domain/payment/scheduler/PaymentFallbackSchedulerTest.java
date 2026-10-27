@@ -30,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
 // Sweep이 어떤 기준 시각으로 묻고, 받은 ID를 어떤 작업으로 큐에 넣는지만 본다.
-// 어떤 상태가 골라지는지는 WebhookEventRepositoryTest·RefundRepositoryTest가 실제 DB로 본다
+// 어떤 상태가 골라지는지는 WebhookEventRepositoryTest·RefundRepositoryTest·PaymentRepositoryTest가 실제 DB로 본다
 @ExtendWith(MockitoExtension.class)
 class PaymentFallbackSchedulerTest {
 
@@ -129,6 +129,47 @@ class PaymentFallbackSchedulerTest {
     }
 
     @Test
+    @DisplayName("만료 재조회 구간(10분)이 지난 IN_PROGRESS 결제를 지금 시각의 PAYMENT_EXPIRE로 넣는다 — 환불 작업으로 넣지 않는다")
+    void recoverExpiredPayments() {
+        // given
+        given(webhookEventService.findRecoverableIds(
+            NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
+            .willReturn(List.of());
+        given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleInProgressPaymentIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of(88L));
+
+        // when
+        scheduler.sweep();
+
+        // then
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.paymentExpire(88L), NOW_INSTANT);
+        verify(paymentDelayQueue, never()).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(88L), NOW_INSTANT);
+    }
+
+    @Test
+    @DisplayName("만료 결제도 한 번에 BATCH_SIZE건이 차면 마지막 ID 다음부터 이어 읽고, 덜 차면 멈춘다")
+    void continueExpiredPaymentsAfterFullBatch() {
+        // given — 첫 묶음 1~100, 두 번째 묶음 101
+        List<Long> firstBatch = LongStream.rangeClosed(1, BATCH).boxed().toList();
+        given(webhookEventService.findRecoverableIds(
+            NOW.minusMinutes(1), NOW.minusMinutes(10), NOW.minusMinutes(10), 0L, BATCH))
+            .willReturn(List.of());
+        given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of());
+        given(paymentService.findStaleInProgressPaymentIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(firstBatch);
+        given(paymentService.findStaleInProgressPaymentIds(NOW.minusMinutes(10), (long) BATCH, BATCH))
+            .willReturn(List.of(101L));
+
+        // when
+        scheduler.sweep();
+
+        // then
+        verify(paymentDelayQueue, times(BATCH + 1)).enqueueIfEarlier(any(), any());
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.paymentExpire(101L), NOW_INSTANT);
+    }
+
+    @Test
     @DisplayName("한 번에 BATCH_SIZE건이 차면 마지막 ID 다음부터 이어 읽고, 덜 차면 멈춘다")
     void continueAfterFullBatch() {
         // given — 첫 묶음 1~100, 두 번째 묶음 101
@@ -150,7 +191,7 @@ class PaymentFallbackSchedulerTest {
     }
 
     @Test
-    @DisplayName("웹훅 → 회원 환불 → SYSTEM 환불 순서로 복구한다")
+    @DisplayName("웹훅 → 회원 환불 → SYSTEM 환불 → 만료 결제 순서로 복구한다")
     void recoverWebhookEventsBeforeRefunds() {
         // given
         given(webhookEventService.findRecoverableIds(
@@ -158,6 +199,7 @@ class PaymentFallbackSchedulerTest {
             .willReturn(List.of(3L));
         given(paymentService.findStaleMemberRefundIds(NOW.minusMinutes(5), 0L, BATCH)).willReturn(List.of(55L));
         given(paymentService.findStaleSystemRefundIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of(77L));
+        given(paymentService.findStaleInProgressPaymentIds(NOW.minusMinutes(10), 0L, BATCH)).willReturn(List.of(88L));
 
         // when
         scheduler.sweep();
@@ -167,6 +209,7 @@ class PaymentFallbackSchedulerTest {
         inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.webhookProcess(3L), NOW_INSTANT);
         inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.refundReconcile(55L), NOW_INSTANT);
         inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(77L), NOW_INSTANT);
+        inOrder.verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.paymentExpire(88L), NOW_INSTANT);
     }
 
     @Test
