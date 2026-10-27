@@ -53,7 +53,7 @@
    docker exec -i recipick-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 recipick_perf' < scripts/perf/seed-members.sql
    ```
 3. 앱을 `local` 프로필로 실행한다(앱 포트 8080, 관리 포트 8081).
-4. (선택) `docker compose -f docker-compose.monitoring.yml up -d`로 Grafana 대시보드를 함께 본다.
+4. `docker compose -f docker-compose.monitoring.yml up -d`로 모니터링을 실행한다. Before/After 모두 모니터링을 켠 상태에서 측정한다.
 5. 부하를 실행한다(약 5분). Git Bash에서 실행하고, 맨 앞의 `MSYS_NO_PATHCONV=1`은 Git Bash가 `/scripts` 경로를 윈도우 경로로 바꾸지 않게 한다.
    ```bash
    MSYS_NO_PATHCONV=1 docker run --rm -i -v "$(pwd -W)/scripts/perf/k6:/scripts:ro" grafana/k6:1.3.0 run /scripts/product-search.js
