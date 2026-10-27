@@ -180,12 +180,21 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 
 1. 팀에 "○시~○시 배포 정지, 운영 서버 데이터 수정 금지"를 공지한다. 측정이 끝나면 덤프 시점으로 복원하므로 그사이의 변경은 사라진다.
 2. 레포 변수 `DEPLOY_BRANCH`를 `paused`(없는 브랜치 이름)로 바꾼다. 이후 dev 머지는 테스트만 돌고 배포 job은 건너뛴다.
-3. 진행 중인 배포가 없는지 확인한다. Actions 탭에 도는 배포 job이 없고, 서버에서 `flock -n /opt/recipick/.deploy.lock true && echo 비어 있음`이 출력되면 된다.
-4. 덤프를 뜨고 별도 이름으로 복사한다. `pre-deploy-*`는 최근 10개만 남기므로 이후 배포에 밀려 지워지지 않게 한다.
+3. 실행 중이거나 줄 서 있는 배포가 없는지 확인한다. 배포 job은 앞의 배포가 끝날 때까지 기다리고(`cancel-in-progress: false`), 이미 줄 선 job은 2번에서 변수를 바꿔도 그대로 실행된다.
+   ```bash
+   gh run list --workflow CI --status in_progress
+   gh run list --workflow CI --status queued
+   gh run list --workflow CI --status pending
+   ```
+   남은 실행은 Actions 탭에서 취소하거나 끝날 때까지 기다린다. 목록이 모두 비고 나서 서버에서 `flock -n /opt/recipick/.deploy.lock true && echo 비어 있음`이 출력되면 된다.
+4. 덤프를 뜨고 별도 이름으로 복사한다. `pre-deploy-*`는 최근 10개만 남기므로 이후 배포에 밀려 지워지지 않게 한다. 꼬리표를 실행마다 다르게 붙여 이번 실행이 만든 파일만 복사한다. 덤프가 실패하거나 만들어지지 않으면(MySQL 컨테이너가 없으면 `backup.sh`는 덤프 없이 성공으로 끝난다) `cp`가 파일을 찾지 못해 멈추므로, 예전 덤프가 기준으로 잡히지 않는다.
    ```bash
    cd /opt/recipick
-   ./scripts/backup.sh pre-deploy loadtest
-   cp -p "$(ls -1t backups/pre-deploy-*-loadtest.sql.gz | head -1)" backups/loadtest-$(date +%Y%m%d).sql.gz
+   LABEL=loadtest-$(date +%Y%m%d-%H%M) bash -euo pipefail -c '
+     ./scripts/backup.sh pre-deploy "$LABEL"
+     cp -p backups/pre-deploy-*-"$LABEL".sql.gz "backups/$LABEL.sql.gz"
+     echo "기준 덤프: backups/$LABEL.sql.gz"
+   '
    ```
 
 **측정 중**
@@ -194,22 +203,22 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
   ```bash
   cd /opt/recipick && docker compose up -d --no-deps --force-recreate app
   ```
-- 측정 데이터를 적재한 뒤 회차마다 같은 데이터에서 시작해야 하면, 적재 직후 4번과 같은 방법으로 `backups/loadtest-base.sql.gz`를 만들고 회차 사이마다 아래 복원을 그 파일로 한다.
+- 측정 데이터를 적재한 뒤 회차마다 같은 데이터에서 시작해야 하면, 적재 직후 4번을 한 번 더 실행하고 출력된 파일로 회차 사이마다 아래 복원을 한다.
 
 **끝난 뒤**
 
 1. 측정 전 덤프로 복원한다. 7절 전체 복원과 같은 순서이고, 앱은 .env의 현재 태그로 다시 띄운다.
    ```bash
    cd /opt/recipick
-   DUMP=backups/loadtest-<날짜>.sql.gz bash -euo pipefail -c '
+   DUMP=backups/loadtest-<시각>.sql.gz bash -euo pipefail -c '
      ./scripts/restore-check.sh "$DUMP"
      docker compose stop app
      docker exec recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql -e \"DROP DATABASE \$MYSQL_DATABASE; CREATE DATABASE \$MYSQL_DATABASE\""
      gunzip -c "$DUMP" | docker exec -i recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql \$MYSQL_DATABASE"
      echo "가져오기 성공. 앱을 다시 띄운다"
      docker compose up -d --no-deps app
-   ' || echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"
+   ' || { echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"; false; }
    ```
    `docker inspect -f '{{.State.Health.Status}}' recipick-app`이 `healthy`가 될 때까지 기다린다.
-2. `DEPLOY_BRANCH`를 `dev`로 되돌린다. 워크플로에 수동 실행이 없어서, 정지 중에 머지된 코드는 **다음 dev 머지 때** 함께 배포된다. 바로 반영해야 하면 dev에 작은 PR을 하나 머지한다.
+2. 복원이 성공하고 앱이 `healthy`가 된 뒤에만 `DEPLOY_BRANCH`를 `dev`로 되돌린다. 복원이 중단됐으면 배포를 멈춘 채로 원인부터 본다. 워크플로에 수동 실행이 없어서, 정지 중에 머지된 코드는 **다음 dev 머지 때** 함께 배포된다. 바로 반영해야 하면 dev에 작은 PR을 하나 머지한다.
 3. 팀에 배포 재개를 알린다.
