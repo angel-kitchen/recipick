@@ -1,0 +1,21 @@
+# 운영 프로필(SPRING_PROFILES_ACTIVE=prod). 접속 정보와 비밀은 환경 변수로만 받는다(deploy/.env.example 참고).
+# 프로필 전용 파일이므로 spring.config.activate.on-profile을 적지 않는다(적으면 기동 오류).
+spring:
+  datasource:
+    hikari:
+      # 컨벤션의 팀 공통 락 대기 시간(5초). 로컬 예시와 같은 값이어야 락 실패 시 COMMON-010 규칙이 지켜진다
+      connection-init-sql: SET SESSION innodb_lock_wait_timeout = 5
+  jpa:
+    hibernate:
+      # DDL·마이그레이션 파일이 없어 첫 배포부터 스키마를 앱이 만들어야 한다. 컬럼 삭제·타입 변경은 수동 처리
+      ddl-auto: update
+  lifecycle:
+    # graceful shutdown 때 진행 중 요청을 기다리는 상한
+    timeout-per-shutdown-phase: 20s
+
+server:
+  # 리버스 프록시 뒤에서 X-Forwarded-* 헤더로 실제 클라이언트 주소·스킴을 복원한다(감사 IP 규칙).
+  # Tomcat 기본 internal-proxies 범위가 도커 네트워크 대역을 포함하므로 프록시 컨테이너만 신뢰된다
+  forward-headers-strategy: native
+  # 재시작 배포 때 새 요청은 거부하고 진행 중 요청은 끝낸 뒤 내린다
+  shutdown: graceful
