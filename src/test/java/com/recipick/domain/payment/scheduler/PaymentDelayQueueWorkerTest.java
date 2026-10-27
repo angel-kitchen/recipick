@@ -5,6 +5,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
 import com.recipick.domain.payment.facade.SystemRefundExecutionFacade;
@@ -40,12 +41,16 @@ class PaymentDelayQueueWorkerTest {
     @Mock
     private SystemRefundExecutionFacade systemRefundExecutionFacade;
 
+    @Mock
+    private PaymentExpirationFacade paymentExpirationFacade;
+
     private PaymentDelayQueueWorker worker;
 
     @BeforeEach
     void setUp() {
         worker = new PaymentDelayQueueWorker(paymentDelayQueue, paymentReconciliationFacade,
-            refundReconciliationFacade, systemRefundExecutionFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+            refundReconciliationFacade, systemRefundExecutionFacade, paymentExpirationFacade,
+            Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
     }
 
     @Test
@@ -91,7 +96,7 @@ class PaymentDelayQueueWorkerTest {
 
         // then
         verify(refundReconciliationFacade).reconcile(5L);
-        verifyNoInteractions(paymentReconciliationFacade, systemRefundExecutionFacade);
+        verifyNoInteractions(paymentReconciliationFacade, systemRefundExecutionFacade, paymentExpirationFacade);
     }
 
     @Test
@@ -106,7 +111,22 @@ class PaymentDelayQueueWorkerTest {
 
         // then
         verify(systemRefundExecutionFacade).execute(77L);
-        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, paymentExpirationFacade);
+    }
+
+    @Test
+    @DisplayName("PAYMENT_EXPIRE는 결제 만료 Facade에 넘긴다 — 같은 숫자 ID라도 환불 작업으로 보내지 않는다")
+    void dispatchPaymentExpire() {
+        // given
+        given(paymentDelayQueue.popDue(NOW, PaymentDelayQueueWorker.BATCH_SIZE))
+            .willReturn(List.of(PaymentDelayTask.paymentExpire(77L)));
+
+        // when
+        worker.poll();
+
+        // then
+        verify(paymentExpirationFacade).execute(77L);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade);
     }
 
     @Test
@@ -119,6 +139,7 @@ class PaymentDelayQueueWorkerTest {
         worker.poll();
 
         // then
-        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade,
+            paymentExpirationFacade);
     }
 }

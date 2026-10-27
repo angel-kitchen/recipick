@@ -54,6 +54,12 @@ public class PaymentService {
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND));
     }
 
+    // 결제 만료 작업의 잠금 없는 스냅샷. 큐에 남은 오래된 작업은 결제가 없을 수 있어 예외 대신 빈 값을 돌려준다.
+    // 상태 변경은 각 Processor가 PAYMENT 잠금 아래에서 다시 읽어 판단한다
+    public Optional<Payment> findById(Long paymentId) {
+        return paymentRepository.findById(paymentId);
+    }
+
     // 상태를 바꾸는 흐름의 첫 줄에서 부른다. 호출자 트랜잭션에 참여해야 잠금이 유지된다
     @Transactional
     public Payment getByOrderIdForUpdate(Long orderId) {
