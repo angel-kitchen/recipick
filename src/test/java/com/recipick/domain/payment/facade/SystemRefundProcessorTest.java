@@ -172,6 +172,27 @@ class SystemRefundProcessorTest {
     }
 
     @Test
+    @DisplayName("이미 실패로 끝난 환불은 다른 결과가 와도 다시 바꾸지 않고 FAILED를 돌려준다")
+    void alreadyFailed() {
+        // given
+        Payment payment = failedPayment(PAYMENT_ID);
+        Refund refund = systemRefund(payment);
+        refund.fail("cancel_old", RefundFailureType.PG_FAILED, "cancellation FAILED");
+        stub(payment, refund);
+
+        // when
+        RefundStatus status =
+            processor.apply(PAYMENT_ID, REFUND_ID, result(PortOneCancelOutcome.SUCCEEDED, CANCELED_AT));
+
+        // then
+        assertThat(status).isEqualTo(RefundStatus.FAILED);
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(refund.getPortoneCancellationId()).isEqualTo("cancel_old");
+        assertThat(refund.getFailureType()).isEqualTo(RefundFailureType.PG_FAILED);
+        assertThat(refund.getCompletedAt()).isNull();
+    }
+
+    @Test
     @DisplayName("결제가 FAILED가 아니면 SYSTEM 환불 대상이 아니라 호출자 버그로 막는다")
     void rejectsPaymentNotFailed() {
         // given
