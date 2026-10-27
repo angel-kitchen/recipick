@@ -187,12 +187,15 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
    gh run list --workflow CI --status pending
    ```
    남은 실행은 Actions 탭에서 취소하거나 끝날 때까지 기다린다. 목록이 모두 비고 나서 서버에서 `flock -n /opt/recipick/.deploy.lock true && echo 비어 있음`이 출력되면 된다.
-4. 덤프를 뜨고 별도 이름으로 복사한다. `pre-deploy-*`는 최근 10개만 남기므로 이후 배포에 밀려 지워지지 않게 한다. 꼬리표를 실행마다 다르게 붙여 이번 실행이 만든 파일만 복사한다. 덤프가 실패하거나 만들어지지 않으면(MySQL 컨테이너가 없으면 `backup.sh`는 덤프 없이 성공으로 끝난다) `cp`가 파일을 찾지 못해 멈추므로, 예전 덤프가 기준으로 잡히지 않는다.
+4. 덤프를 뜨고 별도 이름으로 복사한다. `pre-deploy-*`는 최근 10개만 남기므로 이후 배포에 밀려 지워지지 않게 한다. 꼬리표에 초와 실행 PID를 붙여 이번 실행이 만든 파일만 고르고, 그 파일이 정확히 하나일 때만 복사한다. 덤프가 실패하거나 만들어지지 않으면(MySQL 컨테이너가 없으면 `backup.sh`는 덤프 없이 성공으로 끝난다) 여기서 멈추므로, 예전 덤프가 기준으로 잡히지 않는다.
    ```bash
    cd /opt/recipick
-   LABEL=loadtest-$(date +%Y%m%d-%H%M) bash -euo pipefail -c '
+   bash -euo pipefail -c '
+     LABEL="loadtest-$(date +%Y%m%d-%H%M%S)-$$"
      ./scripts/backup.sh pre-deploy "$LABEL"
-     cp -p backups/pre-deploy-*-"$LABEL".sql.gz "backups/$LABEL.sql.gz"
+     set -- backups/pre-deploy-*-"$LABEL".sql.gz
+     [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "이번 실행의 덤프를 찾지 못했다. 중단"; exit 1; }
+     cp -p "$1" "backups/$LABEL.sql.gz"
      echo "기준 덤프: backups/$LABEL.sql.gz"
    '
    ```
