@@ -389,24 +389,27 @@ Table AUTO_CART_ITEM {
 // auto_cart_request_id는 AI로 미리보기를 만든 경우에만 채운다. 7일 지난 PREVIEWED 요청을 정리할 때는
 // 같은 트랜잭션에서 이 값을 먼저 NULL로 바꾼 뒤 요청을 삭제한다(FK에 ON DELETE를 두지 않고 배치가 처리).
 // success는 AI 응답을 받아 결과에 썼는지를 뜻한다: PREVIEWED·NEEDS_SELECTION·NO_MATCH·RECOMMENDED는 true,
-// FALLBACK은 false이고 failure_reason을 채운다.
+// FALLBACK은 false이고 failure_reason을 채운다. 성공 상태에서는 failure_reason이 NULL이다.
+// parsed_result와 토큰 수는 AI 응답을 받은 만큼만 채우고, 응답을 하나도 받지 못한 FALLBACK이면 NULL이다.
+// matched_recipe_ids는 응답에 담은 레시피 ID이며, 담은 레시피가 없으면(NO_MATCH 등) NULL이다.
+// model과 latency_ms는 실패해도 호출한 모델과 실패까지 걸린 시간을 남긴다.
 Table AI_REQUEST_LOG {
   id bigint [pk]
-  member_id bigint
+  member_id bigint [not null]
   auto_cart_request_id bigint [null]
-  request_type varchar(20)
-  raw_text text
-  parsed_result json
-  matched_recipe_ids text
-  result_status varchar(20)
-  success boolean
-  failure_reason varchar(500)
-  model varchar(50)
-  input_tokens int
-  output_tokens int
-  cache_read_tokens int
-  latency_ms int
-  created_at datetime
+  request_type varchar(20) [not null]
+  raw_text text [not null]
+  parsed_result json [null]
+  matched_recipe_ids text [null]
+  result_status varchar(20) [not null]
+  success boolean [not null]
+  failure_reason varchar(500) [null]
+  model varchar(50) [not null]
+  input_tokens int [null]
+  output_tokens int [null]
+  cache_read_tokens int [null]
+  latency_ms int [not null]
+  created_at datetime [not null]
   indexes {
     (created_at)
     (member_id, created_at)
