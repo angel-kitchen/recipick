@@ -265,7 +265,7 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
     { "Effect": "Allow", "Action": "ssmmessages:OpenDataChannel", "Resource": "arn:aws:ssm:*:*:session/${aws:username}-*" },
     {
       "Effect": "Allow",
-      "Action": ["ssm:DescribeSessions", "ssm:GetConnectionStatus", "ssm:DescribeInstanceInformation", "ec2:DescribeInstances"],
+      "Action": ["ssm:DescribeSessions", "ssm:GetConnectionStatus", "ssm:DescribeInstanceInformation", "ssm:DescribeInstanceProperties", "ec2:DescribeInstances"],
       "Resource": "*"
     },
     { "Effect": "Allow", "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"], "Resource": "*" },
