@@ -1,0 +1,42 @@
+# 모니터링(태헌 담당, 필수 11). 첫 배포에는 올리지 않고 앱 배포가 안정된 뒤 추가한다.
+# 실행: docker compose -f compose.monitoring.yml up -d. 부하 테스트 중에는 내려서 측정을 오염시키지 않는다.
+# 두 서비스 모두 호스트에 포트를 노출하지 않는다. 접근 방식(nginx 경로 + 인증 또는 SSM 포트 포워딩)은 미결.
+name: recipick-monitoring
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: recipick-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: recipick-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    logging: *logging
+
+networks:
+  default:
+    name: recipick
+    external: true
+
+volumes:
+  prometheus-data:
+  grafana-data:

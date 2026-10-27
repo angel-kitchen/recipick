@@ -1,0 +1,31 @@
+# HTTPS 단계. 인증서 발급 뒤 DOMAIN을 실제 도메인으로 바꾸고 확장자 .disabled를 떼며, app.conf는 app.conf.disabled로 바꾼다.
+# 그 뒤 `docker compose exec nginx nginx -s reload`.
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    location / {
+        include /etc/nginx/proxy_params;
+        proxy_pass http://app;
+    }
+}
