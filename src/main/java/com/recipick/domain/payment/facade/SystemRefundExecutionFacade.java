@@ -14,7 +14,6 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.portone.PortOnePaymentClient;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import com.recipick.infra.portone.dto.PortOneCancellation;
-import com.recipick.infra.portone.dto.PortOneCancellationStatus;
 import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
@@ -179,6 +178,11 @@ public class SystemRefundExecutionFacade {
         if (RefundCancellationRules.hasOtherSucceededCancellation(portOnePayment, cancellation)) {
             return Decision.manualReview("고른 취소 외에 성공한 취소가 또 있음: selected=" + cancellation.id());
         }
+        // 고른 취소가 성공했어도 같은 결제에 API가 아닌 취소가 살아 있으면 결제 전체의 최종 취소 상태를 단정할 수 없다.
+        // 환불을 닫지 않고 운영에 넘긴다
+        if (RefundCancellationRules.hasActiveNonApiCancellation(portOnePayment)) {
+            return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨: selected=" + cancellation.id());
+        }
         PortOneCancelResult result = cancellation.toCancelResult();
         RefundStatus status = systemRefundProcessor.apply(refund.getPayment().getId(), refund.getId(), result);
         log.info("SYSTEM 환불 기존 취소 반영: refundId={}, cancellationId={}, status={}",
@@ -190,7 +194,7 @@ public class SystemRefundExecutionFacade {
     // 이미 콘솔에서 취소 중·취소됐거나 부분 취소된 결제를 자동으로 다시 취소하지 않는다(외부 취소 정합화 몫)
     private Decision requestCancel(Refund refund, PortOnePayment portOnePayment) {
         // 콘솔 취소가 처리 중이면 결제는 아직 PAID로 보인다. 서버 키가 달라 PortOne 멱등성이 둘을 묶어 주지 못하므로 먼저 막는다
-        if (hasActiveExternalCancellation(portOnePayment)) {
+        if (RefundCancellationRules.hasActiveNonApiCancellation(portOnePayment)) {
             return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨");
         }
         if (portOnePayment.status() != PortOnePaymentStatus.PAID) {
@@ -206,13 +210,6 @@ public class SystemRefundExecutionFacade {
         log.info("SYSTEM 환불 취소 요청 반영: refundId={}, outcome={}, status={}",
             refund.getId(), result.outcome(), status);
         return decide(status, "취소 결과 미확정: outcome=" + result.outcome() + ", detail=" + result.detail());
-    }
-
-    // 콘솔·PortOne 관리자·차지백 등 API가 아닌 취소 중 실패로 끝나지 않은 것이 있는지. 실패한 과거 시도는 막지 않는다
-    private boolean hasActiveExternalCancellation(PortOnePayment portOnePayment) {
-        return portOnePayment.cancellations().stream()
-            .anyMatch(candidate -> candidate.trigger() != PortOneCancellationTrigger.API
-                && candidate.status() != PortOneCancellationStatus.FAILED);
     }
 
     // 환불이 끝났으면(COMPLETED·FAILED) 이 작업도 끝이다. REQUESTED로 남았으면 다시 실행한다

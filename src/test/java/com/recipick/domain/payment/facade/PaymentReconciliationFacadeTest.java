@@ -636,6 +636,7 @@ class PaymentReconciliationFacadeTest {
         verify(paymentService, never()).findRefundByPortoneCancellationId(anyString());
     }
 
+
     @Test
     @DisplayName("취소 ID가 없고 API 전액 취소가 한 건이 아니면 MANUAL_REVIEW")
     void manualReviewWhenNoUniqueApiCancellation() {
@@ -1048,6 +1049,56 @@ class PaymentReconciliationFacadeTest {
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
         verifyNoInteractions(systemRefundProcessor, paymentCancelProcessor);
+    }
+
+    @Test
+    @DisplayName("SYSTEM 환불의 API 취소가 성공했어도 같은 결제에 콘솔 취소가 처리 중이면 Processor를 부르지 않고 MANUAL_REVIEW — 실행 Facade와 같은 기준")
+    void manualReviewWhenNonApiCancellationActiveOnSystemRefund() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CANCELLATION_ID));
+        Payment failed = givenOurFailedPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID))
+            .willReturn(Optional.of(systemRefund(failed, CANCELLATION_ID)));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.API),
+            cancellation("cancel_console", PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.CONSOLE)));
+        givenManualReviewRecorded("API가 아닌 취소");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(systemRefundProcessor, paymentCancelProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("곁에 있는 콘솔 취소가 실패로 끝난 시도면 막지 않고 SYSTEM 환불을 반영해 PROCESSED")
+    void applySystemRefundWhenNonApiCancellationFailed() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CANCELLATION_ID));
+        Payment failed = givenOurFailedPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID))
+            .willReturn(Optional.of(systemRefund(failed, CANCELLATION_ID)));
+        PortOneCancellation api = cancellation(
+            CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT, PortOneCancellationTrigger.API);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED, api,
+            cancellation("cancel_console", PortOneCancellationStatus.FAILED, AMOUNT, null,
+                PortOneCancellationTrigger.CONSOLE)));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, api.toCancelResult()))
+            .willReturn(RefundStatus.COMPLETED);
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verifyNoInteractions(paymentCancelProcessor, paymentDelayQueue);
     }
 
     @Test

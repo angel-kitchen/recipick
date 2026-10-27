@@ -222,7 +222,7 @@ public class PaymentReconciliationFacade {
         // TX-B. 환불 종류에 맞는 Processor로 넘긴다. 값을 받는 switch 식이라 요청 주체가 늘면 컴파일이 실패한다
         return switch (refund.getRequestedBy()) {
             case MEMBER -> applyMemberRefund(payment, refund, cancellation);
-            case SYSTEM -> applySystemRefund(payment, refund, cancellation);
+            case SYSTEM -> applySystemRefund(payment, portOnePayment, refund, cancellation);
             // 외부·관리자 환불은 아직 자동 반영 규칙이 없다
             case EXTERNAL, ADMIN -> Decision.manualReview(
                 "자동 반영 대상 환불이 아님: refundId=" + refund.getId() + ", requestedBy=" + refund.getRequestedBy());
@@ -257,11 +257,17 @@ public class PaymentReconciliationFacade {
     }
 
     // SYSTEM 환불. 결제·주문은 이미 닫혀 있어 환불 행만 바꾼다. 끝난 환불은 apply가 그 상태를 돌려주므로 여러 번 와도 안전하다
-    private Decision applySystemRefund(Payment payment, Refund refund, PortOneCancellation cancellation) {
+    private Decision applySystemRefund(Payment payment, PortOnePayment portOnePayment, Refund refund,
+                                       PortOneCancellation cancellation) {
         // Processor도 잠금 아래에서 다시 막지만 그때는 예외라 사유가 내부 오류로 뭉개진다. 운영이 읽을 사유를 남기려고 먼저 본다
         if (payment.getStatus() != PaymentStatus.FAILED) {
             return Decision.manualReview("SYSTEM 환불 대상 결제가 FAILED가 아님: refundId=" + refund.getId()
                 + ", status=" + payment.getStatus());
+        }
+        // 실행 Facade와 같은 기준이다. 웹훅이 먼저 와도 같은 PortOne 상태를 경로마다 다르게 판정하지 않는다
+        if (RefundCancellationRules.hasActiveNonApiCancellation(portOnePayment)) {
+            return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨: refundId=" + refund.getId()
+                + ", selected=" + cancellation.id());
         }
         PortOneCancelResult result = cancellation.toCancelResult();
         RefundStatus status = systemRefundProcessor.apply(payment.getId(), refund.getId(), result);

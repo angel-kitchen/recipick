@@ -392,6 +392,47 @@ class SystemRefundExecutionFacadeTest {
         verifyNoInteractions(systemRefundProcessor);
     }
 
+    @Test
+    @DisplayName("서버 API 취소가 성공했어도 같은 결제에 콘솔 취소가 처리 중이면 환불을 닫지 않고 MANUAL_REVIEW — 결제 전체의 취소 상태를 단정할 수 없다")
+    void manualReviewWhenNonApiCancellationActiveBesideExisting() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation consoleRequested = new PortOneCancellation("cancel_console",
+            PortOneCancellationStatus.REQUESTED, AMOUNT, NOW.minusMinutes(1), null, PortOneCancellationTrigger.CONSOLE);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(
+            PortOnePaymentStatus.CANCELED, apiCancellation(PortOneCancellationStatus.SUCCEEDED), consoleRequested));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("곁에 있는 콘솔 취소가 실패로 끝난 시도면 막지 않고 서버 API 취소 결과를 반영해 RESOLVED")
+    void applyExistingWhenNonApiCancellationFailed() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation consoleFailed = new PortOneCancellation("cancel_console",
+            PortOneCancellationStatus.FAILED, AMOUNT, NOW.minusMinutes(2), null, PortOneCancellationTrigger.CONSOLE);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(
+            PortOnePaymentStatus.CANCELED, apiCancellation(PortOneCancellationStatus.SUCCEEDED), consoleFailed));
+        given(systemRefundProcessor.apply(eq(PAYMENT_ID), eq(REFUND_ID), any())).willReturn(RefundStatus.COMPLETED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        ArgumentCaptor<PortOneCancelResult> result = ArgumentCaptor.forClass(PortOneCancelResult.class);
+        verify(systemRefundProcessor).apply(eq(PAYMENT_ID), eq(REFUND_ID), result.capture());
+        assertThat(result.getValue().cancellationId()).isEqualTo(CANCELLATION_ID);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+    }
+
     // ---------- 재실행 경계 ----------
 
     @Test
