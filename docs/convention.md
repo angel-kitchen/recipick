@@ -154,7 +154,7 @@ com.{project}
 | --- | --- |
 | `domain/member` | 채빈 |
 | `domain/product` | 태헌 |
-| `domain/recipe` | 보민(AI 기능은 공동) |
+| `domain/recipe` | 보민(AI 기능 포함) |
 | `domain/order` | 준희 |
 | `domain/payment` | 정윤 |
 | `global/security`, `global/exception`, `global/response` | 채빈(변경 시 전체 공유) |
