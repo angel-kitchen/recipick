@@ -23,6 +23,7 @@ import com.recipick.domain.payment.scheduler.PaymentDelayQueueWorker;
 import com.recipick.domain.payment.scheduler.PaymentFallbackScheduler;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
+import com.recipick.domain.payment.service.PaymentDelayTaskType;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
@@ -56,6 +57,7 @@ import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -67,8 +69,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 // 7단계 통합 테스트의 공통 준비물. 웹훅 수신 → 큐 → Worker → 결제·환불 반영을 실제 MySQL·Redis로 잇는다.
 // 트랜잭션을 걸지 않는다 — Worker·Facade가 각자 커밋하므로 테스트가 만든 행을 @AfterEach에서 직접 지운다.
-// 큐 키는 JVM 전체가 함께 쓰므로 자기 member만 지운다. Worker는 실행 시각이 된 작업을 모두 꺼내므로, poll 전에
-// 다른 테스트의 작업이 섞여 있지 않은지 먼저 확인한다(pollOnly) — 남의 행을 조용히 처리해 오염시키지 않기 위해서다.
+// 큐 키는 JVM 전체가 함께 쓰므로 테스트가 만든 작업은 자기 member만 지운다. 예외로, 주문 통합 테스트가 결제 생성 커밋 뒤
+// 남긴 PAYMENT_EXPIRE 작업은 이 테스트와의 소유 관계를 알 수 없어 각 테스트 시작 전에 종류별로 정리한다.
+// Worker는 실행 시각이 된 작업을 모두 꺼내므로, poll 전에 다른 테스트의 작업이 섞여 있지 않은지 먼저 확인한다(pollOnly)
+// — 남의 행을 조용히 처리해 오염시키지 않기 위해서다.
 // 시각은 모두 Clock 빈 기준으로 만든다 — 테스트 JVM 시간대가 Clock(Asia/Seoul)과 다를 때 기준이 어긋나지 않게 하기 위해서다
 abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
 
@@ -79,6 +83,7 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
     protected static final int ORDER_QUANTITY = 2;
     protected static final String CANCEL_REASON = "단순 변심";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String PAYMENT_EXPIRE_PREFIX = PaymentDelayTaskType.PAYMENT_EXPIRE.name() + ":";
 
     // PENDING_PAYMENT 주문은 회원당 하나(pending_member_id UNIQUE)라 픽스처마다 회원 ID를 새로 쓴다
     private static final AtomicLong MEMBER_SEQUENCE = new AtomicLong(92_000L);
@@ -127,6 +132,20 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
     private final List<Long> paymentIds = new ArrayList<>();
     private final List<String> portonePaymentIds = new ArrayList<>();
 
+    // 주문을 만드는 다른 통합 테스트가 실제 시각 +5분으로 남긴 만료 작업이 이 테스트의 pollOnly·Worker에 섞이지 않게 한다.
+    // 이 시점에는 이 테스트의 픽스처가 아직 없어 자기 작업을 지울 일이 없다. Redis 전체를 비우지 않고 이 종류만 지운다.
+    // 테스트를 병렬로 돌리게 되면 이 정리 방식은 다시 검토해야 한다
+    @BeforeEach
+    void removePaymentExpireTasksFromOtherTests() {
+        Set<String> members = redis.opsForZSet().range(PaymentDelayQueue.QUEUE_KEY, 0, -1);
+        if (members == null || members.isEmpty()) {
+            return;
+        }
+        members.stream()
+            .filter(member -> member.startsWith(PAYMENT_EXPIRE_PREFIX))
+            .forEach(member -> redis.opsForZSet().remove(PaymentDelayQueue.QUEUE_KEY, member));
+    }
+
     // 큐 member → 웹훅·환불 → 결제 → 주문 → 상품 → 마트 순으로 지운다(외래키 역순)
     @AfterEach
     void cleanUpFlow() {
@@ -137,6 +156,7 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
         webhookEventRepository.deleteAll(events);
 
         if (!paymentIds.isEmpty()) {
+            paymentIds.forEach(paymentId -> removeTask(PaymentDelayTask.paymentExpire(paymentId)));
             List<Refund> refunds = refundRepository.findAllByPaymentIdIn(paymentIds);
             refunds.forEach(refund -> {
                 removeTask(PaymentDelayTask.refundReconcile(refund.getId()));
