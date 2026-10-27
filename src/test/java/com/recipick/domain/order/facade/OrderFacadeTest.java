@@ -63,6 +63,21 @@ class OrderFacadeTest {
     }
 
     @Test
+    @DisplayName("외부 취소로 주문을 종료하면 재고는 건드리지 않고 복구할 상품 수량을 돌려준다")
+    void closeByExternalCancel() {
+        // given
+        given(orderService.closeByExternalCancel(1L, "PortOne 콘솔 전액 취소")).willReturn(List.of(
+                OrderItem.builder().productId(10L).quantity(2).build()));
+
+        // when
+        List<StockQuantity> result = orderFacade.closeByExternalCancel(1L, "PortOne 콘솔 전액 취소");
+
+        // then
+        assertThat(result).containsExactly(new StockQuantity(10L, 2));
+        verify(productStockService, never()).increaseStocks(any());
+    }
+
+    @Test
     @DisplayName("복구할 상품 수량만큼 재고를 복구한다")
     void restoreStock() {
         // given

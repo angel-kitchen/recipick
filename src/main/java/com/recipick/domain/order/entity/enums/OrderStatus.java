@@ -11,7 +11,8 @@ public enum OrderStatus {
     public boolean canTransitionTo(OrderStatus next) {
         return switch (this) {
             case PENDING_PAYMENT -> next == PAID || next == CANCELED;
-            case PAID -> next == CANCEL_REQUESTED;
+            // PAID → REFUNDED는 PG가 이미 취소를 끝낸 외부 취소 전용이다. 다른 환불은 CANCEL_REQUESTED를 거친다
+            case PAID -> next == CANCEL_REQUESTED || next == REFUNDED;
             case CANCEL_REQUESTED -> next == PAID || next == REFUNDED;
             default -> false;
         };

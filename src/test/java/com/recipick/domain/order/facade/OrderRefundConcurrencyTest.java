@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
+import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.repository.OrderItemRepository;
@@ -69,6 +70,55 @@ class OrderRefundConcurrencyTest extends IntegrationTestSupport {
     @DisplayName("같은 주문에 환불 성공이 5건 동시에 와도 재고는 한 번만 복구되고 이력도 한 건만 남는다")
     void markRefunded_concurrent() throws Exception {
         // given
+        Order cancelRequested = Order.builder()
+                .memberId(9001L)
+                .martId(saveMartAndProduct())
+                .status(OrderStatus.PAID)
+                .martStatus(MartStatus.RECEIVED)
+                .build();
+        cancelRequested.requestMemberCancel(null);
+        saveOrderWithItem(cancelRequested);
+
+        // when
+        // 결제 Facade처럼 한 트랜잭션 안에서 환불 완료 후 재고를 복구한다
+        runConcurrently(5, () -> transactionTemplate.executeWithoutResult(status -> {
+            List<StockQuantity> items = orderFacade.markRefunded(orderId);
+            orderFacade.restoreStock(items);
+        }));
+
+        // then
+        assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity()).isEqualTo(7);
+        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(orderStatusHistoryRepository.findAllByOrderId(orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("같은 주문에 외부 취소가 5건 동시에 와도 재고는 한 번만 복구되고 이력도 한 건만 남는다")
+    void closeByExternalCancel_concurrent() throws Exception {
+        // given
+        saveOrderWithItem(Order.builder()
+                .memberId(9001L)
+                .martId(saveMartAndProduct())
+                .status(OrderStatus.PAID)
+                .martStatus(MartStatus.PREPARING)
+                .build());
+
+        // when
+        runConcurrently(5, () -> transactionTemplate.executeWithoutResult(status -> {
+            List<StockQuantity> items = orderFacade.closeByExternalCancel(orderId, "PortOne 콘솔 전액 취소");
+            orderFacade.restoreStock(items);
+        }));
+
+        // then
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity()).isEqualTo(7);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.EXTERNAL_CANCELED);
+        assertThat(orderStatusHistoryRepository.findAllByOrderId(orderId)).hasSize(1);
+    }
+
+    // 재고 5개짜리 상품 하나를 가진 마트를 만들고 마트 ID를 돌려준다
+    private Long saveMartAndProduct() {
         Mart mart = martRepository.save(Mart.builder()
                 .regionId(31L)
                 .name("동시성 테스트 마트")
@@ -82,39 +132,32 @@ class OrderRefundConcurrencyTest extends IntegrationTestSupport {
                 .totalQuantity(5)
                 .deleted(false)
                 .build());
-        Order cancelRequested = Order.builder()
-                .memberId(9001L)
-                .martId(mart.getId())
-                .status(OrderStatus.PAID)
-                .martStatus(MartStatus.RECEIVED)
-                .build();
-        cancelRequested.requestMemberCancel(null);
-        Order order = orderRepository.save(cancelRequested);
-        orderItemRepository.save(OrderItem.builder()
-                .order(order)
-                .productId(product.getId())
-                .quantity(2)
-                .build());
         martId = mart.getId();
         productId = product.getId();
-        orderId = order.getId();
+        return martId;
+    }
 
-        int threads = 5;
+    private void saveOrderWithItem(Order order) {
+        Order saved = orderRepository.save(order);
+        orderItemRepository.save(OrderItem.builder()
+                .order(saved)
+                .productId(productId)
+                .quantity(2)
+                .build());
+        orderId = saved.getId();
+    }
+
+    // 모든 스레드가 준비된 뒤 한 번에 출발시켜 같은 주문 행 잠금을 실제로 겹치게 한다
+    private void runConcurrently(int threads, Runnable task) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch start = new CountDownLatch(1);
-
-        // when
         List<Future<?>> futures = new ArrayList<>();
         for (int i = 0; i < threads; i++) {
             futures.add(executor.submit(() -> {
                 ready.countDown();
                 start.await();
-                // 결제 Facade처럼 한 트랜잭션 안에서 환불 완료 후 재고를 복구한다
-                transactionTemplate.executeWithoutResult(status -> {
-                    List<StockQuantity> items = orderFacade.markRefunded(orderId);
-                    orderFacade.restoreStock(items);
-                });
+                task.run();
                 return null;
             }));
         }
@@ -124,10 +167,5 @@ class OrderRefundConcurrencyTest extends IntegrationTestSupport {
             future.get(10, TimeUnit.SECONDS);
         }
         executor.shutdown();
-
-        // then
-        assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity()).isEqualTo(7);
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        assertThat(orderStatusHistoryRepository.findAllByOrderId(orderId)).hasSize(1);
     }
 }

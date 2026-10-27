@@ -313,6 +313,39 @@ class OrderTest {
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"RECEIVED", "PREPARING", "SHIPPING", "DELIVERED"})
+    @DisplayName("결제 완료 주문을 외부 취소로 종료하면 취소 요청 없이 환불 완료가 되고 외부 취소 사유가 남으며 마트 처리 상태는 그대로다")
+    void closeByExternalCancel(MartStatus martStatus) {
+        // given
+        Order order = order(OrderStatus.PAID, martStatus);
+
+        // when
+        order.closeByExternalCancel("PortOne 콘솔 전액 취소");
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.EXTERNAL_CANCELED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("PortOne 콘솔 전액 취소");
+        assertThat(order.getCanceledAt()).isNotNull();
+        assertThat(order.getMartStatus()).isEqualTo(martStatus);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = "PAID", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("결제 완료가 아닌 주문은 외부 취소로 종료할 수 없다")
+    void closeByExternalCancel_notPaid(OrderStatus status) {
+        // given
+        Order order = order(status, MartStatus.RECEIVED);
+
+        // when, then
+        assertThatThrownBy(() -> order.closeByExternalCancel(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(status);
+    }
+
     @Test
     @DisplayName("결제 대기 주문에 금액을 확정한다")
     void confirmAmounts() {

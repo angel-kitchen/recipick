@@ -154,6 +154,7 @@
     - 회원 취소(결제 전·후)도 결제 Facade의 호출을 받아 주문 상태·재고·이력을 처리합니다. 결제 전은 `CANCELED`, 결제 후는 `CANCEL_REQUESTED` → `REFUNDED`로 전이합니다.
     - 같은 결과가 반복 전달돼도 재고와 상태를 중복 변경하지 않습니다.
     - 만료 후 늦은 승인은 결제 도메인이 시스템 환불만 처리합니다. 주문은 `CANCELED`로 유지하고 재고는 다시 변경하지 않습니다.
+    - 외부 취소(PortOne 콘솔 등 시스템 밖의 전액 취소)가 확인되면 결제 Facade의 호출을 받아 `PAID` 주문을 `CANCEL_REQUESTED` 없이 바로 `REFUNDED`로 종료합니다. 마트 처리 상태는 바꾸지 않으며, 재고는 마트 처리 상태가 `RECEIVED`·`PREPARING`일 때만 복구하고 배송이 시작된 주문은 복구하지 않습니다. 이미 `CANCEL_REQUESTED`인 주문은 기존 환불 완료 처리로 끝냅니다.
 - **주문 조회·상태 이력** (담당: 준희)
     - 본인 주문 목록과 상세를 조회합니다.
     - 주문번호·주문 상태·마트 처리 상태·상품·금액·배송지·취소 사유를 표시합니다.
@@ -162,7 +163,7 @@
     - 회원 탈퇴 판단용으로 진행 중 주문 여부를 제공합니다. `CANCELED`, `REFUNDED`, 배송 완료(`PAID`+`DELIVERED`)를 뺀 주문이 하나라도 있으면 진행 중입니다.
     - 관리자 변경은 `changed_by_admin_id`도 기록합니다.
     - 취소 사유는 `cancel_reason_code`, `cancel_reason_detail`로 저장합니다.
-    - 코드는 `MEMBER_CANCELED`, `PAYMENT_TIMEOUT`, `PAYMENT_FAILED`, `AMOUNT_MISMATCH`, `MART_REJECTED`를 사용합니다.
+    - 코드는 `MEMBER_CANCELED`, `PAYMENT_TIMEOUT`, `PAYMENT_FAILED`, `AMOUNT_MISMATCH`, `MART_REJECTED`, `EXTERNAL_CANCELED`를 사용합니다.
     - 중복 알림으로 최초 취소 사유를 덮어쓰지 않습니다.
 - **상품 결제** (담당: 정윤)
     - PortOne 카드 결제
