@@ -138,15 +138,29 @@ install_config() {
         "$rel/" "$ROOT/"
 }
 
-proxy_check() {
-    # 앱 컨테이너가 healthy여도 nginx 경유 응답이 실패할 수 있다(설정 오류, 업스트림 조회 실패)
-    local url; url="$(env_get PROXY_CHECK_URL)"; url="${url:-http://127.0.0.1/api/categories}"
+wait_nginx() {
+    # 방금 생성된 nginx는 master가 PID 파일을 쓰기 전이라 reload가 "invalid PID"로 실패한다(첫 배포, nginx 재생성)
     local i
+    for i in $(seq 1 20); do
+        docker exec recipick-nginx test -s /run/nginx.pid 2>/dev/null && return 0
+        sleep 1
+    done
+    log "nginx가 20초 안에 준비되지 않았다"
+    return 1
+}
+
+proxy_check() {
+    # 앱 컨테이너가 healthy여도 nginx 경유 응답이 실패할 수 있다(설정 오류, 업스트림 조회 실패, 인증서).
+    # 리다이렉트를 따라가 최종 응답이 200일 때만 성공이다. HTTPS 전환 뒤 http 주소는 301을 주는데,
+    # 301을 성공으로 치면 HTTPS 블록이나 인증서가 깨져도 통과한다
+    local url; url="$(env_get PROXY_CHECK_URL)"; url="${url:-http://127.0.0.1/api/categories}"
+    local i code=""
     for i in 1 2 3 4 5; do
-        curl -fsS -o /dev/null --max-time 5 "$url" && return 0
+        code="$(curl -sS -L --max-redirs 3 -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>&1)" || true
+        [ "$code" = "200" ] && return 0
         sleep 2
     done
-    log "nginx 경유 응답 실패: $url"
+    log "nginx 경유 응답 실패: $url (마지막 결과 ${code:-없음})"
     return 1
 }
 
@@ -159,6 +173,7 @@ activate() {
     docker compose up -d --no-deps app nginx || { log "컨테이너 기동 실패"; return 1; }
     # conf.d는 바인드 마운트라 파일이 바뀌어도 컨테이너가 재생성되지 않는다. 검사 후 reload해야 반영된다
     docker exec recipick-nginx nginx -t -q || { log "nginx 설정 검사 실패"; return 1; }
+    wait_nginx || return 1
     docker exec recipick-nginx nginx -s reload || { log "nginx reload 실패"; return 1; }
     wait_healthy recipick-app "$HEALTH_TIMEOUT" || return 1
     proxy_check || return 1

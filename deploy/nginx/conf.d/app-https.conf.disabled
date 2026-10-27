@@ -1,5 +1,5 @@
-# HTTPS 단계. 인증서 발급 뒤 DOMAIN을 실제 도메인으로 바꾸고 확장자 .disabled를 떼며, app.conf는 app.conf.disabled로 바꾼다.
-# 그 뒤 `docker compose exec nginx nginx -s reload`.
+# HTTPS 단계. 인증서 발급 뒤 저장소에서 DOMAIN을 실제 도메인으로 바꾸고 확장자 .disabled를 떼며, app.conf는 app.conf.disabled로 바꿔 머지한다.
+# 배포 스크립트가 서버의 옛 app.conf를 지우고 nginx -t 후 reload한다. 인증서가 없으면 nginx -t가 실패해 이전 설정으로 돌아간다.
 server {
     listen 80 default_server;
     server_name _;
