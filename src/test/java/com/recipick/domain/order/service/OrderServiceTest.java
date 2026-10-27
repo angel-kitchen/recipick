@@ -569,6 +569,82 @@ class OrderServiceTest {
         verify(orderItemRepository, never()).findAllByOrderId(any());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"RECEIVED", "PREPARING"})
+    @DisplayName("상품이 아직 마트에 있는 결제 완료 주문을 외부 취소로 종료하면 외부 취소 사유가 담긴 이력을 남기고 재고를 복구할 주문 상품을 돌려준다")
+    void closeByExternalCancel_stockStillInMart(MartStatus martStatus) {
+        // given
+        List<OrderItem> items = List.of(OrderItem.builder().productId(10L).quantity(2).build());
+        Order order = paidOrder(martStatus);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+        given(orderItemRepository.findAllByOrderId(1L)).willReturn(items);
+
+        // when
+        List<OrderItem> result = orderService.closeByExternalCancel(1L, "PortOne 콘솔 전액 취소");
+
+        // then
+        assertThat(result).isEqualTo(items);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getMartStatus()).isEqualTo(martStatus);
+        verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue())
+                .extracting(OrderStatusHistory::getFromStatus, OrderStatusHistory::getToStatus,
+                        OrderStatusHistory::getActor, OrderStatusHistory::getReason)
+                .containsExactly("PAID", "REFUNDED", OrderStatusActor.SYSTEM, "EXTERNAL_CANCELED");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"SHIPPING", "DELIVERED"})
+    @DisplayName("배송이 시작된 결제 완료 주문을 외부 취소로 종료하면 이력은 남기지만 복구할 상품 없이 끝난다")
+    void closeByExternalCancel_shipped(MartStatus martStatus) {
+        // given
+        Order order = paidOrder(martStatus);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        List<OrderItem> result = orderService.closeByExternalCancel(1L, null);
+
+        // then
+        assertThat(result).isEmpty();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        verify(orderStatusHistoryRepository).save(any());
+        verify(orderItemRepository, never()).findAllByOrderId(any());
+    }
+
+    @Test
+    @DisplayName("이미 환불 완료된 주문에 외부 취소가 다시 오면 상태와 사유를 바꾸지 않고 복구할 상품 없이 끝난다")
+    void closeByExternalCancel_alreadyRefunded() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        order.markRefunded();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        List<OrderItem> result = orderService.closeByExternalCancel(1L, null);
+
+        // then
+        assertThat(result).isEmpty();
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+        verify(orderStatusHistoryRepository, never()).save(any());
+        verify(orderItemRepository, never()).findAllByOrderId(any());
+    }
+
+    @Test
+    @DisplayName("취소 요청 중인 주문에 외부 취소가 오면 허용되지 않는 상태 변경 오류가 나고 이력을 남기지 않는다")
+    void closeByExternalCancel_cancelRequested() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.closeByExternalCancel(1L, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        verify(orderStatusHistoryRepository, never()).save(any());
+    }
+
     private OrderMemberId orderMemberId(Long orderId, Long memberId) {
         return new OrderMemberId() {
             @Override
