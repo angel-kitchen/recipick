@@ -390,12 +390,23 @@ Table AI_REQUEST_LOG {
   id bigint [pk]
   member_id bigint
   auto_cart_request_id bigint
+  request_type varchar(20)
   raw_text text
   parsed_result json
   matched_recipe_ids text
+  result_status varchar(20)
   success boolean
   failure_reason varchar(500)
+  model varchar(50)
+  input_tokens int
+  output_tokens int
+  cache_read_tokens int
+  latency_ms int
   created_at datetime
+  indexes {
+    (created_at)
+    (member_id, created_at)
+  }
 }
 
 Table CART_ADD_HISTORY {
