@@ -106,6 +106,12 @@ public class OrderFacade {
         return toStockQuantities(orderService.markRefunded(orderId));
     }
 
+    // 외부 취소도 환불 완료와 같은 자리에서 재고를 복구하므로 같은 모양으로 나눈다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<StockQuantity> closeByExternalCancel(Long orderId, String reasonDetail) {
+        return toStockQuantities(orderService.closeByExternalCancel(orderId, reasonDetail));
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void restoreStock(List<StockQuantity> items) {
         // 이미 종료된 주문은 복구할 재고가 없다
