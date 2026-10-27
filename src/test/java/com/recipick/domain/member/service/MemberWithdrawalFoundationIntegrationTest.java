@@ -161,7 +161,7 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
     @DisplayName("관리자 회원 검색에서 탈퇴 회원은 목록과 전체 건수 모두 제외한다")
     void excludesWithdrawnMemberFromAdminSearch() {
         // given
-        MemberAdminSearchRequest request = new MemberAdminSearchRequest(member.getEmail(), null, 0, 20, null);
+        MemberAdminSearchRequest request = new MemberAdminSearchRequest(member.getEmail(), null, null, null, null, 0, 20, null);
         assertThat(adminService.findMembers(request).totalElements()).isEqualTo(1);
         markWithdrawn();
 

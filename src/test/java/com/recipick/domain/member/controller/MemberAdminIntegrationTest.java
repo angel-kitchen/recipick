@@ -284,4 +284,83 @@ class MemberAdminIntegrationTest extends IntegrationTestSupport {
     private JsonNode data(MockHttpServletResponse response) throws Exception {
         return mapper.readTree(response.getContentAsString()).path("data");
     }
+    @Test
+    @DisplayName("이름 부분 검색은 공백과 대소문자를 처리하고 특수문자를 그대로 비교한다")
+    void filtersNameLiterally() throws Exception {
+        // given, when
+        var found = request(superToken, "name", "  PAI  ");
+        var literal = request(superToken, "name", "%");
+        var combined = request(superToken, "name", "paid", "membershipSource", "ADMIN_GRANT");
+        // then
+        assertThat(data(found).path("totalElements").asInt()).isEqualTo(1);
+        assertThat(data(found).path("content").get(0).path("name").asText()).isEqualTo("paid");
+        assertThat(data(literal).path("totalElements").asInt()).isZero();
+        assertThat(data(combined).path("totalElements").asInt()).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"TRIAL,TRIAL,1", "PAID,ADMIN_GRANT,1", "PAID,SUBSCRIBE,2", "TRIAL,SUBSCRIBE,0"})
+    @DisplayName("유형과 발급 경로는 같은 활성 이용권에 적용하며 만료·종료·미시작 이력을 제외한다")
+    void filtersCurrentMembership(String type, String source, int expected) throws Exception {
+        // given, when
+        var response = request(superToken, "membershipType", type, "membershipSource", source);
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("totalElements").asInt()).isEqualTo(expected);
+        for (JsonNode row : data(response).path("content")) {
+            assertThat(row.path("membershipActive").asBoolean()).isTrue();
+            assertThat(row.path("membershipType").asText()).isEqualTo(type);
+        }
+    }
+
+    @Test
+    @DisplayName("과거 체험 이력은 현재 이용권 필터에 포함하지 않고 체험 전환 경로를 검색한다")
+    void filtersConversionWithoutMatchingOldHistory() throws Exception {
+        // given
+        saveMembership(0, MembershipType.PAID, MembershipSource.TRIAL_CONVERT, -1, 29);
+        saveMembership(2, MembershipType.TRIAL, MembershipSource.TRIAL, -40, -33);
+        // when
+        var conversion = request(superToken, "membershipSource", "TRIAL_CONVERT");
+        var trial = request(superToken, "membershipType", "TRIAL");
+        var incompatible = request(superToken, "membershipActive", "false", "membershipType", "PAID");
+        // then
+        assertThat(data(conversion).path("totalElements").asInt()).isEqualTo(1);
+        assertThat(data(conversion).path("content").get(0).path("name").asText()).isEqualTo("plain");
+        assertThat(data(trial).path("totalElements").asInt()).isEqualTo(1);
+        assertThat(data(incompatible).path("totalElements").asInt()).isZero();
+    }
+
+    @Test
+    @DisplayName("이름 검색과 유형 필터를 추가해도 탈퇴한 회원은 조회하지 않는다")
+    void excludesWithdrawnFromNameSearch() throws Exception {
+        // given
+        fixtures.get(0).withdraw(now);
+        members.flush();
+        // when
+        var response = request(superToken, "name", "plain");
+        // then
+        assertThat(data(response).path("totalElements").asInt()).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"membershipType,INVALID", "membershipSource,INVALID"})
+    @DisplayName("지원하지 않는 유형과 발급 경로는 입력 오류로 거절한다")
+    void rejectsInvalidMembershipFilters(String field, String value) throws Exception {
+        // given, when
+        var response = request(superToken, field, value);
+        // then
+        assertThat(response.getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("이름은 50자까지만 허용하며 빈 검색어는 필터를 적용하지 않는다")
+    void validatesNameLengthAndBlank() throws Exception {
+        // given, when
+        var invalid = request(superToken, "name", "a".repeat(51));
+        var blank = request(superToken, "name", "  ");
+        // then
+        assertThat(invalid.getStatus()).isEqualTo(400);
+        assertThat(data(blank).path("totalElements").asInt()).isEqualTo(8);
+    }
+
 }

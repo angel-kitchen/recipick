@@ -10,6 +10,8 @@ import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.recipick.domain.member.dto.MemberAdminRow;
+import com.recipick.domain.member.entity.enums.MembershipType;
+import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.time.LocalDateTime;
@@ -27,12 +29,14 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public Page<MemberAdminRow> searchMembers(String email, Boolean membershipActive, LocalDateTime now,
-            Pageable pageable) {
+    public Page<MemberAdminRow> searchMembers(String email, String name, Boolean membershipActive, MembershipType type,
+            MembershipSource source, LocalDateTime now, Pageable pageable) {
         BooleanExpression[] conditions = {
                 member.withdrawnAt.isNull(),
                 StringUtils.hasText(email) ? member.email.containsIgnoreCase(email) : null,
-                membershipActiveEq(membershipActive, now)
+                StringUtils.hasText(name) ? member.name.containsIgnoreCase(name) : null,
+                membershipActiveEq(membershipActive, now),
+                membershipDetailsEq(type, source, now)
         };
         List<MemberAdminRow> rows = queryFactory.select(Projections.constructor(MemberAdminRow.class,
                         member.id, member.email, member.name, member.martId, member.createdAt))
@@ -40,6 +44,17 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
                 .offset(pageable.getOffset()).limit(pageable.getPageSize()).fetch();
         JPAQuery<Long> count = queryFactory.select(member.count()).from(member).where(conditions);
         return PageableExecutionUtils.getPage(rows, pageable, count::fetchOne);
+    }
+
+    private BooleanExpression membershipDetailsEq(MembershipType type, MembershipSource source, LocalDateTime now) {
+        if (type == null && source == null) {
+            return null;
+        }
+        return JPAExpressions.selectOne().from(membership)
+                .where(membership.member.id.eq(member.id), membership.startAt.loe(now), membership.endAt.gt(now),
+                        membership.terminatedAt.isNull(),
+                        type == null ? null : membership.type.eq(type),
+                        source == null ? null : membership.source.eq(source)).exists();
     }
 
     private BooleanExpression membershipActiveEq(Boolean active, LocalDateTime now) {

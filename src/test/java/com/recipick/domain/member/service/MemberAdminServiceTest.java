@@ -41,7 +41,7 @@ class MemberAdminServiceTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-23T01:00:00Z"), ZoneId.of("Asia/Seoul"));
         service = new MemberAdminService(members, memberships, clock);
         now = LocalDateTime.now(clock);
-        request = new MemberAdminSearchRequest("test", null, null, null, null);
+        request = new MemberAdminSearchRequest("test", null, null, null, null, null, null, null);
     }
 
     @Test
@@ -50,7 +50,7 @@ class MemberAdminServiceTest {
         // given
         List<MemberAdminRow> rows = List.of(new MemberAdminRow(1L, "a@test.com", "회원1", null, now),
                 new MemberAdminRow(2L, "b@test.com", "회원2", 1L, now));
-        when(members.searchMembers("test", null, now, request.toPageable()))
+        when(members.searchMembers("test", null, null, null, null, now, request.toPageable()))
                 .thenReturn(new PageImpl<>(rows, request.toPageable(), 2));
         when(memberships.findActiveMembershipsForMembers(List.of(1L, 2L), now))
                 .thenReturn(List.of(new MemberMembershipData(2L, MembershipType.PAID, now.plusDays(30))));
@@ -75,7 +75,7 @@ class MemberAdminServiceTest {
     @DisplayName("회원 조회 결과가 비어 있으면 멤버십 조회를 생략한다")
     void skipsMembershipQueriesForEmptyPage() {
         // given
-        when(members.searchMembers("test", null, now, request.toPageable()))
+        when(members.searchMembers("test", null, null, null, null, now, request.toPageable()))
                 .thenReturn(new PageImpl<>(List.of(), request.toPageable(), 0));
 
         // when
