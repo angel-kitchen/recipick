@@ -89,7 +89,7 @@
   - 403: 자격 없음
   - 404: 대상 없음, 다른 회원 소유
   - 409: 현재 상태와 맞지 않음, 중복
-  - 500: 외부 서비스 오류(코드로 구분)
+  - 500: 외부 서비스 오류(코드로 구분). AI 장애는 500 대신 성공 응답의 `FALLBACK` 상태로 대체 결과를 준다.
 - 접두어: member(MEMBER, ADDRESS, REGION, MEMBERSHIP, AUDIT), product(PRODUCT, CATEGORY, MART, STOCK), recipe(RECIPE, INGREDIENT, AUTO_CART, AI), order(CART, ORDER), payment(PAYMENT, REFUND, POINT, BILLING)
 - message는 사용자에게 그대로 보여줄 수 있는 문장으로 쓴다.
 - catch 후 무시 금지. 외부 API 실패는 WARN, 예상 못한 예외는 ERROR + 스택
