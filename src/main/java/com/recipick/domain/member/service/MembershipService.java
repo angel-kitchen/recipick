@@ -25,6 +25,7 @@ public class MembershipService {
     private final MembershipRepository membershipRepository;
     private final MemberRepository memberRepository;
     private final Clock clock;
+    private final TrialBlockService trialBlockService;
 
     public MembershipMeResponse getMe(Long memberId) {
         validateMember(memberId);
@@ -62,7 +63,12 @@ public class MembershipService {
     }
 
     public boolean isTrialEligible(Long memberId) {
-        return !membershipRepository.existsByMemberId(memberId);
+        if (membershipRepository.existsByMemberId(memberId)) {
+            return false;
+        }
+        return memberRepository.findById(memberId).filter(member -> !member.isWithdrawn())
+                .map(member -> !trialBlockService.isBlocked(member.getPhone()))
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
     }
 
     private Optional<Membership> findActive(Long memberId, LocalDateTime now) {
