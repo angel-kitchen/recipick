@@ -88,7 +88,17 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
 
     private MemberWithdrawalProcessor processor(WithdrawalSettlementChecker checker) {
         StaticListableBeanFactory factory = new StaticListableBeanFactory();
-        factory.addBean("checker", checker);
+        factory.addBean("checker", new WithdrawalSettlementChecker() {
+            @Override
+            public java.util.Set<Scope> supportedScopes() {
+                return java.util.EnumSet.allOf(Scope.class);
+            }
+
+            @Override
+            public void requireSettled(Long memberId) {
+                checker.requireSettled(memberId);
+            }
+        });
         return new MemberWithdrawalProcessor(memberService, orders, memberships, trialBlocks, withdrawal,
                 factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
     }

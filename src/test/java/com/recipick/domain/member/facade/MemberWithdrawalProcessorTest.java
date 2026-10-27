@@ -45,6 +45,7 @@ class MemberWithdrawalProcessorTest {
         Member member = Member.builder().passwordHash("encoded").build();
         given(members.getMemberForUpdate(1L)).willReturn(member);
         given(encoder.matches("password", "encoded")).willReturn(true);
+        given(checker.supportedScopes()).willReturn(java.util.EnumSet.allOf(WithdrawalSettlementChecker.Scope.class));
         // when
         processor().withdraw(1L, new MemberWithdrawRequest("password"));
         // then
@@ -73,4 +74,33 @@ class MemberWithdrawalProcessorTest {
                                 .isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_ORDER));
         verifyNoInteractions(memberships, checker, blocks, withdrawal);
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(WithdrawalSettlementChecker.Scope.class)
+    @DisplayName("정산 영역이 하나라도 미연결이면 실제 정산 및 개인정보 변경을 시작하지 않는다")
+    void refusesPartialIntegration(WithdrawalSettlementChecker.Scope missingScope) {
+        // given
+        Member member = Member.builder().passwordHash("encoded").build();
+        given(members.getMemberForUpdate(1L)).willReturn(member);
+        given(encoder.matches("password", "encoded")).willReturn(true);
+        var scopes = java.util.EnumSet.allOf(WithdrawalSettlementChecker.Scope.class);
+        scopes.remove(missingScope);
+        given(checker.supportedScopes()).willReturn(scopes);
+        // when, then
+        assertThatThrownBy(() -> processor().withdraw(1L, new MemberWithdrawRequest("password")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
+                                .isEqualTo(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY));
+        verify(checker, never()).requireSettled(anyLong());
+        verifyNoInteractions(blocks, withdrawal);
+    }
+
+    @Test
+    @DisplayName("영역 연결을 선언하지 않은 기존 구현체는 기본적으로 준비되지 않은 상태다")
+    void defaultsToUnready() {
+        // given
+        WithdrawalSettlementChecker legacy = memberId -> {};
+        // when, then
+        org.assertj.core.api.Assertions.assertThat(legacy.supportedScopes()).isEmpty();
+    }
+
 }

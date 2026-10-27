@@ -12,6 +12,7 @@ import com.recipick.domain.order.service.OrderService;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,7 +45,8 @@ public class MemberWithdrawalProcessor {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP);
         }
         WithdrawalSettlementChecker checker = settlementCheckers.getIfAvailable();
-        if (checker == null) {
+        if (checker == null || checker.supportedScopes() == null
+                || !checker.supportedScopes().containsAll(EnumSet.allOf(WithdrawalSettlementChecker.Scope.class))) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY);
         }
         checker.requireSettled(memberId);
