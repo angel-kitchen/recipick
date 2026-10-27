@@ -115,15 +115,17 @@ ecr_login() {
 }
 
 set_tag() {
-    # 임시 파일에 쓴 뒤 내용만 덮어써 .env의 권한(600)을 유지한다
+    # 같은 디렉터리의 임시 파일(mktemp는 권한 600)에 다 쓴 뒤 mv로 바꾼다. rename은 원자적이라
+    # 쓰기 도중 디스크가 차도 비밀값이 든 .env가 반만 남지 않는다. .env는 바인드 마운트가 아니라 inode가 바뀌어도 된다
     local tmp; tmp="$(mktemp "$ROOT/.env.tmp-XXXXXX")"
     if grep -qE '^IMAGE_TAG=' .env; then
-        sed -E "s|^IMAGE_TAG=.*|IMAGE_TAG=$1|" .env > "$tmp"
+        sed -E "s|^IMAGE_TAG=.*|IMAGE_TAG=$1|" .env > "$tmp" || { rm -f "$tmp"; return 1; }
     else
-        { cat .env; printf 'IMAGE_TAG=%s\n' "$1"; } > "$tmp"
+        { cat .env && printf 'IMAGE_TAG=%s\n' "$1"; } > "$tmp" || { rm -f "$tmp"; return 1; }
     fi
-    cat "$tmp" > .env
-    rm -f "$tmp"
+    grep -qxF "IMAGE_TAG=$1" "$tmp" || { rm -f "$tmp"; log ".env 갱신 실패"; return 1; }
+    chmod 600 "$tmp"
+    mv -f "$tmp" .env
 }
 
 install_config() {
