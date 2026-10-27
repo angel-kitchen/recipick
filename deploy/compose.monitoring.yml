@@ -1,0 +1,55 @@
+# 모니터링(태헌 담당, 필수 11). 첫 배포에는 올리지 않고 앱 배포가 안정된 뒤 추가한다.
+# 실행: docker compose -f compose.monitoring.yml up -d. 부하 테스트 중에도 켜 둔다. 병목 분석에 지표가 필요하고,
+# Before·After 모두 켜 두면 측정 조건이 같다. 부하 발생기(k6)는 다른 머신에서 돌린다.
+# 호스트에 포트를 노출하지 않는다. Grafana는 SSM 포트 포워딩으로 접근한다(README 8절).
+# 메모리 예산: prometheus 384m + grafana 192m + exporter 3개 합계 약 128m. 태헌이 추가할 exporter:
+#   node-exporter(호스트 CPU·메모리·디스크), mysqld-exporter(커넥션·락 대기·슬로 쿼리), redis-exporter(메모리·명령 수)
+name: recipick-monitoring
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: recipick-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      # 기간보다 용량이 먼저 차면 오래된 블록부터 지운다. 루트 볼륨 30GB 보호
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: recipick-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+    logging: *logging
+
+networks:
+  default:
+    name: recipick
+    external: true
+
+volumes:
+  prometheus-data:
+  grafana-data:

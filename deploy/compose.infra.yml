@@ -1,0 +1,83 @@
+# MySQL·Redis. 배포 스크립트는 없을 때만 띄우고(--no-recreate) 재생성하지 않는다.
+# 이 파일을 바꾸면 서버에서 직접 적용한다: docker compose -f compose.infra.yml up -d (해당 서비스가 잠깐 재시작된다)
+# RDS·ElastiCache로 옮기면 이 파일을 지우고 .env의 접속 정보만 바꾼다. `down -v`는 데이터를 지우므로 쓰지 않는다.
+name: recipick-infra
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: recipick-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD가 비었다}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE가 비었다}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER가 비었다}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD가 비었다}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # 컨벤션의 팀 공통 락 대기 시간(5초). 앱의 세션 초기화 SQL과 같은 값
+      - --innodb-lock-wait-timeout=5
+      # 4GB 인스턴스에서 앱과 나눠 쓰는 크기
+      - --innodb-buffer-pool-size=512M
+      # 복제·시점 복구를 쓰지 않으므로 binlog를 끈다. 디스크와 쓰기 비용을 줄이고 백업은 mysqldump로 한다
+      - --skip-log-bin
+    # 호스트에 포트를 노출하지 않는다. 접근은 recipick 네트워크 안에서만
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging: *logging
+
+  redis:
+    image: redis:7.4
+    container_name: recipick-redis
+    restart: unless-stopped
+    # 리프레시 토큰과 로그인 실패 횟수를 담는다. 볼륨만으로는 최근 쓰기가 보존되지 않으므로 AOF를 1초 단위로 기록한다
+    # (재시작·장애 시 최대 1초 유실 허용). maxmemory는 컨테이너 상한(256m)보다 낮게 두어 OOM 강제 종료를 피하고,
+    # noeviction으로 꽉 차면 쓰기를 실패시킨다. 토큰을 조용히 지워 사용자를 로그아웃시키는 것보다 오류로 드러나는 편이 낫다
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 200mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging: *logging
+
+networks:
+  default:
+    name: recipick
+    external: true
+
+volumes:
+  mysql-data:
+  redis-data:
