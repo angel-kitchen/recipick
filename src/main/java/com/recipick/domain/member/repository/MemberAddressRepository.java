@@ -20,5 +20,7 @@ public interface MemberAddressRepository extends JpaRepository<MemberAddress, Lo
 
     Optional<MemberAddress> findByIdAndMemberId(Long id, Long memberId);
 
+    void deleteAllByMemberId(Long memberId);
+
     long countByMemberId(Long memberId);
 }

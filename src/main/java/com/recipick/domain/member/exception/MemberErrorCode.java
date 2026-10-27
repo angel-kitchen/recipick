@@ -16,6 +16,10 @@ public enum MemberErrorCode implements ErrorCode {
 
     INVALID_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "MEMBER-005", "현재 비밀번호가 올바르지 않습니다."),
 
+    WITHDRAW_BLOCKED_ORDER(HttpStatus.CONFLICT, "MEMBER-006", "진행 중인 주문을 먼저 처리해 주세요."),
+    WITHDRAW_BLOCKED_MEMBERSHIP(HttpStatus.CONFLICT, "MEMBER-007", "이용 중인 멤버십을 먼저 종료해 주세요."),
+    WITHDRAW_SETTLEMENT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "MEMBER-008", "현재 탈퇴 정산 확인을 진행할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+
     REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "REGION-001", "지역을 찾을 수 없습니다."),
     REGION_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "REGION-002", "서비스 지역이 아닌 주소입니다."),
     LOCATION_CONSENT_REQUIRED(HttpStatus.BAD_REQUEST, "REGION-003", "위치 정보 이용 동의가 필요합니다."),

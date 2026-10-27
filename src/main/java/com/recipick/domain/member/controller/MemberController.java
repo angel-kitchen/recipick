@@ -1,6 +1,9 @@
 package com.recipick.domain.member.controller;
 
 import com.recipick.domain.member.dto.request.MemberPasswordChangeRequest;
+import com.recipick.domain.member.dto.request.MemberWithdrawRequest;
+import com.recipick.domain.member.facade.MemberWithdrawalFacade;
+import org.springframework.web.bind.annotation.PostMapping;
 import com.recipick.domain.member.dto.response.MemberMeResponse;
 import com.recipick.domain.member.facade.MemberMeFacade;
 import com.recipick.domain.member.facade.MemberPasswordFacade;
@@ -24,6 +27,7 @@ public class MemberController {
 
     private final MemberMeFacade memberMeFacade;
     private final MemberPasswordFacade memberPasswordFacade;
+    private final MemberWithdrawalFacade memberWithdrawalFacade;
     private final AuthCookieFactory cookieFactory;
 
     @GetMapping("/me")
@@ -35,6 +39,14 @@ public class MemberController {
     public ResponseEntity<Void> changePassword(@LoginMember Long memberId,
             @Valid @RequestBody MemberPasswordChangeRequest request) {
         memberPasswordFacade.changePassword(memberId, request);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookieFactory.clearRefreshCookie().toString()).build();
+    }
+
+    @PostMapping("/me/withdraw")
+    public ResponseEntity<Void> withdraw(@LoginMember Long memberId,
+            @Valid @RequestBody MemberWithdrawRequest request) {
+        memberWithdrawalFacade.withdraw(memberId, request);
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, cookieFactory.clearRefreshCookie().toString()).build();
     }
