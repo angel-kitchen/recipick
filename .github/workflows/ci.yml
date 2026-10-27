@@ -69,20 +69,28 @@ jobs:
 
       - name: 서버 설정 파일 업로드 (deploy/ → S3)
         run: |
-          tar -czf deploy.tar.gz -C deploy --exclude=.env --exclude=backups --exclude=certbot --exclude=.deploy.lock .
+          tar -czf deploy.tar.gz -C deploy --exclude=.env --exclude=backups --exclude=certbot --exclude=releases --exclude=.deploy.lock .
           aws s3 cp deploy.tar.gz "s3://$DEPLOY_BUCKET/deploy/$GITHUB_SHA.tar.gz"
 
       - name: SSM Run Command로 서버에서 배포 스크립트 실행
         id: ssm
         run: |
+          # 잠금을 다운로드 전에 잡고(fd 9) 배포 스크립트에 물려준다. 설정 교체·기동·검증·복구가 끝날 때까지 유지된다.
+          # 묶음은 운영 디렉터리에 덮어 풀지 않고 releases/<SHA>에 풀며, 운영 설정 교체는 deploy.sh가 한다.
+          # 다운로드 임시 파일은 배포마다 따로 만들고 끝나면 지운다. SSM은 sh로 실행할 수 있어 POSIX 문법만 쓴다
           jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
             executionTimeout: ["900"],
             commands: [
-              "set -e",
-              "aws s3 cp s3://\($bucket)/deploy/\($sha).tar.gz /tmp/deploy.tar.gz",
-              "mkdir -p /opt/recipick && tar -xzf /tmp/deploy.tar.gz -C /opt/recipick",
-              "chmod +x /opt/recipick/scripts/deploy.sh",
-              "/opt/recipick/scripts/deploy.sh \($sha)"
+              "set -eu",
+              "mkdir -p /opt/recipick/releases",
+              "exec 9>/opt/recipick/.deploy.lock",
+              "flock -n 9 || { echo \"다른 배포가 진행 중이라 중단\"; exit 1; }",
+              "work=$(mktemp -d /tmp/recipick-deploy-\($sha).XXXXXX)",
+              "trap \"rm -rf $work\" EXIT",
+              "aws s3 cp --only-show-errors s3://\($bucket)/deploy/\($sha).tar.gz $work/bundle.tar.gz",
+              "rm -rf /opt/recipick/releases/\($sha) && mkdir -p /opt/recipick/releases/\($sha)",
+              "tar -xzf $work/bundle.tar.gz -C /opt/recipick/releases/\($sha)",
+              "DEPLOY_LOCK_HELD=1 bash /opt/recipick/releases/\($sha)/scripts/deploy.sh \($sha)"
             ]
           }' > params.json
           command_id=$(aws ssm send-command \
