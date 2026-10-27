@@ -26,18 +26,22 @@
 
 키워드 검색 한 번이 DB 연결을 약 175ms(103 + 71) 쥐고 있었다. 풀이 10개이면 키워드 검색만으로 초당 약 57번이 한계라서, 100명이 몰리면 줄이 생긴다는 것이 풀 대기 69개와 일치한다.
 
-## 3. 개선: 인덱스 2개 추가
+## 3. 개선: 인덱스 3개 추가
 
 `Product` 엔티티의 `@Table(indexes)`에 추가했다.
 
 | 인덱스 | 컬럼 | 대상 |
 | --- | --- | --- |
-| `idx_product_mart_category_price` | `mart_id, category_id, deleted, price, id` | 필터 검색(카테고리, 가격 범위, 가격 정렬) |
+| `idx_product_mart_category_price` | `mart_id, category_id, deleted, price, id` | 필터 검색(카테고리, 가격 범위, 가격 내림차순 정렬) |
+| `idx_product_mart_category_price_asc` | `mart_id, category_id, deleted, price ASC, id DESC` | 필터 검색의 가격 오름차순 정렬 |
 | `idx_product_mart_created` | `mart_id, deleted, created_at, id` | 키워드 검색과 기본 정렬(최신순) |
+
+> `idx_product_mart_category_price_asc`는 부하 테스트 After 측정(5절) **이후에** 추가했다. 5절의 After 수치에는 포함되지 않는다.
 
 선택 이유
 
 - **필터 검색 인덱스**: 같음 조건(`mart_id`, `category_id`, `deleted`)을 앞에, 범위·정렬 조건(`price`)을 뒤에 둔다. 조건을 만족하는 행만 읽고, 개수 쿼리는 테이블을 읽지 않고 인덱스만으로 끝난다(covering).
+- **가격 오름차순 인덱스**: 앱은 가격 오름차순을 `ORDER BY price ASC, id DESC`로 만든다. 위 필터 인덱스는 `id`가 오름차순이라 이 정렬을 그대로 쓰지 못해 `Sort`가 남았다. `id DESC`로 만든 인덱스를 따로 두면 정렬이 사라진다. 가격 내림차순(`price DESC, id DESC`)은 기존 인덱스를 거꾸로 읽어 처리하므로 둘 다 필요하다. 단독 실행에서 가격 범위가 있는 목록은 1.22ms에서 0.12ms, 카테고리 전체 목록은 5.97ms에서 0.06ms로 줄었다.
 - **최신순 인덱스**: 정렬 순서와 같게 만들어 두었기 때문에 최신 상품부터 읽다가 키워드가 든 20건이 모이면 멈춘다. 정렬 작업(`filesort`)이 사라진다. 키워드가 흔할수록 효과가 크다(테스트 키워드 '대파'는 마트 안에서 약 8%).
 - 기존 인덱스 `(mart_id, ingredient_id)`는 다른 기능이 쓸 수 있어 유지했다.
 - 다음 방법은 이번에 쓰지 않았다. 풀텍스트(ngram) 인덱스는 개수 쿼리를 22ms까지 줄였지만 JPA가 `MATCH ... AGAINST`를 지원하지 않아 쿼리 코드 변경이 크다. 풀 크기 증가는 원인이 느린 쿼리일 때 DB 부담만 늘린다.
