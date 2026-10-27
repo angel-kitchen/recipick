@@ -171,3 +171,45 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | Grafana 접속 | 로컬에서 `aws ssm start-session --target <INSTANCE_ID> --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host=<grafana 컨테이너 IP>,portNumber=3000,localPortNumber=3000` 후 `http://localhost:3000`. 컨테이너 IP는 `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' recipick-grafana` |
 | infra 설정 변경 적용 | `docker compose -f compose.infra.yml up -d`. 해당 서비스가 잠깐 재시작되므로 시연 시간을 피한다 |
 | 메모리·디스크 확인 | `docker stats --no-stream`, `df -h /`, `docker system df` |
+
+## 9. 부하 테스트 중 배포 정지
+
+측정 중에 배포가 끼면 앱이 재시작되어 결과가 깨지고, 측정이 끝나면 DB를 측정 전 상태로 되돌린다. 측정 담당자는 시작 시각·예상 소요 시간·단계를 배포 담당자에게 미리 알리고, 배포 담당자가 아래를 한다. 레포 변수는 레포 admin만 바꿀 수 있다.
+
+**시작 전**
+
+1. 팀에 "○시~○시 배포 정지, 운영 서버 데이터 수정 금지"를 공지한다. 측정이 끝나면 덤프 시점으로 복원하므로 그사이의 변경은 사라진다.
+2. 레포 변수 `DEPLOY_BRANCH`를 `paused`(없는 브랜치 이름)로 바꾼다. 이후 dev 머지는 테스트만 돌고 배포 job은 건너뛴다.
+3. 진행 중인 배포가 없는지 확인한다. Actions 탭에 도는 배포 job이 없고, 서버에서 `flock -n /opt/recipick/.deploy.lock true && echo 비어 있음`이 출력되면 된다.
+4. 덤프를 뜨고 별도 이름으로 복사한다. `pre-deploy-*`는 최근 10개만 남기므로 이후 배포에 밀려 지워지지 않게 한다.
+   ```bash
+   cd /opt/recipick
+   ./scripts/backup.sh pre-deploy loadtest
+   cp -p "$(ls -1t backups/pre-deploy-*-loadtest.sql.gz | head -1)" backups/loadtest-$(date +%Y%m%d).sql.gz
+   ```
+
+**측정 중**
+
+- 배포 영향을 재는 단계(soak 등)에서는 배포 담당자가 정한 시점에 앱만 다시 만든다. 같은 태그를 `deploy.sh`로 다시 배포하면 compose가 바뀐 것이 없다고 보고 앱을 재시작하지 않는다.
+  ```bash
+  cd /opt/recipick && docker compose up -d --no-deps --force-recreate app
+  ```
+- 측정 데이터를 적재한 뒤 회차마다 같은 데이터에서 시작해야 하면, 적재 직후 4번과 같은 방법으로 `backups/loadtest-base.sql.gz`를 만들고 회차 사이마다 아래 복원을 그 파일로 한다.
+
+**끝난 뒤**
+
+1. 측정 전 덤프로 복원한다. 7절 전체 복원과 같은 순서이고, 앱은 .env의 현재 태그로 다시 띄운다.
+   ```bash
+   cd /opt/recipick
+   DUMP=backups/loadtest-<날짜>.sql.gz bash -euo pipefail -c '
+     ./scripts/restore-check.sh "$DUMP"
+     docker compose stop app
+     docker exec recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql -e \"DROP DATABASE \$MYSQL_DATABASE; CREATE DATABASE \$MYSQL_DATABASE\""
+     gunzip -c "$DUMP" | docker exec -i recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql \$MYSQL_DATABASE"
+     echo "가져오기 성공. 앱을 다시 띄운다"
+     docker compose up -d --no-deps app
+   ' || echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"
+   ```
+   `docker inspect -f '{{.State.Health.Status}}' recipick-app`이 `healthy`가 될 때까지 기다린다.
+2. `DEPLOY_BRANCH`를 `dev`로 되돌린다. 워크플로에 수동 실행이 없어서, 정지 중에 머지된 코드는 **다음 dev 머지 때** 함께 배포된다. 바로 반영해야 하면 dev에 작은 PR을 하나 머지한다.
+3. 팀에 배포 재개를 알린다.
