@@ -84,21 +84,24 @@
 
 ## 5. HTTPS 전환 (10/30 목표)
 
-1. 도메인의 A 레코드를 Elastic IP로 연결한다.
+1. 도메인의 A 레코드를 Elastic IP로 연결한다. 연결되면 서버 `.env`의 `PROXY_CHECK_URL`을 `http://<도메인>/api/categories`로 바꾼다. 배포 확인이 리다이렉트를 따라가 최종 200을 보므로, 이후 HTTPS로 바꿔도 이 값은 그대로 두면 인증서까지 확인된다.
 2. 발급 시험. 실제 발급은 도메인당 주 5회 제한이 있으므로 먼저 `--dry-run`으로 확인한다.
    ```bash
    cd /opt/recipick
    docker compose --profile certbot run --rm certbot certonly --webroot -w /var/www/certbot -d <도메인> --email <메일> --agree-tos --dry-run
    ```
 3. 성공하면 `--dry-run`을 빼고 실제 발급한다.
-4. 저장소에서 `nginx/conf.d/app-https.conf.disabled`의 `DOMAIN`을 실제 도메인으로 바꾸고, 이름을 `app-https.conf`로, `app.conf`는 `app.conf.disabled`로 바꿔 머지한다. 배포가 옛 `app.conf`를 지우고 `nginx -t` 후 reload한다. 설정이 틀리면 이전 설정으로 돌아간다.
-5. 서버 `.env`의 `PROXY_CHECK_URL`을 `https://<도메인>/api/categories`로, `CORS_ALLOWED_ORIGINS`를 프론트 도메인으로 바꾼다. 이후 배포는 인증서까지 확인한다.
+4. 저장소에서 `nginx/conf.d/app-https.conf.disabled`의 `DOMAIN`을 실제 도메인으로 바꾸고, 이름을 `app-https.conf`로, `app.conf`는 `app.conf.disabled`로 바꿔 머지한다. 배포가 옛 `app.conf`를 지우고 `nginx -t` 후 reload한 뒤, http 주소에서 https로 넘어가 최종 200인지 확인한다. 인증서가 없거나 HTTPS 블록이 틀리면 이전 설정으로 돌아간다.
+5. 서버 `.env`의 `CORS_ALLOWED_ORIGINS`를 프론트 도메인으로 바꾼다.
 6. 확인한다.
    - `curl -I http://<도메인>/api/categories`가 301로 https를 가리킨다
    - `curl -vI https://<도메인>/api/categories`의 인증서 발급자가 Let's Encrypt이고 만료일이 90일 뒤다
    - 로그인 응답의 리프레시 토큰 쿠키에 `Secure`가 붙는다
    - 그 쿠키로 토큰 재발급이 200이다
-7. 갱신 cron(root): `0 4 * * 1 cd /opt/recipick && docker compose --profile certbot run --rm certbot renew -q && docker compose exec -T nginx nginx -s reload`
+7. 갱신 cron(root). 배포와 같은 잠금 파일로 감싸 배포 중에는 끝날 때까지 기다린다(최대 10분). 배포가 새 설정을 깔고 검사하기 전에 갱신의 reload가 끼어드는 것을 막는다.
+   ```
+   0 4 * * 1 cd /opt/recipick && flock -w 600 .deploy.lock sh -c 'docker compose --profile certbot run --rm certbot renew -q && docker compose exec -T nginx nginx -s reload' >> /var/log/recipick-certbot.log 2>&1
+   ```
 8. PortOne 웹훅 URL 등록은 결제 담당에게 도메인을 알린다.
 
 ## 6. 백업

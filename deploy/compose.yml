@@ -69,7 +69,7 @@ services:
   # 인증서 발급·갱신용. 기본으로는 뜨지 않는다(--profile certbot).
   # 발급: docker compose --profile certbot run --rm certbot certonly --webroot -w /var/www/certbot -d <도메인> --email <메일> --agree-tos
   #       (먼저 --dry-run 또는 --staging으로 설정을 확인한다. 실제 발급은 도메인당 주 5회 제한)
-  # 갱신: 호스트 cron 주 1회 `docker compose --profile certbot run --rm certbot renew && docker compose exec nginx nginx -s reload`
+  # 갱신: 호스트 cron 주 1회. 배포와 겹치지 않게 .deploy.lock으로 감싼다(README 5절)
   certbot:
     image: certbot/certbot:v4.1.1
     container_name: recipick-certbot

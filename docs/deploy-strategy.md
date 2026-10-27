@@ -276,6 +276,7 @@ AWS·파이프라인
 - [ ] 운영 관리자 계정을 서버에서 SQL로 한 번 생성. 로컬 시드의 비밀번호 해시는 쓰지 않는다
 - [x] 배포 워크플로(`ci.yml`의 deploy 작업)와 서버 스크립트(`deploy/scripts/deploy.sh`) 작성. 동시 실행 제한, SSM 완료 대기와 출력 수집 포함
 - [x] 10/27 검토 반영: 정상 배포가 실패로 끝나던 이미지 정리 수정, 기동 실패까지 공통 복구(설정 묶음 포함), 묶음을 `releases/`에 풀고 정확히 교체, 다운로드 전 잠금, `nginx -t`·reload·경유 응답 확인, MySQL 준비 대기, `stop_grace_period` 30초, 필수 환경 변수 검사, 백업 스크립트 분리(`backup.sh`, `restore-check.sh`), Redis 영속화·메모리 정책. 로컬에서 시나리오 9개 검증(`docs/deploy-implementation.md`)
+- [x] 10/27 완료 조건 재대조: 응답 확인은 리다이렉트를 따라가 최종 200만 성공(HTTPS 전환 뒤 301에 속던 빈틈), 새 nginx의 reload 대기, 인증서 갱신 cron을 배포 잠금으로 감쌈. 자체 CA로 HTTPS 전환·HTTPS 블록 오류·인증서 없음·HTTP 롤백 로컬 검증
 - [ ] 10/30까지: 실서버에서 워크플로 첫 실행(dev 병합 → 자동 배포) 확인
 - [ ] nightly 백업 cron 등록, `BACKUP_BUCKET`·`ALERT_WEBHOOK_URL` 설정, 실서버에서 `restore-check.sh`로 복원 1회
 - [ ] 10/30까지: 도메인·DNS·HTTPS(인증서 자동 발급·갱신)
