@@ -79,7 +79,7 @@ check_env() {
     [ -f .env ] || { log ".env가 없다. .env.example을 복사해 채운다"; exit 1; }
     local missing="" key
     for key in IMAGE SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD \
-               JWT_SECRET PORTONE_API_SECRET MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD; do
+               JWT_SECRET TRIAL_BLOCK_HMAC_SECRET PORTONE_API_SECRET MYSQL_ROOT_PASSWORD MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD; do
         [ -n "$(env_get "$key")" ] || missing="$missing $key"
     done
     [ -z "$missing" ] || { log ".env에 비어 있는 필수 값:$missing"; exit 1; }

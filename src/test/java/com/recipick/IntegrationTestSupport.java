@@ -41,5 +41,6 @@ public abstract class IntegrationTestSupport {
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
         registry.add("security.jwt.secret", () -> TEST_SECRET);
+        registry.add("security.trial-block.secret", () -> TEST_SECRET);
     }
 }

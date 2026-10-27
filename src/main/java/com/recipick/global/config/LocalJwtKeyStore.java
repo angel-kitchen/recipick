@@ -13,9 +13,9 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import javax.crypto.SecretKey;
 
-class LocalJwtKeyStore {
+public class LocalJwtKeyStore {
 
-    static synchronized SecretKey loadOrCreate(Path keyPath) throws IOException {
+    public static synchronized SecretKey loadOrCreate(Path keyPath) throws IOException {
         keyPath = keyPath.toAbsolutePath().normalize();
         Path directory = keyPath.getParent();
         Path ancestor = directory;
