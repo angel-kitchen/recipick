@@ -12,6 +12,7 @@ const MEMBER_COUNT = 100;
 const KEYWORDS = ['대파', '유기농', '양파', '두부', '소고기'];
 
 export const options = {
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     search: {
       executor: 'ramping-vus',
