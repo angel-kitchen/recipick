@@ -32,8 +32,14 @@ class MemberWithdrawalProcessorTest {
     Clock clock = Clock.systemUTC();
 
     private MemberWithdrawalProcessor processor() {
+        return processor(checker);
+    }
+
+    private MemberWithdrawalProcessor processor(WithdrawalSettlementChecker... checkers) {
         var factory = new StaticListableBeanFactory();
-        factory.addBean("checker", checker);
+        for (int i = 0; i < checkers.length; i++) {
+            factory.addBean("checker" + i, checkers[i]);
+        }
         return new MemberWithdrawalProcessor(members, orders, memberships, blocks, withdrawal,
                 factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
     }
@@ -101,6 +107,77 @@ class MemberWithdrawalProcessorTest {
         WithdrawalSettlementChecker legacy = memberId -> {};
         // when, then
         org.assertj.core.api.Assertions.assertThat(legacy.supportedScopes()).isEmpty();
+    }
+
+    private void allowMember() {
+        given(members.getMemberForUpdate(1L)).willReturn(Member.builder().passwordHash("encoded").build());
+        given(encoder.matches("password", "encoded")).willReturn(true);
+    }
+
+    @Test
+    @DisplayName("여러 구현체의 범위를 합쳐 전체 연결을 확인하고 모든 정산 검사를 실행한다")
+    void combinesScopesAndRunsAllCheckers() {
+        // given
+        allowMember();
+        WithdrawalSettlementChecker other = mock(WithdrawalSettlementChecker.class);
+        given(checker.supportedScopes()).willReturn(java.util.Set.of(
+                WithdrawalSettlementChecker.Scope.PRODUCT_PAYMENT, WithdrawalSettlementChecker.Scope.POINTS));
+        given(other.supportedScopes()).willReturn(java.util.Set.of(
+                WithdrawalSettlementChecker.Scope.MEMBERSHIP_PAYMENT, WithdrawalSettlementChecker.Scope.AUTO_BILLING));
+        // when
+        processor(checker, other).withdraw(1L, new MemberWithdrawRequest("password"));
+        // then
+        verify(checker).requireSettled(1L);
+        verify(other).requireSettled(1L);
+        verify(withdrawal).withdraw(any(Member.class), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("구현체가 없으면 정산 미연결로 거절한다")
+    void refusesMissingCheckers() {
+        // given
+        allowMember();
+        // when, then
+        assertThatThrownBy(() -> processor(new WithdrawalSettlementChecker[0])
+                .withdraw(1L, new MemberWithdrawRequest("password")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
+                                .isEqualTo(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY));
+        verifyNoInteractions(blocks, withdrawal);
+    }
+
+    @Test
+    @DisplayName("구현체가 여러 개여도 합산 범위가 부족하면 모든 정산 검사를 시작하지 않는다")
+    void refusesIncompleteCombinedScopes() {
+        // given
+        allowMember();
+        WithdrawalSettlementChecker other = mock(WithdrawalSettlementChecker.class);
+        given(checker.supportedScopes()).willReturn(java.util.Set.of(WithdrawalSettlementChecker.Scope.PRODUCT_PAYMENT));
+        given(other.supportedScopes()).willReturn(null);
+        // when, then
+        assertThatThrownBy(() -> processor(checker, other).withdraw(1L, new MemberWithdrawRequest("password")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
+                                .isEqualTo(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY));
+        verify(checker, never()).requireSettled(anyLong());
+        verify(other, never()).requireSettled(anyLong());
+        verifyNoInteractions(blocks, withdrawal);
+    }
+
+    @Test
+    @DisplayName("여러 구현체 중 정산 검사가 실패하면 회원 정보와 체험 차단을 변경하지 않는다")
+    void stopsOnCheckerFailure() {
+        // given
+        allowMember();
+        WithdrawalSettlementChecker other = mock(WithdrawalSettlementChecker.class);
+        given(checker.supportedScopes()).willReturn(java.util.EnumSet.allOf(WithdrawalSettlementChecker.Scope.class));
+        given(other.supportedScopes()).willReturn(java.util.Set.of(WithdrawalSettlementChecker.Scope.POINTS));
+        doThrow(new IllegalStateException("정산 미완료")).when(other).requireSettled(1L);
+        // when, then
+        assertThatThrownBy(() -> processor(checker, other).withdraw(1L, new MemberWithdrawRequest("password")))
+                .isInstanceOf(IllegalStateException.class);
+        verify(other).requireSettled(1L);
+        verifyNoInteractions(blocks, withdrawal);
     }
 
 }

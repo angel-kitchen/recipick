@@ -13,6 +13,8 @@ import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,12 +46,18 @@ public class MemberWithdrawalProcessor {
         if (memberships.isActive(memberId)) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP);
         }
-        WithdrawalSettlementChecker checker = settlementCheckers.getIfAvailable();
-        if (checker == null || checker.supportedScopes() == null
-                || !checker.supportedScopes().containsAll(EnumSet.allOf(WithdrawalSettlementChecker.Scope.class))) {
+        List<WithdrawalSettlementChecker> checkers = settlementCheckers.orderedStream().toList();
+        Set<WithdrawalSettlementChecker.Scope> covered = EnumSet.noneOf(WithdrawalSettlementChecker.Scope.class);
+        for (WithdrawalSettlementChecker checker : checkers) {
+            Set<WithdrawalSettlementChecker.Scope> scopes = checker.supportedScopes();
+            if (scopes != null) {
+                covered.addAll(scopes);
+            }
+        }
+        if (!covered.containsAll(EnumSet.allOf(WithdrawalSettlementChecker.Scope.class))) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY);
         }
-        checker.requireSettled(memberId);
+        checkers.forEach(checker -> checker.requireSettled(memberId));
         LocalDateTime now = LocalDateTime.now(clock);
         trialBlocks.recordWithdrawal(memberId, now);
         withdrawal.withdraw(member, now);
