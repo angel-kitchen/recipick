@@ -198,6 +198,46 @@ class PaymentRepositoryTest extends IntegrationTestSupport {
             .containsExactly(first.getId(), second.getId());
     }
 
+    @Test
+    @DisplayName("만료 재조회 구간이 지난 IN_PROGRESS 결제만 경계 포함·ID 순으로 이어 읽는다 — 결제 완료·실패·만료 시각 없음은 제외")
+    void findStaleInProgressPaymentIds() {
+        // given — 기준 시각을 먼 과거로 잡는다. 다른 통합 테스트가 커밋해 둔 결제는 실제 현재 시각 근처라 섞이지 않는다
+        LocalDateTime expiredBefore = LocalDateTime.of(2000, 1, 1, 10, 0);
+        Payment before = paymentRepository.save(inProgressPayment(13L, expiredBefore.minusMinutes(1)));
+        Payment boundary = paymentRepository.save(inProgressPayment(14L, expiredBefore));
+        paymentRepository.save(inProgressPayment(15L, expiredBefore.plusMinutes(1)));
+        Payment paid = inProgressPayment(16L, expiredBefore.minusHours(1));
+        paid.markPaid("tx_16", expiredBefore.minusHours(1).minusMinutes(1));
+        paymentRepository.save(paid);
+        Payment failed = inProgressPayment(17L, expiredBefore.minusHours(1));
+        failed.fail(PaymentFailureReason.EXPIRED, null);
+        paymentRepository.save(failed);
+        paymentRepository.save(inProgressPayment(18L, null));
+        em.flush();
+        em.clear();
+
+        // when — 한 건씩 읽은 뒤 마지막 ID 다음부터 이어 읽는다
+        List<Long> firstPage = paymentRepository.findStaleInProgressPaymentIds(
+            0L, expiredBefore, PageRequest.ofSize(1));
+        List<Long> secondPage = paymentRepository.findStaleInProgressPaymentIds(
+            firstPage.get(0), expiredBefore, PageRequest.ofSize(10));
+
+        // then
+        assertThat(firstPage).containsExactly(before.getId());
+        assertThat(secondPage).containsExactly(boundary.getId());
+    }
+
+    private Payment inProgressPayment(Long orderId, LocalDateTime expiresAt) {
+        return Payment.builder()
+            .orderId(orderId)
+            .paymentMethod(PaymentMethod.CARD)
+            .portonePaymentId("pay_" + orderId)
+            .amount(23800L)
+            .status(PaymentStatus.IN_PROGRESS)
+            .expiresAt(expiresAt)
+            .build();
+    }
+
     private Payment newPayment(Long orderId) {
         return Payment.builder()
             .orderId(orderId)

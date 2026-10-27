@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.scheduler;
 
+import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
 import com.recipick.domain.payment.facade.SystemRefundExecutionFacade;
@@ -47,9 +48,10 @@ public class PaymentFallbackScheduler {
             int webhookEvents = recoverWebhookEvents(now, executeAt);
             int memberRefunds = recoverMemberRefunds(now, executeAt);
             int systemRefunds = recoverSystemRefunds(now, executeAt);
-            if (webhookEvents + memberRefunds + systemRefunds > 0) {
-                log.warn("Fallback Sweep 재등록: webhookEvents={}, memberRefunds={}, systemRefunds={}",
-                    webhookEvents, memberRefunds, systemRefunds);
+            int expiredPayments = recoverExpiredPayments(now, executeAt);
+            if (webhookEvents + memberRefunds + systemRefunds + expiredPayments > 0) {
+                log.warn("Fallback Sweep 재등록: webhookEvents={}, memberRefunds={}, systemRefunds={}, expiredPayments={}",
+                    webhookEvents, memberRefunds, systemRefunds, expiredPayments);
             }
         } catch (DataAccessException e) {
             // DB·Redis 장애면 남은 건도 같은 이유로 실패한다. 한 번만 남기고 다음 주기에 다시 한다
@@ -108,6 +110,26 @@ public class PaymentFallbackScheduler {
             List<Long> ids = paymentService.findStaleSystemRefundIds(requestedBefore, afterId, BATCH_SIZE);
             for (Long id : ids) {
                 paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(id), executeAt);
+            }
+            count += ids.size();
+            if (ids.size() < BATCH_SIZE) {
+                return count;
+            }
+            afterId = ids.get(ids.size() - 1);
+        }
+    }
+
+    // 만료 재조회 구간(만료 시각부터 10분)이 지나도 IN_PROGRESS인 결제. 그 안의 결제는 만료 Facade가 1분 간격으로 다시 보고
+    // 있으므로 겹치지 않게 구간이 끝난 것만 고른다. 예약 등록 실패·Worker 중단·STALLED·MANUAL_REVIEW로 큐에서 빠진 결제가
+    // 여기로 온다. 만료 시각이 이미 지났으므로 지금 시각으로 넣고, 판정은 Worker가 PortOne 조회부터 다시 한다
+    private int recoverExpiredPayments(LocalDateTime now, Instant executeAt) {
+        LocalDateTime expiredBefore = now.minus(PaymentExpirationFacade.RECHECK_WINDOW);
+        int count = 0;
+        long afterId = 0L;
+        while (true) {
+            List<Long> ids = paymentService.findStaleInProgressPaymentIds(expiredBefore, afterId, BATCH_SIZE);
+            for (Long id : ids) {
+                paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.paymentExpire(id), executeAt);
             }
             count += ids.size();
             if (ids.size() < BATCH_SIZE) {
