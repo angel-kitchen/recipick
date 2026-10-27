@@ -80,6 +80,29 @@ class PortOnePaymentClientCancelTest {
         assertThat(result.canceledAt()).isEqualTo(LocalDateTime.of(2026, 10, 23, 19, 8, 40));
     }
 
+
+    @Test
+    @DisplayName("SYSTEM 환불의 사후 반환은 같은 경로·멱등 키 규칙으로 requester=ADMIN 본문을 보낸다")
+    void succeededByAdmin() {
+        // given
+        server.expect(requestTo(CANCEL_URL))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(header("Idempotency-Key", "\"" + SERVER_KEY + "\""))
+            .andExpect(content().json("""
+                {"reason": "결제 대기 5분 만료", "currentCancellableAmount": 23800, "requester": "ADMIN"}
+                """, JsonCompareMode.STRICT))
+            .andRespond(withSuccess(
+                cancellation("SUCCEEDED", "\"2026-10-23T10:08:40Z\""), MediaType.APPLICATION_JSON));
+
+        // when
+        PortOneCancelResult result = client.cancelPaymentByAdmin("pay_1", SERVER_KEY, "결제 대기 5분 만료", 23800L);
+
+        // then — 회원 취소와는 본문의 requester만 다르다 (STRICT 비교라 다른 필드가 섞이면 실패한다)
+        server.verify();
+        assertThat(result.outcome()).isEqualTo(PortOneCancelOutcome.SUCCEEDED);
+        assertThat(result.cancellationId()).isEqualTo("cancel_1");
+    }
+
     @Test
     @DisplayName("SUCCEEDED인데 취소 시각이 없으면 시각을 지어내지 않고 null로 돌려준다")
     void succeededWithoutCanceledAt() {
