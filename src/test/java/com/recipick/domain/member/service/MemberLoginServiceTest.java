@@ -67,7 +67,7 @@ class MemberLoginServiceTest {
         stubValidMember();
         given(attempts.clearIfUnlocked("MEMBER", request.email())).willReturn(true);
         JwtTokenPair pair = new JwtTokenPair("access", "refresh", "id", Duration.ofMinutes(30), Duration.ofDays(14));
-        given(tokens.createMemberTokens(1L)).willReturn(pair);
+        given(tokens.createMemberTokens(1L, 0)).willReturn(pair);
         doThrow(new DataAccessResourceFailureException("Redis unavailable")).when(refreshTokens)
                 .save("MEMBER", 1L, "id", "refresh", Duration.ofDays(14));
 

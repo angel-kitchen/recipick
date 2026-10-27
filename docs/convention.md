@@ -51,6 +51,8 @@ API 명세는 각자 형식으로 쓰되, 아래 공통 규칙과 에러 코드 
 - 공개 경로(permitAll): `/api/auth/signup`, `/api/auth/login`, `/api/auth/reissue`, `/api/admin/auth/login`, `/api/webhooks/**`, `/api/config/**`, `/api/service-area/check`(서비스 가능 지역 확인), 각 도메인이 정한 비로그인 조회 경로
 - `/api/config/**`에는 프론트에 공개 가능한 값(storeId, channelKey)만 반환하고, API Secret·Webhook Secret은 절대 반환하지 않습니다.
 - 리프레시 토큰은 응답 본문이 아니라 `HttpOnly; Secure; SameSite=Strict` 쿠키로 주고받고, Redis에 저장합니다. 같은 계정 로그인 3회 연속 실패 시 10분 동안 로그인을 막습니다.
+- 회원 리프레시 토큰에는 `refreshVersion`을 넣고 재발급 시 `MEMBER.refresh_token_version`과 비교합니다. 비밀번호 해시와 버전은 같은 DB 트랜잭션으로 갱신하며, 버전이 없는 기존 토큰은 0으로 처리합니다. 액세스 토큰 검증에는 이 버전을 적용하지 않습니다.
+- 비밀번호 변경의 Redis 세션 조회·삭제는 DB 회원 잠금 밖에서 수행합니다. 변경 전 확보한 키만 커밋 뒤 정리하며 삭제 실패·늦은 저장이 있어도 DB 버전으로 이전 세션을 거절합니다. 상세 실패 정책은 [비밀번호 변경 API](api/member-password-change.md)를 따릅니다.
 - Security Filter에서 발생한 401·403은 `GlobalExceptionHandler`를 거치지 않으므로, `AuthenticationEntryPoint`와 `AccessDeniedHandler`에서 공통 Wrapper로 직접 응답합니다.
 - PortOne 웹훅은 JWT 대신 서명 검증을 사용합니다. 서명 검증에 원문 body가 필요하므로 `/api/webhooks/**`는 request body를 먼저 읽는 로깅 필터에서 제외합니다.
 - CORS는 `global/config`에서 한 곳에서 설정하며, 허용 헤더에 `Authorization, Content-Type, Idempotency-Key`를 포함합니다. 리프레시 토큰 쿠키를 주고받기 위해 `allowCredentials`를 켜고, 허용 Origin은 와일드카드(*) 없이 프론트 주소만 지정합니다.

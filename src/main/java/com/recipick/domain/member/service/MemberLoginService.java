@@ -66,7 +66,7 @@ public class MemberLoginService {
         if (!attemptStore.clearIfUnlocked(SUBJECT_TYPE, attemptId)) {
             throw new BusinessException(AuthErrorCode.LOGIN_LOCKED);
         }
-        JwtTokenPair tokens = tokenProvider.createMemberTokens(member.getId());
+        JwtTokenPair tokens = tokenProvider.createMemberTokens(member.getId(), member.getRefreshTokenVersion());
         refreshTokenStore.save(SUBJECT_TYPE, member.getId(), tokens.refreshTokenId(), tokens.refreshToken(),
                 tokens.refreshExpiration());
         MemberLoginResponse response = new MemberLoginResponse(tokens.accessToken(),

@@ -26,6 +26,7 @@
 - 회원 토큰과 관리자 토큰은 서로의 API를 호출할 수 없다.
 - 회원 토큰 인증·로그인·재발급에서 DB 탈퇴 상태를 확인한다. `global/security`의 인터페이스를 member가 구현하며, Redis 정리 실패 시에도 DB 상태로 차단한다.
 - 비밀번호 변경은 모든 기기 리프레시 토큰을 폐기하되 기존 액세스 토큰은 만료까지 유효하고, 탈퇴는 기존 액세스 토큰으로도 회원 API를 이용할 수 없다.
+- 회원 재발급은 JWT의 refreshVersion과 MEMBER.refresh_token_version을 비교한다(기존 토큰 누락은 0). 비밀번호 해시·버전은 같은 DB 트랜잭션에서 갱신하고, Redis 키 정리는 잠금 밖에서 한다. 액세스 토큰에는 버전 검사를 적용하지 않는다.
 - MART_ADMIN은 요청한 마트가 토큰의 `martId`와 같은지 서버에서 검사한다.
 - SUPER_ADMIN 전용 API는 `@PreAuthorize("hasRole('SUPER_ADMIN')")`
 - 다른 회원 소유 리소스는 403 대신 그 도메인의 404 코드로 응답한다.

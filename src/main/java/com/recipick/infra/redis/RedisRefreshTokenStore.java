@@ -4,9 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -40,6 +44,24 @@ public class RedisRefreshTokenStore {
     public void delete(String subjectType, Long subjectId, String sessionId) {
         // 회전 중에도 같은 세션 키를 삭제하므로 로그아웃 뒤 새 토큰이 남지 않는다.
         redisTemplate.delete(key(subjectType, subjectId, sessionId));
+    }
+
+    public List<String> findSessionKeys(String subjectType, Long subjectId) {
+        List<String> keys = new ArrayList<>();
+        ScanOptions options = ScanOptions.scanOptions().match(key(subjectType, subjectId, "*")).count(500).build();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            cursor.forEachRemaining(keys::add);
+        }
+        return List.copyOf(keys);
+    }
+
+    public void deleteSessions(List<String> keys) {
+        for (int start = 0; start < keys.size(); start += 500) {
+            Long deleted = redisTemplate.delete(keys.subList(start, Math.min(start + 500, keys.size())));
+            if (deleted == null) {
+                throw new DataAccessResourceFailureException("Redis 세션 정리 결과가 없습니다.");
+            }
+        }
     }
 
     private String key(String subjectType, Long subjectId, String sessionId) {
