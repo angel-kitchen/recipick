@@ -38,12 +38,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -53,6 +55,9 @@ public class OrderService {
     private static final Set<CancelReasonCode> BEFORE_PAYMENT_CLOSE_REASONS = EnumSet.of(
             CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH,
             CancelReasonCode.MEMBER_CANCELED);
+
+    // 외부 취소로 종료할 때 재고를 복구하는 마트 처리 상태. 배송이 시작되면 상품이 마트에 없어 재고를 더하면 실물보다 많아진다
+    private static final Set<MartStatus> STOCK_STILL_IN_MART = EnumSet.of(MartStatus.RECEIVED, MartStatus.PREPARING);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -315,6 +320,30 @@ public class OrderService {
 
         orderStatusHistoryRepository.save(systemHistory(order, OrderStatusType.ORDER, fromStatus.name(),
                 order.getStatus().name(), order.getCancelReasonCode().name()));
+        return orderItemRepository.findAllByOrderId(orderId);
+    }
+
+    // 결제 Facade가 PAYMENT를 먼저 잠근 트랜잭션 안에서 호출한다(락 순서 PAYMENT → ORDERS).
+    // 재고 복구는 호출한 Facade가 하므로, 이번 호출로 종료됐고 상품이 아직 마트에 있을 때만 주문 상품을 돌려준다
+    @Transactional
+    public List<OrderItem> closeByExternalCancel(Long orderId, String reasonDetail) {
+        Order order = getOrderForUpdate(orderId);
+        // 웹훅·재조회가 같은 외부 취소를 반복 전달해도 재고를 다시 복구하지 않는다
+        if (order.getStatus() == OrderStatus.REFUNDED) {
+            return List.of();
+        }
+
+        OrderStatus fromStatus = order.getStatus();
+        order.closeByExternalCancel(reasonDetail);
+
+        orderStatusHistoryRepository.save(systemHistory(order, OrderStatusType.ORDER, fromStatus.name(),
+                order.getStatus().name(), CancelReasonCode.EXTERNAL_CANCELED.name()));
+        if (!STOCK_STILL_IN_MART.contains(order.getMartStatus())) {
+            // 실물은 관리자가 확인해 재고 조정으로 맞춘다
+            log.warn("외부 취소로 종료했지만 배송이 시작된 주문이라 재고를 복구하지 않음: orderId={}, martStatus={}",
+                    orderId, order.getMartStatus());
+            return List.of();
+        }
         return orderItemRepository.findAllByOrderId(orderId);
     }
 

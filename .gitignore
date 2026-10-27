@@ -42,3 +42,7 @@ out/
 ### Local secrets ###
 application-local.yml
 .env
+deploy/.env
+deploy/certbot/
+deploy/backups/
+deploy/.deploy.lock

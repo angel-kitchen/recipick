@@ -5,5 +5,6 @@ public enum CancelReasonCode {
     PAYMENT_TIMEOUT,
     PAYMENT_FAILED,
     AMOUNT_MISMATCH,
-    MART_REJECTED
+    MART_REJECTED,
+    EXTERNAL_CANCELED
 }

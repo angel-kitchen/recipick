@@ -22,3 +22,124 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew test
+
+  # 배포 대상 브랜치(레포 변수 DEPLOY_BRANCH)로 push됐을 때만 돈다. 11/9에 변수를 dev에서 main으로 바꾼다.
+  # 필요한 레포 변수: DEPLOY_BRANCH, AWS_REGION, AWS_DEPLOY_ROLE_ARN, ECR_REPOSITORY, DEPLOY_BUCKET, EC2_INSTANCE_ID
+  # 시크릿은 없다. AWS 인증은 OIDC로 역할을 가정하고, 서버 접속은 SSM Run Command다.
+  deploy:
+    if: github.event_name == 'push' && github.ref_name == vars.DEPLOY_BRANCH
+    needs: test
+    runs-on: ubuntu-latest
+    # 서버가 한 대라 배포는 한 번에 하나만. 뒤에 온 배포는 기다린다
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+    steps:
+      # 배포 브랜치를 정했는데 나머지 변수가 비었으면 설정 실수다. 건너뛰면 머지가 초록으로 보이면서 배포가 안 되므로,
+      # 빌드 전에 빠진 이름을 대며 실패시킨다. DEPLOY_BRANCH가 없을 때(배포 미사용)는 위 if에서 이미 건너뛴다
+      - name: 배포 변수 확인
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          missing=""
+          for name in AWS_REGION AWS_DEPLOY_ROLE_ARN ECR_REPOSITORY DEPLOY_BUCKET EC2_INSTANCE_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::레포 변수가 비어 있다:$missing (deploy/README.md 3절)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 실행 jar 빌드 (테스트는 test 작업에서 끝났다)
+        run: ./gradlew bootJar -x test
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 이미지 빌드·푸시 (태그 = 커밋 SHA)
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+        run: |
+          docker build -t "$IMAGE:$GITHUB_SHA" .
+          docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: 서버 설정 파일 업로드 (deploy/ → S3)
+        run: |
+          tar -czf deploy.tar.gz -C deploy --exclude=.env --exclude=backups --exclude=certbot --exclude=releases --exclude=.deploy.lock .
+          aws s3 cp deploy.tar.gz "s3://$DEPLOY_BUCKET/deploy/$GITHUB_SHA.tar.gz"
+
+      - name: SSM Run Command로 서버에서 배포 스크립트 실행
+        id: ssm
+        run: |
+          # 잠금을 다운로드 전에 잡고(fd 9) 배포 스크립트에 물려준다. 설정 교체·기동·검증·복구가 끝날 때까지 유지된다.
+          # 묶음은 운영 디렉터리에 덮어 풀지 않고 releases/<SHA>에 풀며, 운영 설정 교체는 deploy.sh가 한다.
+          # 다운로드 임시 파일은 배포마다 따로 만들고 끝나면 지운다. SSM은 sh로 실행할 수 있어 POSIX 문법만 쓴다
+          jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
+            executionTimeout: ["900"],
+            commands: [
+              "set -eu",
+              "export PATH=\"$PATH:/usr/local/bin:/snap/bin\"",
+              "mkdir -p /opt/recipick/releases",
+              "exec 9>/opt/recipick/.deploy.lock",
+              "flock -n 9 || { echo \"다른 배포가 진행 중이라 중단\"; exit 1; }",
+              "work=$(mktemp -d /tmp/recipick-deploy-\($sha).XXXXXX)",
+              "trap \"rm -rf $work\" EXIT",
+              "aws s3 cp --only-show-errors s3://\($bucket)/deploy/\($sha).tar.gz $work/bundle.tar.gz",
+              "rm -rf /opt/recipick/releases/\($sha) && mkdir -p /opt/recipick/releases/\($sha)",
+              "tar -xzf $work/bundle.tar.gz -C /opt/recipick/releases/\($sha)",
+              "DEPLOY_LOCK_HELD=1 bash /opt/recipick/releases/\($sha)/scripts/deploy.sh \($sha)"
+            ]
+          }' > params.json
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $GITHUB_SHA" \
+            --parameters file://params.json \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+      - name: 완료 대기, 서버 출력 수집 (AWS 권한 없는 팀원도 여기서 원인을 본다)
+        env:
+          COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
+        run: |
+          status=Pending
+          for i in $(seq 1 90); do
+            status=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          echo "::group::서버 표준 출력"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "::endgroup::"
+          echo "::group::서버 표준 오류"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+          echo "::endgroup::"
+          if [ "$status" != "Success" ]; then
+            echo "::error::배포 실패. SSM 상태: $status"
+            exit 1
+          fi
