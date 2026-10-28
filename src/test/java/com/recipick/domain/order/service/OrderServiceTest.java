@@ -86,7 +86,7 @@ class OrderServiceTest {
     @DisplayName("주문의 회원 ID를 돌려준다")
     void getMemberIdOf() {
         // given
-        given(orderRepository.findById(1L)).willReturn(Optional.of(pendingOrder()));
+        given(orderRepository.findMemberIdById(1L)).willReturn(Optional.of(7L));
 
         // when
         Long memberId = orderService.getMemberIdOf(1L);
@@ -99,10 +99,36 @@ class OrderServiceTest {
     @DisplayName("없는 주문의 회원 ID를 조회하면 주문을 찾을 수 없다는 오류가 난다")
     void getMemberIdOf_orderNotFound() {
         // given
-        given(orderRepository.findById(1L)).willReturn(Optional.empty());
+        given(orderRepository.findMemberIdById(1L)).willReturn(Optional.empty());
 
         // when, then
         assertThatThrownBy(() -> orderService.getMemberIdOf(1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("주문 당시 마트 ID를 돌려준다")
+    void getMartIdOf() {
+        // given
+        given(orderRepository.findMartIdById(1L)).willReturn(Optional.of(3L));
+
+        // when
+        Long martId = orderService.getMartIdOf(1L);
+
+        // then
+        assertThat(martId).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("없는 주문의 마트 ID를 조회하면 주문을 찾을 수 없다는 오류가 난다")
+    void getMartIdOf_orderNotFound() {
+        // given
+        given(orderRepository.findMartIdById(1L)).willReturn(Optional.empty());
+
+        // when, then
+        assertThatThrownBy(() -> orderService.getMartIdOf(1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);

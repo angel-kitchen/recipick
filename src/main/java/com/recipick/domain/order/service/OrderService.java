@@ -146,17 +146,16 @@ public class OrderService {
         return orderItemRepository.saveAll(items);
     }
 
+    // 결제 Facade가 주문을 잠그기 전에 부르므로 엔티티를 올리지 않고 값만 읽는다
     public Long getMemberIdOf(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
-                .getMemberId();
+        return orderRepository.findMemberIdById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     // 관리자 결제 상세 감사 기록(PAYMENT_DETAIL_VIEW)은 마트 ID가 필수. 회원의 현재 이용 마트가 아니라 주문 당시 마트를 준다
     public Long getMartIdOf(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
-                .getMartId();
+        return orderRepository.findMartIdById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     public PageResponse<OrderSummaryResponse> searchMemberOrders(
