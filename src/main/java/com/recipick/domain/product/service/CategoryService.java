@@ -12,6 +12,9 @@ import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.recipick.global.config.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +26,7 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
 
+    @Cacheable(cacheNames = CacheConfig.CATEGORIES)
     @Transactional(readOnly = true)
     public List<CategoryResponse> getCategories(){
         return categoryRepository.findAllByDeletedFalse().stream()
@@ -31,6 +35,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
     public CategoryIdResponse createCategory(CategoryCreateRequest request) {
         Optional<Category> existing = categoryRepository.findByNameForUpdate(request.name());
         if (existing.isPresent()) {
@@ -48,6 +53,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
     public CategoryIdResponse updateCategory(Long categoryId, CategoryUpdateRequest request){
         Category category = findCategory(categoryId);
         if(category.isDeleted()){
@@ -63,6 +69,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
     public void delete(Long categoryId){
         Category category = categoryRepository.findByIdForUpdate(categoryId)
             .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));

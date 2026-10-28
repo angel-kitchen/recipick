@@ -38,6 +38,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.recipick.global.config.CacheConfig;
+import org.springframework.cache.annotation.Cacheable;
+
 
 @Service
 @RequiredArgsConstructor
@@ -243,6 +246,13 @@ public class ProductService {
 
     private static final Set<String> SEARCH_SORT_PROPERTIES = Set.of("price", "createdAt");
 
+
+    @Cacheable(
+        cacheNames = CacheConfig.PRODUCT_SEARCH,
+        key = "#martId + ':' + #request.keyword + ':' + #request.categoryId + ':' + #request.minPrice"
+            + " + ':' + #request.maxPrice + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
+            + " + ':' + #pageable.sort"
+    )
     public PageResponse<ProductSearchResponse> searchProducts(
         Long martId,
         ProductSearchRequest request,
