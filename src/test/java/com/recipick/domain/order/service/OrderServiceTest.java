@@ -89,7 +89,7 @@ class OrderServiceTest {
     @DisplayName("주문의 회원 ID를 돌려준다")
     void getMemberIdOf() {
         // given
-        given(orderRepository.findById(1L)).willReturn(Optional.of(pendingOrder()));
+        given(orderRepository.findMemberIdById(1L)).willReturn(Optional.of(7L));
 
         // when
         Long memberId = orderService.getMemberIdOf(1L);
@@ -102,10 +102,36 @@ class OrderServiceTest {
     @DisplayName("없는 주문의 회원 ID를 조회하면 주문을 찾을 수 없다는 오류가 난다")
     void getMemberIdOf_orderNotFound() {
         // given
-        given(orderRepository.findById(1L)).willReturn(Optional.empty());
+        given(orderRepository.findMemberIdById(1L)).willReturn(Optional.empty());
 
         // when, then
         assertThatThrownBy(() -> orderService.getMemberIdOf(1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("주문 당시 마트 ID를 돌려준다")
+    void getMartIdOf() {
+        // given
+        given(orderRepository.findMartIdById(1L)).willReturn(Optional.of(3L));
+
+        // when
+        Long martId = orderService.getMartIdOf(1L);
+
+        // then
+        assertThat(martId).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("없는 주문의 마트 ID를 조회하면 주문을 찾을 수 없다는 오류가 난다")
+    void getMartIdOf_orderNotFound() {
+        // given
+        given(orderRepository.findMartIdById(1L)).willReturn(Optional.empty());
+
+        // when, then
+        assertThatThrownBy(() -> orderService.getMartIdOf(1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
@@ -441,6 +467,168 @@ class OrderServiceTest {
 
         // when, then
         assertThatThrownBy(() -> orderService.acceptByMart(AdminRole.SUPER_ADMIN, null, 10L, 1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("접수중인 결제 완료 주문을 마트가 거절하면 취소 요청·마트 거절 상태로 바꾸고 처리 관리자가 담긴 마트 주체 이력을 두 건 남긴다")
+    void requestMartRejection() {
+        // given
+        Order order = receivedOrder(3L);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.REJECTED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MART_REJECTED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("재료 소진");
+        verify(orderStatusHistoryRepository).saveAll(historiesCaptor.capture());
+        assertThat(historiesCaptor.getValue())
+                .extracting(OrderStatusHistory::getStatusType, OrderStatusHistory::getFromStatus,
+                        OrderStatusHistory::getToStatus, OrderStatusHistory::getActor,
+                        OrderStatusHistory::getChangedByAdminId, OrderStatusHistory::getReason)
+                .containsExactly(
+                        tuple(OrderStatusType.ORDER, "PAID", "CANCEL_REQUESTED", OrderStatusActor.MART, 20L,
+                                "MART_REJECTED"),
+                        tuple(OrderStatusType.MART, "RECEIVED", "REJECTED", OrderStatusActor.MART, 20L, "재료 소진"));
+    }
+
+    @Test
+    @DisplayName("SUPER_ADMIN이 거절해도 주체는 마트이고 처리 관리자 ID로 누가 처리했는지 남긴다")
+    void requestMartRejection_superAdmin() {
+        // given
+        Order order = receivedOrder(3L);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.REJECTED);
+        verify(orderStatusHistoryRepository).saveAll(historiesCaptor.capture());
+        assertThat(historiesCaptor.getValue())
+                .extracting(OrderStatusHistory::getActor, OrderStatusHistory::getChangedByAdminId)
+                .containsOnly(tuple(OrderStatusActor.MART, 10L));
+    }
+
+    @Test
+    @DisplayName("MART_ADMIN이 다른 마트 주문을 거절하면 소속 마트 데이터만 처리할 수 있다는 오류가 나고 상태는 그대로다")
+    void requestMartRejection_otherMart() {
+        // given
+        Order order = receivedOrder(3L);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.requestMartRejection(AdminRole.MART_ADMIN, 4L, 20L, 1L, "재료 소진"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
+        verify(orderStatusHistoryRepository, never()).saveAll(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"PREPARING", "SHIPPING", "DELIVERED"})
+    @DisplayName("마트가 준비를 시작한 주문은 상태를 바꾸지 않고 거절할 수 없다고 돌려준다")
+    void requestMartRejection_martAlreadyPreparing(MartStatus martStatus) {
+        // given
+        Order order = paidOrder(martStatus);
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.NOT_REJECTABLE);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getMartStatus()).isEqualTo(martStatus);
+        verify(orderStatusHistoryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("회원 취소가 진행 중인 주문은 회원 취소 사유를 그대로 두고 거절할 수 없다고 돌려준다")
+    void requestMartRejection_memberCancelRequested() {
+        // given
+        Order order = memberCancelRequestedOrder();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.NOT_REJECTABLE);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
+        verify(orderStatusHistoryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("이미 거절 접수된 주문에 거절이 다시 오면 최초 거절 사유를 그대로 두고 이미 거절됐다고 돌려준다")
+    void requestMartRejection_alreadyRejected() {
+        // given
+        Order order = receivedOrder(3L);
+        order.rejectByMart("재료 소진");
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "다른 사유");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.ALREADY_REJECTED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("재료 소진");
+        verify(orderStatusHistoryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("거절 환불까지 끝난 주문에 거절이 다시 와도 이미 거절됐다고 돌려준다")
+    void requestMartRejection_refundedAfterRejection() {
+        // given
+        Order order = receivedOrder(3L);
+        order.rejectByMart("재료 소진");
+        order.markRefunded();
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
+
+        // when
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
+
+        // then
+        assertThat(result).isEqualTo(MartRejectRequestResult.ALREADY_REJECTED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        verify(orderStatusHistoryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("결제 전 주문을 거절하면 주문을 찾을 수 없다는 오류가 난다")
+    void requestMartRejection_pendingOrder() {
+        // given
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(pendingOrder()));
+
+        // when, then
+        assertThatThrownBy(() -> orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("없는 주문을 거절하면 주문을 찾을 수 없다는 오류가 난다")
+    void requestMartRejection_orderNotFound() {
+        // given
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.empty());
+
+        // when, then
+        assertThatThrownBy(() -> orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(OrderErrorCode.ORDER_NOT_FOUND);

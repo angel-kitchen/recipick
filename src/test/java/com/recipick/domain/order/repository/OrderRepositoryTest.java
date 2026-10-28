@@ -78,6 +78,43 @@ class OrderRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("주문 ID로 회원 ID와 마트 ID를 돌려주고 없는 주문 ID는 비어 있다")
+    void findMemberIdAndMartIdById() {
+        // given
+        Order order = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        em.flush();
+        em.clear();
+
+        // when, then
+        assertThat(orderRepository.findMemberIdById(order.getId())).contains(MEMBER_ID);
+        assertThat(orderRepository.findMartIdById(order.getId())).contains(MART_ID);
+        assertThat(orderRepository.findMemberIdById(Long.MAX_VALUE)).isEmpty();
+        assertThat(orderRepository.findMartIdById(Long.MAX_VALUE)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("회원·마트 ID를 먼저 조회해도 뒤이은 잠금 조회는 그 사이 바뀐 최신 상태를 읽는다")
+    void findIdsBeforeLock_lockReadsLatestState() {
+        // given
+        Order order = orderRepository.save(newMartOrder(MART_ID, OrderStatus.PAID, MartStatus.RECEIVED));
+        em.flush();
+        em.clear();
+        orderRepository.findMemberIdById(order.getId());
+        orderRepository.findMartIdById(order.getId());
+        // 영속성 컨텍스트를 거치지 않는 벌크 UPDATE로, 결제 Facade의 조회와 잠금 사이에 다른 트랜잭션이 마트 수락을 커밋한 상황을 만든다
+        em.createQuery("update Order o set o.martStatus = :martStatus where o.id = :id")
+                .setParameter("martStatus", MartStatus.PREPARING)
+                .setParameter("id", order.getId())
+                .executeUpdate();
+
+        // when
+        Order locked = orderRepository.findByIdForUpdate(order.getId()).orElseThrow();
+
+        // then
+        assertThat(locked.getMartStatus()).isEqualTo(MartStatus.PREPARING);
+    }
+
+    @Test
     @DisplayName("주문 목록 조회용 인덱스가 회원 ID, 마트 ID·마트 처리 상태 순서로 생성된다")
     void listIndexesExist() {
         // when

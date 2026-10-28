@@ -238,6 +238,111 @@ class OrderTest {
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "PAID, RECEIVED, true",
+            "PAID, PREPARING, false",
+            "PAID, SHIPPING, false",
+            "PAID, DELIVERED, false",
+            "CANCEL_REQUESTED, RECEIVED, false",
+            "CANCEL_REQUESTED, REJECTED, false",
+            "REFUNDED, REJECTED, false",
+            "PENDING_PAYMENT, NONE, false"
+    })
+    @DisplayName("결제 완료이면서 마트가 접수중일 때만 마트가 거절할 수 있다")
+    void isRejectableByMart(OrderStatus status, MartStatus martStatus, boolean expected) {
+        // given
+        Order order = order(status, martStatus);
+
+        // when
+        boolean rejectable = order.isRejectableByMart();
+
+        // then
+        assertThat(rejectable).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("마트가 거절하면 취소 요청 상태와 마트 거절 상태가 되고 마트 거절 사유와 상세가 남으며 취소 시각은 아직 없다")
+    void rejectByMart() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+
+        // when
+        order.rejectByMart("재료 소진");
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MART_REJECTED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("재료 소진");
+        assertThat(order.getCanceledAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("마트가 준비를 시작한 주문은 거절할 수 없고 상태도 그대로다")
+    void rejectByMart_martPreparing() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.PREPARING);
+
+        // when, then
+        assertThatThrownBy(() -> order.rejectByMart("재료 소진"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.PREPARING);
+        assertThat(order.getCancelReasonCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("회원 취소가 진행 중인 주문은 거절할 수 없고 회원 취소 사유도 그대로다")
+    void rejectByMart_memberCancelRequested() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.requestMemberCancel("단순 변심");
+
+        // when, then
+        assertThatThrownBy(() -> order.rejectByMart("재료 소진"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
+        assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
+    }
+
+    @Test
+    @DisplayName("마트 거절 주문은 PG 취소가 실패해도 결제 완료로 되돌릴 수 없다")
+    void restorePaidAfterMemberCancelFailure_martRejected() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.rejectByMart("재료 소진");
+
+        // when, then
+        assertThatThrownBy(order::restorePaidAfterMemberCancelFailure)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
+    }
+
+    @Test
+    @DisplayName("마트 거절 주문을 환불 완료로 바꾸면 마트 거절 상태와 사유는 유지되고 취소 시각이 남는다")
+    void markRefunded_martRejected() {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.RECEIVED);
+        order.rejectByMart("재료 소진");
+
+        // when
+        order.markRefunded();
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
+        assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MART_REJECTED);
+        assertThat(order.getCanceledAt()).isNotNull();
+    }
+
     @Test
     @DisplayName("회원 취소가 실패해 결제 완료로 되돌리면 취소 사유와 상세가 비워진다")
     void restorePaidAfterMemberCancelFailure() {
