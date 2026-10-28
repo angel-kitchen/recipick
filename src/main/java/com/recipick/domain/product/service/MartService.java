@@ -14,7 +14,9 @@ import com.recipick.global.common.PolicyConstants;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.repository.query.Param;
+import com.recipick.global.config.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class MartService {
 
     private final MartRepository martRepository;
 
+    @CacheEvict(cacheNames = CacheConfig.OPEN_MARTS, allEntries = true)
     @Transactional
     public MartIdResponse createMart(MartCreateRequest request){
         int radius = request.serviceRadiusM() != null
@@ -53,6 +56,7 @@ public class MartService {
         return new MartIdResponse(martRepository.save(mart).getId());
     }
 
+    @CacheEvict(cacheNames = CacheConfig.OPEN_MARTS, allEntries = true)
     @Transactional
     public MartIdResponse updateMart(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
         validateUpdatePermission(role, adminMartId, martId, request);
@@ -105,6 +109,7 @@ public class MartService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'all'")
     public List<OpenMartResponse> findOpenMarts() {
         return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
             .map(OpenMartResponse::from)
@@ -112,6 +117,7 @@ public class MartService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'region:' + #regionId")
     public List<OpenMartResponse> findOpenMarts(Long regionId) {
         return martRepository.findAllByRegionIdAndStatusOrderByIdAsc(regionId, MartStatus.OPEN).stream()
             .map(OpenMartResponse::from)
