@@ -13,6 +13,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -33,7 +34,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Immutable
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "admin_audit_log")
+@Table(name = "admin_audit_log", indexes = {
+        @Index(name = "idx_admin_audit_log_created_at", columnList = "created_at")
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AdminAuditLog {
 

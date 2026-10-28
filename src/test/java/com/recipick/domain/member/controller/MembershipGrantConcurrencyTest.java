@@ -74,6 +74,8 @@ class MembershipGrantConcurrencyTest extends IntegrationTestSupport {
 
     @AfterEach
     void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        jdbc.update("DELETE FROM admin_audit_log WHERE admin_id = ?", adminId);
         jdbc.update("DELETE FROM membership WHERE member_id = ?", memberId);
         jdbc.update("DELETE FROM member WHERE id = ?", memberId);
         jdbc.update("DELETE FROM admin WHERE id = ?", adminId);
@@ -171,6 +173,10 @@ class MembershipGrantConcurrencyTest extends IntegrationTestSupport {
     void rollsBackFailedGrant() throws Exception {
         // given
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        AuthPrincipal principal = new AuthPrincipal(SubjectType.ADMIN, adminId, "SUPER_ADMIN", null);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.authorities()));
 
         // when
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {

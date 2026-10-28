@@ -213,6 +213,22 @@ public class Order extends BaseTimeEntity {
         this.martStatus = MartStatus.PREPARING;
     }
 
+    // 마트는 접수중인 결제 완료 주문만 거절한다. 준비를 시작했거나 취소가 진행 중인 주문은 거절 대상이 아니다
+    public boolean isRejectableByMart() {
+        return status == OrderStatus.PAID && martStatus == MartStatus.RECEIVED;
+    }
+
+    // PG 환불 결과를 기다려야 하므로 즉시 종료하지 않고 CANCEL_REQUESTED에 둔다. 재고는 환불 성공 시 markRefunded가 복구한다
+    public void rejectByMart(String reasonDetail) {
+        if (!isRejectableByMart()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        }
+        this.status = OrderStatus.CANCEL_REQUESTED;
+        this.martStatus = MartStatus.REJECTED;
+        this.cancelReasonCode = CancelReasonCode.MART_REJECTED;
+        this.cancelReasonDetail = reasonDetail;
+    }
+
     public void restorePaidAfterMemberCancelFailure() {
         // 마트 거절은 이미 처리할 수 없다고 판정됐으므로 PG 취소가 실패해도 정상 주문으로 되돌리지 않는다
         if (cancelReasonCode != CancelReasonCode.MEMBER_CANCELED || !status.canTransitionTo(OrderStatus.PAID)) {

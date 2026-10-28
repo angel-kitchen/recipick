@@ -29,4 +29,11 @@ public interface OrderRepository extends JpaRepository<Order, Long>, OrderReposi
 
     @Query("select o.id as orderId, o.memberId as memberId from Order o where o.id in :ids")
     List<OrderMemberId> findMemberIdsByIdIn(@Param("ids") Collection<Long> ids);
+
+    // 엔티티를 읽으면 영속성 컨텍스트에 남아, 같은 트랜잭션의 뒤이은 findByIdForUpdate가 잠근 뒤에도 이전 상태를 받는다
+    @Query("select o.memberId from Order o where o.id = :id")
+    Optional<Long> findMemberIdById(@Param("id") Long id);
+
+    @Query("select o.martId from Order o where o.id = :id")
+    Optional<Long> findMartIdById(@Param("id") Long id);
 }

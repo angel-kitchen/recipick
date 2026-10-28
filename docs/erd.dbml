@@ -65,6 +65,9 @@ Table ADMIN_AUDIT_LOG {
   details json [null]
   ip_address varchar(45) [null]
   created_at datetime [not null]
+  indexes {
+    created_at [name: 'idx_admin_audit_log_created_at']
+  }
 }
 
 Table MEMBERSHIP {
