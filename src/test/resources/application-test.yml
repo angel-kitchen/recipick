@@ -2,6 +2,8 @@
 recipick:
   cache:
     enabled: false
+  rate-limit:
+    enabled: false
 
 spring:
   jpa:

@@ -61,6 +61,14 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+recipick:
+  rate-limit:
+    # 부하 테스트(k6)는 한 IP에서 많이 보내므로 RATE_LIMIT_ENABLED=false로 끄고 돌린다
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    window: 1m
+    auth-limit: 10
+    api-limit: 120
 ---
 spring:
   config:
