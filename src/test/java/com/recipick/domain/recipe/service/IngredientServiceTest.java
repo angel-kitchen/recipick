@@ -34,6 +34,9 @@ class IngredientServiceTest {
     @Mock
     private RecipeIngredientRepository recipeIngredientRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private IngredientService ingredientService;
 

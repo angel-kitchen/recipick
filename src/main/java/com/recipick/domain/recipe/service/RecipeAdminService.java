@@ -1,5 +1,11 @@
 package com.recipick.domain.recipe.service;
 
+import java.util.Arrays;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
 import com.recipick.domain.recipe.dto.request.RecipeIngredientsSaveRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSaveRequest;
@@ -34,6 +40,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class RecipeAdminService {
 
+    private final AdminAuditRecorder auditRecorder;
+
     private final RecipeRepository recipeRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final IngredientRepository ingredientRepository;
@@ -51,12 +59,15 @@ public class RecipeAdminService {
             .steps(toSteps(request.steps()))
             .youtubeVideoId(YoutubeUrlParser.extractVideoId(request.youtubeUrl()))
             .build();
-        return new RecipeIdResponse(recipeRepository.save(recipe).getId());
+        Recipe saved = recipeRepository.save(recipe);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.RECIPE_CREATE, saved.getId(), null, Map.of()));
+        return new RecipeIdResponse(saved.getId());
     }
 
     @Transactional
     public RecipeIdResponse updateRecipe(Long recipeId, RecipeSaveRequest request) {
         Recipe recipe = getRecipeForUpdate(recipeId);
+        var before = auditValues(recipe);
         recipe.update(
                 request.name(),
                 request.cuisineType(),
@@ -68,12 +79,21 @@ public class RecipeAdminService {
                 toSteps(request.steps()),
                 YoutubeUrlParser.extractVideoId(request.youtubeUrl())
         );
+        if (!before.equals(auditValues(recipe))) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.RECIPE_UPDATE, recipeId, null, Map.of()));
+        }
         return new RecipeIdResponse(recipeId);
     }
 
     @Transactional
     public RecipeIdResponse changeStatus(Long recipeId, RecipeStatusUpdateRequest request) {
-        getRecipeForUpdate(recipeId).changeStatus(request.status());
+        Recipe recipe = getRecipeForUpdate(recipeId);
+        var beforeStatus = recipe.getStatus();
+        boolean beforeAuto = recipe.isAutoCartEnabled();
+        recipe.changeStatus(request.status());
+        if (beforeStatus != recipe.getStatus() || beforeAuto != recipe.isAutoCartEnabled()) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.RECIPE_STATUS_CHANGE, recipeId, null, Map.of(AdminAuditField.STATUS, new AdminAuditChange(beforeStatus, recipe.getStatus()), AdminAuditField.AUTO_CART_AVAILABLE, new AdminAuditChange(beforeAuto, recipe.isAutoCartEnabled()))));
+        }
         return new RecipeIdResponse(recipeId);
     }
 
@@ -154,4 +174,10 @@ public class RecipeAdminService {
             .map(RecipeStepRequest::toStep)
             .toList();
     }
+    private List<Object> auditValues(Recipe recipe) {
+        return Arrays.asList(recipe.getName(), recipe.getCuisine(), recipe.getDishType(),
+                recipe.getBaseServings(), recipe.getCookTimeMin(), recipe.getDifficulty(), recipe.getSpicyLevel(),
+                recipe.getSteps(), recipe.getYoutubeVideoId());
+    }
+
 }
