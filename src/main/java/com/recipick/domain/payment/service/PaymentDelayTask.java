@@ -33,6 +33,11 @@ public record PaymentDelayTask(
         return new PaymentDelayTask(PaymentDelayTaskType.SYSTEM_REFUND_EXECUTE, refundId);
     }
 
+    // SYSTEM 환불 실행과 같은 REFUND.id를 쓰지만 접두사가 달라 큐에서 서로 다른 member다
+    public static PaymentDelayTask adminRefundExecute(Long refundId) {
+        return new PaymentDelayTask(PaymentDelayTaskType.ADMIN_REFUND_EXECUTE, refundId);
+    }
+
     // 환불 작업과 같은 숫자 ID가 와도 접두사가 달라 큐에서 서로 다른 member다
     public static PaymentDelayTask paymentExpire(Long paymentId) {
         return new PaymentDelayTask(PaymentDelayTaskType.PAYMENT_EXPIRE, paymentId);

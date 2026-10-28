@@ -101,6 +101,47 @@ class RefundTest {
     }
 
     @Test
+    @DisplayName("ADMIN 환불은 REQUESTED 상태로 생성되고 결제 금액 전액과 관리자 요청의 멱등키가 그대로 저장된다")
+    void requestedByAdmin() {
+        // given
+        Payment payment = cancelRequestedPayment();
+
+        // when
+        Refund refund = Refund.requestedByAdmin(payment, "상품 준비가 어렵습니다.", "admin-key-1", REQUESTED_AT);
+
+        // then — 마트 거절도 전액 환불만 있으므로 금액은 결제 금액과 같다
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.ADMIN);
+        assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
+        assertThat(refund.getReason()).isEqualTo("상품 준비가 어렵습니다.");
+        assertThat(refund.getIdempotencyKey()).isEqualTo("admin-key-1");
+        assertThat(refund.getRequestedAt()).isEqualTo(REQUESTED_AT);
+        assertThat(refund.getPayment()).isSameAs(payment);
+        assertThat(refund.getPortoneCancellationId()).isNull();
+        assertThat(refund.getCompletedAt()).isNull();
+        assertThat(refund.getFailureType()).isNull();
+        assertThat(refund.getFailureReason()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentStatus.class, names = "CANCEL_REQUESTED", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("취소 요청 상태가 아닌 결제에는 ADMIN 환불을 만들 수 없다")
+    void requestedByAdminWhenPaymentNotCancelRequested(PaymentStatus status) {
+        // given — 마트 거절 환불도 Payment.requestCancel() 뒤에만 생긴다
+        Payment payment = paymentWith(status);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            Refund.requestedByAdmin(payment, "상품 준비가 어렵습니다.", "admin-key-1", REQUESTED_AT));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+    }
+
+    @Test
     @DisplayName("PortOne이 처리 중이라고 답하면 상태는 REQUESTED로 두고 취소 내역 ID만 남긴다")
     void recordRequested() {
         // given

@@ -22,7 +22,8 @@ import org.springframework.util.StringUtils;
 
 // PortOne 콘솔·관리자 화면에서 끝난 전액 취소를 결제·환불·주문·재고에 반영한다. 외부 취소로 상태를 바꾸는 곳은 여기뿐이다.
 // PortOne 조회와 외부 취소 판정(RefundCancellationRules.matchExternalFullCancellation)은 호출한 쪽이 트랜잭션 밖에서 끝낸 뒤 부른다.
-// 기존 회원·SYSTEM 환불로 마무리돼야 하는 취소는 새 EXTERNAL 환불을 만들지 않고 RETRY·NOT_APPLICABLE로 돌려준다.
+// 기존 회원·SYSTEM·마트 거절 환불로 마무리돼야 하는 취소는 새 EXTERNAL 환불을 만들지 않고 RETRY·NOT_APPLICABLE로 돌려준다.
+// 마트 거절 환불이 실패로 끝난 뒤의 콘솔 전액 취소는 예외다 — 1차에는 재처리 API가 없어 운영자가 콘솔에서 돌려주고 여기서 거절 주문을 닫는다.
 // 업무 결과는 예외가 아니라 반환값이다 — 안에서 던지면 롤백돼 버린다. 판정 규칙에 맞지 않는 취소를 넘긴 것은 호출자 버그라 예외로 막는다
 @Slf4j
 @Component
@@ -55,9 +56,10 @@ public class ExternalCancellationProcessor {
         // 새 EXTERNAL 환불은 결제 전액을 돌려준 취소에만 만든다
         requireAmount(cancellation.totalAmount(), payment.getAmount());
 
-        // 판정과 잠금 사이에 회원 취소 등이 새 환불을 만들었을 수 있다. 기존 환불이 우선이라 EXTERNAL을 만들지 않는다
+        // 판정과 잠금 사이에 회원 취소·마트 거절이 새 환불을 만들었을 수 있다. 기존 환불이 우선이라 EXTERNAL을 만들지 않는다
         List<Refund> requested = new ArrayList<>(paymentService.findRequestedMemberRefunds(paymentId));
         paymentService.findRequestedSystemRefund(paymentId).ifPresent(requested::add);
+        requested.addAll(paymentService.findRequestedAdminRefunds(paymentId));
         if (!requested.isEmpty()) {
             return judgeRequested(payment, requested);
         }
@@ -67,6 +69,13 @@ public class ExternalCancellationProcessor {
             return notApplicable(payment, "외부 취소 자동 반영 대상 결제가 PAID가 아님: status=" + payment.getStatus());
         }
 
+        // 마트 거절 환불이 실패로 끝난 주문인지 상태를 바꾸기 전에 본다. 1차에는 재처리가 없어 실패한 마트 거절 환불은 결제당 최대 한 건이다.
+        // 둘 이상이면 어느 거절의 복구인지 단정할 수 없어 아무것도 바꾸지 않는다
+        List<Refund> failedAdmin = paymentService.findFailedAdminRefunds(paymentId);
+        if (failedAdmin.size() > 1) {
+            return notApplicable(payment, "실패한 마트 거절 환불이 여러 건: " + failedAdmin.size());
+        }
+
         String reason = "PortOne 외부 전액 취소(" + cancellation.trigger() + ")";
         // 요청 시각이 없으면 PG가 확인한 완료 시각을 쓴다. 서버 시각으로 대신 채우지 않는다
         LocalDateTime requestedAt = cancellation.requestedAt() != null
@@ -74,6 +83,16 @@ public class ExternalCancellationProcessor {
             : cancellation.canceledAt();
         payment.markExternallyCanceled(cancellation.canceledAt());
         paymentService.recordExternalRefund(payment, cancellation.id(), reason, requestedAt, cancellation.canceledAt());
+        if (failedAdmin.size() == 1) {
+            // 마트 거절 뒤 PG 취소가 실패해 결제만 PAID로 돌아간 주문이다. 주문은 이미 CANCEL_REQUESTED·마트 REJECTED라
+            // 외부 취소 종료(PAID → REFUNDED)가 아니라 환불 완료 경로로 닫는다. 실패한 마트 거절 환불은 시도 이력으로 그대로 남긴다
+            List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+            orderFacade.restoreStock(items);
+            log.info("실패한 마트 거절 뒤 PortOne 외부 전액 취소로 거절 주문 종료: paymentId={}, orderId={}, failedRefundId={}, "
+                    + "cancellationId={}",
+                paymentId, payment.getOrderId(), failedAdmin.get(0).getId(), cancellation.id());
+            return ExternalCancellationResult.reconciled();
+        }
         // 배송이 시작된 주문이면 빈 목록이 와서 재고를 건드리지 않는다. 실물은 관리자가 재고 조정으로 맞춘다
         List<StockQuantity> items = orderFacade.closeByExternalCancel(payment.getOrderId(), reason);
         orderFacade.restoreStock(items);
@@ -115,7 +134,7 @@ public class ExternalCancellationProcessor {
                 ? alreadyReconciled(payment, refund)
                 : notApplicable(payment, "완료 환불과 결제 상태·요청 주체가 일치하지 않음: refundId=" + refund.getId()
                                          + ", paymentStatus=" + payment.getStatus() + ", requestedBy=" + refund.getRequestedBy());
-            // 다음 실행에서 취소 ID로 기존 회원·SYSTEM 환불 경로에 연결된다
+            // 다음 실행에서 취소 ID로 기존 회원·SYSTEM·마트 거절 환불 경로에 연결된다
             case REQUESTED -> isInProgress(payment, refund)
                 ? retry(payment, "같은 취소 ID의 환불이 아직 REQUESTED: refundId=" + refund.getId())
                 : notApplicable(payment, inProgressMismatch(payment, refund));
@@ -142,21 +161,20 @@ public class ExternalCancellationProcessor {
             + ", requestedBy=" + refund.getRequestedBy());
     }
 
-    // 완료 환불이 결제 상태와 맞는 정상 조합인지. 회원·외부 취소는 결제를 CANCELED로 닫고, SYSTEM 환불은 FAILED 결제의 돈만 돌려준다
+    // 완료 환불이 결제 상태와 맞는 정상 조합인지. 회원·외부 취소·마트 거절은 결제를 CANCELED로 닫고, SYSTEM 환불은 FAILED 결제의 돈만 돌려준다
     private static boolean isSettled(Payment payment, Refund refund) {
         return switch (refund.getRequestedBy()) {
-            case MEMBER, EXTERNAL -> payment.getStatus() == PaymentStatus.CANCELED;
+            case MEMBER, EXTERNAL, ADMIN -> payment.getStatus() == PaymentStatus.CANCELED;
             case SYSTEM -> payment.getStatus() == PaymentStatus.FAILED;
-            case ADMIN -> false;
         };
     }
 
     // 진행 중 환불이 결제 상태와 맞는 정상 조합인지. 아니면 기다려도 정상화되지 않으므로 재시도하지 않는다
     private static boolean isInProgress(Payment payment, Refund refund) {
         return switch (refund.getRequestedBy()) {
-            case MEMBER -> payment.getStatus() == PaymentStatus.CANCEL_REQUESTED;
+            case MEMBER, ADMIN -> payment.getStatus() == PaymentStatus.CANCEL_REQUESTED;
             case SYSTEM -> payment.getStatus() == PaymentStatus.FAILED;
-            case EXTERNAL, ADMIN -> false;
+            case EXTERNAL -> false;
         };
     }
 

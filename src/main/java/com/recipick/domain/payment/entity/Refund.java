@@ -115,7 +115,29 @@ public class Refund extends BaseTimeEntity {
         String idempotencyKey,
         LocalDateTime requestedAt
     ) {
-        // 회원 환불은 Payment.requestCancel() 뒤에만 만든다. 취소 요청 상태가 아닌 결제에 환불 행이 생기면 PortOne 호출 근거가 없다
+        return requestedAfterPay(RefundRequester.MEMBER, payment, reason, idempotencyKey, requestedAt);
+    }
+
+    // 마트 거절 환불. 관리자 거절 API의 Idempotency-Key를 그대로 저장하고, 전액 취소라 금액은 Payment.amount다.
+    // ADMIN은 레시픽 안에서 이 환불이 마트 거절 경로라는 뜻이다. PortOne에 보내는 요청 주체(requester=ADMIN)와는 다른 값이다
+    public static Refund requestedByAdmin(
+        Payment payment,
+        String reason,
+        String idempotencyKey,
+        LocalDateTime requestedAt
+    ) {
+        return requestedAfterPay(RefundRequester.ADMIN, payment, reason, idempotencyKey, requestedAt);
+    }
+
+    // 결제 후 전액 취소 환불의 공통 생성. Payment.requestCancel() 뒤에만 만든다 —
+    // 취소 요청 상태가 아닌 결제에 환불 행이 생기면 PortOne 호출 근거가 없다
+    private static Refund requestedAfterPay(
+        RefundRequester requestedBy,
+        Payment payment,
+        String reason,
+        String idempotencyKey,
+        LocalDateTime requestedAt
+    ) {
         if (payment.getStatus() != PaymentStatus.CANCEL_REQUESTED) {
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
         }
@@ -124,7 +146,7 @@ public class Refund extends BaseTimeEntity {
             .amount(payment.getAmount())
             .reason(reason)
             .status(RefundStatus.REQUESTED)
-            .requestedBy(RefundRequester.MEMBER)
+            .requestedBy(requestedBy)
             .idempotencyKey(idempotencyKey)
             .requestedAt(requestedAt)
             .build();

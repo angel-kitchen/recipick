@@ -1,10 +1,12 @@
 package com.recipick.domain.payment.facade;
 
+import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
 import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
@@ -32,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -69,6 +72,7 @@ public class PaymentReconciliationFacade {
     private final PaymentCancelProcessor paymentCancelProcessor;
     private final SystemRefundProcessor systemRefundProcessor;
     private final SystemRefundExecutionFacade systemRefundExecutionFacade;
+    private final MartRejectionProcessor martRejectionProcessor;
     private final ExternalCancellationProcessor externalCancellationProcessor;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
@@ -164,10 +168,12 @@ public class PaymentReconciliationFacade {
             return reconcileKnownRefund(payment, portOnePayment, byCancellationId.get(), webhookCancellationId);
         }
 
-        // ② 취소 ID를 아직 못 받은 환불(취소 요청의 응답보다 웹훅이 먼저 온 경우). 회원 환불은 PAID·CANCEL_REQUESTED 결제에,
-        // SYSTEM 환불은 FAILED 결제에만 생기므로 정상이라면 둘이 함께 있지 않다. 정확히 한 건일 때만 그 환불로 본다
+        // ② 취소 ID를 아직 못 받은 환불(취소 요청의 응답보다 웹훅이 먼저 온 경우). 회원·마트 거절 환불은 CANCEL_REQUESTED 결제에,
+        // SYSTEM 환불은 FAILED 결제에만 생기고 회원 취소와 마트 거절은 PAYMENT 잠금으로 서로를 막으므로 정상이라면 함께 있지 않다.
+        // 정확히 한 건일 때만 그 환불로 본다
         List<Refund> requested = new ArrayList<>(paymentService.findRequestedMemberRefunds(payment.getId()));
         paymentService.findRequestedSystemRefund(payment.getId()).ifPresent(requested::add);
+        requested.addAll(paymentService.findRequestedAdminRefunds(payment.getId()));
         if (requested.size() > 1) {
             return Decision.manualReview("REQUESTED 환불이 여러 건: " + requested.size());
         }
@@ -209,6 +215,10 @@ public class PaymentReconciliationFacade {
     private Decision reconcileApiCancellation(Payment payment, PortOnePayment portOnePayment, Refund refund,
                                               String cancellationId) {
         String refundCancellationId = refund.getPortoneCancellationId();
+        // 취소 ID를 아직 못 받은 마트 거절 환불은 실행기와 같은 엄격한 판정으로 고른다. 같은 결제에 과거 회원 취소가 남아 있을 수 있다
+        if (refund.getRequestedBy() == RefundRequester.ADMIN && refundCancellationId == null) {
+            return reconcileAdminCancellation(payment, portOnePayment, refund, cancellationId);
+        }
         PortOneCancellation cancellation;
         if (StringUtils.hasText(cancellationId)) {
             Optional<PortOneCancellation> found = portOnePayment.cancellations().stream()
@@ -225,9 +235,12 @@ public class PaymentReconciliationFacade {
                 return Decision.manualReview("환불과 금액·요청 경로가 다른 취소 내역: cancellationId=" + cancellationId);
             }
         } else {
-            // 취소 ID가 어디에도 없다. API로 요청한 환불 금액의 취소가 정확히 한 건일 때만 그것으로 본다
+            // 취소 ID가 어디에도 없다. API로 요청한 환불 금액의 취소가 정확히 한 건일 때만 그것으로 본다.
+            // 같은 결제의 다른 환불에 이미 묶인 취소는 그 환불의 것이라 후보에서 뺀다 — 과거 시도의 취소를 이 환불에 묶지 않는다
+            Set<String> boundIds = paymentService.findBoundCancellationIds(payment.getId(), refund.getId());
             List<PortOneCancellation> candidates = portOnePayment.cancellations().stream()
                 .filter(candidate -> RefundCancellationRules.isServerFullCancellation(candidate, refund))
+                .filter(candidate -> candidate.id() == null || !boundIds.contains(candidate.id()))
                 .toList();
             if (candidates.size() != 1) {
                 return Decision.manualReview("우리 금액의 API 취소 내역이 " + candidates.size() + "건");
@@ -248,9 +261,45 @@ public class PaymentReconciliationFacade {
         return switch (refund.getRequestedBy()) {
             case MEMBER -> applyMemberRefund(payment, refund, cancellation);
             case SYSTEM -> applySystemRefund(payment, portOnePayment, refund, cancellation);
-            // 서버 API 취소에 외부·관리자 환불이 묶인 경우는 자동 반영 규칙이 없다
-            case EXTERNAL, ADMIN -> Decision.manualReview(
+            case ADMIN -> applyAdminRefund(payment, portOnePayment, refund, cancellation);
+            // 서버 API 취소에 외부 환불이 묶인 경우는 자동 반영 규칙이 없다
+            case EXTERNAL -> Decision.manualReview(
                 "자동 반영 대상 환불이 아님: refundId=" + refund.getId() + ", requestedBy=" + refund.getRequestedBy());
+        };
+    }
+
+    // 취소 ID 없는 마트 거절 환불. 고르는 판정은 실행기와 같고, 고를 것이 없으면 POST하지 않고 다시 묻는다 —
+    // 웹훅은 이미 일어난 취소를 반영할 뿐 취소를 요청하지 않는다. 그 몫은 마트 거절 실행기다
+    private Decision reconcileAdminCancellation(Payment payment, PortOnePayment portOnePayment, Refund refund,
+                                                String webhookCancellationId) {
+        if (StringUtils.hasText(webhookCancellationId) && portOnePayment.cancellations().stream()
+            .noneMatch(candidate -> webhookCancellationId.equals(candidate.id()))) {
+            // 웹훅이 가리키는 취소가 조회 결과에 아직 없다. PortOne 반영이 늦는 경우라 잠시 뒤 다시 묻는다
+            return Decision.retry("조회 결과에 취소 내역 없음: cancellationId=" + webhookCancellationId);
+        }
+        Set<String> boundIds = paymentService.findBoundCancellationIds(payment.getId(), refund.getId());
+        ApiCancellationSelection selection = RefundCancellationRules.selectCurrentApiCancellation(
+            portOnePayment, boundIds, refund.getRequestedAt());
+        return switch (selection.type()) {
+            case SELECTED -> {
+                PortOneCancellation cancellation = selection.cancellation();
+                // 웹훅이 다른 취소를 말한다. 늦게 온 과거 취소의 웹훅일 수 있어 이 환불에 묶지 않는다
+                if (StringUtils.hasText(webhookCancellationId) && !webhookCancellationId.equals(cancellation.id())) {
+                    yield Decision.manualReview("웹훅 취소 ID가 이 환불의 취소로 고른 것과 다름: webhook="
+                        + webhookCancellationId + ", selected=" + cancellation.id());
+                }
+                if (!RefundCancellationRules.matchesAmount(cancellation, refund)) {
+                    yield Decision.manualReview("취소 금액 불일치: refundAmount=" + refund.getAmount()
+                        + ", cancellationAmount=" + cancellation.totalAmount());
+                }
+                if (RefundCancellationRules.hasOtherSucceededCancellation(portOnePayment, cancellation)) {
+                    yield Decision.manualReview("고른 취소 외에 성공한 취소가 또 있음: selected=" + cancellation.id());
+                }
+                yield applyAdminRefund(payment, portOnePayment, refund, cancellation);
+            }
+            case NONE -> Decision.retry("마트 거절 환불의 취소가 아직 보이지 않음 — 웹훅은 취소를 요청하지 않음: refundId="
+                + refund.getId());
+            case AMBIGUOUS -> Decision.manualReview(selection.reason());
         };
     }
 
@@ -265,7 +314,9 @@ public class PaymentReconciliationFacade {
         return switch (refund.getRequestedBy()) {
             case MEMBER -> applyMemberRefund(payment, refund, cancellation);
             case SYSTEM -> applySystemRefund(payment, portOnePayment, refund, cancellation);
-            case EXTERNAL, ADMIN -> Decision.manualReview("REQUESTED 상태의 자동 반영 대상 환불이 아님: refundId="
+            // 진행 중인 마트 거절 환불에 콘솔 취소가 들어왔다. 새 EXTERNAL 환불 없이 그 취소로 기존 환불을 끝낸다
+            case ADMIN -> applyAdminRefund(payment, portOnePayment, refund, cancellation);
+            case EXTERNAL -> Decision.manualReview("REQUESTED 상태의 자동 반영 대상 환불이 아님: refundId="
                 + refund.getId() + ", requestedBy=" + refund.getRequestedBy());
         };
     }
@@ -384,6 +435,45 @@ public class PaymentReconciliationFacade {
             + ", status=" + cancellation.status());
     }
 
+    // 마트 거절 환불. 거절 실행기의 TX2를 그대로 쓴다. 끝난 환불은 apply가 결제와의 조합을 검증한 뒤 저장된 결과를 돌려주므로
+    // 같은 취소 웹훅의 재전송도 PROCESSED로 끝난다. 진행 중 환불만 여기서 결제 상태를 먼저 본다
+    private Decision applyAdminRefund(Payment payment, PortOnePayment portOnePayment, Refund refund,
+                                      PortOneCancellation cancellation) {
+        // Processor도 잠금 아래에서 다시 막지만 그때는 예외라 사유가 내부 오류로 뭉개진다. 운영이 읽을 사유를 남기려고 먼저 본다
+        if (refund.getStatus() == RefundStatus.REQUESTED && payment.getStatus() != PaymentStatus.CANCEL_REQUESTED) {
+            return Decision.manualReview("마트 거절 환불이 진행 중인데 결제가 CANCEL_REQUESTED가 아님: refundId="
+                + refund.getId() + ", status=" + payment.getStatus());
+        }
+        // 지금 선택한 취소 자체는 빼고, 그 밖의 활성 비API 취소가 있을 때만 중단한다. SYSTEM 환불 반영과 같은 규칙이다
+        if (RefundCancellationRules.hasOtherActiveNonApiCancellation(portOnePayment, cancellation)) {
+            return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨: refundId=" + refund.getId()
+                + ", selected=" + cancellation.id());
+        }
+        PortOneCancelResult result = cancellation.toCancelResult();
+        MartRejectionPaymentResult applied = martRejectionProcessor.apply(payment.getId(), refund.getId(), result);
+        log.info("웹훅 마트 거절 환불 반영: paymentId={}, refundId={}, cancellationId={}, outcome={}",
+            payment.getId(), refund.getId(), cancellation.id(), applied.outcome());
+        return switch (applied.outcome()) {
+            case COMPLETED -> Decision.processed();
+            // PortOne에서는 취소가 성공했는데 환불은 실패로 끝나 있다. 잠금을 기다리는 사이 다른 경로가 실패로 끝냈거나
+            // 저장된 결과와 PG가 서로 다른 사실을 말한다. 정상 종료로 기록하지 않는다
+            case PG_FAILED, REQUEST_REJECTED -> cancellation.status() == PortOneCancellationStatus.SUCCEEDED
+                ? Decision.manualReview("PortOne 취소는 성공했지만 마트 거절 환불이 실패 상태: refundId="
+                                        + refund.getId() + ", cancellationId=" + cancellation.id() + ", outcome=" + applied.outcome())
+                : Decision.processed();
+            // 아직 미확정이다. 취소 ID가 있으면 추적할 수 있어 거절 실행기의 GET 재확인에 맡긴다.
+            // ID가 없으면 어느 취소인지 다시 찾을 근거가 없다
+            case PENDING -> {
+                if (!StringUtils.hasText(result.cancellationId())) {
+                    yield Decision.manualReview("마트 거절 환불 취소 결과를 추적할 ID가 없음: result=" + result.outcome()
+                        + ", status=" + cancellation.status());
+                }
+                scheduleAdminRefundExecute(refund.getId());
+                yield Decision.processed();
+            }
+        };
+    }
+
     // 취소 API가 같은 환불을 먼저 등록했을 수 있어 더 이른 예약은 그대로 둔다. 등록 실패는 웹훅 결과와 무관하다 —
     // 환불이 REQUESTED로 남아 Fallback이 다시 등록한다
     private void scheduleRefundReconcile(Long refundId) {
@@ -403,6 +493,17 @@ public class PaymentReconciliationFacade {
                 clock.instant().plus(SystemRefundExecutionFacade.RECHECK_DELAY));
         } catch (DataAccessException e) {
             log.error("SYSTEM 환불 재실행 예약 실패: refundId={}", refundId, e);
+        }
+    }
+
+    // 거절 실행기는 POST 전에 항상 GET하므로 이미 접수된 취소를 다시 요청하지 않고 결과만 확인한다. 거절 API·Fallback이 더 이른
+    // 예약을 해 뒀을 수 있어 늦추지 않는다. 등록 실패는 웹훅 결과와 무관하다 — 환불이 REQUESTED로 남아 Fallback이 다시 등록한다
+    private void scheduleAdminRefundExecute(Long refundId) {
+        try {
+            paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.adminRefundExecute(refundId),
+                clock.instant().plus(AdminRefundExecutionFacade.RECHECK_DELAY));
+        } catch (DataAccessException e) {
+            log.error("마트 거절 환불 실행 예약 실패: refundId={}", refundId, e);
         }
     }
 

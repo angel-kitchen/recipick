@@ -27,6 +27,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -343,6 +344,96 @@ class PaymentServiceTest {
                 assertThat(exception.getErrorCode())
                     .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
         verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN 환불은 결제 금액 전액·관리자 요청 키·멈춘 시계의 시각으로 REQUESTED 행을 만들고 즉시 flush한다")
+    void requestAdminRefund() {
+        // given
+        Payment payment = cancelRequestedPayment();
+        given(refundRepository.saveAndFlush(any(Refund.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        Refund refund = paymentService.requestAdminRefund(payment, "상품 준비가 어렵습니다.", "admin-key-1");
+
+        // then — 회원 환불과 같이 saveAndFlush()여야 UNIQUE 충돌을 이 자리에서 받는다
+        verify(refundRepository).saveAndFlush(refundCaptor.capture());
+        verify(refundRepository, never()).save(any(Refund.class));
+        assertThat(refund).isSameAs(refundCaptor.getValue());
+        assertThat(refund.getPayment()).isSameAs(payment);
+        assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
+        assertThat(refund.getReason()).isEqualTo("상품 준비가 어렵습니다.");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.ADMIN);
+        assertThat(refund.getIdempotencyKey()).isEqualTo("admin-key-1");
+        assertThat(refund.getRequestedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("ADMIN 환불의 멱등키가 UNIQUE에 걸리면 COMMON-011로 바꾸고 원인 예외를 붙인다")
+    void requestAdminRefundWhenKeyAlreadyUsed() {
+        // given — 다른 결제에 같은 키가 동시에 들어온 경쟁. 선조회는 둘 다 통과하고 DB가 한쪽을 거절한다
+        Payment payment = cancelRequestedPayment();
+        DataIntegrityViolationException cause = new DataIntegrityViolationException("Duplicate entry");
+        given(refundRepository.saveAndFlush(any(Refund.class))).willThrow(cause);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            paymentService.requestAdminRefund(payment, "상품 준비가 어렵습니다.", "admin-key-1"));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH))
+            .hasCause(cause);
+    }
+
+    @Test
+    @DisplayName("취소 요청 상태가 아닌 결제에는 ADMIN 환불을 만들지 않고 저장도 하지 않는다")
+    void requestAdminRefundWhenPaymentNotCancelRequested() {
+        // given — Payment.requestCancel() 전에 부르면 엔티티가 막는다
+        Payment payment = payment(PAYMENT_ID, PaymentStatus.PAID);
+
+        // when
+        Throwable thrown = catchThrowable(() ->
+            paymentService.requestAdminRefund(payment, "상품 준비가 어렵습니다.", "admin-key-1"));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+        verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+    }
+
+    @Test
+    @DisplayName("다른 환불에 묶인 취소 ID는 Repository 결과를 Set으로 바꿔 돌려준다")
+    void findBoundCancellationIds() {
+        // given
+        given(refundRepository.findBoundCancellationIds(PAYMENT_ID, 55L))
+            .willReturn(List.of("cancel_member_failed", "cancel_member_completed"));
+
+        // when
+        Set<String> bound = paymentService.findBoundCancellationIds(PAYMENT_ID, 55L);
+
+        // then
+        assertThat(bound).containsExactlyInAnyOrder("cancel_member_failed", "cancel_member_completed");
+    }
+
+    @Test
+    @DisplayName("ADMIN 환불 Fallback 조회는 기준 시각·이어 읽을 ID·건수를 그대로 Repository에 넘긴다")
+    void findStaleAdminRefundIds() {
+        // given
+        LocalDateTime requestedBefore = NOW.minusMinutes(10);
+        given(refundRepository.findStaleRequestedAdminRefundIds(7L, requestedBefore, PageRequest.ofSize(100)))
+            .willReturn(List.of(8L, 9L));
+
+        // when
+        List<Long> ids = paymentService.findStaleAdminRefundIds(requestedBefore, 7L, 100);
+
+        // then
+        assertThat(ids).containsExactly(8L, 9L);
     }
 
     @Test

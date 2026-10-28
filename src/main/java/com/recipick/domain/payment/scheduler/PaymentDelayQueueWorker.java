@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.scheduler;
 
+import com.recipick.domain.payment.facade.AdminRefundExecutionFacade;
 import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
@@ -27,6 +28,7 @@ public class PaymentDelayQueueWorker {
     private final PaymentReconciliationFacade paymentReconciliationFacade;
     private final RefundReconciliationFacade refundReconciliationFacade;
     private final SystemRefundExecutionFacade systemRefundExecutionFacade;
+    private final AdminRefundExecutionFacade adminRefundExecutionFacade;
     private final PaymentExpirationFacade paymentExpirationFacade;
     private final Clock clock;
 
@@ -46,6 +48,7 @@ public class PaymentDelayQueueWorker {
                 case WEBHOOK_PROCESS -> paymentReconciliationFacade.processWebhook(task.id());
                 case REFUND_RECONCILE -> refundReconciliationFacade.reconcile(task.id());
                 case SYSTEM_REFUND_EXECUTE -> systemRefundExecutionFacade.execute(task.id());
+                case ADMIN_REFUND_EXECUTE -> adminRefundExecutionFacade.execute(task.id());
                 case PAYMENT_EXPIRE -> paymentExpirationFacade.execute(task.id());
             };
             log.debug("지연 큐 작업 처리: task={}, outcome={}", task.member(), outcome);

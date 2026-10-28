@@ -77,7 +77,9 @@ public class PortOnePaymentClient {
         return cancel(portonePaymentId, idempotencyKey, PortOneCancelRequest.byCustomer(reason, cancellableAmount));
     }
 
-    // SYSTEM 환불의 사후 반환. 고객 요청이 아니라 서버 판단이라 requester=ADMIN으로 보낸다. 호출 규칙은 cancel()과 같다
+    // SYSTEM 환불의 사후 반환과 마트 거절 환불. 고객 요청이 아니라 서버·마트 판단이라 requester=ADMIN으로 보낸다.
+    // 여기의 ADMIN은 PG에 알리는 취소 요청 주체다. 레시픽 내부의 RefundRequester.ADMIN(마트 거절 환불)과는 다른 값이다.
+    // 호출 규칙은 cancel()과 같다
     public PortOneCancelResult cancelPaymentByAdmin(
         String portonePaymentId, String idempotencyKey, String reason, Long cancellableAmount) {
         return cancel(portonePaymentId, idempotencyKey, PortOneCancelRequest.byAdmin(reason, cancellableAmount));
