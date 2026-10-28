@@ -35,7 +35,7 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 @Configuration
 @EnableCaching
-@ConditionalOnProperty(name = "recipick.cache.enaled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = "recipick.cache.enabled", havingValue = "true", matchIfMissing = true)
 public class CacheConfig implements CachingConfigurer {
 
     public static final String CATEGORIES = "categories";
@@ -63,6 +63,7 @@ public class CacheConfig implements CachingConfigurer {
             .withCacheConfiguration(PRODUCT_SEARCH, typed(base, mapper, productSearch, Duration.ofSeconds(30)))
             .disableCreateOnMissingCache()
             .enableStatistics()
+            .transactionAware()
             .build();
     }
 

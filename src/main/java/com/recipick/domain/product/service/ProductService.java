@@ -249,7 +249,8 @@ public class ProductService {
 
     @Cacheable(
         cacheNames = CacheConfig.PRODUCT_SEARCH,
-        key = "#martId + ':' + #request.keyword + ':' + #request.categoryId + ':' + #request.minPrice"
+        key = "#martId + ':' + (#request.keyword == null ? '-' : #request.keyword.length() + '#' + #request.keyword)"
+            + " + ':' + #request.categoryId() + ':' + #request.minPrice"
             + " + ':' + #request.maxPrice + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
             + " + ':' + #pageable.sort"
     )
