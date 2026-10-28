@@ -22,9 +22,11 @@ import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
+import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
@@ -81,6 +83,7 @@ class PaymentReconciliationFacadeTest {
     private static final Long AMOUNT = 23800L;
     private static final String PORTONE_PAYMENT_ID = "pay_1";
     private static final String CANCELLATION_ID = "cancel_1";
+    private static final String CONSOLE_CANCELLATION_ID = "cancel_console";
     private static final String PAID = "Transaction.Paid";
     private static final String CANCELED = "Transaction.Cancelled";
     private static final String CANCEL_PENDING = "Transaction.CancelPending";
@@ -107,6 +110,9 @@ class PaymentReconciliationFacadeTest {
     private SystemRefundExecutionFacade systemRefundExecutionFacade;
 
     @Mock
+    private ExternalCancellationProcessor externalCancellationProcessor;
+
+    @Mock
     private PaymentDelayQueue paymentDelayQueue;
 
     private PaymentReconciliationFacade facade;
@@ -118,8 +124,9 @@ class PaymentReconciliationFacadeTest {
         Clock fixedClock = Clock.fixed(NOW_INSTANT, SEOUL);
         facade = new PaymentReconciliationFacade(webhookEventService, paymentService, portOnePaymentClient,
             new PortOneWebhookParser(), paymentConfirmProcessor, paymentCancelProcessor, systemRefundProcessor,
-            systemRefundExecutionFacade, paymentDelayQueue, fixedClock);
-        // Facade는 결제 상태를 읽지 않는다. 회원 환불 행을 붙일 수 있는 상태(CANCEL_REQUESTED)로 하나만 만들어 공유한다
+            systemRefundExecutionFacade, externalCancellationProcessor, paymentDelayQueue, fixedClock);
+        // 회원 환불 행을 붙일 수 있는 상태(CANCEL_REQUESTED)로 하나만 만들어 공유한다.
+        // 결제 상태가 판정에 쓰이는 테스트는 givenOurFailedPayment·givenOurPaymentIn으로 따로 만든다
         payment = payment(PAYMENT_ID, ORDER_ID);
     }
 
@@ -480,9 +487,9 @@ class PaymentReconciliationFacadeTest {
     }
 
     @Test
-    @DisplayName("대응하는 REQUESTED 환불이 없으면(콘솔 등 외부 취소) 아무것도 바꾸지 않고 MANUAL_REVIEW")
-    void manualReviewWhenNoRequestedRefund() {
-        // given
+    @DisplayName("대응 환불이 없는데 결제가 PAID가 아니면 외부 취소로도 반영하지 않고 MANUAL_REVIEW")
+    void manualReviewWhenNoRefundAndPaymentNotPaid() {
+        // given — 결제는 취소 진행 중(CANCEL_REQUESTED)인데 환불 행이 없는 이상 상태
         givenClaimed(claimedEvent(CANCELED, CANCELLATION_ID));
         givenOurPayment();
         given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.empty());
@@ -491,14 +498,14 @@ class PaymentReconciliationFacadeTest {
             PortOnePaymentStatus.CANCELED,
             cancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
                 PortOneCancellationTrigger.CONSOLE)));
-        givenManualReviewRecorded("REQUESTED 환불 없음");
+        givenManualReviewRecorded("결제가 PAID가 아니라");
 
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
-        verifyNoInteractions(paymentCancelProcessor);
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor);
     }
 
     @Test
@@ -542,6 +549,7 @@ class PaymentReconciliationFacadeTest {
         verifyNoInteractions(paymentCancelProcessor);
     }
 
+
     @Test
     @DisplayName("환불에 기록된 취소 ID와 웹훅의 취소 ID가 다르면(같은 결제에 취소가 둘) 자동으로 고르지 않고 MANUAL_REVIEW")
     void manualReviewWhenWebhookCancellationIdDiffersFromRefund() {
@@ -558,9 +566,9 @@ class PaymentReconciliationFacadeTest {
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
-        // then
+        // then — 저장된 취소 ID를 외부 취소 ID로 다시 묶지 않는다
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
-        verifyNoInteractions(paymentCancelProcessor);
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor);
     }
 
     // ---------- 취소 내역 고르기 ----------
@@ -588,10 +596,9 @@ class PaymentReconciliationFacadeTest {
         verifyNoInteractions(paymentCancelProcessor);
     }
 
-    @ParameterizedTest(name = "trigger={0}, 금액={1}")
-    @CsvSource({"CONSOLE, 23800", "API, 1000"})
-    @DisplayName("취소 ID 없는 환불에 묶으려는 취소가 API 전액 취소가 아니면(콘솔·금액 다름) MANUAL_REVIEW")
-    void manualReviewWhenCancellationIsNotOurs(PortOneCancellationTrigger trigger, long amount) {
+    @Test
+    @DisplayName("취소 ID 없는 환불에 묶으려는 API 취소의 금액이 환불과 다르면 MANUAL_REVIEW")
+    void manualReviewWhenCancellationIsNotOurs() {
         // given
         givenClaimed(claimedEvent(CANCELED, "cancel_9"));
         givenOurPayment();
@@ -599,7 +606,8 @@ class PaymentReconciliationFacadeTest {
         given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(memberRefund(payment, null)));
         given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
             PortOnePaymentStatus.CANCELED,
-            cancellation("cancel_9", PortOneCancellationStatus.SUCCEEDED, amount, CANCELED_AT, trigger)));
+            cancellation("cancel_9", PortOneCancellationStatus.SUCCEEDED, 1000L, CANCELED_AT,
+                PortOneCancellationTrigger.API)));
         givenManualReviewRecorded("금액·요청 경로가 다른");
 
         // when
@@ -673,14 +681,14 @@ class PaymentReconciliationFacadeTest {
                 PortOneCancellationTrigger.API),
             cancellation("cancel_x", PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
                 PortOneCancellationTrigger.CONSOLE)));
-        givenManualReviewRecorded("성공한 취소가 또 있음");
+        givenManualReviewRecorded("별도의 비API 취소");
 
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
-        // then
+        // then — 저장된 API 취소 ID를 콘솔 취소로 다시 묶지 않는다
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
-        verifyNoInteractions(paymentCancelProcessor);
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor);
     }
 
     @Test
@@ -1065,14 +1073,15 @@ class PaymentReconciliationFacadeTest {
                 PortOneCancellationTrigger.API),
             cancellation("cancel_console", PortOneCancellationStatus.REQUESTED, AMOUNT, null,
                 PortOneCancellationTrigger.CONSOLE)));
-        givenManualReviewRecorded("API가 아닌 취소");
+        givenManualReviewRecorded("별도의 비API 취소");
 
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
-        verifyNoInteractions(systemRefundProcessor, paymentCancelProcessor, paymentDelayQueue);
+        verifyNoInteractions(systemRefundProcessor, paymentCancelProcessor, externalCancellationProcessor,
+            paymentDelayQueue);
     }
 
     @Test
@@ -1102,27 +1111,30 @@ class PaymentReconciliationFacadeTest {
     }
 
     @Test
-    @DisplayName("취소 ID 없는 SYSTEM 환불에 콘솔 취소가 들어오면 그 환불과 묶지 않고 MANUAL_REVIEW")
-    void manualReviewWhenConsoleCancellationOnSystemRefund() {
-        // given
-        givenClaimed(claimedEvent(CANCELED, "cancel_console"));
+    @DisplayName("취소 ID 없는 SYSTEM 환불에 콘솔 전액 취소가 들어오면 그 취소로 SYSTEM 환불을 완료해 PROCESSED — PortOne에 취소를 새로 요청하지 않는다")
+    void applySystemRefundWithConsoleCancellation() {
+        // given — 결제 확정이 만든 SYSTEM 환불을 실행하기 전에 운영자가 콘솔에서 먼저 돌려줬다
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
         Payment failed = givenOurFailedPayment();
-        given(paymentService.findRefundByPortoneCancellationId("cancel_console")).willReturn(Optional.empty());
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
         given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
         given(paymentService.findRequestedSystemRefund(PAYMENT_ID)).willReturn(Optional.of(systemRefund(failed, null)));
-        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
-            PortOnePaymentStatus.CANCELED,
-            cancellation("cancel_console", PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
-                PortOneCancellationTrigger.CONSOLE)));
-        givenManualReviewRecorded("금액·요청 경로가 다른");
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.COMPLETED);
+        givenProcessedRecorded();
 
         // when
         WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
 
-        // then
-        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
-        verifyNoInteractions(systemRefundProcessor);
+        // then — 결제 FAILED·주문 CANCELED는 SystemRefundProcessor가 그대로 둔다
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor, paymentDelayQueue);
     }
+
 
     @Test
     @DisplayName("회원 환불과 SYSTEM 환불이 함께 REQUESTED면 정상 상태가 아니라 어느 것인지 고르지 않고 MANUAL_REVIEW")
@@ -1167,6 +1179,429 @@ class PaymentReconciliationFacadeTest {
 
         // then
         assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor, systemRefundProcessor, externalCancellationProcessor);
+    }
+
+    // ---------- 외부 취소 — 대응 환불 없음 ----------
+
+    @Test
+    @DisplayName("대응 환불이 없는 PAID 결제의 콘솔 전액 취소는 외부 취소 Processor로 반영해 PROCESSED — 회원·SYSTEM Processor는 부르지 않는다")
+    void reconcileExternalCancellationWithoutRefund() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.reconciled());
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verifyNoInteractions(paymentCancelProcessor, systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("외부 취소 Processor가 이미 반영됐다고 하면 PROCESSED")
+    void processedWhenExternalCancellationAlreadyReconciled() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.alreadyReconciled());
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+    }
+
+    @Test
+    @DisplayName("외부 취소 Processor가 RETRY면 사유를 남겨 RETRY_PENDING으로 적고 1분 뒤로 다시 예약한다")
+    void retryWhenExternalCancellationProcessorRetries() {
+        // given — 판정과 잠금 사이에 회원 취소가 시작돼 기존 환불로 마무리돼야 하는 경우
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.retry("기존 환불로 연결"));
+        given(webhookEventService.markRetryPending(eq(EVENT_ID), eq(ATTEMPT), contains("기존 환불로 연결")))
+            .willReturn(true);
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
+        verify(paymentDelayQueue).reschedule(
+            PaymentDelayTask.webhookProcess(EVENT_ID), NOW_INSTANT.plus(Duration.ofMinutes(1)));
+    }
+
+    @Test
+    @DisplayName("외부 취소 Processor가 NOT_APPLICABLE이면 그 사유로 MANUAL_REVIEW")
+    void manualReviewWhenExternalCancellationNotApplicable() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.notApplicable("REQUESTED 환불이 여러 건: 2"));
+        givenManualReviewRecorded("REQUESTED 환불이 여러 건: 2");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+    }
+
+    @Test
+    @DisplayName("외부 취소가 아직 처리 중이면 Processor를 부르지 않고 RETRY_PENDING")
+    void retryWhenExternalCancellationStillRequested() {
+        // given
+        givenClaimed(claimedEvent(CANCEL_PENDING, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.PAID,
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.CONSOLE)));
+        given(webhookEventService.markRetryPending(eq(EVENT_ID), eq(ATTEMPT), contains("외부 취소 처리 중")))
+            .willReturn(true);
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
+        verifyNoInteractions(externalCancellationProcessor);
+    }
+
+    @Test
+    @DisplayName("외부 취소 금액이 결제 금액과 다르면 Processor를 부르지 않고 MANUAL_REVIEW — 전액 취소만 자동 반영한다")
+    void manualReviewWhenExternalCancellationAmountDiffers() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        givenNoRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, 10000L, CANCELED_AT,
+                PortOneCancellationTrigger.CONSOLE)));
+        givenManualReviewRecorded("외부 취소 금액 불일치");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(externalCancellationProcessor);
+    }
+
+    @Test
+    @DisplayName("웹훅이 알려 준 취소가 차지백이면 Processor를 부르지 않고 MANUAL_REVIEW")
+    void manualReviewWhenWebhookCancellationIsChargeback() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, "cancel_chargeback"));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        given(paymentService.findRefundByPortoneCancellationId("cancel_chargeback")).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation("cancel_chargeback", PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.CHARGEBACK)));
+        givenManualReviewRecorded("자동 정합화하지 않는 취소 경로");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(externalCancellationProcessor);
+    }
+
+    @Test
+    @DisplayName("서버 API 취소인데 대응 환불이 없으면 외부 취소로 처리하지 않고 MANUAL_REVIEW — 환불 행이 빠진 데이터 불일치다")
+    void manualReviewWhenApiCancellationHasNoRefund() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.API)));
+        givenManualReviewRecorded("서버 API 취소인데 대응 Refund 없음");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(externalCancellationProcessor, paymentCancelProcessor, systemRefundProcessor);
+    }
+
+    // ---------- 외부 취소 — 진행 중인 기존 환불 ----------
+
+    @Test
+    @DisplayName("취소 ID 없는 회원 환불에 콘솔 전액 취소가 들어오면 그 취소로 회원 환불을 완료해 PROCESSED — EXTERNAL 환불을 만들지 않는다")
+    void applyMemberRefundWithConsoleCancellation() {
+        // given — 회원 취소의 PortOne 응답을 받기 전에 운영자가 콘솔에서 먼저 취소했다
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPayment();
+        Refund refund = memberRefund(payment, null);
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(refund));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(applied(PaymentCancelOutcome.CANCELED, refund));
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verifyNoInteractions(externalCancellationProcessor, systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소는 성공했지만 서버 API 취소가 아직 처리 중이면 회원 환불을 완료하지 않고 RETRY_PENDING")
+    void retryWhenApiCancellationInProgressWithConsoleCancellation() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(memberRefund(payment, null)));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation("cancel_api", PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.API),
+            consoleSucceeded()));
+        given(webhookEventService.markRetryPending(eq(EVENT_ID), eq(ATTEMPT), contains("서버 API 취소가 처리 중")))
+            .willReturn(true);
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor);
+    }
+
+    @Test
+    @DisplayName("회원 환불에 묶으려는 콘솔 취소의 금액이 환불과 다르면 완료하지 않고 MANUAL_REVIEW")
+    void manualReviewWhenConsoleCancellationAmountDiffersFromMemberRefund() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(memberRefund(payment, null)));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, 10000L, CANCELED_AT,
+                PortOneCancellationTrigger.CONSOLE)));
+        givenManualReviewRecorded("외부 취소 금액 불일치");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor, externalCancellationProcessor);
+    }
+
+    @Test
+    @DisplayName("취소 ID 없는 SYSTEM 환불에 콘솔 취소가 들어와도 다른 비API 취소가 살아 있으면 완료하지 않고 MANUAL_REVIEW")
+    void manualReviewWhenOtherNonApiCancellationActiveOnSystemRefund() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        Payment failed = givenOurFailedPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID)).willReturn(Optional.of(systemRefund(failed, null)));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            consoleSucceeded(),
+            cancellation("cancel_chargeback", PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.CHARGEBACK)));
+        givenManualReviewRecorded("API가 아닌 취소");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(systemRefundProcessor, externalCancellationProcessor);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentCancelOutcome.class, names = {"PG_FAILED", "REQUEST_REJECTED"})
+    @DisplayName("콘솔 취소는 성공했는데 잠금 사이에 회원 환불이 실패로 끝나 apply가 실패 결과를 주면 PROCESSED가 아니라 MANUAL_REVIEW")
+    void manualReviewWhenMemberRefundFailedDespiteConsoleSucceeded(PaymentCancelOutcome failedOutcome) {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPayment();
+        Refund refund = memberRefund(payment, null);
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of(refund));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(applied(failedOutcome, refund));
+        givenManualReviewRecorded("회원 환불이 실패 상태");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(externalCancellationProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소는 성공했는데 잠금 사이에 SYSTEM 환불이 실패로 끝나 Processor가 FAILED를 주면 PROCESSED가 아니라 MANUAL_REVIEW")
+    void manualReviewWhenSystemRefundFailedDespiteConsoleSucceeded() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        Payment failed = givenOurFailedPayment();
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
+        given(paymentService.findRequestedSystemRefund(PAYMENT_ID)).willReturn(Optional.of(systemRefund(failed, null)));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.FAILED);
+        givenManualReviewRecorded("SYSTEM 환불이 FAILED");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(externalCancellationProcessor, paymentDelayQueue);
+    }
+    // ---------- 외부 취소 — 이미 끝난 환불 ----------
+
+    @Test
+    @DisplayName("같은 콘솔 취소의 EXTERNAL 환불이 이미 있으면 외부 취소 Processor가 이미 반영됐다고 판정해 PROCESSED — 웹훅 재전송")
+    void processedWhenExternalRefundRedelivered() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        Payment canceled = givenOurPaymentIn(PaymentStatus.CANCELED);
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID))
+            .willReturn(Optional.of(externalRefund(canceled, CONSOLE_CANCELLATION_ID)));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.alreadyReconciled());
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verifyNoInteractions(paymentCancelProcessor, systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소로 완료된 회원 환불의 재전송은 회원 Processor가 아니라 외부 취소 Processor로 판정해 PROCESSED")
+    void processedWhenCompletedMemberRefundRedelivered() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.CANCELED);
+        Refund refund = memberRefund(payment, null);
+        refund.complete(CONSOLE_CANCELLATION_ID, CANCELED_AT);
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID))
+            .willReturn(Optional.of(refund));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console))
+            .willReturn(ExternalCancellationResult.alreadyReconciled());
+        givenProcessedRecorded();
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.PROCESSED);
+        verifyNoInteractions(paymentCancelProcessor);
+    }
+
+    @Test
+    @DisplayName("완료된 회원 환불인데 결제가 PAID면 외부 취소 Processor의 판정대로 MANUAL_REVIEW — 회원 Processor가 완료 결과로 덮지 않게 한다")
+    void manualReviewWhenCompletedMemberRefundButPaymentPaid() {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        givenOurPaymentIn(PaymentStatus.PAID);
+        Refund refund = memberRefund(payment, null);
+        refund.complete(CONSOLE_CANCELLATION_ID, CANCELED_AT);
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID))
+            .willReturn(Optional.of(refund));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console)).willReturn(ExternalCancellationResult
+            .notApplicable("완료 환불과 결제 상태·요청 주체가 일치하지 않음: paymentStatus=PAID"));
+        givenManualReviewRecorded("완료 환불과 결제 상태·요청 주체가 일치하지 않음");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor);
+    }
+
+    @ParameterizedTest(name = "결제={0}, 요청 주체={1}")
+    @CsvSource({"PAID, MEMBER", "FAILED, SYSTEM"})
+    @DisplayName("같은 콘솔 취소의 환불이 FAILED면 기존 Processor가 실패 결과로 PROCESSED를 내지 않게 외부 취소 Processor 판정대로 MANUAL_REVIEW")
+    void manualReviewWhenFailedRefundMatchesConsoleCancellation(PaymentStatus paymentStatus,
+                                                                RefundRequester requestedBy) {
+        // given
+        givenClaimed(claimedEvent(CANCELED, CONSOLE_CANCELLATION_ID));
+        Payment owner = givenOurPaymentIn(paymentStatus);
+        Refund refund = requestedBy == RefundRequester.MEMBER ? memberRefund(payment, null) : systemRefund(owner, null);
+        refund.fail(CONSOLE_CANCELLATION_ID, RefundFailureType.PG_FAILED, "cancellation FAILED");
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID))
+            .willReturn(Optional.of(refund));
+        PortOneCancellation console = consoleSucceeded();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(externalCancellationProcessor.apply(PAYMENT_ID, console)).willReturn(ExternalCancellationResult
+            .notApplicable("같은 PortOne 취소 ID의 환불이 FAILED 상태"));
+        givenManualReviewRecorded("FAILED 상태");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
         verifyNoInteractions(paymentCancelProcessor, systemRefundProcessor);
     }
 
@@ -1186,6 +1621,19 @@ class PaymentReconciliationFacadeTest {
         Payment failed = payment(PAYMENT_ID, ORDER_ID, PaymentStatus.FAILED);
         given(paymentService.findByPortonePaymentId(PORTONE_PAYMENT_ID)).willReturn(Optional.of(failed));
         return failed;
+    }
+
+    // 외부 취소 반영은 결제 상태로 판정한다. 웹훅이 찾는 결제를 원하는 상태로 돌려준다
+    private Payment givenOurPaymentIn(PaymentStatus status) {
+        Payment found = payment(PAYMENT_ID, ORDER_ID, status);
+        given(paymentService.findByPortonePaymentId(PORTONE_PAYMENT_ID)).willReturn(Optional.of(found));
+        return found;
+    }
+
+    // 취소 ID로 찾히는 환불도, 취소 ID 없는 진행 중 회원 환불도 없다. SYSTEM 환불 조회는 기본값(빈 Optional)을 쓴다
+    private void givenNoRefund() {
+        given(paymentService.findRefundByPortoneCancellationId(CONSOLE_CANCELLATION_ID)).willReturn(Optional.empty());
+        given(paymentService.findRequestedMemberRefunds(PAYMENT_ID)).willReturn(List.of());
     }
 
     // 처리권이 그대로라 기록이 받아들여지는 경우. 다른 인자로 부르면 strict stubs가 실패시킨다
@@ -1263,6 +1711,19 @@ class PaymentReconciliationFacadeTest {
             refund.recordRequested(cancellationId);
         }
         return refund;
+    }
+
+    // 앞선 웹훅이 외부 취소로 만든 EXTERNAL 환불. 결제는 이미 CANCELED다
+    private static Refund externalRefund(Payment canceledOwner, String cancellationId) {
+        Refund refund = Refund.completedByExternal(canceledOwner, cancellationId, "PortOne 외부 전액 취소(CONSOLE)",
+            NOW.minusMinutes(2), CANCELED_AT);
+        ReflectionTestUtils.setField(refund, "id", REFUND_ID);
+        return refund;
+    }
+
+    private static PortOneCancellation consoleSucceeded() {
+        return cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+            PortOneCancellationTrigger.CONSOLE);
     }
 
     private static PaymentCancelResult applied(PaymentCancelOutcome outcome, Refund refund) {

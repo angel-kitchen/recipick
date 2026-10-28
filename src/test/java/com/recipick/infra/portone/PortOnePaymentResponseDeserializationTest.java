@@ -182,6 +182,27 @@ class PortOnePaymentResponseDeserializationTest {
     }
 
     @Test
+    @DisplayName("차지백 취소 경로 CHARGEBACK을 UNKNOWN이 아닌 CHARGEBACK으로 읽는다")
+    void deserializeChargebackTrigger() throws Exception {
+        // given — PortOne 응답 값과 상수명이 다르면 실제 차지백이 UNKNOWN으로 기록돼 운영 로그에서 원인을 구분할 수 없다
+        String json = """
+                {
+                  "status": "CANCELLED",
+                  "id": "pay_1",
+                  "cancellations": [
+                    { "status": "SUCCEEDED", "id": "cancel_1", "totalAmount": 23800, "trigger": "CHARGEBACK" }
+                  ]
+                }
+                """;
+
+        // when
+        PortOnePaymentResponse response = mapper.readValue(json, PortOnePaymentResponse.class);
+
+        // then
+        assertThat(response.cancellations().get(0).trigger()).isEqualTo(PortOneCancellationTrigger.CHARGEBACK);
+    }
+
+    @Test
     @DisplayName("cancellations가 없는 응답은 null로 읽는다")
     void deserializeWithoutCancellations() throws Exception {
         // when

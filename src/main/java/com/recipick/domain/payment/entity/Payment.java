@@ -115,6 +115,17 @@ public class Payment extends BaseTimeEntity {
         this.canceledAt = canceledAt;
     }
 
+    // PortOne 콘솔·관리자 화면에서 이미 끝난 전액 취소를 반영한다. 서버가 취소를 요청한 적이 없으므로 CANCEL_REQUESTED를
+    // 거치지 않는다 — 거치게 하면 서버가 요청하지 않은 취소 요청 기록이 생긴다. 취소 시각은 PG가 준 값이어야 한다
+    public void markExternallyCanceled(LocalDateTime canceledAt) {
+        if (this.status != PaymentStatus.PAID) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        Objects.requireNonNull(canceledAt, "canceledAt은 필수입니다.");
+        this.status = PaymentStatus.CANCELED;
+        this.canceledAt = canceledAt;
+    }
+
     // PortOne이 FAILED를 명시했거나 처리 전에 거절(400·401·403)했을 때만 되돌린다. 결과를 모르는 응답에서는 부르지 않는다
     public void restorePaid() {
         if (this.status != PaymentStatus.CANCEL_REQUESTED) {

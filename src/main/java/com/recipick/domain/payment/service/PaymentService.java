@@ -160,6 +160,21 @@ public class PaymentService {
         }
     }
 
+    // 외부 취소 반영 전용. 결제 CANCELED·주문 REFUNDED·재고 복구와 한 트랜잭션에 묶여야 하므로 바깥 트랜잭션을 강제한다.
+    // 같은 취소의 중복 기록은 호출 전 PAYMENT 잠금 아래 선조회가 막고 portone_cancellation_id UNIQUE가 최종 판정한다.
+    // UNIQUE 위반은 커밋에서 전체 롤백으로 끝나야 하므로 즉시 flush해 업무 결과로 바꾸지 않는다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Refund recordExternalRefund(
+        Payment payment,
+        String portoneCancellationId,
+        String reason,
+        LocalDateTime requestedAt,
+        LocalDateTime completedAt
+    ) {
+        return refundRepository.save(
+            Refund.completedByExternal(payment, portoneCancellationId, reason, requestedAt, completedAt));
+    }
+
     // 내 결제 내역. 정렬은 호출자가 넘긴 Pageable이 정한다
     public Page<Payment> findHistory(Collection<Long> orderIds, Pageable pageable) {
         return paymentRepository.findByOrderIdIn(orderIds, pageable);

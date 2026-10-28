@@ -69,6 +69,7 @@ class SystemRefundExecutionFacadeTest {
     private static final String SERVER_KEY = "recipick-refund-77";
     private static final String REASON = "결제 대기 5분 만료";
     private static final String CANCELLATION_ID = "cancel_1";
+    private static final String CONSOLE_CANCELLATION_ID = "cancel_console";
 
     @Mock
     private PaymentService paymentService;
@@ -297,14 +298,11 @@ class SystemRefundExecutionFacadeTest {
     // ---------- 자동으로 고르지 않는 경우 ----------
 
     @Test
-    @DisplayName("이 환불의 취소가 없는데 PG 결제가 PAID가 아니면 MANUAL_REVIEW — 콘솔 취소 등은 1-C 몫이라 다시 취소하지 않는다")
+    @DisplayName("이 환불의 취소도 외부 취소도 없는데 PG 결제가 PAID가 아니면 MANUAL_REVIEW — 근거 없이 다시 취소하지 않는다")
     void manualReviewWhenPgNotPaidWithoutCancellation() {
         // given
         givenRequestedRefund();
-        PortOneCancellation console = new PortOneCancellation("cancel_console", PortOneCancellationStatus.SUCCEEDED,
-            AMOUNT, NOW.minusMinutes(2), NOW.minusMinutes(1), PortOneCancellationTrigger.CONSOLE);
-        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
-            .willReturn(portOne(PortOnePaymentStatus.CANCELED, console));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(PortOnePaymentStatus.CANCELED));
 
         // when
         RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
@@ -316,8 +314,8 @@ class SystemRefundExecutionFacadeTest {
     }
 
     @Test
-    @DisplayName("콘솔 취소가 처리 중이면 PG 결제가 아직 PAID여도 ADMIN 취소를 중복 요청하지 않는다")
-    void manualReviewWhenExternalCancellationIsRequested() {
+    @DisplayName("콘솔 취소가 처리 중이면 PG 결제가 아직 PAID여도 ADMIN 취소를 요청하지 않고 결과가 정해질 때까지 재실행을 예약한다")
+    void recheckWhenConsoleCancellationRequested() {
         // given
         givenRequestedRefund();
         PortOneCancellation consoleRequested = new PortOneCancellation("cancel_console",
@@ -329,9 +327,10 @@ class SystemRefundExecutionFacadeTest {
         RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
 
         // then
-        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
         verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
-        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+        verifyNoInteractions(systemRefundProcessor);
     }
 
     @Test
@@ -393,10 +392,11 @@ class SystemRefundExecutionFacadeTest {
     }
 
     @Test
-    @DisplayName("서버 API 취소가 성공했어도 같은 결제에 콘솔 취소가 처리 중이면 환불을 닫지 않고 MANUAL_REVIEW — 결제 전체의 취소 상태를 단정할 수 없다")
+    @DisplayName("받아 둔 서버 API 취소가 성공했어도 같은 결제에 콘솔 취소가 처리 중이면 환불을 닫지 않고 MANUAL_REVIEW — 결제 전체의 취소 상태를 단정할 수 없다")
     void manualReviewWhenNonApiCancellationActiveBesideExisting() {
         // given
-        givenRequestedRefund();
+        Refund refund = givenRequestedRefund();
+        refund.recordRequested(CANCELLATION_ID);
         PortOneCancellation consoleRequested = new PortOneCancellation("cancel_console",
             PortOneCancellationStatus.REQUESTED, AMOUNT, NOW.minusMinutes(1), null, PortOneCancellationTrigger.CONSOLE);
         given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(
@@ -431,6 +431,183 @@ class SystemRefundExecutionFacadeTest {
         verify(systemRefundProcessor).apply(eq(PAYMENT_ID), eq(REFUND_ID), result.capture());
         assertThat(result.getValue().cancellationId()).isEqualTo(CANCELLATION_ID);
         verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+    }
+
+    // ---------- 외부 전액 취소: POST하지 않는다 ----------
+
+    @Test
+    @DisplayName("콘솔 전액 취소가 끝나 있으면 ADMIN 취소를 요청하지 않고 그 취소로 SYSTEM 환불을 완료해 RESOLVED")
+    void applyConsoleCancellationWithoutPost() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, AMOUNT);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.COMPLETED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then — 결제 FAILED·주문 CANCELED는 SystemRefundProcessor가 그대로 둔다
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("서버 API 취소가 실패로 끝났고 콘솔 전액 취소가 성공했으면 콘솔 취소로 완료해 RESOLVED — 다시 요청하지 않는다")
+    void applyConsoleCancellationBesideFailedApi() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, AMOUNT);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(
+            portOne(PortOnePaymentStatus.CANCELED, apiCancellation(PortOneCancellationStatus.FAILED), console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.COMPLETED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("콘솔 취소는 성공했지만 서버 API 취소가 아직 처리 중이면 반영도 POST도 하지 않고 재실행을 예약한다")
+    void recheckWhenApiInProgressBesideConsole() {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(PortOnePaymentStatus.CANCELED,
+            apiCancellation(PortOneCancellationStatus.REQUESTED),
+            consoleCancellation(PortOneCancellationStatus.SUCCEEDED, AMOUNT)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소 금액이 SYSTEM 환불 금액과 다르면 반영도 POST도 하지 않고 MANUAL_REVIEW")
+    void manualReviewWhenConsoleAmountDiffers() {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(PortOnePaymentStatus.CANCELED,
+            consoleCancellation(PortOneCancellationStatus.SUCCEEDED, 10000L)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("차지백 취소가 보이면 반영도 POST도 하지 않고 MANUAL_REVIEW — 카드사 분쟁은 운영이 판단한다")
+    void manualReviewWhenChargebackActive() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation chargeback = new PortOneCancellation("cancel_chargeback",
+            PortOneCancellationStatus.SUCCEEDED, AMOUNT, NOW.minusMinutes(2), NOW.minusMinutes(1),
+            PortOneCancellationTrigger.CHARGEBACK);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, chargeback));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("취소 ID 없이 서버 API 취소 성공과 처리 중인 콘솔 취소가 함께 보이면 콘솔 결과가 정해질 때까지 재실행을 예약한다")
+    void recheckWhenConsoleRequestedBesideApi() {
+        // given — 콘솔이 FAILED로 끝나면 API 취소를 반영하고, SUCCEEDED로 끝나면 성공 취소가 둘이라 운영에 넘긴다
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(PortOnePaymentStatus.CANCELED,
+            apiCancellation(PortOneCancellationStatus.SUCCEEDED),
+            consoleCancellation(PortOneCancellationStatus.REQUESTED, AMOUNT)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("결제 금액과 다른 SYSTEM 환불도 환불 금액과 같은 콘솔 전액 취소면 그 취소로 완료한다 — 금액 기준은 환불이다")
+    void applyConsoleCancellationForMismatchedAmountRefund() {
+        // given — 결제 23,800원, PG 승인 25,000원이라 25,000원 SYSTEM 환불이 생긴 경우
+        Long refundAmount = 25000L;
+        givenRequestedRefund(NOW.minusMinutes(1), refundAmount);
+        PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, refundAmount);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.COMPLETED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("콘솔 취소는 성공했는데 잠금 사이에 SYSTEM 환불이 실패로 끝나 Processor가 FAILED를 주면 RESOLVED가 아니라 MANUAL_REVIEW")
+    void manualReviewWhenSystemRefundFailedDespiteConsoleSucceeded() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, AMOUNT);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, console));
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(RefundStatus.FAILED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("ADMIN 취소 요청은 성공했는데 잠금 사이에 SYSTEM 환불이 실패로 끝나 Processor가 FAILED를 주면 RESOLVED가 아니라 MANUAL_REVIEW")
+    void manualReviewWhenSystemRefundFailedDespitePostSucceeded() {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne(PortOnePaymentStatus.PAID));
+        PortOneCancelResult succeeded = new PortOneCancelResult(
+            PortOneCancelOutcome.SUCCEEDED, CANCELLATION_ID, NOW, "cancellation SUCCEEDED");
+        given(portOnePaymentClient.cancelPaymentByAdmin(PORTONE_PAYMENT_ID, SERVER_KEY, REASON, AMOUNT))
+            .willReturn(succeeded);
+        given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, succeeded)).willReturn(RefundStatus.FAILED);
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then — POST는 이미 한 번 나갔고, 그 뒤 모순을 발견했다
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient).cancelPaymentByAdmin(PORTONE_PAYMENT_ID, SERVER_KEY, REASON, AMOUNT);
+        verifyNoInteractions(paymentDelayQueue);
     }
 
     // ---------- 재실행 경계 ----------
@@ -581,7 +758,11 @@ class SystemRefundExecutionFacadeTest {
     }
 
     private Refund givenRequestedRefund(LocalDateTime requestedAt) {
-        Refund refund = systemRefund(failedPayment(), requestedAt);
+        return givenRequestedRefund(requestedAt, AMOUNT);
+    }
+
+    private Refund givenRequestedRefund(LocalDateTime requestedAt, Long amount) {
+        Refund refund = systemRefund(failedPayment(), requestedAt, amount);
         given(paymentService.findRefundWithPayment(REFUND_ID)).willReturn(Optional.of(refund));
         return refund;
     }
@@ -607,7 +788,12 @@ class SystemRefundExecutionFacadeTest {
     }
 
     private Refund systemRefund(Payment payment, LocalDateTime requestedAt) {
-        Refund refund = Refund.requestedBySystem(payment, AMOUNT, REASON, "system-key-1", requestedAt);
+        return systemRefund(payment, requestedAt, AMOUNT);
+    }
+
+    // 금액 불일치로 생긴 SYSTEM 환불은 결제 금액과 다르다
+    private Refund systemRefund(Payment payment, LocalDateTime requestedAt, Long amount) {
+        Refund refund = Refund.requestedBySystem(payment, amount, REASON, "system-key-1", requestedAt);
         ReflectionTestUtils.setField(refund, "id", REFUND_ID);
         return refund;
     }
@@ -624,6 +810,13 @@ class SystemRefundExecutionFacadeTest {
         LocalDateTime canceledAt = status == PortOneCancellationStatus.SUCCEEDED ? NOW.minusSeconds(30) : null;
         return new PortOneCancellation(CANCELLATION_ID, status, AMOUNT, NOW.minusMinutes(1), canceledAt,
             PortOneCancellationTrigger.API);
+    }
+
+    // 콘솔 화면에서 운영자가 요청한 취소. 성공이면 PG가 확인한 취소 시각이 있다
+    private static PortOneCancellation consoleCancellation(PortOneCancellationStatus status, Long amount) {
+        LocalDateTime canceledAt = status == PortOneCancellationStatus.SUCCEEDED ? NOW.minusMinutes(1) : null;
+        return new PortOneCancellation(CONSOLE_CANCELLATION_ID, status, amount, NOW.minusMinutes(2), canceledAt,
+            PortOneCancellationTrigger.CONSOLE);
     }
 
     private static PortOnePayment portOne(PortOnePaymentStatus status, PortOneCancellation... cancellations) {

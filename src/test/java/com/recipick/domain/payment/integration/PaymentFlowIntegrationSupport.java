@@ -246,6 +246,11 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
 
     // 결제 완료 후: PAID 주문(마트 접수) + PAID 결제 + 재고·품목. 회원 취소가 들어오는 자리다
     protected Flow paidPaymentWithStock() {
+        return paidPaymentWithStock(MartStatus.RECEIVED);
+    }
+
+    // 결제 완료 후: PAID 주문 + PAID 결제 + 재고·품목. 회원 취소·외부 취소가 들어오는 자리다. 마트 처리 상태는 재고 복구 여부를 가른다
+    protected Flow paidPaymentWithStock(MartStatus martStatus) {
         long memberId = MEMBER_SEQUENCE.incrementAndGet();
         Mart mart = saveMart();
         Product product = productRepository.save(Product.builder()
@@ -259,7 +264,7 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
             .memberId(memberId)
             .martId(mart.getId())
             .status(OrderStatus.PAID)
-            .martStatus(MartStatus.RECEIVED)
+            .martStatus(martStatus)
             .build());
         orderIds.add(order.getId());
         orderItemRepository.save(OrderItem.builder()

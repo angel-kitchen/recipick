@@ -431,6 +431,90 @@ class RefundTest {
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
     }
 
+    @Test
+    @DisplayName("외부 취소 환불은 EXTERNAL·COMPLETED로 생성되고 결제 금액·PortOne 취소 ID·시각이 저장된다")
+    void completedByExternal() {
+        // given — 결제를 먼저 외부 취소로 닫은 뒤에 만든다
+        Payment payment = paymentWith(PaymentStatus.CANCELED);
+
+        // when
+        Refund refund = Refund.completedByExternal(
+            payment, CANCELLATION_ID, "PortOne 외부 취소(CONSOLE)", REQUESTED_AT, COMPLETED_AT);
+
+        // then — PG를 호출하지 않으므로 멱등키는 없고 취소 ID UNIQUE가 중복을 막는다
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.EXTERNAL);
+        assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
+        assertThat(refund.getReason()).isEqualTo("PortOne 외부 취소(CONSOLE)");
+        assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
+        assertThat(refund.getRequestedAt()).isEqualTo(REQUESTED_AT);
+        assertThat(refund.getCompletedAt()).isEqualTo(COMPLETED_AT);
+        assertThat(refund.getIdempotencyKey()).isNull();
+        assertThat(refund.getPayment()).isSameAs(payment);
+        assertThat(refund.getFailureType()).isNull();
+        assertThat(refund.getFailureReason()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentStatus.class, names = "CANCELED", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("취소 완료가 아닌 결제에는 외부 취소 환불을 만들 수 없다")
+    void completedByExternalWhenPaymentNotCanceled(PaymentStatus status) {
+        // given — 순서가 바뀌면 PAID 결제에 완료 환불이 붙는다
+        Payment payment = paymentWith(status);
+
+        // when
+        Throwable thrown = catchThrowable(() -> Refund.completedByExternal(
+            payment, CANCELLATION_ID, "PortOne 외부 취소(CONSOLE)", REQUESTED_AT, COMPLETED_AT));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+    }
+
+    @Test
+    @DisplayName("PortOne 취소 ID 없이는 외부 취소 환불을 만들 수 없다")
+    void completedByExternalWithoutCancellationId() {
+        // given
+        Payment payment = paymentWith(PaymentStatus.CANCELED);
+
+        // when
+        Throwable thrown = catchThrowable(() -> Refund.completedByExternal(
+            payment, null, "PortOne 외부 취소(CONSOLE)", REQUESTED_AT, COMPLETED_AT));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("완료 시각 없이는 외부 취소 환불을 만들 수 없다 — 서버 시각으로 대신 채우지 않는다")
+    void completedByExternalWithoutCompletedAt() {
+        // given
+        Payment payment = paymentWith(PaymentStatus.CANCELED);
+
+        // when
+        Throwable thrown = catchThrowable(() -> Refund.completedByExternal(
+            payment, CANCELLATION_ID, "PortOne 외부 취소(CONSOLE)", REQUESTED_AT, null));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("요청 시각 없이는 외부 취소 환불을 만들 수 없다")
+    void completedByExternalWithoutRequestedAt() {
+        // given — 호출하는 쪽이 PortOne 요청 시각, 없으면 취소 완료 시각을 넘긴다
+        Payment payment = paymentWith(PaymentStatus.CANCELED);
+
+        // when
+        Throwable thrown = catchThrowable(() -> Refund.completedByExternal(
+            payment, CANCELLATION_ID, "PortOne 외부 취소(CONSOLE)", null, COMPLETED_AT));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+    }
+
     private Payment cancelRequestedPayment() {
         return paymentWith(PaymentStatus.CANCEL_REQUESTED);
     }

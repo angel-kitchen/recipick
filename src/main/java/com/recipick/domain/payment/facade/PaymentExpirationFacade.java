@@ -122,7 +122,7 @@ public class PaymentExpirationFacade {
             // 카드 결제에서 예상하지 않는 상태라 실패로 단정하지 않고 다시 묻는다
             case PENDING, VIRTUAL_ACCOUNT_ISSUED, UNKNOWN ->
                 retry(payment, "PG 결제 미확정: status=" + portOnePayment.status());
-            // 결제 전에 PG에서 취소된 비정상 상황이다. 외부 취소 정합화(1-C) 몫이라 어느 Processor에도 넘기지 않는다
+            // 내부 결제가 아직 IN_PROGRESS인데 PG에서 취소된 경우는 주문을 종료할 근거가 부족하므로 자동 반영하지 않는다
             case CANCELED, PARTIAL_CANCELED -> manualReview(payment, "PG에서 취소된 미확정 결제: status="
                 + portOnePayment.status());
         };

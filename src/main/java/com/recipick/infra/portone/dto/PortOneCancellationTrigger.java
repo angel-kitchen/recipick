@@ -7,7 +7,7 @@ public enum PortOneCancellationTrigger {
     CONSOLE,
     API,
     PORTONE_ADMIN,
-    CHARGERBACK,
+    CHARGEBACK,
     @JsonEnumDefaultValue
     UNKNOWN
 }

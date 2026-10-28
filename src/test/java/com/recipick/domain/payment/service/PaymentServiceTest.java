@@ -346,6 +346,34 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("외부 취소 환불은 결제 금액 전액·PortOne 취소 ID·PG 시각으로 EXTERNAL·COMPLETED 행을 저장한다")
+    void recordExternalRefund() {
+        // given — 결제를 먼저 외부 취소로 닫은 뒤에 부른다
+        Payment payment = payment(PAYMENT_ID, PaymentStatus.CANCELED);
+        LocalDateTime requestedAt = NOW.minusMinutes(2);
+        LocalDateTime completedAt = NOW.minusMinutes(1);
+        given(refundRepository.save(any(Refund.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        Refund refund = paymentService.recordExternalRefund(
+            payment, "cancel_console", "PortOne 외부 전액 취소(CONSOLE)", requestedAt, completedAt);
+
+        // then — 같은 취소의 중복은 PAYMENT 잠금과 UNIQUE가 막고, 위반은 커밋에서 전체 롤백으로 끝나므로 즉시 flush하지 않는다
+        verify(refundRepository).save(refundCaptor.capture());
+        verify(refundRepository, never()).saveAndFlush(any(Refund.class));
+        assertThat(refund).isSameAs(refundCaptor.getValue());
+        assertThat(refund.getPayment()).isSameAs(payment);
+        assertThat(refund.getAmount()).isEqualTo(payment.getAmount());
+        assertThat(refund.getReason()).isEqualTo("PortOne 외부 전액 취소(CONSOLE)");
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(refund.getRequestedBy()).isEqualTo(RefundRequester.EXTERNAL);
+        assertThat(refund.getPortoneCancellationId()).isEqualTo("cancel_console");
+        assertThat(refund.getRequestedAt()).isEqualTo(requestedAt);
+        assertThat(refund.getCompletedAt()).isEqualTo(completedAt);
+        assertThat(refund.getIdempotencyKey()).isNull();
+    }
+
+    @Test
     @DisplayName("내 결제 내역 조회는 받은 주문 ID와 Pageable을 그대로 Repository에 넘긴다")
     void findHistory() {
         // given

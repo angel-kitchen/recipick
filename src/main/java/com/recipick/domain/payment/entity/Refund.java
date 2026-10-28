@@ -130,6 +130,33 @@ public class Refund extends BaseTimeEntity {
             .build();
     }
 
+    // PortOne 콘솔·관리자 화면에서 이미 끝난 전액 취소를 기록한다. PG를 호출하지 않으므로 멱등키 대신
+    // portoneCancellationId UNIQUE가 같은 취소의 중복 기록을 막는다. 결제를 외부 취소로 먼저 닫은 뒤에만 만든다 —
+    // 순서가 바뀌면 PAID 결제에 완료 환불이 붙는다. 전액 취소만 반영하므로 금액은 Payment.amount를 그대로 쓴다
+    public static Refund completedByExternal(
+        Payment payment,
+        String portoneCancellationId,
+        String reason,
+        LocalDateTime requestedAt,
+        LocalDateTime completedAt
+    ) {
+        if (payment.getStatus() != PaymentStatus.CANCELED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        Objects.requireNonNull(requestedAt, "requestedAt은 필수입니다.");
+        Refund refund = Refund.builder()
+            .payment(payment)
+            .amount(payment.getAmount())
+            .reason(reason)
+            .status(RefundStatus.REQUESTED)
+            .requestedBy(RefundRequester.EXTERNAL)
+            .requestedAt(requestedAt)
+            .build();
+        // 완료 전이의 검사(취소 ID·완료 시각 필수)를 그대로 거친다
+        refund.complete(portoneCancellationId, completedAt);
+        return refund;
+    }
+
     // PortOne이 REQUESTED(비동기 처리 중)로 답했다. 웹훅·재조회가 이 ID로 환불을 찾으므로 상태는 두고 ID만 남긴다
     public void recordRequested(String portoneCancellationId) {
         requireRequested();

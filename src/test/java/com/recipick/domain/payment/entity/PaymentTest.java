@@ -202,7 +202,7 @@ class PaymentTest {
     @EnumSource(value = PaymentStatus.class, names = "CANCEL_REQUESTED", mode = EnumSource.Mode.EXCLUDE)
     @DisplayName("취소 요청 상태가 아닌 결제는 취소 완료로 변경할 수 없다")
     void markCanceledWhenNotCancelRequested(PaymentStatus status) {
-        // given — PAID에서 바로 CANCELED로 가는 길은 없다. 반드시 requestCancel을 거친다
+        // given — 서버가 요청한 취소는 PAID에서 바로 CANCELED로 가지 않는다. 반드시 requestCancel을 거친다
         Payment payment = paymentWith(status);
 
         // when
@@ -247,6 +247,54 @@ class PaymentTest {
                 assertThat(exception.getErrorCode())
                     .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
         assertThat(payment.getStatus()).isEqualTo(status);
+    }
+
+    @Test
+    @DisplayName("결제 완료 상태에서 PG가 확인한 외부 취소 시각과 함께 바로 취소 완료로 변경한다")
+    void markExternallyCanceled() {
+        // given — 콘솔·관리자 화면 취소는 서버가 요청한 적이 없어 CANCEL_REQUESTED를 거치지 않는다
+        Payment payment = paymentWith(PaymentStatus.PAID);
+
+        // when
+        payment.markExternallyCanceled(CANCELED_AT);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+    }
+
+    @Test
+    @DisplayName("외부 취소 시각 없이는 취소 완료로 변경할 수 없다 — 서버 시각으로 대신 채우지 않는다")
+    void markExternallyCanceledWithoutCanceledAt() {
+        // given
+        Payment payment = paymentWith(PaymentStatus.PAID);
+
+        // when
+        Throwable thrown = catchThrowable(() -> payment.markExternallyCanceled(null));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getCanceledAt()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentStatus.class, names = "PAID", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("결제 완료가 아닌 결제는 외부 취소로 취소 완료할 수 없다")
+    void markExternallyCanceledWhenNotPaid(PaymentStatus status) {
+        // given — 취소 진행 중인 결제는 기존 환불 경로로, 결제 전·실패 결제는 운영 확인으로 처리한다
+        Payment payment = paymentWith(status);
+
+        // when
+        Throwable thrown = catchThrowable(() -> payment.markExternallyCanceled(CANCELED_AT));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+        assertThat(payment.getStatus()).isEqualTo(status);
+        assertThat(payment.getCanceledAt()).isNull();
     }
 
     private Payment paymentWith(PaymentStatus status) {
