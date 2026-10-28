@@ -21,6 +21,7 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.security.AuthPrincipal;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.global.security.SubjectType;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +38,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     @Autowired MockMvc mvc;
@@ -49,6 +52,8 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     @Autowired JdbcTemplate jdbc;
     @Autowired AdminAuditCleanupService cleanup;
     @Autowired Clock clock;
+    @Autowired EntityManager entityManager;
+    @Autowired PlatformTransactionManager transactionManager;
     Admin admin;
     Admin other;
     Admin martAdmin;
@@ -135,8 +140,9 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
         AdminAuditLog first = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
         AdminAuditLog second = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
         AdminAuditLog outside = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
-        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id IN (?, ?)", from, first.getId(), second.getId());
-        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", from.plusDays(1), outside.getId());
+        setCreatedAt(first.getId(), from);
+        setCreatedAt(second.getId(), from);
+        setCreatedAt(outside.getId(), from.plusDays(1));
         // when
         var response = search("from", from.toString(), "to", from.plusDays(1).toString(), "size", "1");
         var next = search("from", from.toString(), "to", from.plusDays(1).toString(), "size", "1", "page", "1");
@@ -288,9 +294,9 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
         AdminAuditLog old = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
         AdminAuditLog boundary = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
         AdminAuditLog recent = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
-        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff.minusSeconds(1), old.getId());
-        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff, boundary.getId());
-        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff.plusSeconds(1), recent.getId());
+        setCreatedAt(old.getId(), cutoff.minusSeconds(1));
+        setCreatedAt(boundary.getId(), cutoff);
+        setCreatedAt(recent.getId(), cutoff.plusSeconds(1));
         // when
         cleanup.deleteExpiredBatch(cutoff);
         cleanup.deleteExpiredBatch(cutoff);
@@ -304,11 +310,17 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     void concurrentCleanupIsIdempotentAndBounded() throws Exception {
         // given
         LocalDateTime cutoff = LocalDateTime.now(clock).minusYears(1).withNano(0);
-        java.util.List<Object[]> rows = new java.util.ArrayList<>();
-        for (int i = 0; i < 1001; i++) {
-            rows.add(new Object[]{admin.getId(), "MEMBER_LIST_VIEW", "MEMBER", cutoff.minusDays(1)});
-        }
-        jdbc.batchUpdate("INSERT INTO admin_audit_log (admin_id, action, target_type, created_at) VALUES (?, ?, ?, ?)", rows);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var query = entityManager.createNativeQuery("INSERT INTO admin_audit_log "
+                    + "(admin_id, action, target_type, created_at) VALUES (:adminId, :action, :target, :createdAt)")
+                    .setParameter("adminId", admin.getId())
+                    .setParameter("action", "MEMBER_LIST_VIEW")
+                    .setParameter("target", "MEMBER")
+                    .setParameter("createdAt", cutoff.minusDays(1));
+            for (int i = 0; i < 1001; i++) {
+                query.executeUpdate();
+            }
+        });
         AdminAuditLog recent = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
         var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
         var start = new java.util.concurrent.CountDownLatch(1);
@@ -332,6 +344,14 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    private void setCreatedAt(Long id, LocalDateTime createdAt) {
+        // 테스트 날짜도 조회·삭제와 동일한 Hibernate 시간대 설정으로 바인딩한다.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                entityManager.createNativeQuery("UPDATE admin_audit_log SET created_at = :createdAt WHERE id = :id")
+                        .setParameter("createdAt", createdAt).setParameter("id", id).executeUpdate());
+        assertThat(logs.findById(id).orElseThrow().getCreatedAt()).isEqualTo(createdAt);
     }
 
 }
