@@ -451,10 +451,10 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.REJECTED);
+        assertThat(result).isEqualTo(MartRejectRequestResult.REJECTED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MART_REJECTED);
@@ -478,10 +478,11 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.REJECTED);
+        assertThat(result).isEqualTo(MartRejectRequestResult.REJECTED);
         verify(orderStatusHistoryRepository).saveAll(historiesCaptor.capture());
         assertThat(historiesCaptor.getValue())
                 .extracting(OrderStatusHistory::getActor, OrderStatusHistory::getChangedByAdminId)
@@ -514,10 +515,11 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.NOT_REJECTABLE);
+        assertThat(result).isEqualTo(MartRejectRequestResult.NOT_REJECTABLE);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(order.getMartStatus()).isEqualTo(martStatus);
         verify(orderStatusHistoryRepository, never()).saveAll(any());
@@ -531,10 +533,11 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
+        MartRejectRequestResult result =
+                orderService.requestMartRejection(AdminRole.SUPER_ADMIN, null, 10L, 1L, "재료 소진");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.NOT_REJECTABLE);
+        assertThat(result).isEqualTo(MartRejectRequestResult.NOT_REJECTABLE);
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
         assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
         verify(orderStatusHistoryRepository, never()).saveAll(any());
@@ -549,10 +552,10 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "다른 사유");
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "다른 사유");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.ALREADY_REJECTED);
+        assertThat(result).isEqualTo(MartRejectRequestResult.ALREADY_REJECTED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(order.getCancelReasonDetail()).isEqualTo("재료 소진");
         verify(orderStatusHistoryRepository, never()).saveAll(any());
@@ -568,10 +571,10 @@ class OrderServiceTest {
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when
-        MartRejectionResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
+        MartRejectRequestResult result = orderService.requestMartRejection(AdminRole.MART_ADMIN, 3L, 20L, 1L, "재료 소진");
 
         // then
-        assertThat(result).isEqualTo(MartRejectionResult.ALREADY_REJECTED);
+        assertThat(result).isEqualTo(MartRejectRequestResult.ALREADY_REJECTED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
         verify(orderStatusHistoryRepository, never()).saveAll(any());
     }

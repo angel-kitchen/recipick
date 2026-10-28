@@ -297,7 +297,7 @@ public class OrderService {
     // Idempotency-Key가 먼저 거르므로 여기 오는 재거절은 다른 키로 온 것이라 상태만 알린다.
     // 결제 전 주문·다른 마트 주문은 수락과 같이 예외다 — 상태가 아니라 접근 범위 문제라 TX1째 롤백한다
     @Transactional(propagation = Propagation.MANDATORY)
-    public MartRejectionResult requestMartRejection(
+    public MartRejectRequestResult requestMartRejection(
             AdminRole role, Long adminMartId, Long adminId, Long orderId, String reasonDetail) {
         Order order = getOrderForUpdate(orderId);
         if (order.getMartStatus() == MartStatus.NONE) {
@@ -306,10 +306,10 @@ public class OrderService {
         verifyMartScope(role, adminMartId, order);
         // 거절만 마트 처리 상태를 REJECTED로 바꾸므로, REJECTED면 환불 진행 중이든 끝났든 이미 거절된 주문이다
         if (order.getMartStatus() == MartStatus.REJECTED) {
-            return MartRejectionResult.ALREADY_REJECTED;
+            return MartRejectRequestResult.ALREADY_REJECTED;
         }
         if (!order.isRejectableByMart()) {
-            return MartRejectionResult.NOT_REJECTABLE;
+            return MartRejectRequestResult.NOT_REJECTABLE;
         }
 
         OrderStatus fromStatus = order.getStatus();
@@ -322,7 +322,7 @@ public class OrderService {
                 martHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(),
                         adminId, reasonDetail)
         ));
-        return MartRejectionResult.REJECTED;
+        return MartRejectRequestResult.REJECTED;
     }
 
     @Transactional

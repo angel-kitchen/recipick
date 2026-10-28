@@ -64,8 +64,8 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
         List<Object> results = runConcurrently(threads, i -> reject());
 
         // then
-        assertThat(results).containsOnly(MartRejectionResult.REJECTED, MartRejectionResult.ALREADY_REJECTED);
-        assertThat(results).containsOnlyOnce(MartRejectionResult.REJECTED);
+        assertThat(results).containsOnly(MartRejectRequestResult.REJECTED, MartRejectRequestResult.ALREADY_REJECTED);
+        assertThat(results).containsOnlyOnce(MartRejectRequestResult.REJECTED);
         Order order = orderRepository.findById(orderId).orElseThrow();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
@@ -88,15 +88,15 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
             assertThat(histories).hasSize(1);
             // 수락이 먼저 잠그면 거절은 모두 거절 불가로 끝나고 수락은 모두 성공(멱등)한다
-            assertThat(results).containsOnly(MartStatus.PREPARING, MartRejectionResult.NOT_REJECTABLE);
+            assertThat(results).containsOnly(MartStatus.PREPARING, MartRejectRequestResult.NOT_REJECTABLE);
         } else {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
             assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
             assertThat(histories).hasSize(2);
             // 거절이 먼저 잠그면 수락은 모두 수락 불가, 나머지 거절은 이미 거절됐다고 끝난다
-            assertThat(results).containsOnly(MartRejectionResult.REJECTED, OrderErrorCode.ORDER_NOT_ACCEPTABLE,
-                    MartRejectionResult.ALREADY_REJECTED);
-            assertThat(results).containsOnlyOnce(MartRejectionResult.REJECTED);
+            assertThat(results).containsOnly(MartRejectRequestResult.REJECTED, OrderErrorCode.ORDER_NOT_ACCEPTABLE,
+                    MartRejectRequestResult.ALREADY_REJECTED);
+            assertThat(results).containsOnlyOnce(MartRejectRequestResult.REJECTED);
         }
     }
 
@@ -119,15 +119,15 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
             assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MART_REJECTED);
             assertThat(histories).hasSize(2);
             // 거절이 먼저 잠그면 회원 취소는 모두 상태 불일치, 나머지 거절은 이미 거절됐다고 끝난다
-            assertThat(results).containsOnly(MartRejectionResult.REJECTED, MartRejectionResult.ALREADY_REJECTED,
+            assertThat(results).containsOnly(MartRejectRequestResult.REJECTED, MartRejectRequestResult.ALREADY_REJECTED,
                     MemberCancelRequestResult.INVALID_ORDER_STATUS);
-            assertThat(results).containsOnlyOnce(MartRejectionResult.REJECTED);
+            assertThat(results).containsOnlyOnce(MartRejectRequestResult.REJECTED);
         } else {
             assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
             assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
             assertThat(histories).hasSize(1);
             // 회원 취소가 먼저 잠그면 거절은 모두 거절 불가, 나머지 취소는 상태 불일치로 끝난다
-            assertThat(results).containsOnly(MartRejectionResult.NOT_REJECTABLE,
+            assertThat(results).containsOnly(MartRejectRequestResult.NOT_REJECTABLE,
                     MemberCancelRequestResult.REQUESTED, MemberCancelRequestResult.INVALID_ORDER_STATUS);
             assertThat(results).containsOnlyOnce(MemberCancelRequestResult.REQUESTED);
         }
