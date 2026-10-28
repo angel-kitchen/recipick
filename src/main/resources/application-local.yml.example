@@ -31,3 +31,9 @@ portone:
   # 웹훅 시크릿은 관리자 콘솔 > 결제 연동 > 웹훅 탭에서 발급한다. 비어 있으면 앱은 뜨고 웹훅만 거절한다
   webhook:
     secret: ""
+
+# 키가 있으면 client를 claude로 바꾸고 api-key를 넣는다. 실제 값은 커밋하지 않는다
+ai:
+  client: fake
+  claude:
+    api-key: ""

@@ -3,6 +3,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
+# 테스트는 실제 AI를 부르지 않는다. AI 응답을 바꿔야 하는 테스트는 @MockitoBean AiClient를 쓴다
+ai:
+  client: fake
+
 # PortOne 설정 바인딩용 더미 값. 테스트는 외부 호출을 하지 않는다
 portone:
   api-secret: test-secret

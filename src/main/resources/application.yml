@@ -38,6 +38,12 @@ security:
     lock-duration: 10m
     refresh-cookie-secure: true
 
+ai:
+  # API 키를 받기 전에는 가짜 응답(fake)으로 개발하고, 키를 넣은 환경에서만 claude로 바꾼다
+  client: ${AI_CLIENT:fake}
+  claude:
+    api-key: ${ANTHROPIC_API_KEY:}
+
 management:
   server:
     # 헬스 체크·지표는 앱 포트와 분리한 관리 포트에서만 연다. 이 포트는 외부(인터넷)에 공개하지 않는다
