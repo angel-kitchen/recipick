@@ -74,6 +74,7 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         refreshTokens.delete("MEMBER", member.getId(), pair.refreshTokenId());
         members.deleteById(member.getId());
     }
@@ -160,6 +161,11 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("관리자 회원 검색에서 탈퇴 회원은 목록과 전체 건수 모두 제외한다")
     void excludesWithdrawnMemberFromAdminSearch() {
+        com.recipick.global.security.AuthPrincipal principal = new com.recipick.global.security.AuthPrincipal(
+                com.recipick.global.security.SubjectType.ADMIN, 1L, "SUPER_ADMIN", null);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.authorities()));
         // given
         MemberAdminSearchRequest request = new MemberAdminSearchRequest(member.getEmail(), null, null, null, null, 0, 20, null);
         assertThat(adminService.findMembers(request).totalElements()).isEqualTo(1);

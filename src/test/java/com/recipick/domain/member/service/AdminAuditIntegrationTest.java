@@ -274,7 +274,13 @@ class AdminAuditIntegrationTest extends IntegrationTestSupport {
                 + "AND COLUMN_NAME IN ('action','target_type')",
                 String.class, schema);
 
+        List<String> retentionIndexColumns = jdbc.queryForList(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? "
+                        + "AND TABLE_NAME = 'admin_audit_log' AND INDEX_NAME = 'idx_admin_audit_log_created_at' "
+                        + "ORDER BY SEQ_IN_INDEX", String.class, schema);
+
         // then
+        assertThat(retentionIndexColumns).containsExactly("created_at");
         assertThat(columns).containsExactlyInAnyOrder("id", "admin_id", "action", "target_type", "target_id",
                 "mart_id", "details", "ip_address", "created_at");
         assertThat(foreignKeys).containsExactlyInAnyOrder("admin_id", "mart_id");
