@@ -35,7 +35,9 @@
 
 정확한 의존성은 [build.gradle](build.gradle), 자동 검증은 [CI 설정](.github/workflows/ci.yml)을 따릅니다.
 현재 상태·지표 공개 규칙은 [모니터링 문서](docs/monitoring.md)에 정리되어 있습니다.
-프론트·운영 배포·추가 모니터링·성능 개선 결과는 확정 후 반영합니다.
+배포의 [선택 근거](docs/deploy-strategy.md)·[구현 기록](docs/deploy-implementation.md)·[운영 절차](deploy/README.md),
+성능의 [부하 테스트](docs/performance/load-test.md)·[병목 개선](docs/performance/bottleneck.md)·[캐싱](docs/performance/caching.md) 보고서가 있습니다.
+프론트 연동·HTTPS 검증 결과와 제출용 성능 수치 요약은 담당자 확인 후 갱신합니다.
 
 ## 구조
 
@@ -98,7 +100,7 @@ curl -i http://localhost:8080/api/categories
 
 로컬 프로필은 예시 설정의 `ddl-auto: update`와 초기 SQL을 사용합니다. 초기 지역·마트는
 [data.sql](src/main/resources/data.sql), 로컬 관리자 시드는 [data-admin-local.sql](src/main/resources/data-admin-local.sql)을 참고합니다.
-운영 관리자 준비와 배포용 DB 변경 절차는 별도 문서로 확정합니다.
+운영 관리자·환경변수·배포용 DB 변경은 [운영 절차](deploy/README.md)를 확인하고 배포 담당자와 적용 범위를 맞춥니다.
 
 프론트를 별도 로컬 출처에서 실행할 때는 `CORS_ALLOWED_ORIGINS`에 해당 출처를 지정합니다.
 실제 배포 주소·쿠키 정책·프론트 실행법은 담당자 합의 후 추가합니다.
@@ -119,9 +121,10 @@ GitHub Actions는 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스�
 
 | 주제 | 환경·데이터 | Before | After | 결과 근거 |
 | --- | --- | --- | --- | --- |
-| 상품 검색·쿼리 개선 | 작성 대기 | 측정 예정 | 측정 예정 | 보고서 작성 대기 |
-| 캐싱 | 작성 대기 | 측정 예정 | 측정 예정 | 보고서 작성 대기 |
-| 부하·호출 제한 | 작성 대기 | 측정 예정 | 측정 예정 | 보고서 작성 대기 |
+| 상품 검색·쿼리 개선 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [병목 개선](docs/performance/bottleneck.md) |
+| 캐싱 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [캐싱](docs/performance/caching.md) |
+| 부하 테스트 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [부하 테스트](docs/performance/load-test.md) |
+| 호출 제한 | 담당자 확인 대기 | 확인 대기 | 확인 대기 | 결과 취합 대기 |
 
 측정용 데이터의 규모와 생성 방법은 [성능 시드 문서](docs/performance/seed-data.md)를 참고합니다.
 위 표에는 측정 완료한 결과만 반영합니다.
