@@ -1,3 +1,8 @@
+# 조회 캐시는 끈 채로 테스트한다. 캐시 동작은 CacheIntegrationTest만 켜서 확인한다
+recipick:
+  cache:
+    enabled: false
+
 spring:
   jpa:
     hibernate:
