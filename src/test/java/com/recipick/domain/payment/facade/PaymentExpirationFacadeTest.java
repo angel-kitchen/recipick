@@ -412,7 +412,7 @@ class PaymentExpirationFacadeTest {
 
     @ParameterizedTest
     @EnumSource(value = PortOnePaymentStatus.class, names = {"CANCELED", "PARTIAL_CANCELED"})
-    @DisplayName("PG에서 이미 취소된 결제면 MANUAL_REVIEW — 1-C 몫이라 어느 Processor에도 넘기지 않는다")
+    @DisplayName("내부 결제가 IN_PROGRESS인데 PG에서 취소됐으면 MANUAL_REVIEW — 주문 종료 근거가 부족해 어느 Processor에도 넘기지 않는다")
     void manualReviewWhenPgCanceled(PortOnePaymentStatus status) {
         // given
         givenPayment(PaymentStatus.IN_PROGRESS, NOW.minusMinutes(1));
