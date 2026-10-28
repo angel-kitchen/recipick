@@ -37,6 +37,9 @@ public class CategoryServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private CategoryService categoryService;
 
@@ -100,7 +103,7 @@ public class CategoryServiceTest {
     @DisplayName("수정 : 새 이름이면 이름이 바뀐다")
     void updateCategory(){
         Category category = category(1L, "채소");
-        given(categoryRepository.findById(1L)).willReturn(Optional.of(category));
+        given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
         given(categoryRepository.existsByName("신선 채소")).willReturn(false);
 
         categoryService.updateCategory(1L, new CategoryUpdateRequest("신선 채소"));
@@ -112,7 +115,7 @@ public class CategoryServiceTest {
     @DisplayName("수정 : 같은 이름이면 중복 검사 없이 성공한다")
     void updateCategory_sameName(){
         Category category = category(1L,"채소");
-        given(categoryRepository.findById(1L)).willReturn(Optional.of(category));
+        given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
 
         CategoryIdResponse result = categoryService.updateCategory(1L, new CategoryUpdateRequest("채소"));
 
@@ -123,7 +126,7 @@ public class CategoryServiceTest {
     @Test
     @DisplayName("수정: 다른 카테고리와 이름이 겹치면 CATEGORY_NAME_DUPLICATED")
     void updateCategory_duplicated(){
-        given(categoryRepository.findById(1L)).willReturn(Optional.of(category(1L, "채소")));
+        given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category(1L, "채소")));
         given(categoryRepository.existsByName("육류")).willReturn(true);
 
         assertThatThrownBy(() -> categoryService.updateCategory(1L, new CategoryUpdateRequest("육류")))
@@ -134,7 +137,7 @@ public class CategoryServiceTest {
     @Test
     @DisplayName("수정: 없는 id면 CATEGORY_NOT_FOUND")
     void updateCategory_notFound(){
-        given(categoryRepository.findById(99L)).willReturn(Optional.empty());
+        given(categoryRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.updateCategory(99L, new CategoryUpdateRequest("채소")))
             .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -146,7 +149,7 @@ public class CategoryServiceTest {
     void updateCategory_alreadyDeleted(){
         Category category = category(1L, "채소");
         category.delete();
-        given(categoryRepository.findById(1L)).willReturn(Optional.of(category));
+        given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
 
         assertThatThrownBy(() -> categoryService.updateCategory(1L, new CategoryUpdateRequest("신선 채소")))
             .extracting(e -> ((BusinessException) e).getErrorCode())

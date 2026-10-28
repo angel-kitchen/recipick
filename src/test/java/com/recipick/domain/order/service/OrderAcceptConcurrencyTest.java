@@ -29,7 +29,16 @@ class OrderAcceptConcurrencyTest extends IntegrationTestSupport {
 
     // data.sql의 시연 마트(삼청 마트). 주문 ID로만 조회하므로 다른 테스트와 격리할 필요가 없다
     private static final Long MART_ID = 1L;
-    private static final Long ADMIN_ID = 20L;
+    private Long adminId;
+    @Autowired private com.recipick.domain.member.repository.AdminRepository admins;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setupAdmin() {
+        adminId = admins.saveAndFlush(com.recipick.domain.member.entity.Admin.builder()
+                .loginId(java.util.UUID.randomUUID().toString()).passwordHash("hash")
+                .role(AdminRole.MART_ADMIN).martId(MART_ID).active(true).build()).getId();
+    }
 
     @Autowired
     OrderService orderService;
@@ -42,6 +51,8 @@ class OrderAcceptConcurrencyTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        jdbc.update("DELETE FROM admin_audit_log WHERE admin_id = ?", adminId);
+        admins.deleteById(adminId);
         if (orderId != null) {
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
             orderRepository.deleteById(orderId);
@@ -96,10 +107,17 @@ class OrderAcceptConcurrencyTest extends IntegrationTestSupport {
     }
 
     private Object accept() {
+        var principal = new com.recipick.global.security.AuthPrincipal(
+                com.recipick.global.security.SubjectType.ADMIN, adminId, "MART_ADMIN", MART_ID);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.authorities()));
         try {
-            return orderService.acceptByMart(AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, orderId).martStatus();
+            return orderService.acceptByMart(AdminRole.MART_ADMIN, MART_ID, adminId, orderId).martStatus();
         } catch (BusinessException e) {
             return e.getErrorCode();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
     }
 

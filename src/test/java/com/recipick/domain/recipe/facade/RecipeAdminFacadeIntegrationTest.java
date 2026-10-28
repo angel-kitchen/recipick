@@ -48,6 +48,11 @@ class RecipeAdminFacadeIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        var principal = new com.recipick.global.security.AuthPrincipal(
+                com.recipick.global.security.SubjectType.ADMIN, 1L, "SUPER_ADMIN", null);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.authorities()));
         recipe = recipeRepository.save(Recipe.builder()
             .name("통합 테스트 된장찌개")
             .baseServings(2)
@@ -73,6 +78,7 @@ class RecipeAdminFacadeIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         recipeIngredientRepository.deleteAll(recipeIngredientRepository.findAllWithIngredient(recipe.getId()));
         recipeRepository.deleteById(recipe.getId());
         productRepository.deleteById(tofuProduct.getId());

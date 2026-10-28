@@ -37,7 +37,7 @@ public class IngredientAdminFacade {
 
     @Transactional
     public IngredientIdResponse updateIngredient(Long ingredientId, IngredientSaveRequest request) {
-        Ingredient ingredient = ingredientService.getIngredient(ingredientId);
+        Ingredient ingredient = ingredientService.getIngredientForUpdate(ingredientId);
         if (ingredient.getUnit() != request.unit() && isInUse(ingredientId)) {
             throw new BusinessException(RecipeErrorCode.INGREDIENT_IN_USE);
         }

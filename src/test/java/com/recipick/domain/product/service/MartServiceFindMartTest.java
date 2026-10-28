@@ -22,6 +22,9 @@ class MartServiceFindMartTest {
 
     @Mock
     private MartRepository repository;
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private MartService service;
 

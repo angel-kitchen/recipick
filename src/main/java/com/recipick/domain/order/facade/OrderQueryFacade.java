@@ -1,5 +1,12 @@
 package com.recipick.domain.order.facade;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
+import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditRecorder;
+import com.recipick.global.response.PageResponse;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.order.dto.OrderNameFormatter;
@@ -38,14 +45,17 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
-// 각 Service의 readOnly 트랜잭션으로 읽기만 한다. 재고를 잠그거나 차감하지 않고 현재 값으로 판정한다
+// 미리보기는 각 Service의 읽기 전용 트랜잭션을 사용하고, 관리자 조회는 감사 기록과 함께 커밋한다.
 @Component
 @RequiredArgsConstructor
 public class OrderQueryFacade {
 
     private static final Pattern LEGAL_DONG_CODE = Pattern.compile("\\d{10}");
 
+    private final AdminAuditRecorder auditRecorder;
     private final MemberService memberService;
     private final RegionService regionService;
     private final MartService martService;
@@ -54,6 +64,18 @@ public class OrderQueryFacade {
     private final OrderService orderService;
     private final PaymentService paymentService;
     private final Clock clock;
+
+    @Transactional
+    public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
+            AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
+        PageResponse<OrderAdminSummaryResponse> response =
+                orderService.searchAdminOrders(role, adminMartId, request, pageable);
+        Long scopedMartId = role == AdminRole.MART_ADMIN ? adminMartId : request.martId();
+        Long auditMartId = scopedMartId == null ? null
+                : martService.findMart(scopedMartId).map(MartResponse::martId).orElse(null);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_LIST_VIEW, null, auditMartId, Map.of()));
+        return response;
+    }
 
     public OrderPreviewResponse previewOrder(Long memberId, OrderPreviewRequest request) {
         if (new HashSet<>(request.cartItemIds()).size() != request.cartItemIds().size()) {

@@ -94,7 +94,7 @@ class ProductStockAdminControllerTest extends AdminApiTestSupport {
         assertThat(data(response).path("totalElements").asLong()).isEqualTo(2);
         assertThat(data(response).path("content").get(0).path("type").asText()).isEqualTo("DECREASE");
         assertThat(data(response).path("content").get(0).path("reason").asText()).isEqualTo("폐기");
-        assertThat(data(response).path("content").get(0).path("adminId").asLong()).isEqualTo(MART_ADMIN_ID);
+        assertThat(data(response).path("content").get(0).path("adminId").asLong()).isEqualTo(martAdminId);
         assertThat(data(response).path("content").get(1).path("type").asText()).isEqualTo("INCREASE");
     }
 

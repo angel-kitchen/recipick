@@ -76,11 +76,14 @@ class OrderQueryFacadeTest {
     @Mock
     private PaymentService paymentService;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     private OrderQueryFacade orderQueryFacade;
 
     @BeforeEach
     void setUp() {
-        orderQueryFacade = new OrderQueryFacade(memberService, regionService, martService, cartService,
+        orderQueryFacade = new OrderQueryFacade(auditRecorder, memberService, regionService, martService, cartService,
                 productService, orderService, paymentService, Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL));
     }
 
@@ -408,4 +411,20 @@ class OrderQueryFacadeTest {
     private ProductSummary product(Long productId, Long martId, ProductStatus status, int stock, Long price) {
         return new ProductSummary(productId, martId, "상품" + productId, null, price, null, null, status, stock, false);
     }
+    @Test
+    @DisplayName("관리자 주문 목록 감사 기록이 실패하면 조회 결과를 반환하지 않는다")
+    void refusesAdminResponseWhenAuditFails() {
+        // given
+        var request = new com.recipick.domain.order.dto.request.OrderAdminSearchRequest(null, null);
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        given(orderService.searchAdminOrders(com.recipick.domain.member.entity.enums.AdminRole.SUPER_ADMIN,
+                null, request, pageable)).willReturn(new com.recipick.global.response.PageResponse<>(List.of(), 0, 20, 0, 0));
+        org.mockito.Mockito.doThrow(new IllegalStateException("감사 저장 실패"))
+                .when(auditRecorder).record(org.mockito.ArgumentMatchers.any());
+        // when, then
+        assertThatThrownBy(() -> orderQueryFacade.searchAdminOrders(
+                com.recipick.domain.member.entity.enums.AdminRole.SUPER_ADMIN, null, request, pageable))
+                .isInstanceOf(IllegalStateException.class).hasMessage("감사 저장 실패");
+    }
+
 }

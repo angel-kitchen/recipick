@@ -40,6 +40,11 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     private static final Long SUPER_ADMIN_ID = 1L;
     private static final Long MART_ADMIN_ID = 2L;
+    @Autowired private com.recipick.domain.product.repository.MartRepository martRepository;
+    @Autowired private com.recipick.domain.member.repository.AdminRepository admins;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final java.util.List<Long> adminIds = new java.util.ArrayList<>();
+    private final List<Long> createdAuditIds = new ArrayList<>();
     private static final Long MEMBER_ID = 7L;
 
     @Autowired
@@ -58,7 +63,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     private OrderStatusHistoryRepository historyRepository;
 
     // 마트별 목록을 정확히 비교해야 해서 다른 테스트가 남긴 주문과 섞이지 않도록 마트 ID를 실행마다 새로 뽑는다.
-    // ORDERS.mart_id에 FK가 없어 MART에 없는 ID도 저장되며, 마트 존재 여부는 이 테스트의 관심사가 아니다
+    // 감사 로그의 마트 FK도 검증하도록 실제 테스트 마트를 함께 만든다
     private Long martA;
     private Long martB;
     private final List<Order> orders = new ArrayList<>();
@@ -67,15 +72,25 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
-        martA = ThreadLocalRandom.current().nextLong(1_000_000L, 2_000_000L);
-        martB = martA + 1;
+        Long region = ThreadLocalRandom.current().nextLong(1_000_000L, 2_000_000L);
+        martA = saveMart(region);
+        martB = saveMart(region + 1);
     }
 
     @AfterEach
     void cleanUp() {
+        for (Long auditId : createdAuditIds) {
+            jdbc.update("DELETE FROM admin_audit_log WHERE id = ?", auditId);
+        }
+        jdbc.update("DELETE FROM admin_audit_log WHERE mart_id IN (?, ?)", martA, martB);
+        for (Long adminId : adminIds) {
+            jdbc.update("DELETE FROM admin_audit_log WHERE admin_id = ?", adminId);
+            admins.deleteById(adminId);
+        }
         historyRepository.deleteAll(histories);
         orderItemRepository.deleteAll(orderItems);
         orderRepository.deleteAll(orders);
+        martRepository.deleteAllById(java.util.List.of(martA, martB));
     }
 
     @Test
@@ -332,8 +347,14 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     }
 
     private MockHttpServletResponse perform(String url, String token) throws Exception {
-        return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
-                .andReturn().getResponse();
+        Long beforeId = jdbc.queryForObject("SELECT COALESCE(MAX(id), 0) FROM admin_audit_log", Long.class);
+        try {
+            return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
+                    .andReturn().getResponse();
+        } finally {
+            createdAuditIds.addAll(jdbc.queryForList("SELECT id FROM admin_audit_log WHERE id > ? AND admin_id = ?",
+                    Long.class, beforeId, SUPER_ADMIN_ID));
+        }
     }
 
     private JsonNode data(MockHttpServletResponse response) throws Exception {
@@ -350,7 +371,11 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     }
 
     private String martAdminToken(Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, MART_ADMIN_ID, "MART_ADMIN", martId))
+        Long adminId = admins.saveAndFlush(com.recipick.domain.member.entity.Admin.builder()
+                .loginId(UUID.randomUUID().toString()).passwordHash("hash")
+                .role(com.recipick.domain.member.entity.enums.AdminRole.MART_ADMIN).martId(martId).active(true).build()).getId();
+        adminIds.add(adminId);
+        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, "MART_ADMIN", martId))
                 .accessToken();
     }
 
@@ -399,4 +424,40 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
         }
         return order;
     }
+    private Long saveMart(Long regionId) {
+        return martRepository.saveAndFlush(com.recipick.domain.product.entity.Mart.builder()
+                .regionId(regionId).name("주문 감사 테스트 마트")
+                .latitude(new BigDecimal("37.5")).longitude(new BigDecimal("127.0"))
+                .serviceRadiusM(2000).build()).getId();
+    }
+
+    @Test
+    @DisplayName("슈퍼 관리자가 실제 마트의 빈 목록을 조회해도 해당 마트를 감사 기록에 남긴다")
+    void recordsExistingEmptyMartScope() throws Exception {
+        // given, when
+        var response = perform("/api/admin/orders?martId=" + martA, superToken());
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("totalElements").asInt()).isZero();
+        assertThat(createdAuditIds).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT mart_id FROM admin_audit_log WHERE id = ?", Long.class,
+                createdAuditIds.get(0))).isEqualTo(martA);
+    }
+
+    @Test
+    @DisplayName("없는 마트와 전체 마트 조회는 마트 ID 없이 기록하고 빈 목록 응답도 유지한다")
+    void recordsUnknownAndAllMartScopes() throws Exception {
+        // given, when
+        var missing = perform("/api/admin/orders?martId=" + Long.MAX_VALUE, superToken());
+        var all = perform("/api/admin/orders", superToken());
+        // then
+        assertThat(missing.getStatus()).isEqualTo(200);
+        assertThat(data(missing).path("totalElements").asInt()).isZero();
+        assertThat(all.getStatus()).isEqualTo(200);
+        assertThat(createdAuditIds).hasSize(2);
+        for (Long id : createdAuditIds) {
+            assertThat(jdbc.queryForObject("SELECT mart_id FROM admin_audit_log WHERE id = ?", Long.class, id)).isNull();
+        }
+    }
+
 }

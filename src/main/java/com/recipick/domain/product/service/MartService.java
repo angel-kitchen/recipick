@@ -1,5 +1,12 @@
 package com.recipick.domain.product.service;
 
+import java.util.Objects;
+import java.util.Map;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.MartCreateRequest;
 import com.recipick.domain.product.dto.MartIdResponse;
@@ -28,6 +35,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class MartService {
 
+    private final AdminAuditRecorder auditRecorder;
+
     private static final BigDecimal MAX_LATITUDE = new BigDecimal("90");
     private static final BigDecimal MAX_LONGITUDE = new BigDecimal("180");
 
@@ -53,7 +62,9 @@ public class MartService {
             .longitude(request.longitude())
             .serviceRadiusM(radius)
             .build();
-        return new MartIdResponse(martRepository.save(mart).getId());
+        Mart saved = martRepository.save(mart);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.MART_CREATE, saved.getId(), saved.getId(), Map.of()));
+        return new MartIdResponse(saved.getId());
     }
 
     @CacheEvict(cacheNames = CacheConfig.OPEN_MARTS, allEntries = true)
@@ -72,7 +83,22 @@ public class MartService {
         int radius = request.serviceRadiusM() != null ? request.serviceRadiusM() : mart.getServiceRadiusM();
         validateArea(latitude, longitude, radius);
 
+        var beforeLatitude = mart.getLatitude();
+        var beforeLongitude = mart.getLongitude();
+        var beforeRadius = mart.getServiceRadiusM();
+        var beforeStatus = mart.getStatus();
         mart.update(request.latitude(), request.longitude(), request.serviceRadiusM(), request.status());
+        boolean areaChanged = beforeLatitude.compareTo(mart.getLatitude()) != 0
+                || beforeLongitude.compareTo(mart.getLongitude()) != 0
+                || !Objects.equals(beforeRadius, mart.getServiceRadiusM());
+        if (areaChanged || beforeStatus != mart.getStatus()) {
+            auditRecorder.record(new AdminAuditCommand(areaChanged ? AdminAuditAction.MART_UPDATE
+                    : AdminAuditAction.MART_STATUS_CHANGE, mart.getId(), mart.getId(), Map.of(
+                    AdminAuditField.LATITUDE, new AdminAuditChange(beforeLatitude, mart.getLatitude()),
+                    AdminAuditField.LONGITUDE, new AdminAuditChange(beforeLongitude, mart.getLongitude()),
+                    AdminAuditField.SERVICE_RADIUS_M, new AdminAuditChange(beforeRadius, mart.getServiceRadiusM()),
+                    AdminAuditField.STATUS, new AdminAuditChange(beforeStatus, mart.getStatus()))));
+        }
         return new MartIdResponse(mart.getId());
     }
 

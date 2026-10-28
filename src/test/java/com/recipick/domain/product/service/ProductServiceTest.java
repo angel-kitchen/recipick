@@ -66,6 +66,9 @@ public class ProductServiceTest {
     @Mock
     private MartRepository martRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private ProductService productService;
 
@@ -467,7 +470,11 @@ public class ProductServiceTest {
     void createProduct_noIngredientNoBrand() {
         // given
         stubMartAndCategory();
-        given(productRepository.save(any(Product.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(productRepository.save(any(Product.class))).willAnswer(invocation -> {
+            Product saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 77L);
+            return saved;
+        });
         ProductCreateRequest request = createRequest(1L, null, "1", 1000L);
 
         // when
@@ -540,7 +547,11 @@ public class ProductServiceTest {
     void createProduct_martAdminOwnMart() {
         // given
         stubMartAndCategory();
-        given(productRepository.save(any(Product.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(productRepository.save(any(Product.class))).willAnswer(invocation -> {
+            Product saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 77L);
+            return saved;
+        });
         ProductCreateRequest request = createRequest(1L, "국산농장", "300.00", 1500L);
 
         // when
