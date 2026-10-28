@@ -1,24 +1,38 @@
 package com.recipick.domain.payment.facade;
 
+import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.facade.OrderFacade;
+import com.recipick.domain.order.service.MartRejectRequestResult;
+import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
+import com.recipick.domain.payment.dto.MartRejectionPreparation;
 import com.recipick.domain.payment.dto.response.MartRejectionResponse;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
+import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.MartRejectionOutcome;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.product.dto.StockQuantity;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditRecorder;
+import com.recipick.global.exception.AuthErrorCode;
+import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
-import java.util.List;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 // 마트 거절 환불의 상태 변경 트랜잭션. 회원 취소의 PaymentCancelProcessor와 같은 TX1(접수)·TX2(반영) 구조지만
 // PG 취소가 명확히 실패해도 주문을 정상 접수로 되돌리지 않는다 — 결제만 PAID로 돌아가고 주문·마트는 거절 상태로 남는다.
@@ -30,7 +44,58 @@ import org.springframework.util.StringUtils;
 public class MartRejectionProcessor {
 
     private final PaymentService paymentService;
+    private final OrderService orderService;
     private final OrderFacade orderFacade;
+    private final AdminAuditRecorder adminAuditRecorder;
+
+    // TX1. 거절을 접수한다. 주문 거절·결제 CANCEL_REQUESTED·ADMIN 환불·감사 로그를 한 트랜잭션으로 커밋하고
+    // 실행이 필요한 PENDING 결과를 돌려준다. 실행 중 서버가 죽어도 환불 행이 남아 Worker·Fallback이 이어받는다.
+    // 재고는 여기서 건드리지 않는다 — PG 취소가 성공한 TX2에서만 한 번 복구한다
+    @Transactional
+    public MartRejectionPreparation prepare(AdminRole role, Long adminMartId, Long adminId, Long orderId,
+                                            String idempotencyKey, String reason) {
+        // 마트 범위를 결제 잠금·멱등 판정보다 먼저 본다. 순서가 바뀌면 다른 마트 관리자가 남의 주문의 결제 상태나
+        // 같은 키의 결과를 응답 차이로 알 수 있다. 마트 ID 값만 읽고 잠그지 않으므로 잠금 순서 PAYMENT → ORDERS는 그대로다
+        Long martId = orderService.getMartIdOf(orderId);
+        if (role == AdminRole.MART_ADMIN && !martId.equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+
+        Payment payment = paymentService.getByOrderIdForUpdate(orderId);
+        // 결제 전 주문은 주문을 잠그거나 거절 전이를 부르지 않고 끝낸다
+        if (payment.getStatus() == PaymentStatus.IN_PROGRESS) {
+            throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_PAID);
+        }
+
+        // 같은 키 = 같은 거절 작업. 주문 거절을 다시 부르지 않고 그 환불의 상태로 답한다
+        Optional<Refund> existing = paymentService.findRefundByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return replay(existing.get(), payment, reason);
+        }
+
+        // 다른 키로 취소가 진행 중이다. 그 결과를 기다려야 하므로 새 환불을 만들지 않는다
+        if (payment.getStatus() == PaymentStatus.CANCEL_REQUESTED) {
+            throw new BusinessException(CommonErrorCode.DUPLICATE_REQUEST_IN_PROGRESS);
+        }
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+
+        // 결제가 PAID여도 ADMIN 환불이 실패한 거절 주문일 수 있다. 주문이 ALREADY_REJECTED로 판정하므로
+        // 새 환불을 만들지 않는다 — 실패한 거절의 재처리는 2차 관리자 재처리 API의 몫이다
+        MartRejectRequestResult orderResult =
+            orderService.requestMartRejection(role, adminMartId, adminId, orderId, reason);
+        if (orderResult != MartRejectRequestResult.REJECTED) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        }
+        payment.requestCancel();
+        Refund refund = paymentService.requestAdminRefund(payment, reason, idempotencyKey);
+
+        // 새 거절이 실제로 접수됐을 때만 남긴다. SUPER_ADMIN은 토큰에 마트가 없으므로 주문의 마트를 쓴다.
+        // 상태 전후 값은 주문 상태 이력 두 건에 이미 남고, 거절 사유는 자유 입력 원문이라 넣지 않는다
+        adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_REJECT, orderId, martId, Map.of()));
+        return MartRejectionPreparation.execute(result(MartRejectionOutcome.PENDING, payment, refund));
+    }
 
     // TX2. PortOne 결과를 반영한다. 실행기·웹훅이 같은 환불을 여러 번 넘겨도 끝난 환불은 다시 바꾸지 않고 그 결과를 돌려준다.
     // 끝난 환불이라도 결제 상태와 맞지 않는 조합이면 "이미 반영됨"으로 덮지 않고 예외로 멈춘다 — 불일치를 숨기지 않기 위해
@@ -73,6 +138,35 @@ public class MartRejectionProcessor {
             case REJECTED -> fail(payment, refund, null, RefundFailureType.REQUEST_REJECTED, result.detail());
             // 404·상태 불일치 409·timeout·5xx·해석 불가. 성공도 실패도 단정할 수 없어 접수 상태를 그대로 둔다
             case MISMATCH, UNCONFIRMED -> result(MartRejectionOutcome.PENDING, payment, refund);
+        };
+    }
+
+    // 실행기가 TX2까지 가지 않았을 때 거절 API가 응답할 현재 상태를 읽는다. 잠그지 않는다 — 응답용 스냅샷이다
+    @Transactional(readOnly = true)
+    public MartRejectionPaymentResult getCurrentResult(Long paymentId, Long refundId) {
+        Payment payment = paymentService.getById(paymentId);
+        Refund refund = paymentService.getRefundById(refundId);
+        return switch (refund.getStatus()) {
+            case COMPLETED -> result(MartRejectionOutcome.COMPLETED, payment, refund);
+            case FAILED -> result(failureOutcome(refund), payment, refund);
+            case REQUESTED -> result(MartRejectionOutcome.PENDING, payment, refund);
+        };
+    }
+
+    // 같은 키의 재요청. 다른 결제·다른 사유·마트 거절 환불이 아닌 행이면 키를 잘못 재사용한 것이다.
+    // 진행 중인 환불은 새 환불·새 키 없이 같은 실행기로 다시 보낸다 — PortOne 재요청 여부는 실행기의 GET이 정한다
+    private MartRejectionPreparation replay(Refund refund, Payment payment, String reason) {
+        if (refund.getRequestedBy() != RefundRequester.ADMIN
+            || !refund.getPayment().getId().equals(payment.getId())
+            || !refund.getReason().equals(reason)) {
+            throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH);
+        }
+        return switch (refund.getStatus()) {
+            case COMPLETED ->
+                MartRejectionPreparation.finished(result(MartRejectionOutcome.COMPLETED, payment, refund));
+            case FAILED ->
+                MartRejectionPreparation.finished(result(failureOutcome(refund), payment, refund));
+            case REQUESTED -> MartRejectionPreparation.execute(result(MartRejectionOutcome.PENDING, payment, refund));
         };
     }
 
