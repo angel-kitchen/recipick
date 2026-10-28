@@ -24,6 +24,10 @@ spring:
       pageable:
         default-page-size: 20
         max-page-size: 100
+    redis:
+      # Redis가 응답하지 않아도 요청 스레드가 기본값(약 60초) 동안 묶이지 않게 한다
+      timeout: 500ms
+      connect-timeout: 1s
 
 security:
   trial-block:
