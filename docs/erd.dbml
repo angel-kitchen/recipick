@@ -225,6 +225,9 @@ Table POINT_EARNING {
   expires_on date
   created_at datetime
   updated_at datetime
+  indexes {
+    (member_id, status) [name: 'idx_point_earning_member_id_status']
+  }
 }
 
 Table POINT_USAGE {
@@ -239,6 +242,7 @@ Table POINT_USAGE {
   updated_at datetime
   indexes {
     (point_earning_id, order_id) [unique]
+    order_id [name: 'idx_point_usage_order_id']
   }
 }
 
