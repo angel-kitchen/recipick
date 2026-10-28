@@ -5,6 +5,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.recipick.domain.payment.facade.AdminRefundExecutionFacade;
 import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
@@ -42,6 +43,9 @@ class PaymentDelayQueueWorkerTest {
     private SystemRefundExecutionFacade systemRefundExecutionFacade;
 
     @Mock
+    private AdminRefundExecutionFacade adminRefundExecutionFacade;
+
+    @Mock
     private PaymentExpirationFacade paymentExpirationFacade;
 
     private PaymentDelayQueueWorker worker;
@@ -49,8 +53,8 @@ class PaymentDelayQueueWorkerTest {
     @BeforeEach
     void setUp() {
         worker = new PaymentDelayQueueWorker(paymentDelayQueue, paymentReconciliationFacade,
-            refundReconciliationFacade, systemRefundExecutionFacade, paymentExpirationFacade,
-            Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+            refundReconciliationFacade, systemRefundExecutionFacade, adminRefundExecutionFacade,
+            paymentExpirationFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
     }
 
     @Test
@@ -115,6 +119,22 @@ class PaymentDelayQueueWorkerTest {
     }
 
     @Test
+    @DisplayName("ADMIN_REFUND_EXECUTE는 마트 거절 환불 실행 Facade에 넘긴다 — 같은 환불 ID라도 SYSTEM 환불 실행으로 보내지 않는다")
+    void dispatchAdminRefundExecute() {
+        // given
+        given(paymentDelayQueue.popDue(NOW, PaymentDelayQueueWorker.BATCH_SIZE))
+            .willReturn(List.of(PaymentDelayTask.adminRefundExecute(10L)));
+
+        // when
+        worker.poll();
+
+        // then
+        verify(adminRefundExecutionFacade).execute(10L);
+        verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade,
+            paymentExpirationFacade);
+    }
+
+    @Test
     @DisplayName("PAYMENT_EXPIRE는 결제 만료 Facade에 넘긴다 — 같은 숫자 ID라도 환불 작업으로 보내지 않는다")
     void dispatchPaymentExpire() {
         // given
@@ -140,6 +160,6 @@ class PaymentDelayQueueWorkerTest {
 
         // then
         verifyNoInteractions(paymentReconciliationFacade, refundReconciliationFacade, systemRefundExecutionFacade,
-            paymentExpirationFacade);
+            adminRefundExecutionFacade, paymentExpirationFacade);
     }
 }

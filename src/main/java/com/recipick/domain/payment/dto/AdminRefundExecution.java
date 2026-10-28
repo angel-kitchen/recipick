@@ -10,7 +10,8 @@ public record AdminRefundExecution(
     RefundReconcileOutcome outcome,
     MartRejectionPaymentResult applied
 ) {
-    // RESOLVED는 TX2가 확정했다는 뜻이라 결과가 있어야 하고, SKIPPED는 TX2까지 가지 않았다는 뜻이라 결과가 없어야 한다
+    // RESOLVED는 TX2가 확정했다는 뜻이라 결과가 있어야 하고, SKIPPED는 TX2까지 가지 않았다는 뜻이라 결과가 없어야 한다.
+    // MANUAL_REVIEW도 결과를 가질 수 없다 — PG는 취소에 성공했는데 TX2가 실패를 돌려준 경합에서 그 실패가 거절 API 응답(409)으로 나가면 안 된다
     public AdminRefundExecution {
         Objects.requireNonNull(outcome, "outcome은 필수입니다.");
         if (outcome == RefundReconcileOutcome.RESOLVED && applied == null) {
@@ -18,6 +19,9 @@ public record AdminRefundExecution(
         }
         if (outcome == RefundReconcileOutcome.SKIPPED && applied != null) {
             throw new IllegalArgumentException("SKIPPED는 반영 결과를 가질 수 없습니다.");
+        }
+        if (outcome == RefundReconcileOutcome.MANUAL_REVIEW && applied != null) {
+            throw new IllegalArgumentException("MANUAL_REVIEW는 반영 결과를 가질 수 없습니다.");
         }
     }
 

@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.scheduler;
 
+import com.recipick.domain.payment.facade.AdminRefundExecutionFacade;
 import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
@@ -48,10 +49,12 @@ public class PaymentFallbackScheduler {
             int webhookEvents = recoverWebhookEvents(now, executeAt);
             int memberRefunds = recoverMemberRefunds(now, executeAt);
             int systemRefunds = recoverSystemRefunds(now, executeAt);
+            int adminRefunds = recoverAdminRefunds(now, executeAt);
             int expiredPayments = recoverExpiredPayments(now, executeAt);
-            if (webhookEvents + memberRefunds + systemRefunds + expiredPayments > 0) {
-                log.warn("Fallback Sweep 재등록: webhookEvents={}, memberRefunds={}, systemRefunds={}, expiredPayments={}",
-                    webhookEvents, memberRefunds, systemRefunds, expiredPayments);
+            if (webhookEvents + memberRefunds + systemRefunds + adminRefunds + expiredPayments > 0) {
+                log.warn("Fallback Sweep 재등록: webhookEvents={}, memberRefunds={}, systemRefunds={}, adminRefunds={}, "
+                        + "expiredPayments={}",
+                    webhookEvents, memberRefunds, systemRefunds, adminRefunds, expiredPayments);
             }
         } catch (DataAccessException e) {
             // DB·Redis 장애면 남은 건도 같은 이유로 실패한다. 한 번만 남기고 다음 주기에 다시 한다
@@ -110,6 +113,26 @@ public class PaymentFallbackScheduler {
             List<Long> ids = paymentService.findStaleSystemRefundIds(requestedBefore, afterId, BATCH_SIZE);
             for (Long id : ids) {
                 paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(id), executeAt);
+            }
+            count += ids.size();
+            if (ids.size() < BATCH_SIZE) {
+                return count;
+            }
+            afterId = ids.get(ids.size() - 1);
+        }
+    }
+
+    // 마트 거절 환불 REQUESTED. 거절 API가 바로 실행하고 10분 안전망도 걸어 두므로 재실행 간격이 지나도 남아 있으면 예약이 사라졌을 수 있다.
+    // 고빈도 재실행 중이거나 STALLED·MANUAL_REVIEW로 멈춘 환불도 함께 넣는다 — 실행 Facade가 항상 GET부터 하고 Processor가 잠금 아래에서
+    // 멱등이라 겹쳐도 취소를 다시 요청하지 않는다
+    private int recoverAdminRefunds(LocalDateTime now, Instant executeAt) {
+        LocalDateTime requestedBefore = now.minus(AdminRefundExecutionFacade.RECHECK_DELAY);
+        int count = 0;
+        long afterId = 0L;
+        while (true) {
+            List<Long> ids = paymentService.findStaleAdminRefundIds(requestedBefore, afterId, BATCH_SIZE);
+            for (Long id : ids) {
+                paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.adminRefundExecute(id), executeAt);
             }
             count += ids.size();
             if (ids.size() < BATCH_SIZE) {

@@ -19,12 +19,14 @@ class PaymentDelayTaskTest {
         String webhook = PaymentDelayTask.webhookProcess(100L).member();
         String refund = PaymentDelayTask.refundReconcile(55L).member();
         String systemRefund = PaymentDelayTask.systemRefundExecute(77L).member();
+        String adminRefund = PaymentDelayTask.adminRefundExecute(77L).member();
         String paymentExpire = PaymentDelayTask.paymentExpire(77L).member();
 
         // then
         assertThat(webhook).isEqualTo("WEBHOOK_PROCESS:100");
         assertThat(refund).isEqualTo("REFUND_RECONCILE:55");
         assertThat(systemRefund).isEqualTo("SYSTEM_REFUND_EXECUTE:77");
+        assertThat(adminRefund).isEqualTo("ADMIN_REFUND_EXECUTE:77");
         assertThat(paymentExpire).isEqualTo("PAYMENT_EXPIRE:77");
     }
 
@@ -34,16 +36,19 @@ class PaymentDelayTaskTest {
         // given
         PaymentDelayTask refund = PaymentDelayTask.refundReconcile(55L);
         PaymentDelayTask systemRefund = PaymentDelayTask.systemRefundExecute(77L);
+        PaymentDelayTask adminRefund = PaymentDelayTask.adminRefundExecute(77L);
         PaymentDelayTask paymentExpire = PaymentDelayTask.paymentExpire(77L);
 
         // when
         Optional<PaymentDelayTask> parsedRefund = PaymentDelayTask.parse(refund.member());
         Optional<PaymentDelayTask> parsedSystemRefund = PaymentDelayTask.parse(systemRefund.member());
+        Optional<PaymentDelayTask> parsedAdminRefund = PaymentDelayTask.parse(adminRefund.member());
         Optional<PaymentDelayTask> parsedPaymentExpire = PaymentDelayTask.parse(paymentExpire.member());
 
         // then
         assertThat(parsedRefund).contains(refund);
         assertThat(parsedSystemRefund).contains(systemRefund);
+        assertThat(parsedAdminRefund).contains(adminRefund);
         assertThat(parsedPaymentExpire).contains(paymentExpire);
     }
 

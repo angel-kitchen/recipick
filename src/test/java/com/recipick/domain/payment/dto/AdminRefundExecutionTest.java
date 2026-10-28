@@ -52,4 +52,16 @@ class AdminRefundExecutionTest {
         assertThat(resolvedWithoutResult).isInstanceOf(IllegalArgumentException.class);
         assertThat(skippedWithResult).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("MANUAL_REVIEW는 반영 결과를 가질 수 없다 — PG 성공과 어긋난 TX2 결과가 거절 API 응답으로 나가지 않게 한다")
+    void rejectsManualReviewWithResult() {
+        // when
+        Throwable manualReviewWithResult = catchThrowable(() ->
+            AdminRefundExecution.applied(RefundReconcileOutcome.MANUAL_REVIEW, COMPLETED));
+
+        // then
+        assertThat(manualReviewWithResult).isInstanceOf(IllegalArgumentException.class);
+        assertThat(AdminRefundExecution.notApplied(RefundReconcileOutcome.MANUAL_REVIEW).appliedResult()).isEmpty();
+    }
 }
