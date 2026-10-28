@@ -37,6 +37,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
@@ -57,6 +59,7 @@ class RefundReconciliationFacadeTest {
     private static final Long AMOUNT = 23800L;
     private static final String PORTONE_PAYMENT_ID = "pay_1";
     private static final String CANCELLATION_ID = "cancel_1";
+    private static final String CONSOLE_CANCELLATION_ID = "cancel_console";
 
     @Mock
     private PaymentService paymentService;
@@ -114,7 +117,7 @@ class RefundReconciliationFacadeTest {
     }
 
     @Test
-    @DisplayName("SYSTEM 환불이면 SKIPPED — apply는 회원 환불만 받고 SYSTEM 취소 실행기는 아직 없다")
+    @DisplayName("SYSTEM 환불이면 SKIPPED — apply는 회원 환불만 받고 SYSTEM 환불은 실행 Facade가 맡는다")
     void skipWhenRefundIsNotMember() {
         // given
         Refund systemRefund = Refund.requestedBySystem(payment, AMOUNT, "결제 금액 불일치", "sys-key", NOW);
@@ -441,6 +444,167 @@ class RefundReconciliationFacadeTest {
             .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, cancellation));
         given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, cancellation.toCancelResult()))
             .willThrow(new IllegalStateException("기존 PortOne 취소 ID와 일치하지 않습니다."));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    // ---------- 외부 전액 취소 ----------
+
+    @Test
+    @DisplayName("취소 ID 없는 회원 환불에 콘솔 전액 취소가 끝나 있으면 그 취소로 apply해 RESOLVED — EXTERNAL 환불을 만들지 않는다")
+    void resolveConsoleCancellationWithoutId() {
+        // given
+        Refund refund = givenRefund(null, NOW.minusMinutes(10));
+        PortOneCancellation console = cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED,
+            AMOUNT, CANCELED_AT, PortOneCancellationTrigger.CONSOLE);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(applied(PaymentCancelOutcome.CANCELED, refund));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("서버 API 취소가 실패로 끝났고 콘솔 전액 취소가 성공했으면 콘솔 취소로 apply해 RESOLVED")
+    void resolveConsoleCancellationBesideFailedApi() {
+        // given
+        Refund refund = givenRefund(null, NOW.minusMinutes(10));
+        PortOneCancellation api = cancellation(
+            "cancel_api", PortOneCancellationStatus.FAILED, AMOUNT, null, PortOneCancellationTrigger.API);
+        PortOneCancellation console = cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED,
+            AMOUNT, CANCELED_AT, PortOneCancellationTrigger.CONSOLE);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, api, console));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(applied(PaymentCancelOutcome.CANCELED, refund));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESOLVED);
+        verifyNoInteractions(paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소는 성공했지만 서버 API 취소가 아직 처리 중이면 apply하지 않고 다시 예약한다")
+    void rescheduleWhenApiInProgressBesideConsole() {
+        // given
+        givenRefund(null, NOW.minusMinutes(10));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation("cancel_api", PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.API),
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.CONSOLE)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.refundReconcile(REFUND_ID), RECHECK_AT);
+        verifyNoInteractions(paymentCancelProcessor);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소가 아직 처리 중이면 apply하지 않고 다시 예약한다")
+    void rescheduleWhenConsoleStillRequested() {
+        // given
+        givenRefund(null, NOW.minusMinutes(10));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.PAID,
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.CONSOLE)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.refundReconcile(REFUND_ID), RECHECK_AT);
+        verifyNoInteractions(paymentCancelProcessor);
+    }
+
+    @Test
+    @DisplayName("콘솔 취소 금액이 환불 금액과 다르면 apply하지 않고 MANUAL_REVIEW — 전액 취소만 자동 반영한다")
+    void manualReviewWhenConsoleAmountDiffers() {
+        // given
+        givenRefund(null, NOW.minusMinutes(10));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, 10000L, CANCELED_AT,
+                PortOneCancellationTrigger.CONSOLE)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("차지백 취소가 보이면 apply하지 않고 MANUAL_REVIEW — 카드사 분쟁은 운영이 판단한다")
+    void manualReviewWhenChargebackActive() {
+        // given
+        givenRefund(null, NOW.minusMinutes(10));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation("cancel_chargeback", PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.CHARGEBACK)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("받아 둔 서버 API 취소가 성공했어도 같은 결제에 콘솔 취소가 처리 중이면 apply하지 않고 MANUAL_REVIEW — 웹훅과 같은 기준")
+    void manualReviewWhenStoredApiHasActiveConsoleBeside() {
+        // given
+        givenRefund(CANCELLATION_ID, NOW.minusMinutes(10));
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment(
+            PortOnePaymentStatus.CANCELED,
+            cancellation(CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED, AMOUNT, CANCELED_AT,
+                PortOneCancellationTrigger.API),
+            cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.REQUESTED, AMOUNT, null,
+                PortOneCancellationTrigger.CONSOLE)));
+
+        // when
+        RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);
+
+        // then — 저장된 API 취소 ID를 콘솔 취소로 다시 묶지 않는다
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentCancelProcessor, paymentDelayQueue);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PaymentCancelOutcome.class, names = {"PG_FAILED", "REQUEST_REJECTED"})
+    @DisplayName("콘솔 취소는 성공했는데 잠금 사이에 회원 환불이 실패로 끝나 apply가 실패 결과를 주면 RESOLVED가 아니라 MANUAL_REVIEW")
+    void manualReviewWhenMemberRefundFailedDespiteConsoleSucceeded(PaymentCancelOutcome failedOutcome) {
+        // given
+        Refund refund = givenRefund(null, NOW.minusMinutes(10));
+        PortOneCancellation console = cancellation(CONSOLE_CANCELLATION_ID, PortOneCancellationStatus.SUCCEEDED,
+            AMOUNT, CANCELED_AT, PortOneCancellationTrigger.CONSOLE);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOnePayment(PortOnePaymentStatus.CANCELED, console));
+        given(paymentCancelProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
+            .willReturn(applied(failedOutcome, refund));
 
         // when
         RefundReconcileOutcome outcome = facade.reconcile(REFUND_ID);

@@ -8,6 +8,7 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
+import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.PaymentService;
@@ -19,6 +20,7 @@ import com.recipick.infra.portone.PortOneWebhookParser;
 import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import com.recipick.infra.portone.dto.PortOneCancellation;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
 import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOneWebhook;
@@ -315,6 +317,14 @@ public class PaymentReconciliationFacade {
         PaymentCancelResult applied = paymentCancelProcessor.apply(payment.getId(), refund.getId(), result);
         log.info("웹훅 취소 반영: paymentId={}, refundId={}, cancellationId={}, outcome={}",
             payment.getId(), refund.getId(), cancellation.id(), applied.outcome());
+        // 판정과 잠금 사이에 다른 경로가 이 환불을 실패로 끝냈을 수 있다. PortOne에서는 취소가 성공했으므로
+        // 정상 종료로 기록하지 않고 운영에 넘긴다 — 끝난 환불을 다른 취소로 다시 묶지 않는다
+        if (cancellation.status() == PortOneCancellationStatus.SUCCEEDED
+            && (applied.outcome() == PaymentCancelOutcome.PG_FAILED
+            || applied.outcome() == PaymentCancelOutcome.REQUEST_REJECTED)) {
+            return Decision.manualReview("PortOne 취소는 성공했지만 회원 환불이 실패 상태로 끝남: refundId="
+                + refund.getId() + ", cancellationId=" + cancellation.id() + ", outcome=" + applied.outcome());
+        }
         return switch (applied.outcome()) {
             // 완료했거나(또는 이미 완료), PortOne이 FAILED를 명시해 PAID로 되돌렸다. 어느 쪽이든 반영은 끝났다
             case CANCELED, PG_FAILED, REQUEST_REJECTED -> Decision.processed();
@@ -345,7 +355,7 @@ public class PaymentReconciliationFacade {
                 + ", status=" + payment.getStatus());
         }
         // 웹훅 반영에서는 지금 선택한 외부 취소 자체를 제외하고, 그 밖의 활성 비API 취소가 있을 때만 중단한다.
-        // SYSTEM 실행 Facade도 4단계에서 같은 규칙으로 맞춘다
+        // SYSTEM 실행 Facade의 기존 취소 반영도 같은 규칙이다
         if (RefundCancellationRules.hasOtherActiveNonApiCancellation(portOnePayment, cancellation)) {
             return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨: refundId=" + refund.getId()
                 + ", selected=" + cancellation.id());
@@ -354,6 +364,12 @@ public class PaymentReconciliationFacade {
         RefundStatus status = systemRefundProcessor.apply(payment.getId(), refund.getId(), result);
         log.info("웹훅 SYSTEM 환불 반영: paymentId={}, refundId={}, cancellationId={}, status={}",
             payment.getId(), refund.getId(), cancellation.id(), status);
+        // 판정과 잠금 사이에 다른 경로가 이 환불을 실패로 끝냈을 수 있다. PortOne에서는 취소가 성공했으므로
+        // 정상 종료로 기록하지 않고 운영에 넘긴다 — 끝난 환불을 다른 취소로 다시 묶지 않는다
+        if (cancellation.status() == PortOneCancellationStatus.SUCCEEDED && status == RefundStatus.FAILED) {
+            return Decision.manualReview("PortOne 취소는 성공했지만 SYSTEM 환불이 FAILED 상태: refundId="
+                + refund.getId() + ", cancellationId=" + cancellation.id());
+        }
         if (status != RefundStatus.REQUESTED) {
             // 완료했거나 실패로 끝났다(또는 이미 끝나 있었다)
             return Decision.processed();

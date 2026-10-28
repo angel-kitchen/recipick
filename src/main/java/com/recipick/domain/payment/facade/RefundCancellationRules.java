@@ -36,17 +36,16 @@ final class RefundCancellationRules {
             .anyMatch(candidate -> candidate != selected && candidate.status() == PortOneCancellationStatus.SUCCEEDED);
     }
 
-    // 콘솔·PortOne 관리자·차지백 등 API가 아닌 취소 중 실패로 끝나지 않은 것이 있는지. 처리 중·성공·알 수 없는 상태는 결과가
-    // 살아 있어 결제 전체의 최종 취소 상태를 단정할 수 없다. 실패로 끝난 과거 시도는 막지 않는다.
-    // SYSTEM 환불 실행(POST 전·기존 취소 반영 전)과 웹훅의 SYSTEM 환불 반영이 같은 기준으로 멈춘다
+    // PortOne에 새 취소 POST를 보내기 전에 쓴다. 콘솔·PortOne 관리자·차지백 등 API가 아닌 취소 중 실패로 끝나지 않은 것이
+    // 하나라도 있으면 다른 멱등 키의 취소를 새로 만들지 않는다. 실패로 끝난 과거 시도는 막지 않는다
     static boolean hasActiveNonApiCancellation(PortOnePayment portOnePayment) {
         return portOnePayment.cancellations().stream()
             .anyMatch(candidate -> candidate.trigger() != PortOneCancellationTrigger.API
                 && candidate.status() != PortOneCancellationStatus.FAILED);
     }
 
-    // 이미 있는 취소를 반영할 때 쓴다. 지금 반영하려는 외부 취소 자체는 빼고 본다 — 빼지 않으면 그 취소 때문에 스스로 막힌다.
-    // 그 밖에 살아 있는 비API 취소가 또 있으면 결제 전체의 최종 상태가 모호하므로 막는다
+    // 이미 있는 취소를 내부 상태에 반영할 때 쓴다. 지금 반영할 selected 자체는 빼고, 다른 활성 비API 취소가 있을 때만 막는다 —
+    // 빼지 않으면 외부 취소를 반영하려는 순간 그 취소 때문에 스스로 막힌다
     static boolean hasOtherActiveNonApiCancellation(PortOnePayment portOnePayment, PortOneCancellation selected) {
         return portOnePayment.cancellations().stream()
             .anyMatch(candidate -> candidate != selected
@@ -60,7 +59,7 @@ final class RefundCancellationRules {
     }
 
     // 콘솔·PortOne 관리자 화면에서 끝난 전액 취소 하나를 고른다. 위에서부터 판정하고 처음 걸리는 결과를 돌려준다.
-    // expectedAmount는 기존 환불이 있으면 그 환불 금액, 없으면 결제 금액이다. hintId는 웹훅이 알려 준 취소 ID이고 없으면 null이다.
+    // expectedAmount는 기존 환불이 있으면 그 환불 금액, 없으면 결제 금액이다. hintId는 웹훅이 알려 주거나 환불에 기록된 취소 ID이고 없으면 null이다.
     // 순서: 후보 선택 → 후보 자체 상태 → 금액 → 다른 취소 → PG 결제 전체 상태
     static ExternalCancellationMatch matchExternalFullCancellation(
         PortOnePayment portOnePayment,
@@ -76,8 +75,8 @@ final class RefundCancellationRules {
                 .filter(candidate -> hintId.equals(candidate.id()))
                 .findFirst();
             if (byHint.isEmpty()) {
-                // 웹훅이 PortOne 조회 결과보다 먼저 왔다
-                return ExternalCancellationMatch.pending("조회 결과에 웹훅 취소 내역 없음: cancellationId=" + hintId);
+                // 웹훅이나 취소 응답이 PortOne 조회 결과보다 먼저 왔다
+                return ExternalCancellationMatch.pending("조회 결과에 취소 내역 없음: cancellationId=" + hintId);
             }
             selected = byHint.get();
             if (selected.trigger() == PortOneCancellationTrigger.API) {

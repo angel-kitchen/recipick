@@ -12,8 +12,10 @@ import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.payment.service.RefundReconcileOutcome;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.portone.PortOnePaymentClient;
+import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import com.recipick.infra.portone.dto.PortOneCancellation;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
 import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
@@ -32,7 +34,8 @@ import org.springframework.stereotype.Component;
 // SYSTEM 환불(만료 뒤 승인·금액 불일치·늦은 승인)을 실제로 돌려준다. Worker가 큐에서 꺼낸 SYSTEM_REFUND_EXECUTE:{id}마다 부른다.
 // 트랜잭션을 걸지 않는다 — 스냅샷 조회(짧은 readOnly) → PortOne 조회·취소(락 없음) → SystemRefundProcessor.apply(PAYMENT 잠금) 순이다.
 // 취소 POST 전에 항상 GET으로 이 환불의 취소가 이미 접수됐는지 본다. 웹훅·재실행·Fallback이 같은 환불을 여러 번 넘겨도
-// 이미 보이는 취소는 다시 요청하지 않고, 동시에 요청돼도 환불 행마다 고정된 서버 키라 PortOne에서 한 건으로 처리된다
+// 이미 보이는 취소는 다시 요청하지 않고, 동시에 요청돼도 환불 행마다 고정된 서버 키라 PortOne에서 한 건으로 처리된다.
+// 콘솔·PortOne 관리자 화면에서 이미 돌려준 전액 취소는 POST 여부를 정하기 전에 공통 판정으로 먼저 본다 — 같은 돈을 두 번 돌려주지 않는다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -140,11 +143,26 @@ public class SystemRefundExecutionFacade {
             return Decision.retry("PortOne 조회 실패: " + e.getErrorCode().getCode());
         }
 
+        // POST 여부를 정하기 전에 외부 전액 취소를 먼저 본다. 웹훅·회원 환불 재확인과 같은 판정이다.
+        // 환불에 기록된 취소 ID가 있으면 그 ID만 고정해 넘긴다 — 다른 취소로 다시 묶지 않고 곁의 취소와 충돌만 함께 본다.
+        // 금액 기준은 결제가 아니라 환불이다. 금액 불일치로 생긴 SYSTEM 환불은 결제 금액과 다르다
+        String cancellationId = refund.getPortoneCancellationId();
+        ExternalCancellationMatch match =
+            RefundCancellationRules.matchExternalFullCancellation(portOnePayment, refund.getAmount(), cancellationId);
+        return switch (match.type()) {
+            case MATCHED -> applyExisting(refund, portOnePayment, match.cancellation());
+            case PENDING -> Decision.retry(match.reason());
+            case CONFLICT -> Decision.manualReview(match.reason());
+            case ABSENT -> reconcileApiCancellation(refund, portOnePayment, cancellationId);
+        };
+    }
+
+    // 자동 정합화할 외부 취소가 없다. 서버가 API로 요청한 취소를 반영하거나, 없으면 취소를 요청한다
+    private Decision reconcileApiCancellation(Refund refund, PortOnePayment portOnePayment, String cancellationId) {
         // 이 환불의 취소 내역을 고른다. 이미 받은 ID가 있으면 그것, 없으면 서버가 API로 요청한 취소 한 건.
         // 후보를 금액으로 미리 거르지 않는다 — 금액이 다른 API 취소가 후보에서 빠지면 "취소 없음"으로 보여 새 POST가 나간다.
         // 금액 검증은 applyExisting이 MANUAL_REVIEW로 막는다
         Optional<PortOneCancellation> cancellation;
-        String cancellationId = refund.getPortoneCancellationId();
         if (cancellationId != null) {
             cancellation = portOnePayment.cancellations().stream()
                 .filter(candidate -> cancellationId.equals(candidate.id()))
@@ -178,22 +196,27 @@ public class SystemRefundExecutionFacade {
         if (RefundCancellationRules.hasOtherSucceededCancellation(portOnePayment, cancellation)) {
             return Decision.manualReview("고른 취소 외에 성공한 취소가 또 있음: selected=" + cancellation.id());
         }
-        // 고른 취소가 성공했어도 같은 결제에 API가 아닌 취소가 살아 있으면 결제 전체의 최종 취소 상태를 단정할 수 없다.
-        // 환불을 닫지 않고 운영에 넘긴다
-        if (RefundCancellationRules.hasActiveNonApiCancellation(portOnePayment)) {
+        // 지금 반영할 취소는 빼고, 그 밖에 API가 아닌 취소가 살아 있으면 결제 전체의 최종 취소 상태를 단정할 수 없어 운영에 넘긴다
+        if (RefundCancellationRules.hasOtherActiveNonApiCancellation(portOnePayment, cancellation)) {
             return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨: selected=" + cancellation.id());
         }
         PortOneCancelResult result = cancellation.toCancelResult();
         RefundStatus status = systemRefundProcessor.apply(refund.getPayment().getId(), refund.getId(), result);
         log.info("SYSTEM 환불 기존 취소 반영: refundId={}, cancellationId={}, status={}",
             refund.getId(), cancellation.id(), status);
+        // 판정과 잠금 사이에 다른 경로가 이 환불을 실패로 끝냈을 수 있다. PortOne에서는 취소가 성공했으므로
+        // 정상 종료로 기록하지 않고 운영에 넘긴다 — 끝난 환불을 다른 취소로 다시 묶지 않는다
+        if (cancellation.status() == PortOneCancellationStatus.SUCCEEDED && status == RefundStatus.FAILED) {
+            return Decision.manualReview("PortOne 취소는 성공했지만 SYSTEM 환불이 FAILED 상태: refundId="
+                + refund.getId() + ", cancellationId=" + cancellation.id());
+        }
         return decide(status, "PortOne 취소 처리 중: cancellationId=" + cancellation.id());
     }
 
-    // 이 환불의 취소가 아직 없다. 외부 취소가 없고 PG에서 결제가 여전히 PAID일 때만 돌려준다 —
-    // 이미 콘솔에서 취소 중·취소됐거나 부분 취소된 결제를 자동으로 다시 취소하지 않는다(외부 취소 정합화 몫)
+    // 이 환불의 취소가 아직 없다. 외부 취소는 앞선 공통 판정이 이미 반영하거나 막았다. PG에서 결제가 여전히 PAID일 때만 돌려준다 —
+    // 부분 취소·취소된 결제를 근거 없이 다시 취소하지 않는다
     private Decision requestCancel(Refund refund, PortOnePayment portOnePayment) {
-        // 콘솔 취소가 처리 중이면 결제는 아직 PAID로 보인다. 서버 키가 달라 PortOne 멱등성이 둘을 묶어 주지 못하므로 먼저 막는다
+        // 앞선 판정이 걸러 정상 흐름에서는 걸리지 않지만, 다른 서버 키로 새 취소를 만드는 POST 직전의 마지막 방어선이라 남긴다
         if (RefundCancellationRules.hasActiveNonApiCancellation(portOnePayment)) {
             return Decision.manualReview("API가 아닌 취소가 진행 중이거나 완료됨");
         }
@@ -209,6 +232,12 @@ public class SystemRefundExecutionFacade {
         RefundStatus status = systemRefundProcessor.apply(refund.getPayment().getId(), refund.getId(), result);
         log.info("SYSTEM 환불 취소 요청 반영: refundId={}, outcome={}, status={}",
             refund.getId(), result.outcome(), status);
+        // PortOne POST 성공 뒤 PAYMENT 잠금을 기다리는 사이 다른 경로가 이 환불을 실패로 끝냈을 수 있다.
+        // PG에서는 취소가 완료됐으므로 정상 종료로 기록하지 않고 운영에 넘긴다
+        if (result.outcome() == PortOneCancelOutcome.SUCCEEDED && status == RefundStatus.FAILED) {
+            return Decision.manualReview("PortOne 취소는 성공했지만 SYSTEM 환불이 FAILED 상태: refundId="
+                + refund.getId() + ", cancellationId=" + result.cancellationId());
+        }
         return decide(status, "취소 결과 미확정: outcome=" + result.outcome() + ", detail=" + result.detail());
     }
 
