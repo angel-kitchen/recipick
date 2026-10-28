@@ -69,13 +69,19 @@ public class IngredientService {
             .orElseThrow(() -> new BusinessException(RecipeErrorCode.INGREDIENT_NOT_FOUND));
     }
 
+    @Transactional
+    public Ingredient getIngredientForUpdate(Long ingredientId) {
+        return ingredientRepository.findByIdForUpdate(ingredientId)
+                .orElseThrow(() -> new BusinessException(RecipeErrorCode.INGREDIENT_NOT_FOUND));
+    }
+
     public boolean isUsedInRecipe(Long ingredientId) {
         return recipeIngredientRepository.existsByIngredientId(ingredientId);
     }
 
     @Transactional
     public IngredientIdResponse updateIngredient(Long ingredientId, IngredientSaveRequest request) {
-        Ingredient ingredient = getIngredient(ingredientId);
+        Ingredient ingredient = getIngredientForUpdate(ingredientId);
         if (ingredientRepository.existsByNameAndIdNot(request.name(), ingredientId)) {
             throw new BusinessException(RecipeErrorCode.DUPLICATE_INGREDIENT_NAME);
         }

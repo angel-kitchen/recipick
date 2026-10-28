@@ -64,7 +64,8 @@ public class CategoryService {
     @Transactional
     @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
     public CategoryIdResponse updateCategory(Long categoryId, CategoryUpdateRequest request){
-        Category category = findCategory(categoryId);
+        Category category = categoryRepository.findByIdForUpdate(categoryId)
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
         if(category.isDeleted()){
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
@@ -93,8 +94,4 @@ public class CategoryService {
         auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_DELETE, category.getId(), null, Map.of()));
     }
 
-    private Category findCategory(Long categoryId){
-        return categoryRepository.findById(categoryId)
-            .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
-    }
 }

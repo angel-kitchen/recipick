@@ -82,7 +82,7 @@ class IngredientServiceTest {
     @DisplayName("수정: 동시 요청으로 이름 UNIQUE 위반이 나면 DUPLICATE_INGREDIENT_NAME으로 바꾼다")
     void updateIngredient_concurrentDuplicate() {
         // given
-        given(ingredientRepository.findById(3L)).willReturn(Optional.of(ingredient(3L, "두부")));
+        given(ingredientRepository.findByIdForUpdate(3L)).willReturn(Optional.of(ingredient(3L, "두부")));
         given(ingredientRepository.existsByNameAndIdNot("애호박", 3L)).willReturn(false);
         willThrow(new DataIntegrityViolationException("duplicate key")).given(ingredientRepository).flush();
 
@@ -97,7 +97,7 @@ class IngredientServiceTest {
     @DisplayName("수정: 다른 재료와 이름이 겹치면 DUPLICATE_INGREDIENT_NAME")
     void updateIngredient_duplicated() {
         // given
-        given(ingredientRepository.findById(3L)).willReturn(Optional.of(ingredient(3L, "두부")));
+        given(ingredientRepository.findByIdForUpdate(3L)).willReturn(Optional.of(ingredient(3L, "두부")));
         given(ingredientRepository.existsByNameAndIdNot("애호박", 3L)).willReturn(true);
 
         // when, then
@@ -112,7 +112,7 @@ class IngredientServiceTest {
     void updateIngredient() {
         // given
         Ingredient tofu = ingredient(3L, "두부");
-        given(ingredientRepository.findById(3L)).willReturn(Optional.of(tofu));
+        given(ingredientRepository.findByIdForUpdate(3L)).willReturn(Optional.of(tofu));
         given(ingredientRepository.existsByNameAndIdNot("두부", 3L)).willReturn(false);
 
         // when

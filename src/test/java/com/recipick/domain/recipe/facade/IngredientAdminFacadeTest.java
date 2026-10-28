@@ -81,7 +81,7 @@ class IngredientAdminFacadeTest {
     @DisplayName("수정: 레시피에 쓰인 재료의 단위를 바꾸면 INGREDIENT_IN_USE")
     void updateIngredient_unitChangedUsedInRecipe() {
         // given
-        given(ingredientService.getIngredient(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
+        given(ingredientService.getIngredientForUpdate(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
         given(ingredientService.isUsedInRecipe(INGREDIENT_ID)).willReturn(true);
 
         // when, then
@@ -97,7 +97,7 @@ class IngredientAdminFacadeTest {
     @DisplayName("수정: 상품에 연결된 재료의 단위를 바꾸면 INGREDIENT_IN_USE")
     void updateIngredient_unitChangedLinkedToProduct() {
         // given
-        given(ingredientService.getIngredient(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
+        given(ingredientService.getIngredientForUpdate(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
         given(ingredientService.isUsedInRecipe(INGREDIENT_ID)).willReturn(false);
         given(productIngredientService.countLinkedProducts(List.of(INGREDIENT_ID)))
             .willReturn(counts(INGREDIENT_ID, 1L));
@@ -115,7 +115,7 @@ class IngredientAdminFacadeTest {
     void updateIngredient_sameUnit() {
         // given
         IngredientSaveRequest request = new IngredientSaveRequest("부침두부", SaleUnit.G);
-        given(ingredientService.getIngredient(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
+        given(ingredientService.getIngredientForUpdate(INGREDIENT_ID)).willReturn(ingredient(INGREDIENT_ID, "두부", SaleUnit.G));
         given(ingredientService.updateIngredient(INGREDIENT_ID, request))
             .willReturn(new IngredientIdResponse(INGREDIENT_ID));
 
