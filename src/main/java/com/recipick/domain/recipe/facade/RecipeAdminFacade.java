@@ -1,5 +1,11 @@
 package com.recipick.domain.recipe.facade;
 
+import java.util.Comparator;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.product.service.ProductIngredientService;
 import com.recipick.domain.recipe.dto.request.RecipeAdminSearchRequest;
 import com.recipick.domain.recipe.dto.request.RecipeAutoCartUpdateRequest;
@@ -27,6 +33,8 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class RecipeAdminFacade {
+
+    private final AdminAuditRecorder auditRecorder;
 
     private final RecipeAdminService recipeAdminService;
     private final ProductIngredientService productIngredientService;
@@ -62,11 +70,19 @@ public class RecipeAdminFacade {
 
     @Transactional
     public RecipeIngredientsSaveResponse saveIngredients(Long recipeId, RecipeIngredientsSaveRequest request) {
+        Recipe recipe = recipeAdminService.getRecipeForUpdate(recipeId);
+        var before = recipeAdminService.findRecipeIngredients(recipeId).stream()
+                .map(item -> new RecipeIngredientsSaveRequest.Item(item.getIngredient().getId(),
+                        item.getAmountPerServing(), item.isRequired())).toList();
+        boolean beforeAuto = recipe.isAutoCartEnabled();
         int ingredientCount = recipeAdminService.replaceIngredients(recipeId, request);
-        Recipe recipe = recipeAdminService.getRecipe(recipeId);
         boolean released = recipe.isAutoCartEnabled() && !hasLinkedProductsForAllRequired(recipeId);
         if (released) {
             recipe.disableAutoCart();
+        }
+        if (!ingredientState(before).equals(ingredientState(request.ingredients()))
+                || beforeAuto != recipe.isAutoCartEnabled()) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.RECIPE_INGREDIENTS_CHANGE, recipeId, null, Map.of(AdminAuditField.INGREDIENT_COUNT, new AdminAuditChange(before.size(), ingredientCount), AdminAuditField.AUTO_CART_AVAILABLE, new AdminAuditChange(beforeAuto, recipe.isAutoCartEnabled()))));
         }
         return new RecipeIngredientsSaveResponse(recipeId, ingredientCount, recipe.isAutoCartEnabled(), released);
     }
@@ -75,6 +91,7 @@ public class RecipeAdminFacade {
     public RecipeAutoCartResponse changeAutoCart(Long recipeId, RecipeAutoCartUpdateRequest request) {
         // 재료 저장과 같은 레시피 행 잠금을 먼저 잡아야, 재료가 바뀌는 중에 이전 재료 기준으로 지정되지 않는다
         Recipe recipe = recipeAdminService.getRecipeForUpdate(recipeId);
+        boolean beforeAuto = recipe.isAutoCartEnabled();
         if (request.autoCartAvailable()) {
             if (!hasLinkedProductsForAllRequired(recipeId)) {
                 throw new BusinessException(RecipeErrorCode.AUTO_CART_ENABLE_CONDITION_NOT_MET);
@@ -82,6 +99,9 @@ public class RecipeAdminFacade {
             recipe.enableAutoCart();
         } else {
             recipe.disableAutoCart();
+        }
+        if (beforeAuto != recipe.isAutoCartEnabled()) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.RECIPE_AUTO_CART_CHANGE, recipeId, null, Map.of(AdminAuditField.AUTO_CART_AVAILABLE, new AdminAuditChange(beforeAuto, recipe.isAutoCartEnabled()))));
         }
         return new RecipeAutoCartResponse(recipeId, recipe.isAutoCartEnabled());
     }
@@ -108,4 +128,10 @@ public class RecipeAdminFacade {
         }
         return countMissingLinked(requiredIds, productIngredientService.countLinkedProducts(requiredIds)) == 0;
     }
+    private List<List<Object>> ingredientState(List<RecipeIngredientsSaveRequest.Item> items) {
+        return items.stream().sorted(Comparator.comparing(RecipeIngredientsSaveRequest.Item::ingredientId))
+                .map(item -> List.<Object>of(item.ingredientId(),
+                        item.amountPerServing().stripTrailingZeros(), item.required())).toList();
+    }
+
 }

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.facade.OrderQueryFacade;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
 import com.recipick.domain.payment.dto.response.MartRejectionResponse;
@@ -87,6 +88,9 @@ class OrderAdminControllerTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private OrderQueryFacade orderQueryFacade;
 
     @MockitoBean
     private MartRejectionFacade martRejectionFacade;

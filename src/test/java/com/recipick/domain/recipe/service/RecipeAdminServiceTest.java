@@ -50,6 +50,9 @@ class RecipeAdminServiceTest {
     @Mock
     private IngredientRepository ingredientRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private RecipeAdminService recipeAdminService;
 
@@ -88,7 +91,11 @@ class RecipeAdminServiceTest {
             List.of(new RecipeStepRequest(1, "육수를 냅니다."), new RecipeStepRequest(2, "된장을 풉니다.")),
             "https://youtu.be/dQw4w9WgXcQ");
         ArgumentCaptor<Recipe> captor = ArgumentCaptor.forClass(Recipe.class);
-        given(recipeRepository.save(captor.capture())).willAnswer(invocation -> invocation.getArgument(0));
+        given(recipeRepository.save(captor.capture())).willAnswer(invocation -> {
+            Recipe saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 12L);
+            return saved;
+        });
 
         // when
         recipeAdminService.createRecipe(request);

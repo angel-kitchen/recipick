@@ -40,6 +40,9 @@ class ProductStockAdjustServiceTest {
     @Mock
     private StockAdjustmentRepository stockAdjustmentRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private ProductStockService productStockService;
 

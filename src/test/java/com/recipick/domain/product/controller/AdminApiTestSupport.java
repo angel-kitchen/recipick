@@ -30,7 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
 abstract class AdminApiTestSupport extends IntegrationTestSupport {
 
     protected static final Long SUPER_ADMIN_ID = 1L;
-    protected static final Long MART_ADMIN_ID = 2L;
+    protected Long martAdminId;
+    private final java.util.Map<Long, Long> martAdminIds = new java.util.HashMap<>();
+    @Autowired
+    private com.recipick.domain.member.repository.AdminRepository admins;
 
     @Autowired
     protected MemberRepository members;
@@ -53,7 +56,11 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
     }
 
     protected String martAdminToken(Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, MART_ADMIN_ID, "MART_ADMIN", martId))
+        martAdminId = martAdminIds.computeIfAbsent(martId, id -> admins.saveAndFlush(
+                com.recipick.domain.member.entity.Admin.builder().loginId(UUID.randomUUID().toString())
+                        .passwordHash("hash").role(com.recipick.domain.member.entity.enums.AdminRole.MART_ADMIN)
+                        .martId(id).active(true).build()).getId());
+        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, martAdminId, "MART_ADMIN", martId))
             .accessToken();
     }
 

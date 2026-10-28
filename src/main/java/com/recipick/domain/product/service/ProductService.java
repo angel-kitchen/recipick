@@ -1,5 +1,11 @@
 package com.recipick.domain.product.service;
 
+import java.util.Arrays;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.ProductCreateRequest;
 import com.recipick.domain.product.dto.ProductDetailResponse;
@@ -47,6 +53,8 @@ import org.springframework.cache.annotation.Cacheable;
 @Transactional(readOnly = true)
 public class ProductService {
 
+    private final AdminAuditRecorder auditRecorder;
+
     private final ProductRepository productRepository;
     private final MartRepository martRepository;
     private final CategoryRepository categoryRepository;
@@ -87,7 +95,11 @@ public class ProductService {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
 
+        var beforeStatus = product.getStatus();
         product.changeStatus(request.status());
+        if (beforeStatus != product.getStatus()) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_STATUS_CHANGE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(beforeStatus, product.getStatus()))));
+        }
         return ProductStatusResponse.from(product);
     }
 
@@ -102,6 +114,7 @@ public class ProductService {
         }
 
         product.delete();
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_DELETE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.DELETED, new AdminAuditChange(false, true))));
     }
 
     // 장바구니처럼 여러 상품을 한 화면에 그리는 곳에서 쓰므로 IN 쿼리 한 번으로 조회한다. 없는 ID는 결과에서 빠진다.
@@ -181,7 +194,9 @@ public class ProductService {
             .imageUrl(request.imageUrl())
             .price(request.price())
             .build();
-        return new ProductIdResponse(productRepository.save(product).getId());
+        Product saved = productRepository.save(product);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_CREATE, saved.getId(), mart.getId(), Map.of()));
+        return new ProductIdResponse(saved.getId());
     }
 
     @Transactional
@@ -216,8 +231,21 @@ public class ProductService {
             }
         }
 
+        var before = auditValues(product);
+        var beforeCategory = product.getCategory().getId();
+        var beforeIngredient = product.getIngredientId();
+        var beforeAmount = product.getSaleUnitAmount();
+        var beforeUnit = product.getSaleUnit();
         product.updateInfo(category, request.ingredientId(), request.name(), request.brand(),
             request.description(), request.saleUnitAmount(), request.saleUnit(), request.imageUrl());
+        if (!before.equals(auditValues(product))) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_UPDATE, product.getId(),
+                    product.getMart().getId(), Map.of(
+                    AdminAuditField.CATEGORY_ID, new AdminAuditChange(beforeCategory, product.getCategory().getId()),
+                    AdminAuditField.INGREDIENT_ID, new AdminAuditChange(beforeIngredient, product.getIngredientId()),
+                    AdminAuditField.SALE_UNIT_AMOUNT, new AdminAuditChange(beforeAmount, product.getSaleUnitAmount()),
+                    AdminAuditField.SALE_UNIT, new AdminAuditChange(beforeUnit, product.getSaleUnit()))));
+        }
         return new ProductIdResponse(product.getId());
     }
 
@@ -229,7 +257,11 @@ public class ProductService {
         ProductPriceUpdateRequest request
     ) {
         Product product = getProductForUpdate(role, adminMartId, productId);
+        Long beforePrice = product.getPrice();
         product.changePrice(request.price());
+        if (!Objects.equals(beforePrice, product.getPrice())) {
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_PRICE_CHANGE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.PRICE, new AdminAuditChange(beforePrice, product.getPrice()))));
+        }
         return ProductPriceResponse.from(product);
     }
 
@@ -283,4 +315,11 @@ public class ProductService {
             .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
         return ProductDetailResponse.from(product);
     }
+    // 같은 값 재요청은 제외하되 문자열 원문은 감사 details에 저장하지 않는다.
+    private List<Object> auditValues(Product product) {
+        return Arrays.asList(product.getCategory().getId(), product.getIngredientId(), product.getName(),
+                product.getBrand(), product.getDescription(), product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
+                product.getSaleUnit(), product.getImageUrl());
+    }
+
 }

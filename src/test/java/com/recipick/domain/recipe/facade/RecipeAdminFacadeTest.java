@@ -41,6 +41,9 @@ class RecipeAdminFacadeTest {
     @Mock
     private ProductIngredientService productIngredientService;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private RecipeAdminFacade recipeAdminFacade;
 
@@ -82,7 +85,7 @@ class RecipeAdminFacadeTest {
         Recipe recipe = recipe(RECIPE_ID, true);
         RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of());
         given(recipeAdminService.replaceIngredients(RECIPE_ID, request)).willReturn(2);
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe);
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe);
         given(recipeAdminService.findRequiredIngredientIds(List.of(RECIPE_ID)))
             .willReturn(Map.of(RECIPE_ID, List.of(3L, 7L)));
         given(productIngredientService.countLinkedProducts(List.of(3L, 7L))).willReturn(Map.of(3L, 1L, 7L, 0L));
@@ -102,7 +105,7 @@ class RecipeAdminFacadeTest {
         // given
         RecipeIngredientsSaveRequest request = new RecipeIngredientsSaveRequest(List.of());
         given(recipeAdminService.replaceIngredients(RECIPE_ID, request)).willReturn(0);
-        given(recipeAdminService.getRecipe(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
+        given(recipeAdminService.getRecipeForUpdate(RECIPE_ID)).willReturn(recipe(RECIPE_ID, false));
 
         // when
         RecipeIngredientsSaveResponse response = recipeAdminFacade.saveIngredients(RECIPE_ID, request);

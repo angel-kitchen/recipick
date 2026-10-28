@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.recipick.IntegrationTestSupport;
+import com.recipick.domain.member.entity.Admin;
+import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderStatusHistory;
@@ -14,17 +16,24 @@ import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.security.AuthPrincipal;
+import com.recipick.global.security.SubjectType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -32,7 +41,12 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
 
     // data.sql의 시연 마트(삼청 마트). 주문 ID로만 조회하므로 다른 테스트와 격리할 필요가 없다
     private static final Long MART_ID = 1L;
-    private static final Long ADMIN_ID = 20L;
+    private Long adminId;
+
+    @Autowired
+    AdminRepository adminRepository;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
     @Autowired
     OrderService orderService;
@@ -45,12 +59,21 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
 
     private Long orderId;
 
+    @BeforeEach
+    void setupAdmin() {
+        adminId = adminRepository.saveAndFlush(Admin.builder()
+                .loginId(UUID.randomUUID().toString()).passwordHash("hash")
+                .role(AdminRole.MART_ADMIN).martId(MART_ID).active(true).build()).getId();
+    }
+
     @AfterEach
     void cleanUp() {
         if (orderId != null) {
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
             orderRepository.deleteById(orderId);
         }
+        jdbcTemplate.update("DELETE FROM admin_audit_log WHERE admin_id = ?", adminId);
+        adminRepository.deleteById(adminId);
     }
 
     @Test
@@ -138,21 +161,26 @@ class OrderRejectConcurrencyTest extends IntegrationTestSupport {
     void requestMartRejection_withoutTransaction() {
         // when, then
         assertThatThrownBy(() -> orderService.requestMartRejection(
-                AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, 1L, "재료 소진"))
+                AdminRole.MART_ADMIN, MART_ID, adminId, 1L, "재료 소진"))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     // 결제 Facade의 TX1처럼 바깥 트랜잭션 안에서 부른다. 상태 판정은 반환값이라 예외로 바꿀 것이 없다
     private Object reject() {
         return transactionTemplate.execute(status -> orderService.requestMartRejection(
-                AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, orderId, "재료 소진"));
+                AdminRole.MART_ADMIN, MART_ID, adminId, orderId, "재료 소진"));
     }
 
     private Object accept() {
+        AuthPrincipal principal = new AuthPrincipal(SubjectType.ADMIN, adminId, "MART_ADMIN", MART_ID);
+        SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                principal, null, principal.authorities()));
         try {
-            return orderService.acceptByMart(AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, orderId).martStatus();
+            return orderService.acceptByMart(AdminRole.MART_ADMIN, MART_ID, adminId, orderId).martStatus();
         } catch (BusinessException e) {
             return e.getErrorCode();
+        } finally {
+            SecurityContextHolder.clearContext();
         }
     }
 
