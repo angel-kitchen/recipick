@@ -9,6 +9,7 @@ import com.recipick.domain.recipe.entity.AutoCartStatus;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.AiRequestLogRepository;
 import com.recipick.domain.recipe.repository.AutoCartItemRepository;
 import com.recipick.domain.recipe.repository.AutoCartRequestRepository;
 import com.recipick.domain.recipe.repository.IngredientRepository;
@@ -41,6 +42,7 @@ public class AutoCartService {
     private final AutoCartRequestRepository autoCartRequestRepository;
     private final AutoCartItemRepository autoCartItemRepository;
     private final IngredientRepository ingredientRepository;
+    private final AiRequestLogRepository aiRequestLogRepository;
 
     public List<AutoCartMenu> resolveMenus(List<AutoCartPreviewRequest.Menu> menus) {
         List<Long> recipeIds = menus.stream()
@@ -132,6 +134,7 @@ public class AutoCartService {
 
     @Transactional
     public int deleteExpiredPreviews(LocalDateTime before) {
+        aiRequestLogRepository.clearAutoCartRequest(AutoCartStatus.PREVIEWED, before);
         return autoCartRequestRepository.deleteByStatusAndCreatedAtBefore(AutoCartStatus.PREVIEWED, before);
     }
 
