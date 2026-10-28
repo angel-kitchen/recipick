@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -90,6 +91,23 @@ public class PaymentService {
         return refundRepository.findRequestedMemberRefundsByPaymentId(paymentId);
     }
 
+    // 정합화의 환불 찾기 2(마트 거절). 취소 ID를 아직 못 받은 ADMIN 환불. 회원 환불과 같이 정확히 한 건일 때만 자동 반영한다
+    public List<Refund> findRequestedAdminRefunds(Long paymentId) {
+        return refundRepository.findRequestedAdminRefundsByPaymentId(paymentId);
+    }
+
+    // 실패로 끝난 마트 거절 환불. 콘솔 전액 취소로 거절 주문을 닫을 때 정확히 한 건인지 본다.
+    // 상태를 바꾸기 전에 PAYMENT 잠금 아래에서 부른다
+    public List<Refund> findFailedAdminRefunds(Long paymentId) {
+        return refundRepository.findFailedAdminRefundsByPaymentId(paymentId);
+    }
+
+    // 같은 결제의 다른 환불(excludeRefundId 제외)에 이미 묶인 PortOne 취소 ID. 취소 ID 없는 환불이 자기 취소를 고를 때
+    // 과거 시도의 취소를 후보에서 빼는 데 쓴다. 웹훅 취소 ID로 환불을 정확히 찾는 경로에는 쓰지 않는다
+    public Set<String> findBoundCancellationIds(Long paymentId, Long excludeRefundId) {
+        return Set.copyOf(refundRepository.findBoundCancellationIds(paymentId, excludeRefundId));
+    }
+
     // SYSTEM 환불 실행 예약·취소 웹훅용. 한 결제에 SYSTEM 환불은 최대 한 건이라(requestSystemRefund) 아직 REQUESTED인 것만 돌려준다.
     // 취소 웹훅이 트랜잭션 밖에서 refund.getPayment()를 읽으므로 결제를 함께 조회한다.
     // 잠금 없는 스냅샷이고 최종 판정은 SystemRefundProcessor.apply가 PAYMENT 잠금 아래에서 다시 읽어 한다
@@ -111,6 +129,11 @@ public class PaymentService {
     // SYSTEM 환불 Fallback Sweep용. requestedBefore 이전에 요청된 SYSTEM REQUESTED 환불 ID를 afterId 다음부터 limit건 읽는다
     public List<Long> findStaleSystemRefundIds(LocalDateTime requestedBefore, Long afterId, int limit) {
         return refundRepository.findStaleRequestedSystemRefundIds(afterId, requestedBefore, PageRequest.ofSize(limit));
+    }
+
+    // 마트 거절 환불 Fallback Sweep용. requestedBefore 이전에 요청된 ADMIN REQUESTED 환불 ID를 afterId 다음부터 limit건 읽는다
+    public List<Long> findStaleAdminRefundIds(LocalDateTime requestedBefore, Long afterId, int limit) {
+        return refundRepository.findStaleRequestedAdminRefundIds(afterId, requestedBefore, PageRequest.ofSize(limit));
     }
 
     // 결제 만료 Fallback Sweep용. expiredBefore 이전에 만료됐는데 아직 IN_PROGRESS인 결제 ID를 afterId 다음부터 limit건 읽는다
@@ -155,6 +178,18 @@ public class PaymentService {
         try {
             return refundRepository.saveAndFlush(
                 Refund.requestedByMember(payment, reason, idempotencyKey, LocalDateTime.now(clock)));
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH, e);
+        }
+    }
+
+    // 마트 거절 환불. 회원 환불과 같은 이유로 바깥 트랜잭션(TX1)을 강제하고 즉시 flush한다 — PAYMENT·ORDER의 거절 접수와
+    // 한 트랜잭션이어야 하고, 다른 결제에 같은 키가 동시에 들어오면 UNIQUE가 최종 판정한다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Refund requestAdminRefund(Payment payment, String reason, String idempotencyKey) {
+        try {
+            return refundRepository.saveAndFlush(
+                Refund.requestedByAdmin(payment, reason, idempotencyKey, LocalDateTime.now(clock)));
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH, e);
         }
