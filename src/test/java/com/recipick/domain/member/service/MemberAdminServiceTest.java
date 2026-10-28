@@ -39,7 +39,7 @@ class MemberAdminServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-23T01:00:00Z"), ZoneId.of("Asia/Seoul"));
-        service = new MemberAdminService(members, memberships, clock);
+        service = new MemberAdminService(members, memberships, clock, org.mockito.Mockito.mock(com.recipick.global.audit.AdminAuditRecorder.class));
         now = LocalDateTime.now(clock);
         request = new MemberAdminSearchRequest("test", null, null, null, null, null, null, null);
     }

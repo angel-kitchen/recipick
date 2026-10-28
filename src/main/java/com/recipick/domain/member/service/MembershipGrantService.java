@@ -10,6 +10,12 @@ import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
+import com.recipick.global.audit.AdminAuditRecorder;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditField;
+import java.util.Map;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
@@ -30,6 +36,7 @@ public class MembershipGrantService {
     private final AdminRepository adminRepository;
     private final MembershipRepository membershipRepository;
     private final Clock clock;
+    private final AdminAuditRecorder auditRecorder;
 
     @Transactional
     public MembershipGrantResponse grant(Long memberId, Long adminId) {
@@ -50,6 +57,13 @@ public class MembershipGrantService {
         Membership membership = membershipRepository.save(Membership.builder()
                 .member(member).grantedByAdmin(admin).type(MembershipType.PAID).source(MembershipSource.ADMIN_GRANT)
                 .startAt(now).endAt(now.plusDays(GRANT_DAYS)).autoRenew(false).build());
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.MEMBERSHIP_GRANT, membership.getId(),
+                member.getMartId(), Map.of(
+                        AdminAuditField.TYPE, new AdminAuditChange(null, membership.getType()),
+                        AdminAuditField.SOURCE, new AdminAuditChange(null, membership.getSource()),
+                        AdminAuditField.START_AT, new AdminAuditChange(null, membership.getStartAt()),
+                        AdminAuditField.END_AT, new AdminAuditChange(null, membership.getEndAt()),
+                        AdminAuditField.AUTO_RENEW, new AdminAuditChange(null, membership.isAutoRenew()))));
         return new MembershipGrantResponse(membership.getId(), memberId, membership.getType().name(),
                 membership.getSource().name(), membership.getStartAt(), membership.getEndAt(), admin.getId());
     }
