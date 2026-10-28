@@ -44,6 +44,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     @Autowired private com.recipick.domain.member.repository.AdminRepository admins;
     @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final java.util.List<Long> adminIds = new java.util.ArrayList<>();
+    private final List<Long> createdAuditIds = new ArrayList<>();
     private static final Long MEMBER_ID = 7L;
 
     @Autowired
@@ -78,6 +79,9 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        for (Long auditId : createdAuditIds) {
+            jdbc.update("DELETE FROM admin_audit_log WHERE id = ?", auditId);
+        }
         jdbc.update("DELETE FROM admin_audit_log WHERE mart_id IN (?, ?)", martA, martB);
         for (Long adminId : adminIds) {
             jdbc.update("DELETE FROM admin_audit_log WHERE admin_id = ?", adminId);
@@ -343,8 +347,14 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     }
 
     private MockHttpServletResponse perform(String url, String token) throws Exception {
-        return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
-                .andReturn().getResponse();
+        Long beforeId = jdbc.queryForObject("SELECT COALESCE(MAX(id), 0) FROM admin_audit_log", Long.class);
+        try {
+            return mockMvc.perform(get(url).header("Authorization", "Bearer " + token))
+                    .andReturn().getResponse();
+        } finally {
+            createdAuditIds.addAll(jdbc.queryForList("SELECT id FROM admin_audit_log WHERE id > ? AND admin_id = ?",
+                    Long.class, beforeId, SUPER_ADMIN_ID));
+        }
     }
 
     private JsonNode data(MockHttpServletResponse response) throws Exception {
@@ -419,6 +429,35 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
                 .regionId(regionId).name("주문 감사 테스트 마트")
                 .latitude(new BigDecimal("37.5")).longitude(new BigDecimal("127.0"))
                 .serviceRadiusM(2000).build()).getId();
+    }
+
+    @Test
+    @DisplayName("슈퍼 관리자가 실제 마트의 빈 목록을 조회해도 해당 마트를 감사 기록에 남긴다")
+    void recordsExistingEmptyMartScope() throws Exception {
+        // given, when
+        var response = perform("/api/admin/orders?martId=" + martA, superToken());
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("totalElements").asInt()).isZero();
+        assertThat(createdAuditIds).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT mart_id FROM admin_audit_log WHERE id = ?", Long.class,
+                createdAuditIds.get(0))).isEqualTo(martA);
+    }
+
+    @Test
+    @DisplayName("없는 마트와 전체 마트 조회는 마트 ID 없이 기록하고 빈 목록 응답도 유지한다")
+    void recordsUnknownAndAllMartScopes() throws Exception {
+        // given, when
+        var missing = perform("/api/admin/orders?martId=" + Long.MAX_VALUE, superToken());
+        var all = perform("/api/admin/orders", superToken());
+        // then
+        assertThat(missing.getStatus()).isEqualTo(200);
+        assertThat(data(missing).path("totalElements").asInt()).isZero();
+        assertThat(all.getStatus()).isEqualTo(200);
+        assertThat(createdAuditIds).hasSize(2);
+        for (Long id : createdAuditIds) {
+            assertThat(jdbc.queryForObject("SELECT mart_id FROM admin_audit_log WHERE id = ?", Long.class, id)).isNull();
+        }
     }
 
 }

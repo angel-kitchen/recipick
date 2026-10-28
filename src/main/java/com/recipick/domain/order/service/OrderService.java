@@ -174,14 +174,13 @@ public class OrderService {
     }
 
     // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
-    // 없는 마트 ID는 다른 도메인을 조회하지 않고 빈 목록으로 답한다
-    @Transactional
+    // 마트 존재 여부와 감사 기록은 도메인을 조립하는 OrderQueryFacade에서 처리한다.
+    @Transactional(readOnly = true)
     public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
             AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
         Long martId = resolveMartId(role, adminMartId, request.martId());
         Page<Order> orders = orderRepository.searchByMart(martId, request.martStatus(), pageable);
         Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
-        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_LIST_VIEW, null, role == AdminRole.MART_ADMIN ? adminMartId : null, Map.of()));
         return PageResponse.from(orders.map(order ->
                 OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
     }

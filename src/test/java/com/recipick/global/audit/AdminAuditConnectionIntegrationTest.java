@@ -58,6 +58,8 @@ class AdminAuditConnectionIntegrationTest extends IntegrationTestSupport {
     @Autowired RecipeAdminService recipeService;
     @Autowired RecipeAdminFacade recipeFacade;
     @Autowired OrderService orderService;
+    @Autowired com.recipick.domain.order.facade.OrderQueryFacade orderQueryFacade;
+    @Autowired com.recipick.domain.recipe.facade.IngredientAdminFacade ingredientFacade;
     @Autowired JdbcTemplate jdbc;
     Admin admin;
     Mart mart;
@@ -213,7 +215,7 @@ class AdminAuditConnectionIntegrationTest extends IntegrationTestSupport {
                 .unitPrice(1000L).saleUnitAmount(new BigDecimal("100")).saleUnit(SaleUnit.G)
                 .lineAmount(1000L).quantity(1).build());
         // when
-        orderService.searchAdminOrders(AdminRole.SUPER_ADMIN, null, new OrderAdminSearchRequest(null, mart.getId()), PageRequest.of(0, 20));
+        orderQueryFacade.searchAdminOrders(AdminRole.SUPER_ADMIN, null, new OrderAdminSearchRequest(null, mart.getId()), PageRequest.of(0, 20));
         orderService.getAdminOrder(AdminRole.SUPER_ADMIN, null, orderId);
         orderService.getAdminOrder(AdminRole.SUPER_ADMIN, null, orderId);
         orderService.acceptByMart(AdminRole.SUPER_ADMIN, null, admin.getId(), orderId);
@@ -232,4 +234,44 @@ class AdminAuditConnectionIntegrationTest extends IntegrationTestSupport {
                 new ProductPriceUpdateRequest(9999L))).isInstanceOf(BusinessException.class);
         assertThat(products.findById(product.getId()).orElseThrow().getPrice()).isEqualTo(1000L);
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"category", "ingredient"})
+    @DisplayName("같은 값의 카테고리·재료 동시 수정은 잠금 후 비교해 감사 기록을 한 건만 남긴다")
+    void concurrentSameValueUpdatesRecordOnce(String target) throws Exception {
+        // given
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(4);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var futures = new ArrayList<java.util.concurrent.Future<?>>();
+        String updatedName = UUID.randomUUID().toString();
+        try {
+            // when
+            for (int i = 0; i < 4; i++) {
+                futures.add(executor.submit(() -> {
+                    var principal = new AuthPrincipal(SubjectType.ADMIN, admin.getId(), "SUPER_ADMIN", null);
+                    SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                            principal, null, principal.authorities()));
+                    try {
+                        start.await();
+                        if (target.equals("category")) {
+                            categoryService.updateCategory(category.getId(), new CategoryUpdateRequest(updatedName));
+                        } else {
+                            ingredientFacade.updateIngredient(ingredient.getId(), new IngredientSaveRequest(updatedName, SaleUnit.G));
+                        }
+                        return null;
+                    } finally {
+                        SecurityContextHolder.clearContext();
+                    }
+                }));
+            }
+            start.countDown();
+            for (var future : futures) {
+                future.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            // then
+            assertThat(actions()).containsExactly(target.equals("category") ? "CATEGORY_UPDATE" : "INGREDIENT_UPDATE");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
 }

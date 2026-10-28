@@ -6,6 +6,7 @@ import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
 import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
 import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
 import com.recipick.domain.order.service.OrderService;
+import com.recipick.domain.order.facade.OrderQueryFacade;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.AuthPrincipal;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderAdminController {
 
     private final OrderService orderService;
+    private final OrderQueryFacade orderQueryFacade;
 
     // size는 application.yml의 spring.data.web.pageable.max-page-size(100)로 잘린다. 정렬은 id 내림차순 고정이라 sort는 무시한다
     @GetMapping
@@ -34,7 +36,7 @@ public class OrderAdminController {
             @ModelAttribute OrderAdminSearchRequest request,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.searchAdminOrders(
+        return ResponseEntity.ok(ApiResponse.success(orderQueryFacade.searchAdminOrders(
                 AdminRole.valueOf(principal.role()), principal.martId(), request, pageable)));
     }
 
