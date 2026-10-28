@@ -43,6 +43,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -145,17 +146,16 @@ public class OrderService {
         return orderItemRepository.saveAll(items);
     }
 
+    // 결제 Facade가 주문을 잠그기 전에 부르므로 엔티티를 올리지 않고 값만 읽는다
     public Long getMemberIdOf(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
-                .getMemberId();
+        return orderRepository.findMemberIdById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     // 관리자 결제 상세 감사 기록(PAYMENT_DETAIL_VIEW)은 마트 ID가 필수. 회원의 현재 이용 마트가 아니라 주문 당시 마트를 준다
     public Long getMartIdOf(Long orderId) {
-        return orderRepository.findById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND))
-                .getMartId();
+        return orderRepository.findMartIdById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     public PageResponse<OrderSummaryResponse> searchMemberOrders(
@@ -291,6 +291,39 @@ public class OrderService {
         return MemberCancelRequestResult.REQUESTED;
     }
 
+    // 결제 Facade가 PAYMENT를 먼저 잠근 TX1 안에서만 부른다(락 순서 PAYMENT → ORDERS). 단독 호출은 거부한다.
+    // 상태 판정은 회원 취소와 같이 반환값으로 돌려주고 응답 코드는 결제 쪽이 정한다. 같은 요청의 반복은 결제 쪽
+    // Idempotency-Key가 먼저 거르므로 여기 오는 재거절은 다른 키로 온 것이라 상태만 알린다.
+    // 결제 전 주문·다른 마트 주문은 수락과 같이 예외다 — 상태가 아니라 접근 범위 문제라 TX1째 롤백한다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MartRejectRequestResult requestMartRejection(
+            AdminRole role, Long adminMartId, Long adminId, Long orderId, String reasonDetail) {
+        Order order = getOrderForUpdate(orderId);
+        if (order.getMartStatus() == MartStatus.NONE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        verifyMartScope(role, adminMartId, order);
+        // 거절만 마트 처리 상태를 REJECTED로 바꾸므로, REJECTED면 환불 진행 중이든 끝났든 이미 거절된 주문이다
+        if (order.getMartStatus() == MartStatus.REJECTED) {
+            return MartRejectRequestResult.ALREADY_REJECTED;
+        }
+        if (!order.isRejectableByMart()) {
+            return MartRejectRequestResult.NOT_REJECTABLE;
+        }
+
+        OrderStatus fromStatus = order.getStatus();
+        MartStatus fromMartStatus = order.getMartStatus();
+        order.rejectByMart(reasonDetail);
+
+        orderStatusHistoryRepository.saveAll(List.of(
+                martHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), adminId,
+                        CancelReasonCode.MART_REJECTED.name()),
+                martHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(),
+                        adminId, reasonDetail)
+        ));
+        return MartRejectRequestResult.REJECTED;
+    }
+
     @Transactional
     public void restorePaidAfterMemberCancelFailure(Long orderId) {
         Order order = getOrderForUpdate(orderId);
@@ -402,13 +435,20 @@ public class OrderService {
 
     // 마트 처리는 슈퍼 관리자가 대신해도 주체는 마트다. 누가 처리했는지는 changedByAdminId로 남긴다
     private OrderStatusHistory martHistory(Order order, String from, String to, Long adminId) {
+        return martHistory(order, OrderStatusType.MART, from, to, adminId, null);
+    }
+
+    // 마트 거절은 주문 상태도 함께 바꾸므로 이력 종류와 사유를 받는다
+    private OrderStatusHistory martHistory(
+            Order order, OrderStatusType statusType, String from, String to, Long adminId, String reason) {
         return OrderStatusHistory.builder()
                 .order(order)
-                .statusType(OrderStatusType.MART)
+                .statusType(statusType)
                 .fromStatus(from)
                 .toStatus(to)
                 .actor(OrderStatusActor.MART)
                 .changedByAdminId(adminId)
+                .reason(reason)
                 .build();
     }
 

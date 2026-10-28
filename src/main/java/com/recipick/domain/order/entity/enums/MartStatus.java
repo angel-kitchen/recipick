@@ -12,7 +12,7 @@ public enum MartStatus {
     public boolean canTransitionTo(MartStatus next) {
         return switch (this) {
             case NONE -> next == RECEIVED;
-            case RECEIVED -> next == PREPARING;
+            case RECEIVED -> next == PREPARING || next == REJECTED;
             default -> false;
         };
     }
