@@ -1,5 +1,10 @@
 package com.recipick.domain.order.service;
 
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
@@ -50,6 +55,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class OrderService {
+
+    private final AdminAuditRecorder auditRecorder;
 
     // 결제 전 회원 취소도 결제 실패와 같은 종료 흐름을 탄다. 마트 거절은 결제 후 환불 흐름을 타므로 이 메서드로 종료하면 안 된다
     private static final Set<CancelReasonCode> BEFORE_PAYMENT_CLOSE_REASONS = EnumSet.of(
@@ -168,11 +175,13 @@ public class OrderService {
 
     // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
     // 없는 마트 ID는 다른 도메인을 조회하지 않고 빈 목록으로 답한다
+    @Transactional
     public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
             AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
         Long martId = resolveMartId(role, adminMartId, request.martId());
         Page<Order> orders = orderRepository.searchByMart(martId, request.martStatus(), pageable);
         Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_LIST_VIEW, null, role == AdminRole.MART_ADMIN ? adminMartId : null, Map.of()));
         return PageResponse.from(orders.map(order ->
                 OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
     }
@@ -186,11 +195,13 @@ public class OrderService {
     }
 
     // 결제 전(NONE) 주문은 마트가 처리할 대상이 아니라 없는 주문과 같이 답한다. 다른 마트 주문은 목록과 같은 규칙으로 403이다
+    @Transactional
     public OrderAdminDetailResponse getAdminOrder(AdminRole role, Long adminMartId, Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .filter(found -> found.getMartStatus() != MartStatus.NONE)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
         verifyMartScope(role, adminMartId, order);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_DETAIL_VIEW, orderId, order.getMartId(), Map.of()));
         return OrderAdminDetailResponse.of(order, findOrderItems(orderId),
                 orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
     }
@@ -214,6 +225,7 @@ public class OrderService {
 
         orderStatusHistoryRepository.save(martHistory(
                 order, fromMartStatus.name(), order.getMartStatus().name(), adminId));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_ACCEPT, orderId, order.getMartId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(fromMartStatus, order.getMartStatus()))));
         return OrderMartStatusResponse.from(order);
     }
 
