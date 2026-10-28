@@ -6,9 +6,9 @@
 | 항목 | 내용 |
 | --- | --- |
 | 담당 | 채빈 |
-| 작성·검증일 | 2026-10-26 |
-| 코드 기준 | `origin/dev`의 `a169297`을 반영한 문서 브랜치, 병합 커밋 `98a4465` |
-| 관련 구현 | [탈퇴 기반 PR #192](https://github.com/angel-kitchen/recipick/pull/192) 포함 |
+| 문서 갱신·검증일 | 2026-10-28 |
+| 코드 기준 | `dev`의 `d383807`(PR #244 병합). 검증 리포트는 같은 소스의 `896c391`에서 최신 dev를 반영한 전체 실행 |
+| 관련 구현 | 탈퇴 인증 기반 #192, 비밀번호 변경 #215, 탈퇴 API·체험 차단 #222, 감사 호출 연결 #244 |
 | 확인 환경 | Java 17, Spring Boot 3.5.16, 테스트 전용 MySQL 8.4·Redis 7.4, MockMvc |
 | 상태 | 현재 구현과 대상 테스트 확인 완료, 문서 리뷰 대기 |
 
@@ -89,10 +89,10 @@ SecurityContext의 Principal에 넣습니다. 컨트롤러는 `@LoginMember`·`@
 재발급 흐름은 [TokenManagementService.reissue](../../src/main/java/com/recipick/domain/member/service/TokenManagementService.java)에서 관리합니다.
 
 1. 쿠키 JWT의 서명·용도·만료와 세션 정보를 확인합니다.
-2. 회원은 탈퇴 여부, 관리자는 현재 활성 상태·역할·마트 정보를 DB에서 확인합니다.
+2. 회원은 탈퇴 여부와 리프레시 토큰 버전, 관리자는 현재 활성 상태·역할·마트 정보를 DB에서 확인합니다.
 3. 같은 세션 `sid`로 새 액세스·리프레시 토큰을 만듭니다.
 4. Lua에서 기존 해시가 일치할 때만 새 해시와 TTL로 교체합니다.
-5. 교체 성공일 때만 새 토큰과 쿠키를 반환합니다. 이전 토큰 재사용은 `AUTH-011`로 거절합니다.
+5. 교체 후 회원 상태·버전을 다시 확인하고 성공일 때만 새 토큰과 쿠키를 반환합니다. 이전 토큰 재사용은 `AUTH-011`로 거절합니다.
 
 현재 회전은 새 발급 시각부터 14일로 TTL을 갱신합니다. 별도의 로그인 세션 절대 수명 상한은 두지 않습니다.
 이전 리프레시 토큰을 거절하는 동작과, 재사용 시 해당 회원의 모든 로그인 세션을 폐기하는 동작은 구분합니다. 후자는 현재 구현 범위가 아닙니다.
@@ -105,7 +105,39 @@ SecurityContext의 Principal에 넣습니다. 컨트롤러는 `@LoginMember`·`@
 기존 토큰의 버전 누락은 0으로 해석합니다. Redis 키 정리와 경합·실패 정책은 비밀번호 변경 API 문서를 따릅니다.
 기발급 액세스 토큰은 별도 블랙리스트 없이 만료까지 유효하며, 탈퇴 회원은 DB 상태 검사로 차단합니다.
 
-### 3-4. 쿠키·CORS와 브라우저 경계
+### 3-4. 비밀번호 변경과 탈퇴
+
+비밀번호 변경은 `PATCH /api/members/me/password`로 현재 비밀번호를 재확인하고 가입과 같은 새 비밀번호 규칙을 검증합니다.
+[MemberPasswordService](../../src/main/java/com/recipick/domain/member/service/MemberPasswordService.java)는 회원 행을 잠근 뒤
+비밀번호 해시와 `refresh_token_version`을 같은 DB 트랜잭션에서 변경합니다. 기존 리프레시 토큰은 DB 버전으로 무효화하며,
+기존 액세스 토큰은 30분 수명까지 유지합니다. 같은 비밀번호로 변경해도 버전을 올립니다.
+
+[MemberPasswordFacade](../../src/main/java/com/recipick/domain/member/facade/MemberPasswordFacade.java)는 DB 작업 전에 정리할 Redis 세션 키를 고정하고,
+DB 커밋 뒤 그 키만 삭제합니다. 새 비밀번호로 커밋 뒤 로그인한 세션을 전체 삭제로 지우지 않기 위한 방식입니다.
+이전 버전 세션이 늦게 저장돼도 재발급의 DB 버전 검사로 거절합니다. 커밋 후 Redis 삭제 실패는 경고로 남기고 TTL로 정리하며,
+DB 변경 실패 시에는 세션을 삭제하지 않습니다. Redis와 DB를 하나의 원자적 트랜잭션으로 처리한 것은 아닙니다.
+
+탈퇴 API `POST /api/members/me/withdraw`와 개인정보 정리·체험 차단 기반도 구현됐습니다.
+[MemberWithdrawalProcessor](../../src/main/java/com/recipick/domain/member/facade/MemberWithdrawalProcessor.java)는
+쓰기 트랜잭션의 첫 DB 작업으로 회원을 잠그고 비밀번호·진행 중 주문·활성 멤버십을 확인합니다.
+이후 [WithdrawalSettlementChecker](../../src/main/java/com/recipick/domain/member/service/WithdrawalSettlementChecker.java)의
+`PRODUCT_PAYMENT`, `MEMBERSHIP_PAYMENT`, `POINTS`, `AUTO_BILLING` 전체 범위가 연결돼야 정산 검사와 개인정보 변경을 진행합니다.
+**현재 dev에는 실제 Checker 구현이 없어 탈퇴 성공 처리는 `503 MEMBER-008`로 차단됩니다.**
+주문·멤버십 등 앞선 거절 조건이 있으면 해당 오류가 먼저 반환됩니다.
+
+정산 검사를 통과한 경로는 이메일·이름·휴대전화와 비밀번호 해시를 대체하고 현재 배송지 참조·이용 마트·위치 동의를 해제한 뒤
+배송지를 삭제합니다. `withdrawn_at`과 세션 버전도 같은 트랜잭션에서 갱신합니다.
+[MemberWithdrawalFacade](../../src/main/java/com/recipick/domain/member/facade/MemberWithdrawalFacade.java)는 커밋 후 미리 확보한 Redis 세션을 삭제하며,
+정리 실패 시에도 DB 탈퇴 상태로 로그인·재발급·회원 토큰 인증을 거절합니다. 주문·결제의 보존 기록은 이 경로에서 삭제하지 않습니다.
+
+멤버십 이용 이력(관리자 지급 포함)이 있으면 개인정보 대체 전에 휴대전화의 HMAC-SHA-256을 `TRIAL_BLOCK`에 기록합니다.
+일반 해시 대신 별도 비밀키를 사용하는 이유는 전화번호처럼 가능한 값의 범위가 좁은 정보의 단순 해시 대입을 어렵게 하기 위해서입니다.
+차단은 탈퇴 시각부터 1년이며, 이력 없는 재가입·재탈퇴는 기존 기간을 연장하지 않고 이력이 있으면 만료 시각을 연장합니다.
+만료된 기록은 배치 삭제 전에도 자격을 제한하지 않습니다. 이는 번호 기준 제한이며 본인 인증을 통한 사람 단위 차단은 아닙니다.
+`TRIAL_BLOCK_HMAC_SECRET`은 JWT 키와 별도로 관리하며 로컬 외 환경에서 필수입니다. 키를 바꾸면 기존 해시와 비교할 수 없으므로
+임의 교체하지 않습니다. 무료체험 시작 API와 결제·포인트 정산 최종 연결은 남은 작업입니다.
+
+### 3-5. 쿠키·CORS와 브라우저 경계
 
 [AuthCookieFactory](../../src/main/java/com/recipick/domain/member/service/AuthCookieFactory.java)는
 `HttpOnly`, `SameSite=Strict`, `Path=/api/auth` 쿠키를 발급하고 같은 속성으로 삭제합니다.
@@ -121,7 +153,7 @@ CORS는 지정한 Origin과 자격 증명을 허용합니다. 서로 다른 출�
 `STATELESS`나 CORS 설정만으로 CSRF 위험이 없어지는 것은 아닙니다. 교차 사이트 쿠키 정책으로 바꿀 때는 CSRF 방어도 재검토합니다.
 [Spring Security CSRF 설명](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 
-### 3-5. 인가와 오류 계약
+### 3-6. 인가와 오류 계약
 
 | 상황 | 현재 응답·처리 |
 | --- | --- |
@@ -147,24 +179,31 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
 탈퇴 상태 캐시와 조회 최적화는 차단 시점·부하를 측정해 판단할 별도 작업입니다.
 
 비밀번호 변경 시 전체 리프레시 세션 무효화는 [비밀번호 변경 API](../api/member-password-change.md)에 정리했습니다.
-실제 탈퇴 API·개인정보 정리·탈퇴 시 세션 폐기 연결·체험 차단은 후속 작업입니다.
-본 문서의 탈퇴 결과는 DB에 이미 탈퇴 상태가 저장된 회원의 접근 차단을 뜻합니다.
+탈퇴 API·개인정보 정리·세션 폐기·체험 차단 기반은 구현됐지만, 실제 결제·환불·포인트·자동결제 Checker 연결과 최종 통합 검증은 남아 있습니다.
+테스트용 정산 계약으로 검증한 성공 경로와 실제 서비스의 탈퇴 가능 상태를 구분합니다.
 운영 브라우저 연동·동일 사이트 배포와 액세스 토큰 저장 정책은 별도 검증 대상으로 남깁니다.
 
 ## 5. 실제 검증 결과
 
-관련 기존 테스트 12개 클래스를 함께 실행했습니다. 본 문서는 그중 인증 관련 6개 클래스의 결과를 정리합니다.
+2026-10-28 UTC 환경의 전체 테스트 **1,973개 통과** 리포트에서 아래 인증·비밀번호·탈퇴 관련 12개 클래스의 결과를 추렸습니다.
+문서 갱신을 위해 테스트를 다시 실행하지 않았으며, 아래 수치는 해당 전체 실행의 클래스별 XML 기준입니다.
 회원 동시성 결과는 [동시성 문서](../concurrency.md)에 기록하며 일부 검증 클래스가 겹칩니다.
 
 | 검증 클래스 | 테스트 | 실패 | 오류 | 건너뜀 |
 | --- | --- | --- | --- | --- |
-| [JwtTokenProviderTest](../../src/test/java/com/recipick/global/security/JwtTokenProviderTest.java) | 38 | 0 | 0 | 0 |
+| [JwtTokenProviderTest](../../src/test/java/com/recipick/global/security/JwtTokenProviderTest.java) | 39 | 0 | 0 | 0 |
 | [AuthenticationWebTest](../../src/test/java/com/recipick/global/security/AuthenticationWebTest.java) | 17 | 0 | 0 | 0 |
 | [MemberLoginIntegrationTest](../../src/test/java/com/recipick/domain/member/service/MemberLoginIntegrationTest.java) | 10 | 0 | 0 | 0 |
 | [AdminLoginIntegrationTest](../../src/test/java/com/recipick/domain/member/service/AdminLoginIntegrationTest.java) | 13 | 0 | 0 | 0 |
 | [TokenManagementIntegrationTest](../../src/test/java/com/recipick/domain/member/service/TokenManagementIntegrationTest.java) | 23 | 0 | 0 | 0 |
 | [MemberWithdrawalFoundationIntegrationTest](../../src/test/java/com/recipick/domain/member/service/MemberWithdrawalFoundationIntegrationTest.java) | 6 | 0 | 0 | 0 |
-| 합계 | 107 | 0 | 0 | 0 |
+| [MemberPasswordChangeIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MemberPasswordChangeIntegrationTest.java) | 23 | 0 | 0 | 0 |
+| [MemberPasswordFacadeTest](../../src/test/java/com/recipick/domain/member/facade/MemberPasswordFacadeTest.java) | 2 | 0 | 0 | 0 |
+| [MemberWithdrawalIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MemberWithdrawalIntegrationTest.java) | 9 | 0 | 0 | 0 |
+| [MemberWithdrawalProcessorTest](../../src/test/java/com/recipick/domain/member/facade/MemberWithdrawalProcessorTest.java) | 11 | 0 | 0 | 0 |
+| [MemberWithdrawalFacadeTest](../../src/test/java/com/recipick/domain/member/facade/MemberWithdrawalFacadeTest.java) | 2 | 0 | 0 | 0 |
+| [TrialBlockIntegrationTest](../../src/test/java/com/recipick/domain/member/service/TrialBlockIntegrationTest.java) | 6 | 0 | 0 | 0 |
+| 합계 | 161 | 0 | 0 | 0 |
 
 실행 시나리오에서 다음 결과를 확인했습니다.
 
@@ -177,6 +216,11 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
 | 같은 리프레시 토큰으로 동시 재발급 6건 | 200 1건, 나머지 AUTH-011, 성공한 새 토큰으로 재발급 가능 |
 | 재발급과 로그아웃 동시 요청 | 최종 Redis 세션 없음, 회전 성공 시 받은 토큰도 재사용 거절 |
 | 탈퇴 상태 저장 후 기존 액세스·리프레시·정상 비밀번호 사용 | 접근·재발급·로그인 거절, DB 조회·잠금 진입점도 거절 |
+| 비밀번호 변경·경합·롤백 | 현재 비밀번호 불일치 시 유지, 이전 리프레시 무효화·액세스 유지, 동시 변경 1건 성공·나머지 거절, DB 롤백 시 비밀번호·버전·세션 유지 |
+| Redis 세션 정리 실패·새 로그인 | 커밋 후 정리 실패에도 DB 버전으로 이전 세션 거절, 새 버전 세션 보존 |
+| 탈퇴 API 미연결·부분 연결 | 실제 Checker 없음 및 일부 Scope 누락 시 개인정보 변경 전 거절 |
+| 테스트용 정산 계약을 연결한 탈퇴 | 개인정보 대체·배송지 삭제·토큰 거절, 동시 탈퇴 1건 성공, 후속 예외 시 탈퇴·체험 차단 롤백 |
+| 체험 차단 | 번호 정규화·키 해시, 재탈퇴 연장 규칙·동시 저장, 만료 기록 자격 제한 제외·조건부 삭제 |
 | 허용·비허용 Origin preflight | 인증 없이 허용된 Origin만 통과하는 MockMvc 검증 완료 |
 
 위 결과는 자동 테스트 결과입니다. 실제 배포 브라우저·실 PG·부하·침투 테스트의 결과를 뜻하지 않습니다.
@@ -191,11 +235,18 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
   --tests 'com.recipick.domain.member.service.MemberLoginIntegrationTest' \
   --tests 'com.recipick.domain.member.service.AdminLoginIntegrationTest' \
   --tests 'com.recipick.domain.member.service.TokenManagementIntegrationTest' \
-  --tests 'com.recipick.domain.member.service.MemberWithdrawalFoundationIntegrationTest'
+  --tests 'com.recipick.domain.member.service.MemberWithdrawalFoundationIntegrationTest' \
+  --tests 'com.recipick.domain.member.controller.MemberPasswordChangeIntegrationTest' \
+  --tests 'com.recipick.domain.member.facade.MemberPasswordFacadeTest' \
+  --tests 'com.recipick.domain.member.controller.MemberWithdrawalIntegrationTest' \
+  --tests 'com.recipick.domain.member.facade.MemberWithdrawalProcessorTest' \
+  --tests 'com.recipick.domain.member.facade.MemberWithdrawalFacadeTest' \
+  --tests 'com.recipick.domain.member.service.TrialBlockIntegrationTest'
 ```
 
 Docker가 켜져 있어야 하며 테스트 전용 MySQL·Redis는 IntegrationTestSupport가 실행합니다.
-위 명령은 이번 통합 실행의 인증 부분만 재현합니다. 전체 실행 목록과 합계는 동시성 문서에 있습니다.
+위 명령은 보고서에서 추린 12개 클래스·161개를 재현합니다. 회원 경합 6개 클래스를 합친 선택 실행 목록은 동시성 문서에 있습니다.
+전체 실행 재현 명령은 `JAVA_TOOL_OPTIONS=-Duser.timezone=UTC ./gradlew --no-daemon test`입니다. UTC 실행은 시간대 의존성 확인이며 운영의 한국 시간 정책을 바꾸지 않습니다.
 
 ## 6. 관련 코드·규칙
 
