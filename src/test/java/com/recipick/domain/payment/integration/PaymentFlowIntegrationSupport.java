@@ -161,6 +161,7 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
             refunds.forEach(refund -> {
                 removeTask(PaymentDelayTask.refundReconcile(refund.getId()));
                 removeTask(PaymentDelayTask.systemRefundExecute(refund.getId()));
+                removeTask(PaymentDelayTask.adminRefundExecute(refund.getId()));
             });
             refundRepository.deleteAll(refunds);
             paymentRepository.deleteAllById(paymentIds);
