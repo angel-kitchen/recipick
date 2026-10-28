@@ -1,5 +1,10 @@
 package com.recipick.domain.product.service;
 
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditChange;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditField;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockAdjustmentHistoryResponse;
@@ -31,6 +36,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProductStockService {
+
+    private final AdminAuditRecorder auditRecorder;
 
     private final ProductRepository productRepository;
 
@@ -133,6 +140,7 @@ public class ProductStockService {
             .adminId(adminId)
             .build());
 
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.STOCK_ADJUST, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.TOTAL_QUANTITY, new AdminAuditChange(beforeQuantity, product.getTotalQuantity()))));
         return new StockAdjustmentResponse(beforeQuantity,product.getTotalQuantity());
         }
     }

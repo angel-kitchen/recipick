@@ -49,6 +49,11 @@ class CacheIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void clearCaches() {
+        var principal = new com.recipick.global.security.AuthPrincipal(
+                com.recipick.global.security.SubjectType.ADMIN, 1L, "SUPER_ADMIN", null);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.authorities()));
         cacheManager.getCacheNames().forEach(name -> cacheManager.getCache(name).clear());
         clearInvocations(categoryRepository, martRepository, productRepository);
     }
@@ -111,4 +116,9 @@ class CacheIntegrationTest extends IntegrationTestSupport {
         productService.searchProducts(1L, new ProductSearchRequest("양파", null, null, null), page);
         verify(productRepository, times(2)).searchMemberProducts(any(), any());
     }
+    @org.junit.jupiter.api.AfterEach
+    void clearAuthentication() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
 }

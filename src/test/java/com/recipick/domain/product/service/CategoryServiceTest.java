@@ -37,6 +37,9 @@ public class CategoryServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
     @InjectMocks
     private CategoryService categoryService;
 

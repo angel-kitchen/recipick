@@ -1,5 +1,9 @@
 package com.recipick.domain.product.service;
 
+import java.util.Map;
+import com.recipick.global.audit.AdminAuditAction;
+import com.recipick.global.audit.AdminAuditCommand;
+import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.product.dto.CategoryCreateRequest;
 import com.recipick.domain.product.dto.CategoryIdResponse;
 import com.recipick.domain.product.dto.CategoryResponse;
@@ -23,6 +27,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CategoryService {
 
+    private final AdminAuditRecorder auditRecorder;
+
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
 
@@ -44,12 +50,15 @@ public class CategoryService {
                 throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
             }
             category.restore();
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_CREATE, category.getId(), null, Map.of()));
             return new CategoryIdResponse(category.getId());
         }
         Category category = Category.builder()
             .name(request.name())
             .build();
-        return new CategoryIdResponse(categoryRepository.save(category).getId());
+        Category saved = categoryRepository.save(category);
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_CREATE, saved.getId(), null, Map.of()));
+        return new CategoryIdResponse(saved.getId());
     }
 
     @Transactional
@@ -64,6 +73,7 @@ public class CategoryService {
                 throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
             }
             category.rename(request.name());
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_UPDATE, category.getId(), null, Map.of()));
         }
         return new CategoryIdResponse(category.getId());
     }
@@ -80,6 +90,7 @@ public class CategoryService {
             throw new BusinessException(ProductErrorCode.CATEGORY_HAS_PRODUCTS);
         }
         category.delete();
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_DELETE, category.getId(), null, Map.of()));
     }
 
     private Category findCategory(Long categoryId){
