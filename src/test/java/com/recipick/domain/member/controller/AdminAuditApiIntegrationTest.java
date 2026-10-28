@@ -15,6 +15,7 @@ import com.recipick.domain.member.repository.AdminAuditLogRepository;
 import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
+import com.recipick.domain.member.service.AdminAuditCleanupService;
 import com.recipick.global.audit.AdminAuditAction;
 import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.security.AuthPrincipal;
@@ -46,6 +47,7 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     @Autowired AdminAuditLogRepository logs;
     @Autowired JwtTokenProvider tokens;
     @Autowired JdbcTemplate jdbc;
+    @Autowired AdminAuditCleanupService cleanup;
     @Autowired Clock clock;
     Admin admin;
     Admin other;
@@ -276,6 +278,60 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(response.getStatus()).isEqualTo(403);
         assertThat(mapper.readTree(response.getContentAsString()).has("data")).isFalse();
+    }
+
+    @Test
+    @DisplayName("보관 기간 경계까지 삭제하고 최근 로그는 유지하며 재실행은 안전하다")
+    void deletesOnlyExpiredLogs() {
+        // given
+        LocalDateTime cutoff = LocalDateTime.now(clock).minusYears(1).withNano(0);
+        AdminAuditLog old = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
+        AdminAuditLog boundary = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
+        AdminAuditLog recent = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
+        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff.minusSeconds(1), old.getId());
+        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff, boundary.getId());
+        jdbc.update("UPDATE admin_audit_log SET created_at = ? WHERE id = ?", cutoff.plusSeconds(1), recent.getId());
+        // when
+        cleanup.deleteExpiredBatch(cutoff);
+        cleanup.deleteExpiredBatch(cutoff);
+        // then
+        assertThat(logs.existsById(old.getId())).isFalse();
+        assertThat(logs.existsById(boundary.getId())).isFalse();
+        assertThat(logs.existsById(recent.getId())).isTrue();
+    }
+    @Test
+    @DisplayName("두 정리 작업이 동시에 실행돼도 만료 로그만 최대 1,000건씩 중복 없이 삭제한다")
+    void concurrentCleanupIsIdempotentAndBounded() throws Exception {
+        // given
+        LocalDateTime cutoff = LocalDateTime.now(clock).minusYears(1).withNano(0);
+        java.util.List<Object[]> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 1001; i++) {
+            rows.add(new Object[]{admin.getId(), "MEMBER_LIST_VIEW", "MEMBER", cutoff.minusDays(1)});
+        }
+        jdbc.batchUpdate("INSERT INTO admin_audit_log (admin_id, action, target_type, created_at) VALUES (?, ?, ?, ?)", rows);
+        AdminAuditLog recent = log(admin, AdminAuditAction.MEMBER_LIST_VIEW, null);
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            // when
+            java.util.concurrent.Callable<Integer> task = () -> {
+                start.await();
+                return cleanup.deleteExpiredBatch(cutoff);
+            };
+            var first = executor.submit(task);
+            var second = executor.submit(task);
+            start.countDown();
+            int firstCount = first.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            int secondCount = second.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            // then
+            assertThat(firstCount).isBetween(0, 1000);
+            assertThat(secondCount).isBetween(0, 1000);
+            assertThat(firstCount + secondCount).isEqualTo(1001);
+            assertThat(logs.existsById(recent.getId())).isTrue();
+            assertThat(cleanup.deleteExpiredBatch(cutoff)).isZero();
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
 }

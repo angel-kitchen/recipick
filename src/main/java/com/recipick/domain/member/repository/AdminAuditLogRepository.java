@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,4 +24,7 @@ public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, Lo
             @Param("adminId") Long adminId, @Param("action") AdminAuditAction action,
             @Param("targetType") AdminAuditTarget targetType, Pageable pageable);
 
+    @Modifying
+    @Query(value = "DELETE FROM admin_audit_log WHERE created_at <= :cutoff LIMIT 1000", nativeQuery = true)
+    int deleteExpiredBatch(@Param("cutoff") LocalDateTime cutoff);
 }
