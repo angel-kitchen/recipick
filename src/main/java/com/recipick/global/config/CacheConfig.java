@@ -63,7 +63,6 @@ public class CacheConfig implements CachingConfigurer {
             .withCacheConfiguration(PRODUCT_SEARCH, typed(base, mapper, productSearch, Duration.ofSeconds(30)))
             .disableCreateOnMissingCache()
             .enableStatistics()
-            .transactionAware()
             .build();
     }
 
