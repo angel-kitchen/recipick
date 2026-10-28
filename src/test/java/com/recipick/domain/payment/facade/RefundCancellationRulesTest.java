@@ -10,6 +10,7 @@ import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,6 +22,9 @@ class RefundCancellationRulesTest {
     private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 10, 27, 20, 0);
     private static final LocalDateTime REQUESTED_AT = LocalDateTime.of(2026, 10, 27, 21, 0);
     private static final LocalDateTime CANCELED_AT = LocalDateTime.of(2026, 10, 27, 21, 0, 10);
+    private static final LocalDateTime REFUND_REQUESTED_AT = LocalDateTime.of(2026, 10, 28, 14, 0);
+    private static final LocalDateTime BEFORE_REFUND = REFUND_REQUESTED_AT.minusDays(1);
+    private static final LocalDateTime AFTER_REFUND = REFUND_REQUESTED_AT.plusSeconds(1);
 
     // ---------- 외부 취소 경로 ----------
 
@@ -448,6 +452,143 @@ class RefundCancellationRulesTest {
         assertThat(match.type()).isEqualTo(Type.PENDING);
     }
 
+    // ---------- 취소 ID 없는 마트 거절 환불의 서버 API 취소 선택 ----------
+
+    @Test
+    @DisplayName("서버 API 취소가 없으면 NONE — 콘솔 취소는 이 판정의 대상이 아니다")
+    void noneWithoutApiCancellation() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.CANCELED,
+            succeeded("cancel_console", PortOneCancellationTrigger.CONSOLE));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.NONE);
+    }
+
+    @Test
+    @DisplayName("이 환불 이후의 주인 없는 API 취소가 하나면 그것을 고른다 — 금액은 보지 않는다")
+    void selectSingleCurrent() {
+        // given — 금액 검증은 고른 뒤 반영하는 쪽 몫이라 금액이 달라도 고른다
+        PortOneCancellation current = new PortOneCancellation("cancel_current", PortOneCancellationStatus.REQUESTED,
+            1000L, AFTER_REFUND, null, PortOneCancellationTrigger.API);
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID, current);
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.SELECTED);
+        assertThat(selection.cancellation()).isSameAs(current);
+    }
+
+    @Test
+    @DisplayName("요청 시각이 이 환불과 같은 API 취소도 이 환불 이후로 본다")
+    void sameRequestedAtIsCurrent() {
+        // given
+        PortOneCancellation current = api("cancel_current", PortOneCancellationStatus.SUCCEEDED, REFUND_REQUESTED_AT);
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.CANCELED, current);
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.SELECTED);
+        assertThat(selection.cancellation()).isSameAs(current);
+    }
+
+    @Test
+    @DisplayName("다른 환불에 묶인 실패한 API 취소와 이 환불보다 먼저 요청된 실패한 API 취소는 무시해 NONE")
+    void noneWhenOnlyFailedPastOrBound() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api("cancel_member", PortOneCancellationStatus.FAILED, BEFORE_REFUND),
+            api("cancel_orphan", PortOneCancellationStatus.FAILED, BEFORE_REFUND));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of("cancel_member"));
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.NONE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PortOneCancellationStatus.class, names = {"REQUESTED", "UNKNOWN", "SUCCEEDED"})
+    @DisplayName("다른 환불에 묶인 API 취소가 실패로 끝나지 않았으면 이 환불 이후 후보가 있어도 AMBIGUOUS")
+    void ambiguousWhenBoundActive(PortOneCancellationStatus status) {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api("cancel_member", status, BEFORE_REFUND),
+            api("cancel_current", PortOneCancellationStatus.REQUESTED, AFTER_REFUND));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of("cancel_member"));
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.AMBIGUOUS);
+        assertThat(selection.cancellation()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PortOneCancellationStatus.class, names = {"REQUESTED", "UNKNOWN", "SUCCEEDED"})
+    @DisplayName("이 환불보다 먼저 요청된 주인 없는 API 취소가 실패로 끝나지 않았으면 이 환불 이후 후보가 있어도 AMBIGUOUS")
+    void ambiguousWhenPastUnboundActive(PortOneCancellationStatus status) {
+        // given — 과거 회원 취소가 PG에서는 접수됐지만 경합으로 환불 행에 ID가 남지 못했다
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api("cancel_orphan", status, BEFORE_REFUND),
+            api("cancel_current", PortOneCancellationStatus.REQUESTED, AFTER_REFUND));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.AMBIGUOUS);
+    }
+
+    @Test
+    @DisplayName("이 환불 이후의 API 취소가 둘이면 요청 시각이 같아도 AMBIGUOUS — 시각만으로 고르지 않는다")
+    void ambiguousWhenTwoCurrent() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api("cancel_a", PortOneCancellationStatus.REQUESTED, AFTER_REFUND),
+            api("cancel_b", PortOneCancellationStatus.REQUESTED, AFTER_REFUND));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.AMBIGUOUS);
+    }
+
+    @Test
+    @DisplayName("주인 없는 API 취소에 ID가 없으면 AMBIGUOUS — 환불에 묶을 근거가 없다")
+    void ambiguousWithoutId() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api(null, PortOneCancellationStatus.REQUESTED, AFTER_REFUND));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.AMBIGUOUS);
+    }
+
+    @Test
+    @DisplayName("주인 없는 API 취소에 요청 시각이 없으면 실패한 취소여도 AMBIGUOUS — 이 환불 전후를 가를 수 없다")
+    void ambiguousWithoutRequestedAt() {
+        // given
+        PortOnePayment portOne = portOne(PortOnePaymentStatus.PAID,
+            api("cancel_unknown_time", PortOneCancellationStatus.FAILED, null));
+
+        // when
+        ApiCancellationSelection selection = select(portOne, Set.of());
+
+        // then
+        assertThat(selection.type()).isEqualTo(ApiCancellationSelection.Type.AMBIGUOUS);
+    }
     // ---------- 준비 ----------
 
     private static PortOneCancellation succeeded(String id, PortOneCancellationTrigger trigger) {
@@ -461,6 +602,15 @@ class RefundCancellationRulesTest {
 
     private static PortOneCancellation failed(String id, PortOneCancellationTrigger trigger) {
         return new PortOneCancellation(id, PortOneCancellationStatus.FAILED, AMOUNT, REQUESTED_AT, null, trigger);
+    }
+
+    private static PortOneCancellation api(String id, PortOneCancellationStatus status, LocalDateTime requestedAt) {
+        LocalDateTime canceledAt = status == PortOneCancellationStatus.SUCCEEDED ? CANCELED_AT : null;
+        return new PortOneCancellation(id, status, AMOUNT, requestedAt, canceledAt, PortOneCancellationTrigger.API);
+    }
+
+    private static ApiCancellationSelection select(PortOnePayment portOne, Set<String> boundIds) {
+        return RefundCancellationRules.selectCurrentApiCancellation(portOne, boundIds, REFUND_REQUESTED_AT);
     }
 
     private static PortOnePayment portOne(PortOnePaymentStatus status, PortOneCancellation... cancellations) {

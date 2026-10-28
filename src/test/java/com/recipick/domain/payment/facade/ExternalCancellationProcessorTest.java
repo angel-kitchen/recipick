@@ -152,7 +152,7 @@ class ExternalCancellationProcessorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"CANCELED, MEMBER", "CANCELED, EXTERNAL", "FAILED, SYSTEM"})
+    @CsvSource({"CANCELED, MEMBER", "CANCELED, EXTERNAL", "FAILED, SYSTEM", "CANCELED, ADMIN"})
     @DisplayName("같은 취소 ID의 완료 환불이 결제 상태와 정상 조합이면 ALREADY_RECONCILED — 재고를 다시 복구하지 않는다")
     void alreadyReconciled(PaymentStatus paymentStatus, RefundRequester requestedBy) {
         // given
@@ -168,7 +168,7 @@ class ExternalCancellationProcessorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"FAILED, MEMBER", "CANCELED, SYSTEM", "PAID, EXTERNAL", "CANCELED, ADMIN"})
+    @CsvSource({"FAILED, MEMBER", "CANCELED, SYSTEM", "PAID, EXTERNAL", "PAID, ADMIN"})
     @DisplayName("같은 취소 ID의 완료 환불이 결제 상태·요청 주체와 맞지 않으면 NOT_APPLICABLE — 이상 데이터를 멱등 성공으로 덮지 않는다")
     void notApplicableWhenCompletedRefundMismatched(PaymentStatus paymentStatus, RefundRequester requestedBy) {
         // given
@@ -185,7 +185,7 @@ class ExternalCancellationProcessorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"CANCEL_REQUESTED, MEMBER", "FAILED, SYSTEM"})
+    @CsvSource({"CANCEL_REQUESTED, MEMBER", "FAILED, SYSTEM", "CANCEL_REQUESTED, ADMIN"})
     @DisplayName("같은 취소 ID의 환불이 정상적으로 진행 중이면 RETRY — 다음 실행에서 기존 환불 경로로 연결된다")
     void retryWhenSameCancellationInProgress(PaymentStatus paymentStatus, RefundRequester requestedBy) {
         // given
@@ -201,7 +201,7 @@ class ExternalCancellationProcessorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"PAID, MEMBER", "CANCELED, SYSTEM"})
+    @CsvSource({"PAID, MEMBER", "CANCELED, SYSTEM", "PAID, ADMIN"})
     @DisplayName("같은 취소 ID의 진행 중 환불이 결제 상태와 맞지 않으면 재시도하지 않고 NOT_APPLICABLE")
     void notApplicableWhenSameCancellationInProgressMismatched(
         PaymentStatus paymentStatus, RefundRequester requestedBy) {
@@ -235,7 +235,7 @@ class ExternalCancellationProcessorTest {
     // ---------- 진행 중인 기존 환불 ----------
 
     @ParameterizedTest
-    @CsvSource({"CANCEL_REQUESTED, MEMBER", "FAILED, SYSTEM"})
+    @CsvSource({"CANCEL_REQUESTED, MEMBER", "FAILED, SYSTEM", "CANCEL_REQUESTED, ADMIN"})
     @DisplayName("취소 ID 없는 진행 중 환불이 결제 상태와 정상 조합이면 RETRY — EXTERNAL 환불을 만들지 않는다")
     void retryWhenRequestedRefundWithoutCancellationId(PaymentStatus paymentStatus, RefundRequester requestedBy) {
         // given
@@ -251,7 +251,7 @@ class ExternalCancellationProcessorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"PAID, MEMBER", "CANCELED, SYSTEM"})
+    @CsvSource({"PAID, MEMBER", "CANCELED, SYSTEM", "PAID, ADMIN"})
     @DisplayName("취소 ID 없는 진행 중 환불이 결제 상태와 맞지 않으면 NOT_APPLICABLE — 기다려도 정상화되지 않는다")
     void notApplicableWhenRequestedRefundMismatched(PaymentStatus paymentStatus, RefundRequester requestedBy) {
         // given
@@ -298,6 +298,74 @@ class ExternalCancellationProcessorTest {
         // then
         assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.NOT_APPLICABLE);
         assertNothingChanged(payment, PaymentStatus.CANCEL_REQUESTED);
+    }
+
+    // ---------- 실패한 마트 거절 뒤 콘솔 전액 취소 ----------
+
+    @Test
+    @DisplayName("실패한 마트 거절 환불이 한 건이면 결제 CANCELED·EXTERNAL 환불 기록 뒤 환불 완료 경로로 거절 주문을 닫고 재고를 복구한다")
+    void closeRejectedOrderAfterFailedAdminRefund() {
+        // given — 마트 거절 뒤 PG 취소가 실패해 결제만 PAID로 돌아갔고, 운영자가 콘솔에서 전액 취소했다
+        Payment payment = givenLocked(PaymentStatus.PAID);
+        givenNoRefunds();
+        Refund failedAdmin = refund(payment, RefundStatus.FAILED, RefundRequester.ADMIN, "cancel_api");
+        given(paymentService.findFailedAdminRefunds(PAYMENT_ID)).willReturn(List.of(failedAdmin));
+        given(orderFacade.markRefunded(ORDER_ID)).willReturn(RESTORE_ITEMS);
+        String reason = "PortOne 외부 전액 취소(CONSOLE)";
+
+        // when
+        ExternalCancellationResult result = processor.apply(PAYMENT_ID, consoleSucceeded());
+
+        // then
+        assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.RECONCILED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+        InOrder inOrder = inOrder(paymentService, orderFacade);
+        inOrder.verify(paymentService)
+            .recordExternalRefund(payment, CANCELLATION_ID, reason, REQUESTED_AT, CANCELED_AT);
+        inOrder.verify(orderFacade).markRefunded(ORDER_ID);
+        inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
+        verify(orderFacade, never()).closeByExternalCancel(any(), any());
+        // 실패한 마트 거절 환불은 시도 이력으로 그대로 남는다
+        assertThat(failedAdmin.getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(failedAdmin.getPortoneCancellationId()).isEqualTo("cancel_api");
+    }
+
+    @Test
+    @DisplayName("실패한 마트 거절 환불이 여러 건이면 상태를 바꾸기 전에 NOT_APPLICABLE — 어느 거절의 복구인지 단정하지 않는다")
+    void notApplicableWhenMultipleFailedAdminRefunds() {
+        // given
+        Payment payment = givenLocked(PaymentStatus.PAID);
+        givenNoRefunds();
+        given(paymentService.findFailedAdminRefunds(PAYMENT_ID)).willReturn(List.of(
+            refund(payment, RefundStatus.FAILED, RefundRequester.ADMIN, "cancel_api_1"),
+            refund(payment, RefundStatus.FAILED, RefundRequester.ADMIN, "cancel_api_2")));
+
+        // when
+        ExternalCancellationResult result = processor.apply(PAYMENT_ID, consoleSucceeded());
+
+        // then
+        assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.NOT_APPLICABLE);
+        assertThat(result.reason()).contains("실패한 마트 거절 환불이 여러 건");
+        assertNothingChanged(payment, PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("실패한 마트 거절 환불이 없으면 기존 외부 취소 경로로 주문을 닫는다 — 환불 완료 경로를 쓰지 않는다")
+    void closeByExternalCancelWithoutFailedAdminRefund() {
+        // given
+        givenLocked(PaymentStatus.PAID);
+        givenNoRefunds();
+        given(paymentService.findFailedAdminRefunds(PAYMENT_ID)).willReturn(List.of());
+        given(orderFacade.closeByExternalCancel(ORDER_ID, "PortOne 외부 전액 취소(CONSOLE)")).willReturn(RESTORE_ITEMS);
+
+        // when
+        ExternalCancellationResult result = processor.apply(PAYMENT_ID, consoleSucceeded());
+
+        // then
+        assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.RECONCILED);
+        verify(orderFacade, never()).markRefunded(any());
+        verify(orderFacade).restoreStock(RESTORE_ITEMS);
     }
 
     // ---------- 결제 상태 ----------
@@ -441,14 +509,16 @@ class ExternalCancellationProcessorTest {
         given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.of(refund));
     }
 
-    // 실제 조회처럼 회원 환불은 목록으로, SYSTEM 환불은 결제당 한 건으로 돌려준다
+    // 실제 조회처럼 회원·마트 거절 환불은 목록으로, SYSTEM 환불은 결제당 한 건으로 돌려준다
     private void givenRequested(Refund refund) {
         given(paymentService.findRefundByPortoneCancellationId(CANCELLATION_ID)).willReturn(Optional.empty());
-        boolean member = refund.getRequestedBy() == RefundRequester.MEMBER;
+        RefundRequester requestedBy = refund.getRequestedBy();
         given(paymentService.findRequestedMemberRefunds(PAYMENT_ID))
-            .willReturn(member ? List.of(refund) : List.of());
+            .willReturn(requestedBy == RefundRequester.MEMBER ? List.of(refund) : List.of());
         given(paymentService.findRequestedSystemRefund(PAYMENT_ID))
-            .willReturn(member ? Optional.empty() : Optional.of(refund));
+            .willReturn(requestedBy == RefundRequester.SYSTEM ? Optional.of(refund) : Optional.empty());
+        given(paymentService.findRequestedAdminRefunds(PAYMENT_ID))
+            .willReturn(requestedBy == RefundRequester.ADMIN ? List.of(refund) : List.of());
     }
 
     // 상태를 바꾸지 않는 결과는 결제·환불·주문·재고 어디에도 흔적을 남기지 않아야 한다

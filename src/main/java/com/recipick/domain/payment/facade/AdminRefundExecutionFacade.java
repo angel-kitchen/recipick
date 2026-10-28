@@ -17,14 +17,12 @@ import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import com.recipick.infra.portone.dto.PortOneCancellation;
 import com.recipick.infra.portone.dto.PortOneCancellationStatus;
-import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 // 마트 거절 환불(ADMIN)을 실제로 돌려준다. 거절 API·Worker(ADMIN_REFUND_EXECUTE:{id})·Fallback이 모두 이 실행기를 거친다.
 // 트랜잭션을 걸지 않는다 — 스냅샷 조회(짧은 readOnly) → PortOne 조회·취소(락 없음) → MartRejectionProcessor.apply(PAYMENT 잠금) 순이다.
@@ -153,49 +150,16 @@ public class AdminRefundExecutionFacade {
     }
 
     // 취소 ID를 아직 못 받았다(POST 응답 유실 등). 서버 API 취소 중 이 환불의 것을 고르거나, 없으면 취소를 요청한다.
-    // 이 환불의 것이라고 확신할 수 없는 API 취소가 하나라도 살아 있으면 어느 것도 고르지 않는다 — 잘못 묶으면 되돌릴 수 없다.
-    // 후보를 금액으로 미리 거르지 않는다 — 금액이 다른 API 취소가 빠지면 "취소 없음"으로 보여 새 POST가 나간다. 금액은 applyExisting이 막는다
+    // 고르는 판정은 취소 웹훅과 같은 공통 규칙이고, 고를 것이 없을 때 POST하는 것만 실행기의 몫이다
     private Decision reconcileApiCancellation(Refund refund, PortOnePayment portOnePayment) {
         Set<String> boundIds = paymentService.findBoundCancellationIds(refund.getPayment().getId(), refund.getId());
-        List<PortOneCancellation> apiCancellations = portOnePayment.cancellations().stream()
-            .filter(candidate -> candidate.trigger() == PortOneCancellationTrigger.API)
-            .toList();
-        List<PortOneCancellation> bound = apiCancellations.stream()
-            .filter(candidate -> candidate.id() != null && boundIds.contains(candidate.id()))
-            .toList();
-        List<PortOneCancellation> unbound = apiCancellations.stream()
-            .filter(candidate -> !bound.contains(candidate))
-            .toList();
-
-        // 1. ID가 없으면 묶을 근거가 없고, 요청 시각이 없으면 이 환불 전후를 가를 수 없다
-        if (unbound.stream().anyMatch(candidate -> !StringUtils.hasText(candidate.id())
-            || candidate.requestedAt() == null)) {
-            return Decision.manualReview("ID 또는 요청 시각이 없는 서버 API 취소가 있음");
-        }
-        // 2. 다른 환불의 취소가 아직 살아 있다. 그 결과가 정해지기 전에는 이 환불의 취소를 고르거나 새로 요청하지 않는다
-        if (bound.stream().anyMatch(candidate -> candidate.status() != PortOneCancellationStatus.FAILED)) {
-            return Decision.manualReview("다른 환불에 묶인 서버 API 취소가 진행 중이거나 성공함");
-        }
-        // 3. 이 환불보다 먼저 요청된 취소는 이 환불의 것이 아니다. 실패로 끝나지 않았으면 과거 취소의 결과가 DB에 반영되지 못한 것이다.
-        // 서버와 PG 시계가 어긋나 이 환불의 취소가 과거로 보여도 여기서 멈출 뿐 잘못 묶거나 다시 취소하지 않는다
-        LocalDateTime requestedAt = refund.getRequestedAt();
-        if (unbound.stream().anyMatch(candidate -> candidate.requestedAt().isBefore(requestedAt)
-            && candidate.status() != PortOneCancellationStatus.FAILED)) {
-            return Decision.manualReview("이 환불보다 먼저 요청된 서버 API 취소가 진행 중이거나 성공함");
-        }
-        List<PortOneCancellation> current = unbound.stream()
-            .filter(candidate -> !candidate.requestedAt().isBefore(requestedAt))
-            .toList();
-        // 4. 어느 것이 이 환불의 취소인지 고르지 않는다
-        if (current.size() > 1) {
-            return Decision.manualReview("이 환불 이후의 서버 API 취소가 " + current.size() + "건");
-        }
-        // 5. 이 환불 이후의 취소가 한 건뿐이다. POST 응답을 못 받은 그 취소다
-        if (current.size() == 1) {
-            return applyExisting(refund, portOnePayment, current.get(0));
-        }
-        // 6. 남은 API 취소는 실패로 끝난 과거 시도뿐이다
-        return requestCancel(refund, portOnePayment);
+        ApiCancellationSelection selection = RefundCancellationRules.selectCurrentApiCancellation(
+            portOnePayment, boundIds, refund.getRequestedAt());
+        return switch (selection.type()) {
+            case SELECTED -> applyExisting(refund, portOnePayment, selection.cancellation());
+            case NONE -> requestCancel(refund, portOnePayment);
+            case AMBIGUOUS -> Decision.manualReview(selection.reason());
+        };
     }
 
     // 이미 접수된 취소가 보인다. 다시 POST하지 않고 그 결과를 반영한다
