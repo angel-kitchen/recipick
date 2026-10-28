@@ -14,6 +14,7 @@ public record ClaudeProperties(
         @DefaultValue("claude-opus-5-5") String model,
         @DefaultValue("15s") Duration timeout,
         @DefaultValue("2") int maxRetries,
-        @DefaultValue("1024") long maxTokens
+        // 생각(thinking)도 이 한도를 함께 쓰므로, 응답이 잘리지 않을 만큼 여유를 둔 상한이다
+        @DefaultValue("4096") long maxTokens
 ) {
 }

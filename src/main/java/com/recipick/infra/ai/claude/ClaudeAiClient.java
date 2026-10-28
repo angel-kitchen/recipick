@@ -72,6 +72,12 @@ public class ClaudeAiClient implements AiClient {
                 log.warn("Claude가 메뉴 분석을 거절함: model={}", usage.model());
                 return AiResult.failure(AiFailureType.REFUSED, usage);
             }
+            // 생각과 응답이 같은 max_tokens를 나눠 써서, 잘리면 JSON이 깨지거나 응답 블록 없이 빈 목록이 성공처럼 보인다
+            if (message.stopReason().filter(StopReason.MAX_TOKENS::equals).isPresent()) {
+                log.warn("Claude 메뉴 분석 응답이 최대 토큰에서 잘림: model={}, outputTokens={}",
+                    usage.model(), usage.outputTokens());
+                return AiResult.failure(AiFailureType.INVALID_RESPONSE, usage);
+            }
             List<AiExtractedMenu> menus = message.content().stream()
                 .flatMap(block -> block.text().stream())
                 .map(StructuredTextBlock::text)
