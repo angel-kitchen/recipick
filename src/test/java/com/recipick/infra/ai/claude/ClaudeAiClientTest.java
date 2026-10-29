@@ -11,9 +11,11 @@ import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.Usage;
+import com.recipick.infra.ai.claude.ClaudeAiClient.ConditionOutput;
 import com.recipick.infra.ai.claude.ClaudeAiClient.MenuOutput;
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiResult;
 import java.time.Duration;
@@ -54,5 +56,28 @@ class ClaudeAiClientTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.failureType()).isEqualTo(AiFailureType.INVALID_RESPONSE);
         assertThat(result.usage().outputTokens()).isEqualTo(4096);
+    }
+
+    @Test
+    @DisplayName("조건을 말하지 않아 빈 문자열·0·-1로 온 값은 null로 바꾼다")
+    void conditionOutput_convertsMissingValuesToNull() {
+        // given
+        ConditionOutput output = new ConditionOutput("", " ", 0, -1, List.of());
+
+        // when
+        AiRecipeConditions conditions = output.toConditions();
+
+        // then
+        assertThat(conditions).isEqualTo(new AiRecipeConditions(null, null, null, null, List.of()));
+    }
+
+    @Test
+    @DisplayName("맵기 0은 '안 매움'이라는 조건이므로 그대로 남긴다")
+    void conditionOutput_keepsZeroSpicyLevel() {
+        // when
+        AiRecipeConditions conditions = new ConditionOutput("KOREAN", "STEW", 20, 0, List.of("오이")).toConditions();
+
+        // then
+        assertThat(conditions).isEqualTo(new AiRecipeConditions("KOREAN", "STEW", 20, 0, List.of("오이")));
     }
 }

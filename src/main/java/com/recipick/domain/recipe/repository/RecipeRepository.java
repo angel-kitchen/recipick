@@ -16,6 +16,8 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long>, RecipeRep
 
     List<Recipe> findAllByStatusAndAutoCartEnabledTrueOrderByIdAsc(RecipeStatus status);
 
+    List<Recipe> findAllByStatusOrderByIdAsc(RecipeStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Recipe r WHERE r.id = :id")
     Optional<Recipe> findByIdForUpdate(@Param("id") Long id);
