@@ -1,10 +1,14 @@
 package com.recipick.domain.payment.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.payment.entity.MemberPoint;
 import com.recipick.domain.payment.entity.PointEarning;
+import com.recipick.domain.payment.entity.PointHistory;
+import com.recipick.domain.payment.entity.enums.PointHistoryType;
+import com.recipick.domain.payment.repository.dto.PointExpirySummary;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,6 +17,9 @@ import java.util.Optional;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +37,9 @@ class PointRepositoryTest extends IntegrationTestSupport {
 
     @Autowired
     PointEarningRepository pointEarningRepository;
+
+    @Autowired
+    PointHistoryRepository pointHistoryRepository;
 
     @Autowired
     EntityManager em;
@@ -143,6 +153,144 @@ class PointRepositoryTest extends IntegrationTestSupport {
         assertThat(managedEntityCount()).isZero();
     }
 
+    @Test
+    @DisplayName("만료 대상 회원은 잔량이 남은 어제 이전 만료 확정 적립이 있는 회원만, 회원 ID 순으로 마지막으로 본 회원 다음부터 돌려준다")
+    void findExpirationCandidateMemberIds() {
+        // given — 회원 a·b·c는 만료 대상(a는 두 건), d는 오늘 만료, e는 잔량 0, f는 적립 예정
+        long a = 9_100_101L;
+        long b = 9_100_102L;
+        long c = 9_100_103L;
+        long d = 9_100_104L;
+        long e = 9_100_105L;
+        long f = 9_100_106L;
+        PointEarning exhausted = completedFor(e, 15L, 100L, TODAY.minusYears(1).minusDays(1));
+        exhausted.use(100L);
+        saveAll(completedFor(a, 11L, 100L, TODAY.minusYears(1).minusDays(1)),
+            completedFor(a, 12L, 100L, TODAY.minusYears(2)),
+            completedFor(b, 13L, 100L, TODAY.minusYears(1).minusDays(1)),
+            completedFor(c, 14L, 100L, TODAY.minusYears(1).minusDays(1)),
+            completedFor(d, 16L, 100L, TODAY.minusYears(1)),
+            exhausted,
+            PointEarning.pending(f, ORDER_ID_BASE + 17L, 100L));
+
+        // when
+        List<Long> firstPage = pointEarningRepository.findExpirationCandidateMemberIds(
+            TODAY, a - 1, PageRequest.of(0, 2));
+        List<Long> nextPage = pointEarningRepository.findExpirationCandidateMemberIds(
+            TODAY, b, PageRequest.of(0, 10));
+
+        // then — 다른 테스트가 남긴 더 큰 회원 ID가 뒤에 있을 수 있어 앞부분과 제외 대상만 본다
+        assertThat(firstPage).containsExactly(a, b);
+        assertThat(nextPage).startsWith(c).doesNotContain(a, b, d, e, f);
+    }
+
+    @Test
+    @DisplayName("사용 가능 잔량 합은 오늘 만료분까지 포함하고 어제 만료·잔량 0·적립 예정은 빼며, 적립이 없는 회원은 0이다")
+    void sumUsableRemaining() {
+        // given
+        PointEarning exhausted = completed(3L, 100L, TODAY);
+        exhausted.use(100L);
+        saveAll(completed(1L, 100L, TODAY.minusYears(1)),
+            completed(2L, 200L, TODAY.minusYears(1).minusDays(1)),
+            exhausted,
+            PointEarning.pending(MEMBER_ID, ORDER_ID_BASE + 4L, 300L));
+
+        // when
+        long usable = pointEarningRepository.sumUsableRemaining(MEMBER_ID, TODAY);
+        long none = pointEarningRepository.sumUsableRemaining(MEMBER_ID + 1, TODAY);
+
+        // then
+        assertThat(usable).isEqualTo(100L);
+        assertThat(none).isZero();
+    }
+
+    @Test
+    @DisplayName("만료일별 사용 가능 잔량은 같은 날짜끼리 합치고 이른 날짜부터 돌려주며 어제 만료분은 빼고 오늘 만료분은 넣는다")
+    void findUsableExpiries() {
+        // given — 오늘 만료 100, 12/31 만료 500·700, 1/20 만료 300, 어제 만료 900
+        saveAll(completed(1L, 500L, LocalDate.of(2025, 12, 31)),
+            completed(2L, 700L, LocalDate.of(2025, 12, 31)),
+            completed(3L, 300L, LocalDate.of(2026, 1, 20)),
+            completed(4L, 900L, TODAY.minusYears(1).minusDays(1)),
+            completed(5L, 100L, TODAY.minusYears(1)));
+
+        // when
+        List<PointExpirySummary> expiries =
+            pointEarningRepository.findUsableExpiries(MEMBER_ID, TODAY, PageRequest.of(0, 10));
+        List<PointExpirySummary> nearest =
+            pointEarningRepository.findUsableExpiries(MEMBER_ID, TODAY, PageRequest.of(0, 1));
+        List<PointExpirySummary> none =
+            pointEarningRepository.findUsableExpiries(MEMBER_ID + 1, TODAY, PageRequest.of(0, 1));
+
+        // then
+        assertThat(expiries).extracting(PointExpirySummary::getExpiresOn, PointExpirySummary::getAmount)
+            .containsExactly(
+                tuple(TODAY, 100L),
+                tuple(LocalDate.of(2026, 12, 31), 1_200L),
+                tuple(LocalDate.of(2027, 1, 20), 300L));
+        assertThat(nearest).singleElement().satisfies(first -> {
+            assertThat(first.getExpiresOn()).isEqualTo(TODAY);
+            assertThat(first.getAmount()).isEqualTo(100L);
+        });
+        assertThat(none).isEmpty();
+    }
+
+    @Test
+    @DisplayName("회원 적립 건 페이지는 상태와 관계없이 그 회원 것만 넘긴 정렬(최신순)대로 돌려준다")
+    void findEarningsByMember() {
+        // given
+        PointEarning canceled = PointEarning.pending(MEMBER_ID, ORDER_ID_BASE + 3L, 100L);
+        canceled.cancel();
+        PointEarning expired = completed(4L, 100L, TODAY.minusYears(2));
+        expired.expire();
+        saveAll(PointEarning.pending(MEMBER_ID, ORDER_ID_BASE + 1L, 100L),
+            completed(2L, 100L, TODAY),
+            canceled,
+            expired,
+            completedFor(MEMBER_ID + 1, 5L, 100L, TODAY));
+
+        // when
+        Page<PointEarning> page = pointEarningRepository.findByMemberId(MEMBER_ID, PageRequest.of(0, 10,
+            Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+
+        // then — 같은 순간 저장돼 createdAt이 같아도 id가 큰 것이 먼저다
+        assertThat(page.getTotalElements()).isEqualTo(4);
+        assertThat(page.getContent()).extracting(PointEarning::getId)
+            .isSortedAccordingTo((x, y) -> Long.compare(y, x));
+    }
+
+    @Test
+    @DisplayName("이력은 회원 조건이 항상 붙어 주문 ID로 좁혀도 다른 회원의 이력은 나오지 않는다")
+    void findHistoryByMemberAndOrder() {
+        // given — 주문1 이력 2건(적립 예정·확정), 주문2 이력 1건, 다른 회원 주문3 이력 1건
+        PointEarning first = PointEarning.pending(MEMBER_ID, ORDER_ID_BASE + 1L, 100L);
+        pointEarningRepository.save(first);
+        pointHistoryRepository.save(PointHistory.earnPending(first));
+        first.complete(NOW);
+        pointHistoryRepository.save(PointHistory.earnCompleted(first));
+        PointEarning second = completed(2L, 200L, TODAY);
+        PointEarning others = completedFor(MEMBER_ID + 1, 3L, 300L, TODAY);
+        saveAll(second, others);
+        pointHistoryRepository.save(PointHistory.earnCompleted(reload(second)));
+        pointHistoryRepository.save(PointHistory.earnCompleted(reload(others)));
+        em.flush();
+        em.clear();
+        PageRequest latest = PageRequest.of(0, 10, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+
+        // when
+        Page<PointHistory> all = pointHistoryRepository.findByMemberId(MEMBER_ID, latest);
+        Page<PointHistory> firstOrder = pointHistoryRepository.findByMemberIdAndOrderId(
+            MEMBER_ID, ORDER_ID_BASE + 1L, latest);
+        Page<PointHistory> othersOrder = pointHistoryRepository.findByMemberIdAndOrderId(
+            MEMBER_ID, ORDER_ID_BASE + 3L, latest);
+
+        // then
+        assertThat(all.getContent()).hasSize(3).allMatch(history -> MEMBER_ID.equals(history.getMemberId()));
+        assertThat(firstOrder.getContent()).extracting(PointHistory::getType)
+            .containsExactly(PointHistoryType.EARN_COMPLETED, PointHistoryType.EARN_PENDING);
+        assertThat(othersOrder.getContent()).isEmpty();
+    }
+
     // 적립 확정일로부터 1년 뒤가 만료일이다
     private static PointEarning completed(Long orderId, long amount, LocalDate confirmedOn) {
         PointEarning earning = PointEarning.pending(MEMBER_ID, ORDER_ID_BASE + orderId, amount);
@@ -150,9 +298,19 @@ class PointRepositoryTest extends IntegrationTestSupport {
         return earning;
     }
 
+    private static PointEarning completedFor(long memberId, long orderId, long amount, LocalDate confirmedOn) {
+        PointEarning earning = PointEarning.pending(memberId, ORDER_ID_BASE + orderId, amount);
+        earning.complete(confirmedOn.atTime(10, 0));
+        return earning;
+    }
+
     // 값만 조회했다면 영속성 컨텍스트에 올라간 엔티티가 없어야 한다
     private int managedEntityCount() {
         return em.unwrap(SessionImplementor.class).getPersistenceContextInternal().getNumberOfManagedEntities();
+    }
+
+    private PointEarning reload(PointEarning earning) {
+        return pointEarningRepository.findById(earning.getId()).orElseThrow();
     }
 
     private void saveAll(PointEarning... earnings) {

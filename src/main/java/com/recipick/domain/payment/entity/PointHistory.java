@@ -12,6 +12,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -26,7 +27,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "point_history")
+@Table(name = "point_history",
+    indexes = {
+        @Index(name = "idx_point_history_member_created", columnList = "member_id, created_at"),
+        @Index(name = "idx_point_history_member_order_created", columnList = "member_id, order_id, created_at")
+    }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PointHistory {
 

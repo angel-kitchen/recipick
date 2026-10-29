@@ -593,6 +593,92 @@ class PointCommandServiceTest extends IntegrationTestSupport {
     }
 
     // 주문 생성 흐름: 주문 INSERT 뒤 포인트 예약 → 재고 차감 뒤 적립 예정 생성
+    @Test
+    @DisplayName("만료 배치는 만료일 당일 포인트는 그대로 두고 어제 만료된 잔량만 소멸시키며 주문 없는 소멸 이력을 남긴다")
+    void expireMemberKeepsTodayAndExpiresYesterday() {
+        // given — 오늘 만료 300P, 어제 만료 200P
+        PointEarning today = lot(1L, 300L, TODAY);
+        PointEarning yesterday = lot(2L, 200L, TODAY.minusDays(1));
+        holdPoints(today, yesterday);
+
+        // when
+        long expired = pointCommandService.expireMember(MEMBER_ID, TODAY);
+        flushAndClear();
+
+        // then
+        assertThat(expired).isEqualTo(200L);
+        assertThat(earning(today).getStatus()).isEqualTo(PointEarningStatus.COMPLETED);
+        assertThat(earning(today).getRemainingAmount()).isEqualTo(300L);
+        assertThat(earning(yesterday).getStatus()).isEqualTo(PointEarningStatus.EXPIRED);
+        assertThat(earning(yesterday).getRemainingAmount()).isZero();
+        assertThat(balance()).isEqualTo(300L);
+        assertThat(histories(PointHistoryType.EXPIRED)).singleElement().satisfies(history -> {
+            assertThat(history.getAmount()).isEqualTo(200L);
+            assertThat(history.getOrderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("만료 배치는 만료된 적립 건의 잔량만큼 회원 잔액을 줄이고 유효한 적립 건은 건드리지 않는다")
+    void expireMemberDecreasesBalanceByExpiredAmount() {
+        // given — 어제 만료 600P, 내년 만료 400P, 잔액 1,000P
+        PointEarning stale = lot(1L, 600L, TODAY.minusDays(1));
+        PointEarning valid = lot(2L, 400L, TODAY.plusYears(1));
+        holdPoints(stale, valid);
+
+        // when
+        long expired = pointCommandService.expireMember(MEMBER_ID, TODAY);
+        flushAndClear();
+
+        // then
+        assertThat(expired).isEqualTo(600L);
+        assertThat(earning(stale).getStatus()).isEqualTo(PointEarningStatus.EXPIRED);
+        assertThat(earning(valid).getRemainingAmount()).isEqualTo(400L);
+        assertThat(balance()).isEqualTo(400L);
+        assertThat(histories(PointHistoryType.EXPIRED)).extracting(PointHistory::getAmount).containsExactly(600L);
+    }
+
+    @Test
+    @DisplayName("만료 배치를 두 번 불러도 두 번째는 소멸할 것이 없어 잔액과 소멸 이력이 한 번만 반영된다")
+    void expireMemberTwiceIsIdempotent() {
+        // given
+        holdPoints(lot(1L, 600L, TODAY.minusDays(1)), lot(2L, 400L, TODAY.plusYears(1)));
+
+        // when
+        long first = pointCommandService.expireMember(MEMBER_ID, TODAY);
+        long second = pointCommandService.expireMember(MEMBER_ID, TODAY);
+        flushAndClear();
+
+        // then
+        assertThat(first).isEqualTo(600L);
+        assertThat(second).isZero();
+        assertThat(balance()).isEqualTo(400L);
+        assertThat(histories(PointHistoryType.EXPIRED)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("만료된 적립 건이 여럿이면 모두 소멸시키고 적립 건마다 소멸 이력을 남긴다")
+    void expireMemberExpiresEveryStaleLot() {
+        // given — 만료 300P·500P, 유효 200P, 잔액 1,000P
+        PointEarning first = lot(1L, 300L, TODAY.minusDays(3));
+        PointEarning second = lot(2L, 500L, TODAY.minusDays(1));
+        PointEarning valid = lot(3L, 200L, TODAY.plusMonths(1));
+        holdPoints(first, second, valid);
+
+        // when
+        long expired = pointCommandService.expireMember(MEMBER_ID, TODAY);
+        flushAndClear();
+
+        // then
+        assertThat(expired).isEqualTo(800L);
+        assertThat(earning(first).getStatus()).isEqualTo(PointEarningStatus.EXPIRED);
+        assertThat(earning(second).getStatus()).isEqualTo(PointEarningStatus.EXPIRED);
+        assertThat(earning(valid).getRemainingAmount()).isEqualTo(200L);
+        assertThat(balance()).isEqualTo(200L);
+        assertThat(histories(PointHistoryType.EXPIRED)).extracting(PointHistory::getAmount)
+            .containsExactly(300L, 500L);
+    }
+
     private void placeOrder(long productAmount, long usedPoint) {
         pointCommandService.reserveUsage(MEMBER_ID, ORDER_ID, usedPoint);
         pointCommandService.createPendingEarning(MEMBER_ID, ORDER_ID, productAmount, usedPoint, RATE);

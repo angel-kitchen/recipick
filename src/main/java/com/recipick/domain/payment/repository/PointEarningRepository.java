@@ -1,18 +1,20 @@
 package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.PointEarning;
+import com.recipick.domain.payment.repository.dto.PointExpirySummary;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-// 여러 적립 건을 잠그는 조회는 모두 id 오름차순이다(잠금 순서). 어떤 포인트부터 쓰는지(FEFO: 만료일 → id)는
-// 잠금 순서와 다른 업무 규칙이라 서비스가 잠근 뒤 따로 정렬한다 — 이 조회 결과를 사용 순서로 쓰면 안 된다
+// 여러 적립 건을 잠그는 조회는 모두 id 오름차순이다(잠금 순서).
 public interface PointEarningRepository extends JpaRepository<PointEarning, Long> {
 
     Optional<PointEarning> findByOrderId(Long orderId);
@@ -39,6 +41,33 @@ public interface PointEarningRepository extends JpaRepository<PointEarning, Long
         + "AND e.status = com.recipick.domain.payment.entity.enums.PointEarningStatus.COMPLETED "
         + "AND e.remainingAmount > 0 AND e.expiresOn >= :today ORDER BY e.id ASC")
     List<PointEarning> findUsableForUpdate(@Param("memberId") Long memberId, @Param("today") LocalDate today);
+
+    // 만료 배치의 대상 회원. 잠그지 않고 회원 ID만 꺼낸다 — 실제 소멸은 회원별 트랜잭션이 다시 잠그고 확인한다.
+    // 처리하면서 대상이 줄어들어 OFFSET으로 넘기면 회원을 건너뛸 수 있어, 마지막으로 본 회원 ID 다음부터 읽는다
+    @Query("SELECT DISTINCT e.memberId FROM PointEarning e "
+        + "WHERE e.status = com.recipick.domain.payment.entity.enums.PointEarningStatus.COMPLETED "
+        + "AND e.remainingAmount > 0 AND e.expiresOn < :today AND e.memberId > :afterMemberId "
+        + "ORDER BY e.memberId ASC")
+    List<Long> findExpirationCandidateMemberIds(@Param("today") LocalDate today,
+                                                @Param("afterMemberId") Long afterMemberId, Pageable limit);
+
+    // 오늘 실제로 쓸 수 있는 포인트. 만료 배치가 아직 처리하지 않은 만료 잔량은 날짜 조건으로 뺀다
+    @Query("SELECT COALESCE(SUM(e.remainingAmount), 0) FROM PointEarning e WHERE e.memberId = :memberId "
+        + "AND e.status = com.recipick.domain.payment.entity.enums.PointEarningStatus.COMPLETED "
+        + "AND e.remainingAmount > 0 AND e.expiresOn >= :today")
+    long sumUsableRemaining(@Param("memberId") Long memberId, @Param("today") LocalDate today);
+
+    // 쓸 수 있는 잔량을 만료일별로 합친다. 가장 이른 날짜 한 줄만 쓰도록 호출자가 개수를 제한한다
+    @Query("SELECT e.expiresOn AS expiresOn, SUM(e.remainingAmount) AS amount FROM PointEarning e "
+        + "WHERE e.memberId = :memberId "
+        + "AND e.status = com.recipick.domain.payment.entity.enums.PointEarningStatus.COMPLETED "
+        + "AND e.remainingAmount > 0 AND e.expiresOn >= :today "
+        + "GROUP BY e.expiresOn ORDER BY e.expiresOn ASC")
+    List<PointExpirySummary> findUsableExpiries(@Param("memberId") Long memberId, @Param("today") LocalDate today,
+                                                Pageable limit);
+
+    // 정렬은 호출자가 넘긴 Pageable로 정한다
+    Page<PointEarning> findByMemberId(Long memberId, Pageable pageable);
 
     // 복원할 사용 내역이 가리키는 적립 건들
     @Lock(LockModeType.PESSIMISTIC_WRITE)

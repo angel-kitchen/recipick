@@ -23,7 +23,10 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(name = "point_earning",
-       indexes = @Index(name = "idx_point_earning_member_id_status", columnList = "member_id, status")
+    indexes = {
+        @Index(name = "idx_point_earning_member_id_status", columnList = "member_id, status"),
+        @Index(name = "idx_point_earning_status_member_expires", columnList = "status, member_id, expires_on")
+    }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PointEarning extends BaseTimeEntity {

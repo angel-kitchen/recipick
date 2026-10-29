@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -204,6 +205,17 @@ public class PointCommandService {
         }
     }
 
+    // 만료 배치가 회원 한 명씩 부른다. 바깥 트랜잭션 없이 불려 회원마다 새 트랜잭션을 연다 — 한 회원이 실패해도
+    // 다른 회원의 소멸은 그대로 커밋된다. 잠금 순서와 소멸 규칙은 포인트 사용 직전의 지연 만료와 같은 코드를 쓴다.
+    // 여러 서버가 같은 회원을 동시에 처리해도 늦게 온 쪽은 MEMBER_POINT에서 기다린 뒤 대상이 없어 0을 돌려준다
+    @Transactional
+    public long expireMember(Long memberId, LocalDate today) {
+        requireId(memberId, "회원 ID");
+        Objects.requireNonNull(today, "기준 날짜는 필수입니다.");
+        MemberPoint memberPoint = lockMemberPoint(memberId, LocalDateTime.now(clock));
+        return expireStaleLots(memberPoint, memberId, today);
+    }
+
     // 적립 건이 없는 주문은 포인트가 없던 1차 주문이라 할 일이 없다(정상 경로라 로그를 남기지 않는다).
     // 적립 건 엔티티를 잠금 전에 읽어 두면 잠금 뒤에도 예전 값을 보게 되므로 회원 ID 값만 꺼낸다
     private Optional<Long> findPointMemberId(Long orderId) {
@@ -251,20 +263,24 @@ public class PointCommandService {
             .orElseThrow(() -> new IllegalStateException("회원 포인트 행을 보장한 뒤에도 찾을 수 없습니다. memberId=" + memberId));
     }
 
-    // 지연 만료. 만료 배치가 아직 처리하지 않은 적립 건도 포인트를 쓰기 전에 먼저 소멸시켜 만료 포인트를 쓰지 못하게 한다
-    private void expireStaleLots(MemberPoint memberPoint, Long memberId, LocalDate today) {
+    // 지연 만료. 만료 배치가 아직 처리하지 않은 적립 건도 포인트를 쓰기 전에 먼저 소멸시켜 만료 포인트를 쓰지 못하게 한다.
+    // 만료 배치도 이 메서드를 그대로 써서 소멸 규칙이 한 곳에만 있게 한다. 돌려주는 값은 이번에 소멸한 합계다
+    private long expireStaleLots(MemberPoint memberPoint, Long memberId, LocalDate today) {
+        long expired = 0L;
         for (PointEarning lot : pointEarningRepository.findExpiredForUpdate(memberId, today)) {
-            expireLot(memberPoint, lot);
+            expired += expireLot(memberPoint, lot);
         }
+        return expired;
     }
 
     // 주문과 상관없는 소멸이라 이력에 주문을 남기지 않는다. 이미 만료됐거나 남은 잔량이 없으면 아무것도 하지 않는다
-    private void expireLot(MemberPoint memberPoint, PointEarning lot) {
+    private long expireLot(MemberPoint memberPoint, PointEarning lot) {
         long expired = lot.expire();
         if (expired > 0) {
             memberPoint.decrease(expired);
             pointHistoryRepository.save(PointHistory.expired(lot, null, expired));
         }
+        return expired;
     }
 
     private Map<Long, PointEarning> lockSources(List<PointUsage> usages) {
