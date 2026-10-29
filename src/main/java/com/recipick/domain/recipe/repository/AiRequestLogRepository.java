@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 public interface AiRequestLogRepository extends JpaRepository<AiRequestLog, Long> {
 
     @Modifying
-    @Query("UPDATE AiRequestLog  1 SET 1.autoCartRequest = null WHERE 1.autoCartRequest.id IN "
-        + "(SELECT r.id FROM AutoCartRequest r WHERE r.status = :status AND r.createdAt < : before)")
+    @Query("UPDATE AiRequestLog l SET l.autoCartRequest = null WHERE l.autoCartRequest.id IN "
+        + "(SELECT r.id FROM AutoCartRequest r WHERE r.status = :status AND r.createdAt < :before)")
     int clearAutoCartRequest(@Param("status")AutoCartStatus status, @Param("before") LocalDateTime before);
 }
