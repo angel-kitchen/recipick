@@ -6,7 +6,14 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.recipe.exception.AiErrorCode;
 import com.recipick.global.exception.BusinessException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,5 +60,45 @@ class AiRequestLimiterTest extends IntegrationTestSupport {
         // then
         Long ttlMillis = redisTemplate.getExpire(KEY, TimeUnit.MILLISECONDS);
         assertThat(ttlMillis).isBetween(1L, 60_000L);
+    }
+
+    @Test
+    @DisplayName("같은 회원이 10건을 동시에 요청해도 5건만 통과하고 나머지는 AI-001로 거절한다")
+    void acquire_concurrent() throws Exception {
+        // given
+        int threads = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger passed = new AtomicInteger();
+        AtomicInteger rejected = new AtomicInteger();
+
+        // when
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    aiRequestLimiter.acquire(MEMBER_ID);
+                    passed.incrementAndGet();
+                } catch (BusinessException e) {
+                    if (e.getErrorCode() == AiErrorCode.AI_REQUEST_LIMIT_EXCEEDED) {
+                        rejected.incrementAndGet();
+                    }
+                }
+                return null;
+            }));
+        }
+        ready.await();
+        start.countDown();
+        for (Future<?> future : futures) {
+            future.get(10, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        // then
+        assertThat(passed.get()).isEqualTo(5);
+        assertThat(rejected.get()).isEqualTo(threads - 5);
     }
 }
