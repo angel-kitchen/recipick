@@ -14,6 +14,7 @@ import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.service.PaymentExpirationOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import java.time.Clock;
 import java.time.Instant;
@@ -48,15 +49,19 @@ class PaymentExpirationProcessorTest {
     @Mock
     private OrderFacade orderFacade;
 
+    @Mock
+    private PointCommandService pointCommandService;
+
     private PaymentExpirationProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new PaymentExpirationProcessor(paymentService, orderFacade, Clock.fixed(NOW_INSTANT, SEOUL));
+        processor = new PaymentExpirationProcessor(
+            paymentService, orderFacade, pointCommandService, Clock.fixed(NOW_INSTANT, SEOUL));
     }
 
     @Test
-    @DisplayName("만료 시각이 지난 IN_PROGRESS 결제는 FAILED(EXPIRED)로 닫고 주문 종료 뒤 재고를 복구한다")
+    @DisplayName("만료 시각이 지난 IN_PROGRESS 결제는 FAILED(EXPIRED)로 닫고 주문 종료 → 포인트 복원 → 재고 복구 순으로 부른다")
     void expireInProgressPayment() {
         // given
         Payment payment = payment(PaymentStatus.IN_PROGRESS, NOW.minusMinutes(1));
@@ -72,9 +77,10 @@ class PaymentExpirationProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.EXPIRED);
         assertThat(payment.getPortoneTransactionId()).isNull();
-        InOrder inOrder = inOrder(paymentService, orderFacade);
+        InOrder inOrder = inOrder(paymentService, orderFacade, pointCommandService);
         inOrder.verify(paymentService).getByIdForUpdate(PAYMENT_ID);
         inOrder.verify(orderFacade).closeByPaymentFailure(ORDER_ID, CancelReasonCode.PAYMENT_TIMEOUT, "결제 대기 5분 만료");
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
     }
 
@@ -113,7 +119,7 @@ class PaymentExpirationProcessorTest {
     }
 
     @Test
-    @DisplayName("아직 만료 시각 전이면 SKIPPED — 결제·주문·재고를 바꾸지 않는다")
+    @DisplayName("아직 만료 시각 전이면 SKIPPED — 결제·주문·포인트·재고를 바꾸지 않는다")
     void skipBeforeExpiresAt() {
         // given
         Payment payment = payment(PaymentStatus.IN_PROGRESS, NOW.plusSeconds(1));
@@ -125,7 +131,7 @@ class PaymentExpirationProcessorTest {
         // then
         assertThat(outcome).isEqualTo(PaymentExpirationOutcome.SKIPPED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -142,7 +148,7 @@ class PaymentExpirationProcessorTest {
         // then
         assertThat(outcome).isEqualTo(PaymentExpirationOutcome.SKIPPED);
         assertThat(payment.getStatus()).isEqualTo(status);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     private Payment payment(PaymentStatus status, LocalDateTime expiresAt) {

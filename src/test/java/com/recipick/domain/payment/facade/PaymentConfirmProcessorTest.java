@@ -18,6 +18,7 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.payment.service.PaymentVerifier;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
@@ -53,11 +54,14 @@ class PaymentConfirmProcessorTest {
     @Mock
     private OrderFacade orderFacade;
 
+    @Mock
+    private PointCommandService pointCommandService;
+
     @InjectMocks
     private PaymentConfirmProcessor processor;
 
     @Test
-    @DisplayName("APPROVED면 결제를 PAID로 바꾸고 주문 markPaid를 PG 결제 시각으로 부른다")
+    @DisplayName("APPROVED면 결제를 PAID로 바꾸고 주문 markPaid를 PG 결제 시각으로 부른 뒤 포인트 사용을 확정한다")
     void approved() {
         // given
         Payment payment = inProgressPayment();
@@ -73,13 +77,16 @@ class PaymentConfirmProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPortoneTransactionId()).isEqualTo("tx_1");
         assertThat(payment.getPaidAt()).isEqualTo(PAID_AT);
-        verify(orderService).markPaid(ORDER_ID, PAID_AT);
+        InOrder inOrder = inOrder(orderService, pointCommandService);
+        inOrder.verify(orderService).markPaid(ORDER_ID, PAID_AT);
+        inOrder.verify(pointCommandService).confirmUsage(ORDER_ID);
+        verify(pointCommandService, never()).restoreUsageAndCancelEarning(any());
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
         verifyNoInteractions(orderFacade);
     }
 
     @Test
-    @DisplayName("PG_FAILED면 결제를 FAILED(PG_FAILED)로 바꾸고 환불 없이 주문 종료 → 재고 복구 순으로 부른다")
+    @DisplayName("PG_FAILED면 결제를 FAILED(PG_FAILED)로 바꾸고 환불 없이 주문 종료 → 포인트 복원 → 재고 복구 순으로 부른다")
     void pgFailed() {
         // given
         Payment payment = inProgressPayment();
@@ -97,15 +104,16 @@ class PaymentConfirmProcessorTest {
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.PG_FAILED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.PG_FAILED);
-        InOrder inOrder = inOrder(orderFacade);
+        InOrder inOrder = inOrder(orderFacade, pointCommandService);
         inOrder.verify(orderFacade).closeByPaymentFailure(ORDER_ID, CancelReasonCode.PAYMENT_FAILED, "card declined | E001");
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
         verify(orderService, never()).markPaid(any(), any());
     }
 
     @Test
-    @DisplayName("AMOUNT_MISMATCH면 FAILED(AMOUNT_MISMATCH) → PG 청구액으로 SYSTEM 환불 → 주문 종료 → 재고 복구")
+    @DisplayName("AMOUNT_MISMATCH면 FAILED(AMOUNT_MISMATCH) → PG 청구액으로 SYSTEM 환불 → 주문 종료 → 포인트 복원 → 재고 복구")
     void amountMismatch() {
         // given
         Payment payment = inProgressPayment();
@@ -123,15 +131,16 @@ class PaymentConfirmProcessorTest {
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.AMOUNT_MISMATCH);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.AMOUNT_MISMATCH);
-        InOrder inOrder = inOrder(paymentService, orderFacade);
+        InOrder inOrder = inOrder(paymentService, orderFacade, pointCommandService);
         inOrder.verify(paymentService).requestSystemRefund(payment, 20000L, detail);
         inOrder.verify(orderFacade).closeByPaymentFailure(ORDER_ID, CancelReasonCode.AMOUNT_MISMATCH, detail);
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(orderService, never()).markPaid(any(), any());
     }
 
     @Test
-    @DisplayName("EXPIRED면 FAILED(EXPIRED) → SYSTEM 환불 → 주문 종료(PAYMENT_TIMEOUT) → 재고 복구")
+    @DisplayName("EXPIRED면 FAILED(EXPIRED) → SYSTEM 환불 → 주문 종료(PAYMENT_TIMEOUT) → 포인트 복원 → 재고 복구")
     void expired() {
         // given
         Payment payment = inProgressPayment();
@@ -148,15 +157,16 @@ class PaymentConfirmProcessorTest {
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.EXPIRED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.EXPIRED);
-        InOrder inOrder = inOrder(paymentService, orderFacade);
+        InOrder inOrder = inOrder(paymentService, orderFacade, pointCommandService);
         inOrder.verify(paymentService).requestSystemRefund(payment, 23800L, "결제 대기 5분 만료");
         inOrder.verify(orderFacade).closeByPaymentFailure(ORDER_ID, CancelReasonCode.PAYMENT_TIMEOUT, "결제 대기 5분 만료");
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(orderService, never()).markPaid(any(), any());
     }
 
     @Test
-    @DisplayName("만료 뒤 늦은 승인(FAILED + PG PAID)은 SYSTEM 환불만 만들고 결제·주문·재고는 건드리지 않는다")
+    @DisplayName("만료 뒤 늦은 승인(FAILED + PG PAID)은 SYSTEM 환불만 만들고 결제·주문·포인트·재고는 건드리지 않는다")
     void lateApprovalAfterClosed() {
         // given
         Payment payment = payment(PaymentStatus.FAILED);
@@ -171,7 +181,7 @@ class PaymentConfirmProcessorTest {
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ALREADY_CLOSED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         verify(paymentService).requestSystemRefund(payment, 23800L, "종료된 결제의 늦은 승인");
-        verifyNoInteractions(orderService, orderFacade);
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
     @Test
@@ -189,7 +199,7 @@ class PaymentConfirmProcessorTest {
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ALREADY_CLOSED);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
-        verifyNoInteractions(orderService, orderFacade);
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
     @Test
@@ -208,7 +218,7 @@ class PaymentConfirmProcessorTest {
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ALREADY_CLOSED);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
-        verifyNoInteractions(orderService, orderFacade);
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
     @Test
@@ -226,7 +236,7 @@ class PaymentConfirmProcessorTest {
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ALREADY_CLOSED);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
-        verifyNoInteractions(orderService, orderFacade);
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -247,7 +257,7 @@ class PaymentConfirmProcessorTest {
         assertThat(outcome).isEqualTo(given);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
-        verifyNoInteractions(orderService, orderFacade);
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
     private Payment inProgressPayment() {

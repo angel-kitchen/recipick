@@ -29,6 +29,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.MartRejectionOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.audit.AdminAuditAction;
 import com.recipick.global.audit.AdminAuditCommand;
@@ -86,13 +87,16 @@ class MartRejectionProcessorTest {
     private OrderFacade orderFacade;
 
     @Mock
+    private PointCommandService pointCommandService;
+
+    @Mock
     private AdminAuditRecorder adminAuditRecorder;
 
     @InjectMocks
     private MartRejectionProcessor processor;
 
     @Test
-    @DisplayName("SUCCEEDED면 결제 CANCELED·환불 COMPLETED로 바꾼 뒤 기존 환불 완료 경로로 주문을 닫고 재고를 복구한다")
+    @DisplayName("SUCCEEDED면 결제 CANCELED·환불 COMPLETED로 바꾼 뒤 기존 환불 완료 경로로 주문을 닫고 포인트 복원 → 재고 복구 순으로 부른다")
     void completeWhenSucceeded() {
         // given
         Payment payment = cancelRequestedPayment();
@@ -117,8 +121,9 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
         assertThat(refund.getCompletedAt()).isEqualTo(CANCELED_AT);
-        InOrder order = inOrder(orderFacade);
+        InOrder order = inOrder(orderFacade, pointCommandService);
         order.verify(orderFacade).markRefunded(ORDER_ID);
+        order.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         order.verify(orderFacade).restoreStock(items);
         // 응답은 같은 트랜잭션·같은 시점의 결제·환불로 만든다
         assertThat(result.response().orderId()).isEqualTo(ORDER_ID);
@@ -147,7 +152,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -167,7 +172,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -188,7 +193,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(refund.getFailureType()).isEqualTo(RefundFailureType.PG_FAILED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -209,7 +214,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(refund.getFailureType()).isEqualTo(RefundFailureType.REQUEST_REJECTED);
         assertThat(refund.getPortoneCancellationId()).isNull();
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -230,7 +235,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isNull();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -251,7 +256,7 @@ class MartRejectionProcessorTest {
         assertThat(result.outcome()).isEqualTo(MartRejectionOutcome.COMPLETED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -271,7 +276,7 @@ class MartRejectionProcessorTest {
         // then
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -294,7 +299,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(refund.getFailureType()).isEqualTo(failureType);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -317,7 +322,7 @@ class MartRejectionProcessorTest {
         assertThat(result.outcome()).isEqualTo(expectedOutcome(failureType));
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -335,7 +340,7 @@ class MartRejectionProcessorTest {
 
         // then
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -355,7 +360,7 @@ class MartRejectionProcessorTest {
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -374,7 +379,7 @@ class MartRejectionProcessorTest {
         // then
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -395,7 +400,7 @@ class MartRejectionProcessorTest {
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -416,7 +421,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getPortoneCancellationId()).isEqualTo("cancel_previous");
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -439,7 +444,7 @@ class MartRejectionProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isNull();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
 
@@ -497,7 +502,7 @@ class MartRejectionProcessorTest {
         order.verify(paymentService).requestAdminRefund(payment, REASON, IDEMPOTENCY_KEY);
         order.verify(adminAuditRecorder).record(any(AdminAuditCommand.class));
         // 재고는 접수 때 복구하지 않는다
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test

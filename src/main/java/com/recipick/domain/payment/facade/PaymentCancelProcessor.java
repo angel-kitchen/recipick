@@ -17,6 +17,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
@@ -33,7 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 // 결제 취소의 상태 변경 트랜잭션. 결제 후 취소는 PortOne 호출을 사이에 두고 TX1(prepare)·TX2(apply)로 나뉜다.
 // 두 메서드 모두 PAYMENT 잠금으로 시작하고, 업무 결과는 예외가 아니라 반환값으로 돌려준다 — 안에서 던지면 롤백돼 버린다.
-// 잠금 순서 PAYMENT → ORDERS → (2차: MEMBER_POINT → POINT_EARNING) → 재고.
+// 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고. 결제 후 취소의 포인트는 TX1(접수)에서 건드리지 않고
+// PG 환불이 성공한 TX2에서만 되돌린다 — 먼저 돌려주면 환불이 실패해 결제가 PAID로 돌아와도 포인트만 돌아간 채 남는다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -46,6 +48,7 @@ public class PaymentCancelProcessor {
     private final PaymentService paymentService;
     private final OrderService orderService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
     private final Clock clock;
 
     // TX1. 취소를 접수한다. 결제 전 취소는 여기서 끝나고, 결제 후 취소는 CANCEL_REQUESTED·REFUND REQUESTED를 커밋한 뒤
@@ -124,9 +127,9 @@ public class PaymentCancelProcessor {
 
     private PaymentCancelPreparation cancelBeforePay(Payment payment, String reason) {
         payment.fail(PaymentFailureReason.CANCELED_BEFORE_PAY, null);
-        // 주문 종료와 재고 복구 사이가 2차 포인트 복구 자리다
         List<StockQuantity> items =
             orderFacade.closeByPaymentFailure(payment.getOrderId(), CancelReasonCode.MEMBER_CANCELED, reason);
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         return finishedBeforePay(payment);
     }
@@ -178,8 +181,8 @@ public class PaymentCancelProcessor {
     private PaymentCancelResult complete(Payment payment, Refund refund, PortOneCancelResult result) {
         payment.markCanceled(result.canceledAt());
         refund.complete(result.cancellationId(), result.canceledAt());
-        // 환불 완료와 재고 복구 사이가 2차 포인트 복구 자리다
         List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         return afterPay(PaymentCancelOutcome.CANCELED, payment, refund);
     }

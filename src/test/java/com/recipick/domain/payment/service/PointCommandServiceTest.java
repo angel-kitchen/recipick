@@ -454,6 +454,66 @@ class PointCommandServiceTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("외부 취소에서 적립 예정 주문은 포인트를 되돌리고 RESTORED이며, 다시 불러도 이미 안전한 상태라 RESTORED만 돌려준다")
+    void externalCancelRestoresPendingOrder() {
+        // given
+        holdPoints(lot(1L, 500L, LocalDate.of(2026, 12, 31)));
+        placeOrder(10_000L, 300L);
+        pointCommandService.confirmUsage(ORDER_ID);
+
+        // when
+        PointRestoreOutcome first = pointCommandService.restoreForExternalCancel(ORDER_ID);
+        PointRestoreOutcome second = pointCommandService.restoreForExternalCancel(ORDER_ID);
+        flushAndClear();
+
+        // then
+        assertThat(first).isEqualTo(PointRestoreOutcome.RESTORED);
+        assertThat(second).isEqualTo(PointRestoreOutcome.RESTORED);
+        assertThat(balance()).isEqualTo(500L);
+        assertThat(usages()).singleElement()
+            .satisfies(usage -> assertThat(usage.getStatus()).isEqualTo(PointUsageStatus.RESTORED));
+        assertThat(orderEarning().getStatus()).isEqualTo(PointEarningStatus.CANCELED);
+        assertThat(histories(PointHistoryType.RESTORED)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("외부 취소에서 적립이 확정된 주문은 예외 없이 아무것도 되돌리지 않고 FINALIZED_EARNING_KEPT를 돌려준다")
+    void externalCancelKeepsFinalizedEarning() {
+        // given
+        holdPoints(lot(1L, 500L, LocalDate.of(2026, 12, 31)));
+        placeOrder(10_000L, 300L);
+        pointCommandService.confirmUsage(ORDER_ID);
+        pointCommandService.confirmEarning(ORDER_ID);
+        flushAndClear();
+        long balanceBefore = balance();
+
+        // when
+        PointRestoreOutcome outcome = pointCommandService.restoreForExternalCancel(ORDER_ID);
+        flushAndClear();
+
+        // then
+        assertThat(outcome).isEqualTo(PointRestoreOutcome.FINALIZED_EARNING_KEPT);
+        assertThat(balance()).isEqualTo(balanceBefore);
+        assertThat(usages()).singleElement()
+            .satisfies(usage -> assertThat(usage.getStatus()).isEqualTo(PointUsageStatus.CONFIRMED));
+        assertThat(orderEarning().getStatus()).isEqualTo(PointEarningStatus.COMPLETED);
+        assertThat(histories(PointHistoryType.RESTORED)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("외부 취소에서 적립 건이 없는 1차 주문은 NO_POINT이고 회원 포인트 행도 만들지 않는다")
+    void externalCancelWithoutEarningIsNoPoint() {
+        // when
+        PointRestoreOutcome outcome = pointCommandService.restoreForExternalCancel(ORDER_ID);
+        flushAndClear();
+
+        // then
+        assertThat(outcome).isEqualTo(PointRestoreOutcome.NO_POINT);
+        assertThat(memberPointRepository.findByMemberIdForUpdate(MEMBER_ID)).isEmpty();
+        assertThat(histories()).isEmpty();
+    }
+
+    @Test
     @DisplayName("주문이 끝나면 그 주문의 적립 예정을 CANCELED로 바꾸고 이력을 남긴다")
     void cancelPendingEarning() {
         // given — (10,000 − 300) × 0.005 = 48.5 → 48

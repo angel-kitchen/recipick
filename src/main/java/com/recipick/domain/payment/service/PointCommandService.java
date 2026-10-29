@@ -30,9 +30,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 포인트 자산 변경 명령. MEMBER_POINT는 회원 포인트 변경의 직렬화 지점, POINT_EARNING은 실제 자산 lot,
-// POINT_USAGE는 어느 lot의 포인트를 어느 주문이 가져갔는지 남기는 연결 원장이라 잔액만 바꾸지 않고 셋과 이력을 함께 움직인다.
-// 포인트만 따로 커밋되면 주문·결제 상태와 어긋나므로 모든 명령은 호출한 주문·결제 트랜잭션 안에서만 실행한다(MANDATORY)
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -73,7 +70,7 @@ public class PointCommandService {
 
         List<PointEarning> usable = new ArrayList<>(pointEarningRepository.findUsableForUpdate(memberId, today));
         long usableTotal = usable.stream().mapToLong(PointEarning::getRemainingAmount).sum();
-
+        // 잔액은 적립 건 잔량 합을 미리 더해 둔 값이다. 지연 만료까지 끝낸 뒤에도 다르면 어딘가에서 한쪽만 바뀐 것이다
         if (memberPoint.getBalance() != usableTotal) {
             throw new IllegalStateException("포인트 잔액과 사용 가능 적립 건 합계가 다릅니다. memberId=" + memberId
                 + ", balance=" + memberPoint.getBalance() + ", usableTotal=" + usableTotal);
@@ -94,6 +91,7 @@ public class PointCommandService {
             pointHistoryRepository.save(PointHistory.useReserved(usage));
             left -= amount;
         }
+        // 앞에서 합계를 확인했으니 남을 수 없다. 남았다면 적립 건에서 뺀 금액과 잔액에서 뺄 금액이 달라지므로 차감 전에 막는다
         if (left != 0) {
             throw new IllegalStateException("적립 건에 나눠 쓴 뒤에도 사용 금액이 남았습니다. memberId=" + memberId
                 + ", orderId=" + orderId + ", remaining=" + left);
@@ -117,6 +115,7 @@ public class PointCommandService {
         if (pointRate == null || pointRate.signum() < 0) {
             throw new IllegalArgumentException("적립률은 0 이상이어야 합니다: " + pointRate);
         }
+        // 배송비는 적립 대상이 아니고 원 미만은 버린다
         long amount = BigDecimal.valueOf(productAmount - usedPoint)
             .multiply(pointRate)
             .setScale(0, RoundingMode.DOWN)
@@ -153,39 +152,37 @@ public class PointCommandService {
     }
 
     // 주문이 끝났을 때(결제 실패·만료·결제 전 취소, 환불 성공) 사용한 포인트를 원래 적립 건으로 되돌리고 적립 예정을 취소한다.
-    // 적립 건을 두 번(이 주문의 적립 건 → 사용한 적립 건들) 나눠 잠그지만, 같은 회원의 포인트 변경은 먼저 잡은 MEMBER_POINT에서
-    // 줄을 서고 이 주문의 적립 건(PENDING)과 사용한 적립 건(COMPLETED·EXPIRED)은 겹치지 않아 교착이 생기지 않는다
+    // 배송완료로 적립이 확정된 주문은 거래가 끝난 것이라 사용 포인트도 적립도 자동으로 되돌리지 않는다(회수 없음).
+    // 이 경로에서 적립 확정 주문을 만나면 호출 순서가 어긋난 것이라 예외로 막는다
     @Transactional(propagation = Propagation.MANDATORY)
     public void restoreUsageAndCancelEarning(Long orderId) {
         requireId(orderId, "주문 ID");
-        Optional<Long> memberId = findPointMemberId(orderId);
-        if (memberId.isEmpty()) {
+        Optional<RestoreTarget> target = lockRestoreTarget(orderId);
+        if (target.isEmpty()) {
             return;
         }
-
-        LocalDateTime now = LocalDateTime.now(clock);
-        LocalDate today = now.toLocalDate();
-        MemberPoint memberPoint = lockMemberPoint(memberId.get(), now);
-        PointEarning orderEarning = pointEarningRepository.findByOrderIdForUpdate(orderId)
-            .orElseThrow(() -> new IllegalStateException("주문의 적립 건을 찾을 수 없습니다. orderId=" + orderId));
-        // 배송완료로 적립이 확정된 주문은 거래가 끝난 것이라 사용 포인트도 적립도 자동으로 되돌리지 않는다(회수 없음)
-        if (orderEarning.getStatus() == PointEarningStatus.COMPLETED
-            || orderEarning.getStatus() == PointEarningStatus.EXPIRED) {
+        if (isEarningFinalized(target.get().orderEarning())) {
             throw new IllegalStateException("적립이 확정된 주문의 포인트는 자동으로 되돌리지 않습니다. orderId=" + orderId
-                + ", status=" + orderEarning.getStatus());
+                + ", status=" + target.get().orderEarning().getStatus());
         }
+        restoreAndCancel(target.get());
+    }
 
-        List<PointUsage> usages = pointUsageRepository.findAllByOrderIdForUpdate(orderId);
-        Map<Long, PointEarning> sources = lockSources(usages);
-        for (PointUsage usage : usages) {
-            if (usage.restore()) {
-                restoreOne(memberPoint, usage, sources.get(usage.getPointEarning().getId()), today);
-            }
+    // PortOne 콘솔 외부 취소. PG에서는 이미 돈이 돌아갔으므로 결제·주문 정합화를 롤백시키지 않도록 예외 대신 결과로 답한다.
+    // 적립 상태는 잠근 뒤에 본다 — 앞선 일반 조회의 스냅숏으로 판단하면 그사이 커밋된 배송완료를 놓쳐 복원 중 예외가 나고
+    // 외부 취소 전체가 롤백된다. CANCELED는 이미 복원·취소가 끝난 안전한 상태라 아무것도 바꾸지 않고 RESTORED로 답한다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PointRestoreOutcome restoreForExternalCancel(Long orderId) {
+        requireId(orderId, "주문 ID");
+        Optional<RestoreTarget> target = lockRestoreTarget(orderId);
+        if (target.isEmpty()) {
+            return PointRestoreOutcome.NO_POINT;
         }
-
-        if (orderEarning.cancel() && orderEarning.getAmount() > 0) {
-            pointHistoryRepository.save(PointHistory.earnCanceled(orderEarning));
+        if (isEarningFinalized(target.get().orderEarning())) {
+            return PointRestoreOutcome.FINALIZED_EARNING_KEPT;
         }
+        restoreAndCancel(target.get());
+        return PointRestoreOutcome.RESTORED;
     }
 
     // 배송완료. 적립 예정이 사용 가능한 포인트가 되고 이때부터 1년 뒤가 만료일이다
@@ -211,6 +208,40 @@ public class PointCommandService {
     // 적립 건 엔티티를 잠금 전에 읽어 두면 잠금 뒤에도 예전 값을 보게 되므로 회원 ID 값만 꺼낸다
     private Optional<Long> findPointMemberId(Long orderId) {
         return pointEarningRepository.findMemberIdByOrderId(orderId);
+    }
+
+    // 복원 대상을 잠근다. 적립 건이 없는 주문(1차 주문)이면 비어 있다
+    private Optional<RestoreTarget> lockRestoreTarget(Long orderId) {
+        Optional<Long> memberId = findPointMemberId(orderId);
+        if (memberId.isEmpty()) {
+            return Optional.empty();
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        MemberPoint memberPoint = lockMemberPoint(memberId.get(), now);
+        PointEarning orderEarning = pointEarningRepository.findByOrderIdForUpdate(orderId)
+            .orElseThrow(() -> new IllegalStateException("주문의 적립 건을 찾을 수 없습니다. orderId=" + orderId));
+        return Optional.of(new RestoreTarget(memberPoint, orderEarning, now.toLocalDate()));
+    }
+
+    // 적립 건을 두 번(이 주문의 적립 건 → 사용한 적립 건들) 나눠 잠그지만, 같은 회원의 포인트 변경은 먼저 잡은 MEMBER_POINT에서
+    // 줄을 서고 이 주문의 적립 건(PENDING)과 사용한 적립 건(COMPLETED·EXPIRED)은 겹치지 않아 교착이 생기지 않는다
+    private void restoreAndCancel(RestoreTarget target) {
+        PointEarning orderEarning = target.orderEarning();
+        List<PointUsage> usages = pointUsageRepository.findAllByOrderIdForUpdate(orderEarning.getOrderId());
+        Map<Long, PointEarning> sources = lockSources(usages);
+        for (PointUsage usage : usages) {
+            if (usage.restore()) {
+                restoreOne(target.memberPoint(), usage, sources.get(usage.getPointEarning().getId()), target.today());
+            }
+        }
+        if (orderEarning.cancel() && orderEarning.getAmount() > 0) {
+            pointHistoryRepository.save(PointHistory.earnCanceled(orderEarning));
+        }
+    }
+
+    private static boolean isEarningFinalized(PointEarning earning) {
+        return earning.getStatus() == PointEarningStatus.COMPLETED
+            || earning.getStatus() == PointEarningStatus.EXPIRED;
     }
 
     // 회원 포인트 변경의 첫 잠금. 처음 포인트를 다루는 회원은 잠글 행이 없어 먼저 행을 보장한다
@@ -295,5 +326,8 @@ public class PointCommandService {
         if (id == null) {
             throw new IllegalArgumentException(name + "는 필수입니다.");
         }
+    }
+
+    private record RestoreTarget(MemberPoint memberPoint, PointEarning orderEarning, LocalDate today) {
     }
 }

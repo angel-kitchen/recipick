@@ -6,6 +6,8 @@ import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
+import com.recipick.domain.payment.service.PointRestoreOutcome;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.infra.portone.dto.PortOneCancellation;
 import com.recipick.infra.portone.dto.PortOneCancellationStatus;
@@ -20,7 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-// PortOne 콘솔·관리자 화면에서 끝난 전액 취소를 결제·환불·주문·재고에 반영한다. 외부 취소로 상태를 바꾸는 곳은 여기뿐이다.
+// PortOne 콘솔·관리자 화면에서 끝난 전액 취소를 결제·환불·주문·포인트·재고에 반영한다. 외부 취소로 상태를 바꾸는 곳은 여기뿐이다.
 // PortOne 조회와 외부 취소 판정(RefundCancellationRules.matchExternalFullCancellation)은 호출한 쪽이 트랜잭션 밖에서 끝낸 뒤 부른다.
 // 기존 회원·SYSTEM·마트 거절 환불로 마무리돼야 하는 취소는 새 EXTERNAL 환불을 만들지 않고 RETRY·NOT_APPLICABLE로 돌려준다.
 // 마트 거절 환불이 실패로 끝난 뒤의 콘솔 전액 취소는 예외다 — 1차에는 재처리 API가 없어 운영자가 콘솔에서 돌려주고 여기서 거절 주문을 닫는다.
@@ -32,9 +34,11 @@ public class ExternalCancellationProcessor {
 
     private final PaymentService paymentService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
 
-    // 락 순서 PAYMENT → ORDERS → 재고. 회원 취소·결제 확정·만료·SYSTEM 환불과 같은 PAYMENT 잠금을 잡으므로 먼저 잡은 쪽만 상태를 바꾼다.
-    // 결제 CANCELED·EXTERNAL 환불·주문 REFUNDED·재고 복구는 한 트랜잭션이다. 하나라도 실패하면 모두 롤백된다
+    // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고. 회원 취소·결제 확정·만료·SYSTEM 환불과 같은
+    // PAYMENT 잠금을 잡으므로 먼저 잡은 쪽만 상태를 바꾼다. 결제 CANCELED·EXTERNAL 환불·주문 REFUNDED·포인트·재고 복구는
+    // 한 트랜잭션이다. 하나라도 실패하면 모두 롤백된다
     @Transactional
     public ExternalCancellationResult apply(Long paymentId, PortOneCancellation cancellation) {
         Payment payment = paymentService.getByIdForUpdate(paymentId);
@@ -87,6 +91,7 @@ public class ExternalCancellationProcessor {
             // 마트 거절 뒤 PG 취소가 실패해 결제만 PAID로 돌아간 주문이다. 주문은 이미 CANCEL_REQUESTED·마트 REJECTED라
             // 외부 취소 종료(PAID → REFUNDED)가 아니라 환불 완료 경로로 닫는다. 실패한 마트 거절 환불은 시도 이력으로 그대로 남긴다
             List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+            reconcilePoint(payment);
             orderFacade.restoreStock(items);
             log.info("실패한 마트 거절 뒤 PortOne 외부 전액 취소로 거절 주문 종료: paymentId={}, orderId={}, failedRefundId={}, "
                     + "cancellationId={}",
@@ -95,10 +100,21 @@ public class ExternalCancellationProcessor {
         }
         // 배송이 시작된 주문이면 빈 목록이 와서 재고를 건드리지 않는다. 실물은 관리자가 재고 조정으로 맞춘다
         List<StockQuantity> items = orderFacade.closeByExternalCancel(payment.getOrderId(), reason);
+        reconcilePoint(payment);
         orderFacade.restoreStock(items);
         log.info("PortOne 외부 전액 취소 반영: paymentId={}, orderId={}, cancellationId={}, trigger={}",
             paymentId, payment.getOrderId(), cancellation.id(), cancellation.trigger());
         return ExternalCancellationResult.reconciled();
+    }
+
+    // PG에서 이미 끝난 취소라 포인트 때문에 결제·주문 정합화를 롤백하지 않는다. 적립 상태 판정은 포인트 쪽이 잠근 뒤에 한다.
+    // 배송완료로 적립이 확정된 주문은 사용 포인트도 적립도 자동으로 회수하지 않고, 운영이 확인하도록 ERROR로 남긴다
+    private void reconcilePoint(Payment payment) {
+        PointRestoreOutcome outcome = pointCommandService.restoreForExternalCancel(payment.getOrderId());
+        if (outcome == PointRestoreOutcome.FINALIZED_EARNING_KEPT) {
+            log.error("적립이 확정된 주문의 외부 전액 취소 — 포인트 자동 회수 없음, 운영 확인 필요: paymentId={}, orderId={}",
+                payment.getId(), payment.getOrderId());
+        }
     }
 
     // 판정 규칙을 통과한 완료 외부 취소만 받는다. 아니면 PG에서 확정되지 않은 취소로 돈과 주문을 바꾸게 되므로 호출자 버그로 막는다.

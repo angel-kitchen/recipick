@@ -7,6 +7,7 @@ import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.service.PaymentExpirationOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -28,9 +29,11 @@ public class PaymentExpirationProcessor {
 
     private final PaymentService paymentService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
     private final Clock clock;
 
-    // 락 순서 PAYMENT -> ORDER -> 재고. 확정 API·웹훅과 같은 PAYMENT 잠금을 잡으므로 먼저 잡은 쪽만 상태를 바꾼다
+    // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고. 확정 API·웹훅과 같은 PAYMENT 잠금을 잡으므로
+    // 먼저 잡은 쪽만 상태를 바꾼다
     @Transactional
     public PaymentExpirationOutcome expire(Long paymentId) {
         Payment payment = paymentService.getByIdForUpdate(paymentId);
@@ -52,6 +55,8 @@ public class PaymentExpirationProcessor {
         // 재고를 다시 복구하지 않는다
         List<StockQuantity> items = orderFacade.closeByPaymentFailure(
             payment.getOrderId(), CancelReasonCode.PAYMENT_TIMEOUT, EXPIRED_DETAIL);
+        // 예약했던 포인트를 원래 적립 건으로 되돌리고 적립 예정을 취소한다. 이미 되돌렸으면 아무것도 바꾸지 않는다
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         log.info("결제 5분 만료 처리: paymentId={}, orderId={}", paymentId, payment.getOrderId());
         return PaymentExpirationOutcome.EXPIRED;
