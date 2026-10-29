@@ -28,16 +28,16 @@ import lombok.NoArgsConstructor;
 @Getter
 @Entity
 @Table(
-        name = "orders",
-        uniqueConstraints = @UniqueConstraint(
-                name = Order.IDEMPOTENCY_KEY_CONSTRAINT,
-                columnNames = {"member_id", "idempotency_key"}
-        ),
-        // 목록은 id 내림차순으로 읽는다. 보조 인덱스 끝에 PK가 붙어 정렬까지 인덱스 순서로 해결된다
-        indexes = {
-                @Index(name = "idx_orders_member_id", columnList = "member_id"),
-                @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status")
-        }
+    name = "orders",
+    uniqueConstraints = @UniqueConstraint(
+        name = Order.IDEMPOTENCY_KEY_CONSTRAINT,
+        columnNames = {"member_id", "idempotency_key"}
+    ),
+    // 목록은 id 내림차순으로 읽는다. 보조 인덱스 끝에 PK가 붙어 정렬까지 인덱스 순서로 해결된다
+    indexes = {
+        @Index(name = "idx_orders_member_id", columnList = "member_id"),
+        @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status")
+    }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order extends BaseTimeEntity {
@@ -108,24 +108,24 @@ public class Order extends BaseTimeEntity {
 
     @Builder
     private Order(
-            String orderNumber,
-            Long memberId,
-            Long martId,
-            Long pendingMemberId,
-            String idempotencyKey,
-            String requestHash,
-            OrderStatus status,
-            MartStatus martStatus,
-            Long productAmount,
-            Long deliveryFee,
-            Long usedPoint,
-            Long payAmount,
-            BigDecimal pointRate,
-            String receiverName,
-            String receiverPhone,
-            String address,
-            String detailAddress,
-            Long regionId
+        String orderNumber,
+        Long memberId,
+        Long martId,
+        Long pendingMemberId,
+        String idempotencyKey,
+        String requestHash,
+        OrderStatus status,
+        MartStatus martStatus,
+        Long productAmount,
+        Long deliveryFee,
+        Long usedPoint,
+        Long payAmount,
+        BigDecimal pointRate,
+        String receiverName,
+        String receiverPhone,
+        String address,
+        String detailAddress,
+        Long regionId
     ) {
         this.orderNumber = orderNumber;
         this.memberId = memberId;
@@ -211,6 +211,20 @@ public class Order extends BaseTimeEntity {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
         }
         this.martStatus = MartStatus.PREPARING;
+    }
+
+    // 배송 단계는 정상 결제 주문만 한 단계씩 나아간다. 취소·환불 진행 또는 종료된 주문은 배송 상태를 바꾸지 않는다
+    public void changeDeliveryStatus(MartStatus next) {
+        if (status != OrderStatus.PAID) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        if (next != MartStatus.SHIPPING && next != MartStatus.DELIVERED) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        if (!martStatus.canTransitionTo(next)) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        this.martStatus = next;
     }
 
     // 마트는 접수중인 결제 완료 주문만 거절한다. 준비를 시작했거나 취소가 진행 중인 주문은 거절 대상이 아니다

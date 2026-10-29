@@ -232,6 +232,39 @@ public class OrderService {
         return OrderMartStatusResponse.from(order);
     }
 
+    // 배송완료는 포인트 적립 확정과 한 트랜잭션이어야 해서 OrderDeliveryFacade 안에서만 부른다.
+    // 따로 커밋되면 배송완료인데 적립이 확정되지 않은 주문이 남는다. 주문 행만 잠그고 결제는 잠그지 않는다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OrderMartStatusResponse changeDeliveryStatus(
+        AdminRole role, Long adminMartId, Long adminId, Long orderId, MartStatus target) {
+        Order order = getOrderForUpdate(orderId);
+        // 결제 전 주문은 관리자 조회·수락과 같이 없는 주문으로 답한다
+        if (order.getMartStatus() == MartStatus.NONE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        verifyMartScope(role, adminMartId, order);
+        // 같은 상태 반복 판정보다 먼저 본다. 환불로 끝난 배송완료 주문에 배송완료가 다시 와도 성공으로 숨기지 않는다
+        if (order.getStatus() != OrderStatus.PAID) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        // 배송 API는 배송중·배송완료만 정한다. 배송준비중 주문에 배송준비중 요청이 와도 성공으로 답하지 않는다
+        if (target != MartStatus.SHIPPING && target != MartStatus.DELIVERED) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        // 같은 요청이 반복되면 이력·감사 없이 현재 상태를 돌려준다
+        if (order.getMartStatus() == target) {
+            return OrderMartStatusResponse.from(order);
+        }
+
+        MartStatus fromMartStatus = order.getMartStatus();
+        order.changeDeliveryStatus(target);
+
+        orderStatusHistoryRepository.save(martHistory(order, fromMartStatus.name(), target.name(), adminId));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_DELIVERY_CHANGE, orderId,
+            order.getMartId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(fromMartStatus, target))));
+        return OrderMartStatusResponse.from(order);
+    }
+
     // 실패·취소된 결제도 결제 내역에 보여야 하므로 주문 상태로 거르지 않는다
     public List<Long> findOrderIdsOf(Long memberId) {
         return orderRepository.findIdsByMemberId(memberId);
