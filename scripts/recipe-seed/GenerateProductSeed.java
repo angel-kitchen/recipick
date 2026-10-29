@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,7 +33,13 @@ public class GenerateProductSeed {
     private static final List<String> CATEGORIES = List.of(
             "채소·과일", "육류·가공육", "수산·건어물", "두부·계란·유제품", "쌀·곡물·가루",
             "면·파스타·떡", "빵·가공식품", "장류·소스", "기름·양념·향신료");
-    private static final Map<String, String> RENAMED = Map.of("채소", "채소·과일", "육류", "육류·가공육");
+    // 생성 결과의 순서가 매번 같도록 순서가 유지되는 Map을 쓴다
+    private static final Map<String, String> RENAMED = new LinkedHashMap<>();
+
+    static {
+        RENAMED.put("채소", "채소·과일");
+        RENAMED.put("육류", "육류·가공육");
+    }
     private static final List<String> RETIRED = List.of("양념·소스", "면·가공식품");
 
     private record Ingredient(String name, String unit, String category) {}
@@ -53,6 +60,9 @@ public class GenerateProductSeed {
         }
         List<RecipeIngredient> recipeIngredients = new ArrayList<>();
         for (String[] f : read("recipe-ingredients.csv", 4)) {
+            if (!f[3].equals("T") && !f[3].equals("F")) {
+                throw new IllegalStateException("recipe-ingredients.csv의 required는 T 또는 F여야 합니다: " + f[0] + " " + f[1] + " -> " + f[3]);
+            }
             recipeIngredients.add(new RecipeIngredient(f[0], f[1], f[2], f[3].equals("T")));
         }
         validate(ingredients, products, recipeIngredients);
@@ -105,7 +115,7 @@ public class GenerateProductSeed {
                     .append("       ").append(image).append(", ").append(p.price()).append(", 'SELLING', 100, FALSE, NOW(), NOW()\n")
                     .append("FROM mart m JOIN category c ON c.name = ").append(q(i.category()))
                     .append(" JOIN ingredient i ON i.name = ").append(q(i.name())).append("\n")
-                    .append("WHERE m.name IN (").append(martNames).append(")\n")
+                    .append("WHERE m.id IN (1, 2) AND m.name IN (").append(martNames).append(")\n")
                     .append("  AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = ").append(q(p.name()))
                     .append(" AND p.brand = ").append(q(p.brand())).append(");\n");
         }
@@ -158,6 +168,8 @@ public class GenerateProductSeed {
             if (!i.unit().equals(p.unit())) {
                 throw new IllegalStateException("재료와 상품의 단위가 다릅니다: " + p.name());
             }
+            requirePositive("판매 단위 수량(" + p.name() + ")", p.amount());
+            requirePositive("가격(" + p.name() + ")", p.price());
             if (!productKeys.add(p.name() + "|" + p.brand())) {
                 throw new IllegalStateException("상품(이름+브랜드)이 중복됩니다: " + p.name() + " " + p.brand());
             }
@@ -173,9 +185,20 @@ public class GenerateProductSeed {
             if (!byName.containsKey(r.ingredient())) {
                 throw new IllegalStateException("recipe-ingredients.csv에 없는 재료: " + r.recipe() + " -> " + r.ingredient());
             }
+            requirePositive("1인분 양(" + r.recipe() + " " + r.ingredient() + ")", r.amount());
             if (!recipeIngredientKeys.add(r.recipe() + "|" + r.ingredient())) {
                 throw new IllegalStateException("레시피 재료가 중복됩니다: " + r.recipe() + " " + r.ingredient());
             }
+        }
+    }
+
+    private static void requirePositive(String label, String value) {
+        try {
+            if (new BigDecimal(value).signum() <= 0) {
+                throw new NumberFormatException();
+            }
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException(label + "은(는) 0보다 큰 숫자여야 합니다: " + value);
         }
     }
 
