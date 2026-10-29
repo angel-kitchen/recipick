@@ -202,8 +202,8 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("미시작 이용권은 제외하거나 활성화하지 않고 기존 규칙대로 상태 null을 반환한다")
     void includesFutureMembershipWithoutChangingIt() throws Exception {
-        // given
-        LocalDateTime now = LocalDateTime.now(clock);
+        // given: DB 저장 정밀도에 영향을 받지 않도록 입력 시각을 초 단위로 맞춘다.
+        LocalDateTime now = LocalDateTime.now(clock).withNano(0);
         Membership future = memberships.saveAndFlush(membership(member, MembershipType.PAID, MembershipSource.SUBSCRIBE,
                 now.plusDays(1), now.plusDays(31)));
         // when
