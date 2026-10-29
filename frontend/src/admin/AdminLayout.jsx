@@ -38,7 +38,11 @@ export default function AdminLayout() {
         <div className="admin__me">
           <div>{admin.loginId ?? `관리자 #${admin.adminId}`}</div>
           <div className="field__hint">{ADMIN_ROLE[admin.role] ?? admin.role}</div>
-          {logoutError && <div className="error-text">{logoutError.message}</div>}
+          {logoutError && (
+            <div className="error-text" role="alert">
+              {logoutError.message}
+            </div>
+          )}
           <button
             type="button"
             className="btn btn--outline btn--small"

@@ -137,7 +137,18 @@ export function restoreSession() {
 // 서버가 처리하지 못했는데 화면만 로그아웃으로 바꾸면 쿠키가 남아 다시 로그인될 수 있어서, 실패하면 오류를 던진다
 export async function logoutAdminSession() {
   let res = await send('POST', '/api/auth/logout', { admin: true });
-  if (res.status === 401 && (await reissueToken().catch(() => null)) === 'ADMIN') {
+  if (res.status === 401) {
+    let who = null;
+    try {
+      who = await reissueToken();
+    } catch (e) {
+      // 재발급이 401/403이면 세션이 이미 끝난 것이라 서버에 지울 것이 없다. 서버·네트워크 오류는 그대로 던진다
+      if (e.status !== 401 && e.status !== 403) throw e;
+    }
+    if (who !== 'ADMIN') {
+      setAdminToken(null);
+      return;
+    }
     res = await send('POST', '/api/auth/logout', { admin: true });
   }
   if (!res.ok) throw new ApiError(res.status, { message: '관리자 로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.' });
