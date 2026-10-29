@@ -351,8 +351,8 @@ public void deductStock(Long productId, int quantity) {
 | style | 포맷 등 로직 없는 변경 | dev → dev |
 | hotfix | main 긴급 수정 | main → main, dev |
 
-- `domain`은 도메인 패키지 이름(member, product, recipe, order, payment)을 씁니다. `global`·`infra` 작업은 `global`을 씁니다.
-- 예: `feature/recipe-auto-cart-preview`, `fix/product-stock-negative`, `feature/global-jwt-filter`
+- `domain`은 도메인 패키지 이름(member, product, recipe, order, payment)을 씁니다. `global`·`infra` 작업은 `global`을, 프론트(`frontend/`) 작업은 `frontend`를 씁니다.
+- 예: `feature/recipe-auto-cart-preview`, `fix/product-stock-negative`, `feature/global-jwt-filter`, `feature/frontend-cart-page`
 - `main`(배포·시연)과 `dev`(통합)에는 직접 push하지 않습니다.
 
 ### 커밋
@@ -376,7 +376,7 @@ public void deductStock(Long productId, int quantity) {
 
 ### 이슈
 
-- 제목: `[도메인] 작업 내용` (예: `[recipe] 레시피 상세 인분 환산`)
+- 제목: `[도메인] 작업 내용` (예: `[recipe] 레시피 상세 인분 환산`). 프론트는 `[frontend]`
 - 본문: 목적, 할 일 체크리스트, 관련 요구사항 항목, 완료 조건
 - 라벨: 도메인, 차수(1차·2차·3차), 종류(feature·bug·refactor)
 
@@ -386,6 +386,10 @@ public void deductStock(Long productId, int quantity) {
 - CI 성공, 승인 2개 이상, Merge Conflict 없음을 모두 만족하면 머지합니다.
 - `dev`로는 Squash and merge, `main`으로는 Merge commit을 씁니다.
 - 머지한 사람이 브랜치를 지우고 이슈를 닫습니다.
+- 프론트 PR의 테스트 칸은 `./gradlew test` 대신 `npm run build` 통과와 로컬 화면 확인(필요하면 스크린샷)으로 씁니다.
+- 새 API를 쓰는 프론트 PR은 백엔드 PR이 머지된 뒤에 머지합니다. 먼저 열 때는 Draft로 열고 본문에 `선행: #번호`를 적습니다.
+- API는 추가만 합니다. 필드나 경로를 지우거나 바꿀 때는 프론트가 먼저 쓰지 않게 바꾸고 다음 PR에서 백엔드를 지웁니다. 배포 순간 새 백엔드와 이전 화면이 함께 돌기 때문입니다.
+- 백엔드를 바꾼 PR은 머지 직후 15~30초 동안 운영 API가 502를 낼 수 있어 시연·확인 중에는 머지하지 않습니다. 프론트 통합 배포(#261)가 적용되면 `frontend/`만 바꾼 PR은 앱을 재시작하지 않습니다.
 
 ```markdown
 ## 관련 이슈
