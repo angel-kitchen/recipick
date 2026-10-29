@@ -61,6 +61,12 @@ public class AutoCartFacade {
         return AutoCartPreviewResponse.of(saved, getMartName(martId), lines);
     }
 
+    // AI를 부르기 전에 미리보기를 만들 수 없는 회원을 걸러, 쓰지 못할 결과에 AI 비용을 쓰지 않게 한다
+    void validatePreviewable(Long memberId) {
+        validateMembership(memberId);
+        getMartId(memberId);
+    }
+
     // 확정 직전 화면이 실제 확정 결과와 같도록, 확정 전 요청은 저장된 메뉴로 현재 가격·재고 기준 다시 계산한다
     @Transactional(readOnly = true)
     public AutoCartPreviewResponse getAutoCart(Long memberId, Long autoCartRequestId) {
