@@ -5,6 +5,7 @@ import com.recipick.domain.member.entity.Membership;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -46,6 +47,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     @Query("SELECT DISTINCT m.member.id FROM Membership m WHERE m.member.id IN :memberIds AND m.type = :type")
     List<Long> findMemberIdsWithTypeHistory(@Param("memberIds") List<Long> memberIds,
             @Param("type") MembershipType type);
+
+    Page<Membership> findAllByMemberId(Long memberId, Pageable pageable);
 
     boolean existsByMemberId(Long memberId);
 }
