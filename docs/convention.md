@@ -351,8 +351,8 @@ public void deductStock(Long productId, int quantity) {
 | style | 포맷 등 로직 없는 변경 | dev → dev |
 | hotfix | main 긴급 수정 | main → main, dev |
 
-- `domain`은 도메인 패키지 이름(member, product, recipe, order, payment)을 씁니다. `global`·`infra` 작업은 `global`을, 프론트(`frontend/`) 작업은 `web`을 씁니다.
-- 예: `feature/recipe-auto-cart-preview`, `fix/product-stock-negative`, `feature/global-jwt-filter`, `feature/web-cart-page`
+- `domain`은 도메인 패키지 이름(member, product, recipe, order, payment)을 씁니다. `global`·`infra` 작업은 `global`을, 프론트(`frontend/`) 작업은 `frontend`를 씁니다.
+- 예: `feature/recipe-auto-cart-preview`, `fix/product-stock-negative`, `feature/global-jwt-filter`, `feature/frontend-cart-page`
 - `main`(배포·시연)과 `dev`(통합)에는 직접 push하지 않습니다.
 
 ### 커밋
@@ -376,7 +376,7 @@ public void deductStock(Long productId, int quantity) {
 
 ### 이슈
 
-- 제목: `[도메인] 작업 내용` (예: `[recipe] 레시피 상세 인분 환산`). 프론트는 `[web]`
+- 제목: `[도메인] 작업 내용` (예: `[recipe] 레시피 상세 인분 환산`). 프론트는 `[frontend]`
 - 본문: 목적, 할 일 체크리스트, 관련 요구사항 항목, 완료 조건
 - 라벨: 도메인, 차수(1차·2차·3차), 종류(feature·bug·refactor)
 
