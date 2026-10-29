@@ -19,7 +19,7 @@ class MemberWithdrawalFacadeTest {
     private final MemberWithdrawalProcessor service = mock(MemberWithdrawalProcessor.class);
     private final RedisRefreshTokenStore sessions = mock(RedisRefreshTokenStore.class);
     private final MemberWithdrawalFacade facade = new MemberWithdrawalFacade(service, sessions);
-    private final MemberWithdrawRequest request = new MemberWithdrawRequest("Original1!");
+    private final MemberWithdrawRequest request = new MemberWithdrawRequest("Original1!", 0L);
 
     @Test
     @DisplayName("DB 커밋 후 Redis 정리가 실패해도 탈퇴가 완료된 상태을 실패로 되돌리지 않는다")

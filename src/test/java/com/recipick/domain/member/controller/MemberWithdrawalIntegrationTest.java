@@ -35,6 +35,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.http.MediaType;
@@ -95,8 +97,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
             }
 
             @Override
-            public void requireSettled(Long memberId) {
-                checker.requireSettled(memberId);
+            public void requireSettled(Long memberId, Long acknowledgedPointBalance) {
+                checker.requireSettled(memberId, acknowledgedPointBalance);
             }
         });
         return new MemberWithdrawalProcessor(memberService, orders, memberships, trialBlocks, withdrawal,
@@ -105,7 +107,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
 
     private void withdraw(WithdrawalSettlementChecker checker) {
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                processor(checker).withdraw(member.getId(), new MemberWithdrawRequest(password)));
+                processor(checker).withdraw(member.getId(), new MemberWithdrawRequest(password, 0L)));
     }
 
     @Test
@@ -113,7 +115,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     void refusesWithoutSettlementContract() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/members/me/withdraw").header("Authorization", "Bearer " + access)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Original1!\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Original1!\",\"acknowledgedPointBalance\":0}"))
                 .andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(503);
@@ -126,7 +128,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     void refusesIncorrectPassword() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/members/me/withdraw").header("Authorization", "Bearer " + access)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Wrong1!\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Wrong1!\",\"acknowledgedPointBalance\":0}"))
                 .andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(400);
@@ -138,7 +140,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     void refusesAnonymous() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/members/me/withdraw").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"password\":\"Original1!\"}")).andReturn().getResponse();
+                .content("{\"password\":\"Original1!\",\"acknowledgedPointBalance\":0}")).andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(401);
     }
@@ -154,7 +156,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
             locked.selectAddress(address, null);
         });
         // when
-        withdraw(id -> {});
+        withdraw((id, balance) -> {});
         // then
         Member result = members.findById(member.getId()).orElseThrow();
         assertThat(result.isWithdrawn()).isTrue();
@@ -178,7 +180,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         Membership history = histories.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
                 .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
         // when
-        withdraw(id -> {});
+        withdraw((id, balance) -> {});
         // then
         assertThat(histories.existsById(history.getId())).isTrue();
         assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hash, now)).isTrue();
@@ -192,7 +194,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         histories.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
                 .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(1)).endAt(now.plusDays(1)).build());
         // when, then
-        assertThatThrownBy(() -> withdraw(id -> { throw new AssertionError("정산 조회 전에 거절해야 함"); }))
+        assertThatThrownBy(() -> withdraw((id, balance) -> { throw new AssertionError("정산 조회 전에 거절해야 함"); }))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP));
         assertThat(members.findById(member.getId()).orElseThrow().isWithdrawn()).isFalse();
@@ -202,7 +204,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     @DisplayName("정산 확인 실패 시 회원과 배송지·체험 기록을 변경하지 않는다")
     void refusesUnsettledPayment() {
         // given, when, then
-        assertThatThrownBy(() -> withdraw(id -> { throw new IllegalStateException("정산 미완료"); }))
+        assertThatThrownBy(() -> withdraw((id, balance) -> { throw new IllegalStateException("정산 미완료"); }))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(members.findById(member.getId()).orElseThrow().isWithdrawn()).isFalse();
         assertThat(blocks.findAll()).noneMatch(block -> block.getPhoneHash().equals(hash));
@@ -217,7 +219,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
                 .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
         // when, then
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            processor(id -> {}).withdraw(member.getId(), new MemberWithdrawRequest(password));
+            processor((id, balance) -> {}).withdraw(member.getId(), new MemberWithdrawRequest(password, 0L));
             throw new IllegalStateException("커밋 전 실패");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(members.findById(member.getId()).orElseThrow().isWithdrawn()).isFalse();
@@ -238,7 +240,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
                 futures.add(executor.submit(() -> {
                     start.await();
                     try {
-                        withdraw(id -> {});
+                        withdraw((id, balance) -> {});
                         successes.incrementAndGet();
                     } catch (BusinessException e) {
                         errors.add(e);
@@ -257,6 +259,53 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MISSING", "null", "-1", "9223372036854775808"})
+    @DisplayName("확인 잔액의 누락·null·음수·Long 범위 초과는 탈퇴나 세션 변경 전에 거절한다")
+    void rejectsInvalidAcknowledgedBalance(String balanceJson) throws Exception {
+        // given
+        sessions.save("MEMBER", member.getId(), "preserved", "refresh", java.time.Duration.ofDays(14));
+        var beforeSessions = sessions.findSessionKeys("MEMBER", member.getId());
+        String body = "{\"password\":\"Original1!\""
+                + (balanceJson.equals("MISSING") ? "" : ",\"acknowledgedPointBalance\":" + balanceJson) + "}";
+        // when
+        var response = mvc.perform(post("/api/members/me/withdraw")
+                .header("Authorization", "Bearer " + access).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andReturn().getResponse();
+        // then
+        assertThat(response.getStatus()).isEqualTo(400);
+        Member unchanged = members.findById(member.getId()).orElseThrow();
+        assertThat(unchanged.isWithdrawn()).isFalse();
+        assertThat(unchanged.getRefreshTokenVersion()).isEqualTo(member.getRefreshTokenVersion());
+        assertThat(unchanged.getEmail()).isEqualTo(member.getEmail());
+        assertThat(sessions.findSessionKeys("MEMBER", member.getId())).containsExactlyElementsOf(beforeSessions);
+        assertThat(response.getHeaders("Set-Cookie")).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {2500L, Long.MAX_VALUE})
+    @DisplayName("0보다 큰 확인 잔액도 입력은 유효하지만 정산 미연결 차단을 우회하지 못한다")
+    void acceptsNonnegativeBalanceWithoutOpeningWithdrawal(long balance) throws Exception {
+        // given, when
+        String body = "{\"password\":\"Original1!\",\"acknowledgedPointBalance\":" + balance + "}";
+        var response = mvc.perform(post("/api/members/me/withdraw")
+                .header("Authorization", "Bearer " + access).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andReturn().getResponse();
+        // then
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getContentAsString()).contains("MEMBER-008");
+        assertThat(members.findById(member.getId()).orElseThrow().isWithdrawn()).isFalse();
+    }
+
+    @Test
+    @DisplayName("탈퇴 요청 문자열은 비밀번호와 확인 잔액을 노출하지 않는다")
+    void redactsWithdrawalRequest() {
+        // given
+        var request = new MemberWithdrawRequest("Original1!", 2500L);
+        // when, then
+        assertThat(request.toString()).isEqualTo("MemberWithdrawRequest[REDACTED]");
     }
 
 }
