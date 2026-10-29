@@ -113,7 +113,7 @@ function AutoCartPanel({ recipe, member }) {
             </button>
           ) : (
             <div style={{ marginTop: 12 }}>
-              <AutoCartReview preview={preview} />
+              <AutoCartReview preview={preview} disabled={loading} />
             </div>
           )}
         </>
