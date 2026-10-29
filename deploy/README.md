@@ -104,9 +104,9 @@ HTTP 단계는 인증서 발급과 첫 응답 확인을 위한 짧은 구간이�
    - `curl -vI https://<도메인>/api/categories`의 인증서 발급자가 Let's Encrypt이고 만료일이 90일 뒤다
    - 로그인 응답의 리프레시 토큰 쿠키에 `Secure`가 붙는다
    - 그 쿠키로 토큰 재발급이 200이다
-7. 갱신 cron(root). 배포와 같은 잠금 파일로 감싸 배포 중에는 끝날 때까지 기다린다(최대 10분). 배포가 새 설정을 깔고 검사하기 전에 갱신의 reload가 끼어드는 것을 막는다.
+7. 갱신 cron(root). 배포와 같은 잠금 파일로 감싸 배포 중에는 끝날 때까지 기다린다(최대 10분). 배포가 새 설정을 깔고 검사하기 전에 갱신의 reload가 끼어드는 것을 막는다. 서버 cron은 UTC라 아래 시각은 한국 시간 월요일 04:00이다.
    ```
-   0 4 * * 1 cd /opt/recipick && flock -w 600 .deploy.lock sh -c 'docker compose --profile certbot run --rm certbot renew -q && docker compose exec -T nginx nginx -s reload' >> /var/log/recipick-certbot.log 2>&1
+   0 19 * * 0 cd /opt/recipick && flock -w 600 .deploy.lock sh -c 'docker compose --profile certbot run --rm certbot renew -q && docker compose exec -T nginx nginx -s reload' >> /var/log/recipick-certbot.log 2>&1
    ```
 8. PortOne 웹훅 URL 등록은 결제 담당에게 도메인을 알린다.
 
@@ -115,11 +115,11 @@ HTTP 단계는 인증서 발급과 첫 응답 확인을 위한 짧은 구간이�
 | 종류 | 언제 | 어디에 | 보관 |
 | --- | --- | --- | --- |
 | pre-deploy | 배포마다 스크립트가 | 서버 `backups/`만 | 최근 10개 |
-| nightly | 매일 04:30 cron | 서버 `backups/` + S3 `backups/` | 서버 최근 7개, S3 30일 |
+| nightly | 매일 04:30(한국 시간) cron | 서버 `backups/` + S3 `backups/` | 서버 최근 7개, S3 30일 |
 
-nightly cron(root, `crontab -e`):
+nightly cron(root, `crontab -e`). 서버 cron은 UTC라 한국 시간 04:30은 19:30으로 적는다:
 ```
-30 4 * * * /opt/recipick/scripts/backup.sh nightly >> /var/log/recipick-backup.log 2>&1
+30 19 * * * /opt/recipick/scripts/backup.sh nightly >> /var/log/recipick-backup.log 2>&1
 ```
 
 `backup.sh`는 덤프가 끝까지 기록됐는지(마지막 줄의 완료 표시), S3에 올라간 크기가 로컬과 같은지 확인한다. 실패하면 0이 아닌 코드로 끝나고 `.env`의 `ALERT_WEBHOOK_URL`(Discord·Slack 웹훅)로 알린다. 덤프 파일은 권한 600이다.
