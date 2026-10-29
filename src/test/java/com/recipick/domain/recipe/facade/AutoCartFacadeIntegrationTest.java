@@ -2,97 +2,143 @@ package com.recipick.domain.recipe.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.dto.response.MemberMeResponse.MembershipSummary;
-import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
+import com.recipick.domain.order.entity.CartAddHistory;
+import com.recipick.domain.order.entity.CartItem;
+import com.recipick.domain.order.entity.enums.CartAddSource;
+import com.recipick.domain.order.repository.CartAddHistoryRepository;
+import com.recipick.domain.order.repository.CartItemRepository;
 import com.recipick.domain.product.entity.Mart;
+import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
-import com.recipick.domain.recipe.dto.response.AiAutoCartPreviewResponse;
-import com.recipick.domain.recipe.entity.AiRequestLog;
-import com.recipick.domain.recipe.entity.AiRequestType;
-import com.recipick.domain.recipe.entity.AiResultStatus;
+import com.recipick.domain.product.repository.ProductRepository;
+import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
+import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
+import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
+import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
+import com.recipick.domain.recipe.dto.response.AutoCartSummaryResponse;
+import com.recipick.domain.recipe.entity.AutoCartMenu;
+import com.recipick.domain.recipe.entity.AutoCartRequest;
 import com.recipick.domain.recipe.entity.AutoCartStatus;
+import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
-import com.recipick.domain.recipe.exception.AiErrorCode;
-import com.recipick.domain.recipe.repository.AiRequestLogRepository;
+import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.entity.UnavailableReason;
+import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.AutoCartItemRepository;
 import com.recipick.domain.recipe.repository.AutoCartRequestRepository;
+import com.recipick.domain.recipe.repository.IngredientRepository;
+import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.domain.recipe.service.AutoCartService;
+import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
-import com.recipick.infra.ai.AiClient;
-import com.recipick.infra.ai.dto.AiExtractedMenu;
-import com.recipick.infra.ai.dto.AiFailureType;
-import com.recipick.infra.ai.dto.AiResult;
-import com.recipick.infra.ai.dto.AiUsage;
+import com.recipick.global.response.PageResponse;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 
-class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
+class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
-    private static final Long MEMBER_ID = 9502L;
-    private static final AiUsage USAGE = new AiUsage("claude-opus-5-5", 900, 120, 800, 1500);
+    private static final Long MEMBER_ID = 9401L;
 
     @Autowired
-    AiAutoCartFacade aiAutoCartFacade;
-    @Autowired
-    AutoCartService autoCartService;
-    @Autowired
-    AiRequestLogRepository aiRequestLogRepository;
+    AutoCartFacade autoCartFacade;
     @Autowired
     AutoCartRequestRepository autoCartRequestRepository;
     @Autowired
+    AutoCartService autoCartService;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+    @Autowired
+    AutoCartItemRepository autoCartItemRepository;
+    @Autowired
+    CartItemRepository cartItemRepository;
+    @Autowired
+    CartAddHistoryRepository cartAddHistoryRepository;
+    @Autowired
     RecipeRepository recipeRepository;
+    @Autowired
+    IngredientRepository ingredientRepository;
+    @Autowired
+    RecipeIngredientRepository recipeIngredientRepository;
     @Autowired
     MartRepository martRepository;
     @Autowired
-    StringRedisTemplate redisTemplate;
-    @Autowired
-    JdbcTemplate jdbcTemplate;
+    ProductRepository productRepository;
 
-    // 실제 AI 대신 상황별 응답을 정해 주고, 회원·멤버십은 다른 도메인 흐름 없이 결과만 고정한다
-    @MockitoBean
-    AiClient aiClient;
+    // 회원·멤버십은 다른 도메인의 가입·결제 흐름을 거쳐야 만들어져, 자동 구성 흐름만 보도록 결과를 고정한다
     @MockitoBean
     MemberService memberService;
     @MockitoBean
     MembershipService membershipService;
 
-    private Recipe kimchiStew;
-    private Recipe soybeanStew;
+    private Recipe recipe;
+    private Ingredient tofu;
+    private Ingredient pepper;
     private Mart mart;
+    private Product tofuProduct;
 
     @BeforeEach
     void setUp() {
-        kimchiStew = saveAutoCartRecipe("AI장보기 김치찌개");
-        soybeanStew = saveAutoCartRecipe("AI장보기 된장찌개");
+        tofu = ingredientRepository.save(Ingredient.builder().name("자동구성두부").unit(SaleUnit.G).build());
+        pepper = ingredientRepository.save(Ingredient.builder().name("자동구성청양고추").unit(SaleUnit.EA).build());
+        recipe = recipeRepository.save(Recipe.builder()
+            .name("자동구성 된장찌개")
+            .baseServings(2)
+            .steps(List.of())
+            .build());
+        recipeIngredientRepository.saveAll(List.of(
+            RecipeIngredient.builder().recipe(recipe).ingredient(tofu)
+                .amountPerServing(new BigDecimal("100")).required(true).build(),
+            RecipeIngredient.builder().recipe(recipe).ingredient(pepper)
+                .amountPerServing(new BigDecimal("0.5")).required(false).build()
+        ));
+        recipe.enableAutoCart();
+        recipeRepository.save(recipe);
         mart = martRepository.save(Mart.builder()
-            .regionId(9502L)
-            .name("AI 장보기 테스트 마트")
+            .regionId(9401L)
+            .name("자동구성 테스트 마트")
             .latitude(new BigDecimal("37.3670000"))
             .longitude(new BigDecimal("127.1080000"))
             .serviceRadiusM(2000)
             .build());
+        tofuProduct = productRepository.save(Product.builder()
+            .mart(mart)
+            .ingredientId(tofu.getId())
+            .name("국산콩 두부 300g")
+            .saleUnitAmount(new BigDecimal("300"))
+            .saleUnit(SaleUnit.G)
+            .price(2500L)
+            .totalQuantity(10)
+            .deleted(false)
+            .build());
+
         given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(mart.getId()));
         given(membershipService.getSummary(eq(MEMBER_ID), any()))
             .willReturn(new MembershipSummary(true, "TRIAL", null));
@@ -100,156 +146,336 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
-        aiRequestLogRepository.deleteAll(findLogs());
-        autoCartRequestRepository.deleteAll(autoCartRequestRepository.findAll().stream()
-            .filter(request -> request.getMemberId().equals(MEMBER_ID))
+        cartAddHistoryRepository.deleteAll(cartAddHistoryRepository.findAll().stream()
+            .filter(history -> history.getMemberId().equals(MEMBER_ID))
             .toList());
+        cartItemRepository.deleteAll(cartItemRepository.findAllByMemberIdAndProductIdIn(
+            MEMBER_ID, List.of(tofuProduct.getId())));
+        autoCartItemRepository.deleteAll();
+        autoCartRequestRepository.deleteAll();
+        productRepository.deleteById(tofuProduct.getId());
         martRepository.deleteById(mart.getId());
-        recipeRepository.deleteAllById(List.of(kimchiStew.getId(), soybeanStew.getId()));
-        redisTemplate.delete("ai:request:" + MEMBER_ID);
+        recipeIngredientRepository.deleteAll(recipeIngredientRepository.findAllWithIngredient(recipe.getId()));
+        recipeRepository.deleteById(recipe.getId());
+        ingredientRepository.deleteAllById(List.of(tofu.getId(), pepper.getId()));
     }
 
-    private Recipe saveAutoCartRecipe(String name) {
-        Recipe recipe = Recipe.builder().name(name).baseServings(2).steps(List.of()).build();
-        recipe.enableAutoCart();
-        return recipeRepository.save(recipe);
+    private AutoCartPreviewRequest previewRequest(int servings, List<Long> optionalIngredientIds) {
+        return new AutoCartPreviewRequest(
+            List.of(new AutoCartPreviewRequest.Menu(recipe.getId(), servings, optionalIngredientIds)));
     }
 
-    private void givenAiResult(AiResult<List<AiExtractedMenu>> result) {
-        given(aiClient.extractMenus(anyString(), anyList())).willReturn(result);
+    @Test
+    @DisplayName("미리보기: 이용 마트 상품으로 계산하고 PREVIEWED 요청과 메뉴를 저장한다")
+    void preview() {
+        // when
+        AutoCartPreviewResponse response =
+            autoCartFacade.preview(MEMBER_ID, previewRequest(5, List.of(pepper.getId())));
+
+        // then
+        assertThat(response.status()).isEqualTo(AutoCartStatus.PREVIEWED);
+        assertThat(response.martName()).isEqualTo("자동구성 테스트 마트");
+        assertThat(response.items())
+            .extracting(AutoCartPreviewResponse.Item::ingredientId, AutoCartPreviewResponse.Item::purchaseQuantity,
+                AutoCartPreviewResponse.Item::linePrice, AutoCartPreviewResponse.Item::unavailableReason)
+            .containsExactly(
+                tuple(tofu.getId(), 2, 5000L, null),
+                tuple(pepper.getId(), 0, 0L, UnavailableReason.NOT_SOLD_IN_MART));
+        assertThat(response.items().get(0).expectedRemainingAmount().toPlainString()).isEqualTo("100");
+        assertThat(response.totalPrice()).isEqualTo(5000L);
+
+        AutoCartRequest saved = autoCartRequestRepository.findById(response.autoCartRequestId()).orElseThrow();
+        assertThat(saved.getMemberId()).isEqualTo(MEMBER_ID);
+        assertThat(saved.getMartId()).isEqualTo(mart.getId());
+        assertThat(saved.getTotalPrice()).isEqualTo(5000L);
+        assertThat(saved.getMenus())
+            .containsExactly(new AutoCartMenu(recipe.getId(), "자동구성 된장찌개", 5, List.of(pepper.getId())));
     }
 
-    private List<AiRequestLog> findLogs() {
-        return aiRequestLogRepository.findAll().stream()
-            .filter(log -> log.getMemberId().equals(MEMBER_ID))
+    @Test
+    @DisplayName("다시 조회: 확정 전 요청은 저장된 메뉴로 현재 가격 기준 다시 계산한다")
+    void getAutoCart_recalculatesPreviewed() {
+        // given
+        Long autoCartRequestId = autoCartFacade.preview(MEMBER_ID, previewRequest(5, List.of())).autoCartRequestId();
+        ReflectionTestUtils.setField(tofuProduct, "price", 3000L);
+        productRepository.save(tofuProduct);
+
+        // when
+        AutoCartPreviewResponse response = autoCartFacade.getAutoCart(MEMBER_ID, autoCartRequestId);
+
+        // then
+        assertThat(response.totalPrice()).isEqualTo(6000L);
+    }
+
+    @Test
+    @DisplayName("다시 조회: 다른 회원의 요청이면 AUTO_CART_REQUEST_NOT_FOUND 예외를 던진다")
+    void getAutoCart_otherMember() {
+        // given
+        Long autoCartRequestId = autoCartFacade.preview(MEMBER_ID, previewRequest(2, List.of())).autoCartRequestId();
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.getAutoCart(MEMBER_ID + 1, autoCartRequestId));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(RecipeErrorCode.AUTO_CART_REQUEST_NOT_FOUND));
+    }
+
+    private Long previewId() {
+        return autoCartFacade.preview(MEMBER_ID, previewRequest(5, List.of(pepper.getId()))).autoCartRequestId();
+    }
+
+    private void assertErrorCode(Throwable thrown, Object errorCode) {
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(errorCode));
+    }
+
+    @Test
+    @DisplayName("확정: 구매 가능한 상품만 장바구니에 합산하고 자동 담기 경로·요청 번호로 이력을 남긴다")
+    void confirm() {
+        // given
+        Long autoCartRequestId = previewId();
+        cartItemRepository.save(CartItem.builder()
+            .memberId(MEMBER_ID)
+            .productId(tofuProduct.getId())
+            .quantity(1)
+            .build());
+
+        // when
+        AutoCartConfirmResponse response = autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+
+        // then
+        assertThat(response.status()).isEqualTo(AutoCartStatus.CONFIRMED);
+        assertThat(response.addedItems())
+            .extracting(AutoCartConfirmResponse.AddedItem::addedQuantity,
+                AutoCartConfirmResponse.AddedItem::cartQuantity)
+            .containsExactly(tuple(2, 3));
+        assertThat(response.excludedItems())
+            .extracting(AutoCartConfirmResponse.ExcludedItem::reason)
+            .containsExactly(UnavailableReason.NOT_SOLD_IN_MART);
+        assertThat(response.priceChanged()).isFalse();
+
+        List<CartAddHistory> histories = cartAddHistoryRepository.findAll().stream()
+            .filter(history -> history.getMemberId().equals(MEMBER_ID))
             .toList();
+        assertThat(histories)
+            .extracting(CartAddHistory::getSource, CartAddHistory::getAutoCartRequestId,
+                CartAddHistory::getQuantity)
+            .containsExactly(tuple(CartAddSource.AUTO_CART, autoCartRequestId, 2));
     }
 
     @Test
-    @DisplayName("메뉴의 레시피가 하나로 정해지면 미리보기를 만들고 요청 이력에 연결한다")
-    void preview_createsPreviewAndLinksLog() {
+    @DisplayName("확정 뒤 다시 조회하면 가격이 바뀌어도 확정 시점 결과를 그대로 돌려준다")
+    void getAutoCart_confirmedSnapshot() {
         // given
-        givenAiResult(AiResult.success(
-            List.of(new AiExtractedMenu("김치찌개", List.of(kimchiStew.getId()), 3)), USAGE));
+        Long autoCartRequestId = previewId();
+        autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+        ReflectionTestUtils.setField(tofuProduct, "price", 9000L);
+        productRepository.save(tofuProduct);
 
         // when
-        AiAutoCartPreviewResponse response = aiAutoCartFacade.preview(MEMBER_ID, "김치찌개 3인분 장보기");
+        AutoCartPreviewResponse response = autoCartFacade.getAutoCart(MEMBER_ID, autoCartRequestId);
 
         // then
-        assertThat(response.status()).isEqualTo(AiResultStatus.PREVIEWED);
-        assertThat(response.preview().status()).isEqualTo(AutoCartStatus.PREVIEWED);
-        assertThat(response.preview().menus()).singleElement()
-            .satisfies(menu -> assertThat(menu.servings()).isEqualTo(3));
-
-        AiRequestLog log = findLogs().get(0);
-        assertThat(log.getRequestType()).isEqualTo(AiRequestType.AUTO_CART);
-        assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.PREVIEWED);
-        assertThat(log.isSuccess()).isTrue();
-        assertThat(log.getAutoCartRequest().getId()).isEqualTo(response.preview().autoCartRequestId());
-        assertThat(log.getMatchedRecipeIds()).isEqualTo(String.valueOf(kimchiStew.getId()));
-        assertThat(log.getParsedResult()).contains("김치찌개");
-        assertThat(log.getInputTokens()).isEqualTo(900);
-        assertThat(log.getLatencyMs()).isEqualTo(1500);
+        assertThat(response.status()).isEqualTo(AutoCartStatus.CONFIRMED);
+        assertThat(response.totalPrice()).isEqualTo(5000L);
+        assertThat(response.items())
+            .extracting(AutoCartPreviewResponse.Item::ingredientId, AutoCartPreviewResponse.Item::unavailableReason)
+            .containsExactly(tuple(tofu.getId(), null), tuple(pepper.getId(), UnavailableReason.NOT_SOLD_IN_MART));
+        assertThat(response.items().get(0).expectedRemainingAmount().toPlainString()).isEqualTo("100");
     }
 
     @Test
-    @DisplayName("후보가 여러 개면 미리보기를 만들지 않고 후보를 돌려준다")
-    void preview_returnsCandidatesWhenAmbiguous() {
+    @DisplayName("확정: 미리보기 뒤 가격이 바뀌었으면 priceChanged가 true다")
+    void confirm_priceChanged() {
         // given
-        givenAiResult(AiResult.success(List.of(
-            new AiExtractedMenu("찌개", List.of(kimchiStew.getId(), soybeanStew.getId()), null)), USAGE));
+        Long autoCartRequestId = previewId();
+        ReflectionTestUtils.setField(tofuProduct, "price", 3000L);
+        productRepository.save(tofuProduct);
 
         // when
-        AiAutoCartPreviewResponse response = aiAutoCartFacade.preview(MEMBER_ID, "찌개 끓이고 싶어");
+        AutoCartConfirmResponse response = autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
 
         // then
-        assertThat(response.status()).isEqualTo(AiResultStatus.NEEDS_SELECTION);
-        assertThat(response.preview()).isNull();
-        assertThat(response.menus().get(0).candidates())
-            .extracting(AiAutoCartPreviewResponse.RecipeOption::recipeId)
-            .containsExactly(kimchiStew.getId(), soybeanStew.getId());
-        assertThat(autoCartRequestRepository.findAll())
-            .noneMatch(request -> request.getMemberId().equals(MEMBER_ID));
-        assertThat(findLogs()).singleElement()
-            .satisfies(log -> assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NEEDS_SELECTION));
+        assertThat(response.totalAddedPrice()).isEqualTo(6000L);
+        assertThat(response.priceChanged()).isTrue();
     }
 
     @Test
-    @DisplayName("AI가 실패하면 오류 대신 이름이 맞는 레시피를 FALLBACK으로 주고 실패 이력을 남긴다")
-    void preview_fallsBackWhenAiFails() {
+    @DisplayName("확정: 이미 확정한 요청이면 AUTO_CART_INVALID_STATUS 예외를 던진다")
+    void confirm_alreadyConfirmed() {
         // given
-        givenAiResult(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
+        Long autoCartRequestId = previewId();
+        autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
 
         // when
-        AiAutoCartPreviewResponse response = aiAutoCartFacade.preview(MEMBER_ID, "AI장보기 된장찌개 먹고 싶어");
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
 
         // then
-        assertThat(response.status()).isEqualTo(AiResultStatus.FALLBACK);
-        assertThat(response.recipes())
-            .extracting(AiAutoCartPreviewResponse.RecipeOption::recipeId)
-            .containsExactly(soybeanStew.getId());
-
-        AiRequestLog log = findLogs().get(0);
-        assertThat(log.isSuccess()).isFalse();
-        assertThat(log.getFailureReason()).isEqualTo("TIMEOUT");
-        assertThat(log.getParsedResult()).isNull();
-        assertThat(log.getInputTokens()).isNull();
-        assertThat(log.getModel()).isEqualTo("claude-opus-5-5");
-        assertThat(log.getLatencyMs()).isEqualTo(15000);
+        assertErrorCode(thrown, RecipeErrorCode.AUTO_CART_INVALID_STATUS);
     }
 
     @Test
-    @DisplayName("1분에 5번을 넘으면 AI를 부르지 않고 이력도 남기지 않은 채 AI-001로 거절한다")
-    void preview_rejectsWhenLimitExceeded() {
+    @DisplayName("확정: 미리보기 뒤 이용 마트가 바뀌었으면 AUTO_CART_MART_CHANGED 예외를 던진다")
+    void confirm_martChanged() {
         // given
-        givenAiResult(AiResult.success(List.of(), USAGE));
-        for (int i = 0; i < 5; i++) {
-            aiAutoCartFacade.preview(MEMBER_ID, "아무거나");
+        Long autoCartRequestId = previewId();
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(mart.getId() + 1));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.AUTO_CART_MART_CHANGED);
+    }
+
+    @Test
+    @DisplayName("확정: 재계산 결과 담을 상품이 없으면 장바구니에 담지 않고 NO_PURCHASABLE_INGREDIENTS 예외를 던진다")
+    void confirm_noPurchasable() {
+        // given
+        Long autoCartRequestId = previewId();
+        ReflectionTestUtils.setField(tofuProduct, "totalQuantity", 0);
+        productRepository.save(tofuProduct);
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.NO_PURCHASABLE_INGREDIENTS);
+        assertThat(cartItemRepository.findByMemberIdAndProductId(MEMBER_ID, tofuProduct.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("확정: 후보에 없는 상품을 고르면 INVALID_PRODUCT_SELECTION 예외를 던진다")
+    void confirm_invalidSelection() {
+        // given
+        Long autoCartRequestId = previewId();
+        AutoCartConfirmRequest request = new AutoCartConfirmRequest(
+            List.of(new AutoCartConfirmRequest.ProductSelection(tofu.getId(), tofuProduct.getId() + 1000)));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, request));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.INVALID_PRODUCT_SELECTION);
+    }
+
+    @Test
+    @DisplayName("확정: 같은 요청을 5건 동시에 확정해도 장바구니에는 한 번만 합산된다")
+    void confirm_concurrent() throws Exception {
+        // given
+        Long autoCartRequestId = previewId();
+        int threads = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger invalidStatus = new AtomicInteger();
+
+        // when
+        List<Future<?>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null);
+                    success.incrementAndGet();
+                } catch (BusinessException e) {
+                    if (e.getErrorCode() == RecipeErrorCode.AUTO_CART_INVALID_STATUS) {
+                        invalidStatus.incrementAndGet();
+                    }
+                }
+                return null;
+            }));
         }
-
-        // when
-        Throwable thrown = catchThrowable(() -> aiAutoCartFacade.preview(MEMBER_ID, "아무거나"));
+        ready.await();
+        start.countDown();
+        for (Future<?> future : futures) {
+            future.get(10, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
 
         // then
-        assertThat(((BusinessException) thrown).getErrorCode()).isEqualTo(AiErrorCode.AI_REQUEST_LIMIT_EXCEEDED);
-        verify(aiClient, times(5)).extractMenus(anyString(), anyList());
-        assertThat(findLogs()).hasSize(5)
-            .allSatisfy(log -> assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH));
+        assertThat(success.get()).isEqualTo(1);
+        assertThat(invalidStatus.get()).isEqualTo(threads - 1);
+        assertThat(cartItemRepository.findByMemberIdAndProductId(MEMBER_ID, tofuProduct.getId()))
+            .get()
+            .extracting(CartItem::getQuantity)
+            .isEqualTo(2);
+    }
+
+
+    @Test
+    @DisplayName("기록 목록: 본인 요청만 최근 요청부터 보여준다")
+    void findAutoCarts() {
+        // given
+        Long first = previewId();
+        Long second = autoCartFacade.preview(MEMBER_ID, previewRequest(2, List.of())).autoCartRequestId();
+        given(memberService.getMartId(MEMBER_ID + 1)).willReturn(Optional.of(mart.getId()));
+        given(membershipService.getSummary(eq(MEMBER_ID + 1), any()))
+            .willReturn(new MembershipSummary(true, "PAID", null));
+        autoCartFacade.preview(MEMBER_ID + 1, previewRequest(2, List.of()));
+
+        // when
+        PageResponse<AutoCartSummaryResponse> response = autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(0, 20));
+
+        // then
+        assertThat(response.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId, AutoCartSummaryResponse::martName,
+                AutoCartSummaryResponse::menuSummary)
+            .containsExactly(
+                tuple(second, "자동구성 테스트 마트", "자동구성 된장찌개 2인분"),
+                tuple(first, "자동구성 테스트 마트", "자동구성 된장찌개 5인분"));
     }
 
     @Test
-    @DisplayName("멤버십이 없으면 AI를 부르기 전에 거절한다")
-    void preview_rejectsWithoutMembership() {
+    @DisplayName("기록 목록: 크기 1로 나눠 조회하면 페이지마다 다른 요청이 최근 순으로 나온다")
+    void findAutoCarts_paging() {
         // given
-        given(membershipService.getSummary(eq(MEMBER_ID), any()))
-            .willReturn(new MembershipSummary(false, "NONE", null));
+        Long first = previewId();
+        Long second = previewId();
 
         // when
-        Throwable thrown = catchThrowable(() -> aiAutoCartFacade.preview(MEMBER_ID, "김치찌개"));
+        PageResponse<AutoCartSummaryResponse> firstPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(0, 1));
+        PageResponse<AutoCartSummaryResponse> secondPage =
+            autoCartFacade.findAutoCarts(MEMBER_ID, PageRequest.of(1, 1));
 
         // then
-        assertThat(((BusinessException) thrown).getErrorCode()).isEqualTo(MemberErrorCode.MEMBERSHIP_REQUIRED);
-        verify(aiClient, never()).extractMenus(anyString(), anyList());
+        assertThat(firstPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(second);
+        assertThat(secondPage.content())
+            .extracting(AutoCartSummaryResponse::autoCartRequestId)
+            .containsExactly(first);
+        assertThat(firstPage.totalElements()).isEqualTo(2);
+        assertThat(firstPage.totalPages()).isEqualTo(2);
     }
 
+
     @Test
-    @DisplayName("정리 배치는 AI로 만든 미리보기를 지워도 요청 이력은 연결만 비우고 남긴다")
-    void deleteExpiredPreviews_keepsAiLog() {
+    @DisplayName("정리 배치: 기준 시각보다 먼저 만든 미리보기만 지우고 확정한 요청은 남긴다")
+    void deleteExpiredPreviews() {
         // given
-        givenAiResult(AiResult.success(
-            List.of(new AiExtractedMenu("김치찌개", List.of(kimchiStew.getId()), null)), USAGE));
-        Long autoCartRequestId = aiAutoCartFacade.preview(MEMBER_ID, "김치찌개").preview().autoCartRequestId();
+        Long expired = previewId();
+        Long confirmed = previewId();
+        autoCartFacade.confirm(MEMBER_ID, confirmed, null);
+        Long recent = previewId();
         LocalDateTime before = LocalDateTime.now().minusDays(7);
         // created_at은 생성 뒤 바꿀 수 없는 컬럼이라 SQL로 직접 과거 시각을 넣는다
-        jdbcTemplate.update("UPDATE auto_cart_request SET created_at = ? WHERE id = ?",
-            before.minusDays(1), autoCartRequestId);
+        jdbcTemplate.update("UPDATE auto_cart_request SET created_at = ? WHERE id IN (?, ?)",
+            before.minusDays(1), expired, confirmed);
 
         // when
-        autoCartService.deleteExpiredPreviews(before);
+        int deleted = autoCartService.deleteExpiredPreviews(before);
 
         // then
-        assertThat(autoCartRequestRepository.findById(autoCartRequestId)).isEmpty();
-        assertThat(findLogs()).singleElement()
-            .satisfies(log -> assertThat(log.getAutoCartRequest()).isNull());
+        assertThat(deleted).isEqualTo(1);
+        assertThat(autoCartRequestRepository.findAllById(List.of(expired, confirmed, recent)))
+            .extracting(AutoCartRequest::getId)
+            .containsExactlyInAnyOrder(confirmed, recent);
     }
 }
