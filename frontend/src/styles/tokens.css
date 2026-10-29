@@ -1,0 +1,43 @@
+:root {
+  /* 스타벅스 DESIGN.md: 초록 4단계는 각자 쓰임이 정해져 있다 */
+  --green-brand: #006241; /* 제목 */
+  --green-accent: #00754a; /* 주요 버튼 */
+  --green-house: #1e3932; /* 깊은 띠, 푸터 */
+  --green-uplift: #2b5148;
+  --green-light: #d4e9e2;
+
+  --canvas: #f2f0eb; /* 쇼핑 화면 바탕(순백 대신 따뜻한 크림) */
+  --ceramic: #edebe9;
+  --white: #ffffff;
+  --text: rgba(0, 0, 0, 0.87);
+  --text-soft: rgba(0, 0, 0, 0.58);
+  --text-on-dark: #ffffff;
+  --text-on-dark-soft: rgba(255, 255, 255, 0.7);
+  --line: #e7e7e7;
+  --input-line: #d6dbde;
+  --red: #c82014;
+  --yellow: #fbbc05;
+
+  /* 마트 지도 점 */
+  --map-red: #e31b23;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 40px;
+  --space-7: 48px;
+  --space-9: 64px;
+
+  --radius-card: 12px;
+  --radius-pill: 50px;
+  --radius-tesla: 4px; /* 테슬라 DESIGN.md: 홈 버튼은 거의 각진 4px */
+
+  --shadow-card: 0 0 0.5px rgba(0, 0, 0, 0.14), 0 1px 1px rgba(0, 0, 0, 0.24);
+  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.1), 0 2px 2px rgba(0, 0, 0, 0.06), 0 0 2px rgba(0, 0, 0, 0.07);
+
+  --font: 'Pretendard Variable', Pretendard, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --nav-height: 64px;
+  --max-width: 1200px;
+}
