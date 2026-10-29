@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom';
 import { ADMIN_ROLE } from '../labels';
 import { useAdmin } from './AdminContext';
@@ -17,6 +18,7 @@ const ITEMS = [
 
 export default function AdminLayout() {
   const { admin, loading, logout } = useAdmin();
+  const [logoutError, setLogoutError] = useState(null);
   if (loading) return <p className="state-message">불러오는 중입니다.</p>;
   if (!admin) return <Navigate to="/admin/login" replace />;
 
@@ -36,7 +38,15 @@ export default function AdminLayout() {
         <div className="admin__me">
           <div>{admin.loginId ?? `관리자 #${admin.adminId}`}</div>
           <div className="field__hint">{ADMIN_ROLE[admin.role] ?? admin.role}</div>
-          <button type="button" className="btn btn--outline btn--small" onClick={logout}>
+          {logoutError && <div className="error-text">{logoutError.message}</div>}
+          <button
+            type="button"
+            className="btn btn--outline btn--small"
+            onClick={() => {
+              setLogoutError(null);
+              logout().catch(setLogoutError);
+            }}
+          >
             로그아웃
           </button>
           <Link to="/" className="field__hint">

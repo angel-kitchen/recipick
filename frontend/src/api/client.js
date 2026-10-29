@@ -133,18 +133,15 @@ export function restoreSession() {
   return restoring;
 }
 
-// 관리자 로그아웃: 서버의 리프레시 세션을 지워야 새로고침해도 다시 로그인되지 않는다
+// 관리자 로그아웃: 서버의 리프레시 세션을 지워야 새로고침해도 다시 로그인되지 않는다.
+// 서버가 처리하지 못했는데 화면만 로그아웃으로 바꾸면 쿠키가 남아 다시 로그인될 수 있어서, 실패하면 오류를 던진다
 export async function logoutAdminSession() {
-  try {
-    let res = await send('POST', '/api/auth/logout', { admin: true });
-    if (res.status === 401 && (await reissueToken().catch(() => null)) === 'ADMIN') {
-      res = await send('POST', '/api/auth/logout', { admin: true });
-    }
-  } catch {
-    // 연결이 안 돼도 이 화면에서는 로그아웃 상태로 만든다
-  } finally {
-    setAdminToken(null);
+  let res = await send('POST', '/api/auth/logout', { admin: true });
+  if (res.status === 401 && (await reissueToken().catch(() => null)) === 'ADMIN') {
+    res = await send('POST', '/api/auth/logout', { admin: true });
   }
+  if (!res.ok) throw new ApiError(res.status, { message: '관리자 로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.' });
+  setAdminToken(null);
 }
 
 async function request(method, path, options) {
