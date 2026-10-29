@@ -28,5 +28,11 @@ public interface WithdrawalSettlementChecker {
         return Set.of();
     }
 
-    void requireSettled(Long memberId);
+    /**
+     * acknowledgedPointBalance는 사용자가 소멸 안내에서 확인한 잔액이며 서버 잔액을 대신하지 않는다.
+     * POINTS는 포인트 잠금·지연 만료·미정산 확인 후 실제 잔액과 비교하고 다르면 409로 거절한다.
+     * 예외 시 앞선 지연 만료를 포함한 모든 변경이 호출자의 탈퇴 트랜잭션과 함께 롤백돼야 한다.
+     * 다른 Scope는 두 번째 값을 사용하지 않아도 되며, 0이어도 정산 검사를 생략하지 않는다.
+     */
+    void requireSettled(Long memberId, Long acknowledgedPointBalance);
 }

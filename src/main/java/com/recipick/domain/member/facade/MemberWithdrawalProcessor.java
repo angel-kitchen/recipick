@@ -57,7 +57,7 @@ public class MemberWithdrawalProcessor {
         if (!covered.containsAll(EnumSet.allOf(WithdrawalSettlementChecker.Scope.class))) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY);
         }
-        checkers.forEach(checker -> checker.requireSettled(memberId));
+        checkers.forEach(checker -> checker.requireSettled(memberId, request.acknowledgedPointBalance()));
         LocalDateTime now = LocalDateTime.now(clock);
         trialBlocks.recordWithdrawal(memberId, now);
         withdrawal.withdraw(member, now);
