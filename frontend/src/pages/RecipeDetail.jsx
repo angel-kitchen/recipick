@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -30,33 +30,45 @@ function AutoCartPanel({ recipe, member }) {
   const blocked = blockedReason(recipe, member);
   const optionals = recipe.ingredients.filter((ingredient) => !ingredient.required);
 
-  // 인분이나 선택 재료가 바뀌면 이전 미리보기는 맞지 않는다
+  // 선택 재료를 빠르게 여러 번 누를 때 늦게 온 이전 응답이 최신 미리보기를 덮지 않게 마지막 요청만 반영한다
+  const latestRequest = useRef(0);
+
+  // 인분이 바뀌면 이전 미리보기는 맞지 않는다. 선택 재료는 미리보기를 접지 않고 toggleOptional에서 다시 계산한다
   useEffect(() => {
+    latestRequest.current += 1;
     setPreview(null);
-  }, [recipe.servings, recipe.recipeId, optionalIds]);
+    setLoading(false);
+  }, [recipe.servings, recipe.recipeId]);
 
-  const toggleOptional = (ingredientId) =>
-    setOptionalIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(ingredientId)) next.delete(ingredientId);
-      else next.add(ingredientId);
-      return next;
-    });
-
-  const makePreview = async () => {
+  const makePreview = async (ids) => {
+    const requestId = ++latestRequest.current;
     setError(null);
     setLoading(true);
     try {
-      setPreview(
-        await api.post('/api/auto-carts/preview', {
-          menus: [{ recipeId: recipe.recipeId, servings: recipe.servings, optionalIngredientIds: [...optionalIds] }],
-        }),
-      );
+      const result = await api.post('/api/auto-carts/preview', {
+        menus: [{ recipeId: recipe.recipeId, servings: recipe.servings, optionalIngredientIds: [...ids] }],
+      });
+      if (requestId !== latestRequest.current) return;
+      setPreview(result);
     } catch (e) {
+      if (requestId !== latestRequest.current) return;
       setError(e);
+      return false;
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
+    return true;
+  };
+
+  const toggleOptional = async (ingredientId) => {
+    const prev = optionalIds;
+    const next = new Set(prev);
+    if (next.has(ingredientId)) next.delete(ingredientId);
+    else next.add(ingredientId);
+    setOptionalIds(next);
+    if (!preview) return;
+    // 미리보기가 열려 있으면 접지 않고 그 자리에서 새 재료를 반영한다. 실패하면 체크를 되돌려 화면과 미리보기를 맞춘다
+    if ((await makePreview(next)) === false) setOptionalIds(prev);
   };
 
   return (
@@ -86,6 +98,7 @@ function AutoCartPanel({ recipe, member }) {
                   <input
                     type="checkbox"
                     checked={optionalIds.has(ingredient.ingredientId)}
+                    disabled={loading}
                     onChange={() => toggleOptional(ingredient.ingredientId)}
                   />
                   {ingredient.name}
@@ -95,12 +108,12 @@ function AutoCartPanel({ recipe, member }) {
           )}
           <ErrorNotice error={error} />
           {!preview ? (
-            <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={loading} onClick={makePreview}>
+            <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={loading} onClick={() => makePreview(optionalIds)}>
               {loading ? '계산하는 중...' : '재료 미리보기'}
             </button>
           ) : (
             <div style={{ marginTop: 12 }}>
-              <AutoCartReview preview={preview} />
+              <AutoCartReview preview={preview} disabled={loading} />
             </div>
           )}
         </>

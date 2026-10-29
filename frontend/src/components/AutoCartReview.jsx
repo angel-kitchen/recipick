@@ -12,17 +12,22 @@ const NONE = 'NONE';
 // 서버가 만든 미리보기(preview)를 재료별로 고쳐서 장바구니에 담는다.
 // - 체크를 빼거나 상품 목록에서 "선택 안 함"을 고르면 그 재료는 담지 않는다.
 // - 담기는 선택한 상품을 장바구니 담기 API로 하나씩 넣는다(재료를 뺄 수 있게 하려는 방식).
-export default function AutoCartReview({ preview }) {
+export default function AutoCartReview({ preview, disabled = false }) {
   const navigate = useNavigate();
   const { member } = useAuth();
   const { guard, modal } = usePreviousMartGuard();
-  // 재료별 선택. 값이 없으면 서버가 추천한 상품, NONE이면 담지 않음
+  // 재료별 선택. 값이 없거나 새 미리보기의 후보에 없으면 서버가 추천한 상품, NONE이면 담지 않음
   const [choices, setChoices] = useState({});
   const [added, setAdded] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const chosenProductId = (item) => choices[item.ingredientId] ?? String(item.product?.productId);
+  const chosenProductId = (item) => {
+    const choice = choices[item.ingredientId];
+    if (choice === NONE) return NONE;
+    if (choice && item.candidates.some((c) => String(c.productId) === choice)) return choice;
+    return String(item.product?.productId);
+  };
 
   const quantityOf = (item, productId) => {
     if (Number(productId) === item.product?.productId) return item.purchaseQuantity;
@@ -127,8 +132,6 @@ export default function AutoCartReview({ preview }) {
                     {!excluded && (
                       <div className="tile__meta">
                         {quantityOf(item, productId)}개
-                        {Number(productId) === item.product.productId &&
-                          ` · 사용 후 약 ${formatAmount(item.expectedRemainingAmount, item.unit)} 남음`}
                       </div>
                     )}
                   </>
@@ -159,7 +162,7 @@ export default function AutoCartReview({ preview }) {
         <span>{formatWon(total)}</span>
       </div>
       <p className="field__hint">미리보기는 저장되지 않아요. 담을 때 가격과 재고를 다시 확인해요.</p>
-      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={submitting || picked.length === 0} onClick={() => guard(doAdd)}>
+      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || submitting || picked.length === 0} onClick={() => guard(doAdd)}>
         {submitting ? '담는 중...' : `${picked.length}개 장바구니에 담기`}
       </button>
 
