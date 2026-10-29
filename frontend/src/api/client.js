@@ -65,7 +65,7 @@ function buildUrl(path, query) {
   return qs ? `${path}?${qs}` : path;
 }
 
-async function send(method, path, { body, headers, query, admin } = {}) {
+async function send(method, path, { body, headers, query, admin, credentials = 'same-origin' } = {}) {
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders['Content-Type'] = 'application/json';
   const token = admin || isAdminPath(path) ? adminToken : accessToken;
@@ -74,7 +74,7 @@ async function send(method, path, { body, headers, query, admin } = {}) {
     method,
     headers: finalHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
+    credentials,
   });
 }
 
@@ -111,14 +111,6 @@ export function reissueToken() {
         accessToken = data.accessToken;
         return 'MEMBER';
       })
-      .catch((error) => {
-        // 서버 오류·네트워크 오류는 로그인 상태와 무관하므로 토큰을 지우지 않는다
-        if (error.status === 401 || error.status === 403) {
-          accessToken = null;
-          setAdminToken(null);
-        }
-        throw error;
-      })
       .finally(() => {
         reissuing = null;
       });
@@ -135,8 +127,13 @@ export function restoreSession() {
 
 // 관리자 로그아웃: 서버의 리프레시 세션을 지워야 새로고침해도 다시 로그인되지 않는다.
 // 서버가 처리하지 못했는데 화면만 로그아웃으로 바꾸면 쿠키가 남아 다시 로그인될 수 있어서, 실패하면 오류를 던진다
+// 토큰에 세션 id(sid)가 있으면 서버는 쿠키 없이 그 세션을 지운다. 이때 쿠키를 보내지 않아야, 같은 브라우저에서 나중에
+// 로그인한 회원의 쿠키가 이 응답의 쿠키 삭제 지시에 같이 지워지지 않는다. sid가 없는 옛 토큰만 쿠키로 세션을 찾는다
+const adminLogout = () =>
+  send('POST', '/api/auth/logout', { admin: true, credentials: readClaims(adminToken)?.sid ? 'omit' : 'same-origin' });
+
 export async function logoutAdminSession() {
-  let res = await send('POST', '/api/auth/logout', { admin: true });
+  let res = await adminLogout();
   if (res.status === 401) {
     let who = null;
     try {
@@ -149,7 +146,7 @@ export async function logoutAdminSession() {
       setAdminToken(null);
       return;
     }
-    res = await send('POST', '/api/auth/logout', { admin: true });
+    res = await adminLogout();
   }
   if (!res.ok) throw new ApiError(res.status, { message: '관리자 로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.' });
   setAdminToken(null);
@@ -174,6 +171,7 @@ async function request(method, path, options) {
       onAdminAuthLost();
       throw new ApiError(401, { message: '관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.' });
     } else {
+      accessToken = null;
       onAuthLost();
       throw new ApiError(401, { message: '로그인이 필요합니다. 다시 로그인해 주세요.' });
     }
