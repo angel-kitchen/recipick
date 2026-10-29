@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, reissueToken, setAccessToken, setAuthLostHandler } from '../api/client';
+import { api, restoreSession, setAccessToken, setAuthLostHandler } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -14,8 +14,9 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     setAuthLostHandler(() => setMember(null));
-    reissueToken()
-      .then(loadMember)
+    // 쿠키가 관리자 것이면 회원 화면에서는 비로그인으로 둔다
+    restoreSession()
+      .then((who) => (who === 'MEMBER' ? loadMember() : setMember(null)))
       .catch(() => setMember(null))
       .finally(() => setLoading(false));
   }, [loadMember]);

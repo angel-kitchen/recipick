@@ -16,7 +16,8 @@ const ITEMS = [
 ];
 
 export default function AdminLayout() {
-  const { admin, logout } = useAdmin();
+  const { admin, loading, logout } = useAdmin();
+  if (loading) return <p className="state-message">불러오는 중입니다.</p>;
   if (!admin) return <Navigate to="/admin/login" replace />;
 
   return (
@@ -33,7 +34,7 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="admin__me">
-          <div>{admin.loginId}</div>
+          <div>{admin.loginId ?? `관리자 #${admin.adminId}`}</div>
           <div className="field__hint">{ADMIN_ROLE[admin.role] ?? admin.role}</div>
           <button type="button" className="btn btn--outline btn--small" onClick={logout}>
             로그아웃

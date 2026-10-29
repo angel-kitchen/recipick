@@ -1,56 +1,45 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, setAdminAuthLostHandler, setAdminToken } from '../api/client';
+import { api, getAdminSession, logoutAdminSession, restoreSession, setAdminAuthLostHandler, setAdminToken } from '../api/client';
 
-// 관리자 API에는 재발급이 없어서 토큰을 탭 단위 저장소(sessionStorage)에 두고 새로고침을 견디게 한다.
-// 탭을 닫으면 사라진다.
-const KEY = 'recipick.admin';
-
-function readStored() {
-  try {
-    return JSON.parse(sessionStorage.getItem(KEY));
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(value) {
-  try {
-    if (value) sessionStorage.setItem(KEY, JSON.stringify(value));
-    else sessionStorage.removeItem(KEY);
-  } catch {
-    // 저장소를 못 쓰면 새로고침 때 다시 로그인하면 된다
-  }
-}
-
+// 관리자 토큰도 회원과 같이 메모리에만 둔다. 새로고침하면 리프레시 쿠키로 다시 받는다.
+// 쿠키가 하나라서 한 브라우저에서 회원·관리자를 함께 로그인하면 나중 로그인이 앞을 덮어쓴다(테스트는 시크릿 창).
 const AdminContext = createContext(null);
 
 export function AdminProvider({ children }) {
-  const [admin, setAdmin] = useState(() => {
-    const stored = readStored();
-    if (stored?.token) setAdminToken(stored.token);
-    return stored?.token ? stored : null;
-  });
+  const [admin, setAdmin] = useState(() => getAdminSession());
+  // 새로고침 직후 쿠키로 로그인 상태를 확인하는 동안은 로그인 화면으로 보내지 않는다
+  const [loading, setLoading] = useState(true);
 
-  const clear = useCallback(() => {
-    setAdminToken(null);
-    writeStored(null);
-    setAdmin(null);
+  useEffect(() => {
+    let ignore = false;
+    restoreSession().finally(() => {
+      if (ignore) return;
+      setAdmin(getAdminSession());
+      setLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   useEffect(() => {
-    setAdminAuthLostHandler(clear);
+    setAdminAuthLostHandler(() => setAdmin(null));
     return () => setAdminAuthLostHandler(() => {});
-  }, [clear]);
+  }, []);
 
   const login = useCallback(async (loginId, password) => {
     const data = await api.post('/api/admin/auth/login', { loginId, password });
-    setAdminToken(data.accessToken);
-    const next = { token: data.accessToken, adminId: data.adminId, role: data.role, martId: data.martId, loginId };
-    writeStored(next);
-    setAdmin(next);
+    const session = { adminId: data.adminId, role: data.role, martId: data.martId, loginId };
+    setAdminToken(data.accessToken, session);
+    setAdmin(session);
   }, []);
 
-  const value = useMemo(() => ({ admin, login, logout: clear }), [admin, login, clear]);
+  const logout = useCallback(async () => {
+    await logoutAdminSession();
+    setAdmin(null);
+  }, []);
+
+  const value = useMemo(() => ({ admin, loading, login, logout }), [admin, loading, login, logout]);
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 

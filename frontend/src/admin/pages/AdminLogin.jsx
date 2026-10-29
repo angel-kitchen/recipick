@@ -4,12 +4,13 @@ import ErrorNotice from '../../components/ErrorNotice';
 import { useAdmin } from '../AdminContext';
 
 export default function AdminLogin() {
-  const { admin, login } = useAdmin();
+  const { admin, loading, login } = useAdmin();
   const navigate = useNavigate();
   const [form, setForm] = useState({ loginId: '', password: '' });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  if (loading) return null;
   if (admin) return <Navigate to="/admin" replace />;
 
   const handleSubmit = async (event) => {
