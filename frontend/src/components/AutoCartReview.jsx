@@ -127,8 +127,6 @@ export default function AutoCartReview({ preview }) {
                     {!excluded && (
                       <div className="tile__meta">
                         {quantityOf(item, productId)}개
-                        {Number(productId) === item.product.productId &&
-                          ` · 사용 후 약 ${formatAmount(item.expectedRemainingAmount, item.unit)} 남음`}
                       </div>
                     )}
                   </>
