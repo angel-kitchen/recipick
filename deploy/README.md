@@ -88,19 +88,20 @@
 
 HTTP 단계는 인증서 발급과 첫 응답 확인을 위한 짧은 구간이다. 요청이 평문으로 오가므로 테스트 계정만 쓰고 실제 사용자·결제를 받지 않는다. 운영 리프레시 쿠키가 `Secure`라 이 단계에서는 토큰 재발급도 동작하지 않는다.
 
-1. 도메인의 A 레코드를 Elastic IP로 연결한다. 연결되면 서버 `.env`에서 두 값을 바꾼다.
+1. 도메인의 `@`와 `www` A 레코드를 Elastic IP로 연결한다. 프론트도 같은 서버에서 서빙하므로(#261) `api` 하위 도메인은 쓰지 않는다. 연결되면 서버 `.env`를 확인한다.
    - `PROXY_CHECK_URL=http://<도메인>/api/categories`. 배포 확인이 리다이렉트를 따라가 최종 200을 보므로, 이후 HTTPS로 바꿔도 그대로 두면 인증서까지 확인된다.
-   - `CORS_ALLOWED_ORIGINS`를 프론트 도메인으로. 이 값은 앱 컨테이너가 만들어질 때 들어가므로, 4번의 HTTPS 배포보다 먼저 넣어야 그 배포에 반영된다. 배포 없이 바로 적용하려면 `docker compose up -d --no-deps app`으로 앱을 다시 만든다.
-2. 발급 시험. 실제 발급은 도메인당 주 5회 제한이 있으므로 먼저 `--dry-run`으로 확인한다.
+   - `CORS_ALLOWED_ORIGINS`는 비워 둔다. 화면과 API가 같은 출처라 필요 없다.
+2. 발급 시험. 실제 발급은 도메인당 주 5회 제한이 있으므로 먼저 `--dry-run`으로 확인한다. 두 이름을 한 인증서로 받고, 첫 `-d`가 인증서 폴더 이름(`live/<도메인>`)이 된다.
    ```bash
    cd /opt/recipick
-   docker compose --profile certbot run --rm certbot certonly --webroot -w /var/www/certbot -d <도메인> --email <메일> --agree-tos --dry-run
+   docker compose --profile certbot run --rm certbot certonly --webroot -w /var/www/certbot -d <도메인> -d www.<도메인> --email <메일> --agree-tos --dry-run
    ```
 3. 성공하면 `--dry-run`을 빼고 실제 발급한다.
-4. 저장소에서 `nginx/conf.d/app-https.conf.disabled`의 `DOMAIN`을 실제 도메인으로 바꾸고, 이름을 `app-https.conf`로, `app.conf`는 `app.conf.disabled`로 바꿔 머지한다. 배포가 옛 `app.conf`를 지우고 `nginx -t` 후 reload한 뒤, http 주소에서 https로 넘어가 최종 200인지 확인한다. 인증서가 없거나 HTTPS 블록이 틀리면 이전 설정으로 돌아간다.
-5. `.env`를 고친 뒤에는 다음 배포나 앱 재생성 전까지 실행 중인 앱에 반영되지 않는다. 1번에서 CORS를 넣었는지 다시 확인한다.
+4. `nginx/conf.d/app-https.conf`를 켜고 `app.conf`를 `app.conf.disabled`로 바꾼 PR을 머지한다. 배포가 옛 `app.conf`를 지우고 `nginx -t` 후 reload한 뒤, http 주소에서 https로 넘어가 최종 200인지 확인한다. 인증서가 없거나 HTTPS 블록이 틀리면 이전 설정으로 돌아간다.
+5. `.env`를 고친 뒤에는 다음 배포나 앱 재생성 전까지 실행 중인 앱에 반영되지 않는다. 바로 적용하려면 `docker compose up -d --no-deps app`으로 앱을 다시 만든다.
 6. 확인한다.
    - `curl -I http://<도메인>/api/categories`가 301로 https를 가리킨다
+   - `curl -I https://www.<도메인>/`이 301로 `https://<도메인>/`을 가리킨다
    - `curl -vI https://<도메인>/api/categories`의 인증서 발급자가 Let's Encrypt이고 만료일이 90일 뒤다
    - 로그인 응답의 리프레시 토큰 쿠키에 `Secure`가 붙는다
    - 그 쿠키로 토큰 재발급이 200이다
