@@ -70,12 +70,21 @@ public class RecipeService {
     // 등록 레시피가 100개 남짓이라 활성 레시피를 한 번에 읽고 조건은 메모리에서 거른다. 순서는 ID순으로 고정한다
     public List<Recipe> findRecommendCandidates(RecipeRecommendCondition condition) {
         Set<Long> excludedRecipeIds = condition.excludedIngredients().stream()
-            .flatMap(name -> recipeIngredientRepository.findRecipeIdsByIngredientNameContaining(name).stream())
+            .flatMap(name -> recipeIngredientRepository
+                .findRecipeIdsByIngredientNameContaining(escapeLikePattern(name))
+                .stream())
             .collect(Collectors.toSet());
         return recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE).stream()
             .filter(condition::matches)
             .filter(recipe -> !excludedRecipeIds.contains(recipe.getId()))
             .toList();
+    }
+
+    // AI가 준 재료 이름의 %·_가 와일드카드로 해석되면 그 재료가 없는 레시피까지 빠지므로 글자 그대로 찾게 한다
+    private static String escapeLikePattern(String name) {
+        return name.replace("!", "!!")
+            .replace("%", "!%")
+            .replace("_", "!_");
     }
 
     private Set<Long> findBookmarkedRecipeIds(Long memberId, List<Recipe> recipes) {

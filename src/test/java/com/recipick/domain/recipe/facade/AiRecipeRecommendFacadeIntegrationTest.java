@@ -171,6 +171,25 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
             .doesNotContain(kimchiStew.getId());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("제외 재료 이름의 %·_는 와일드카드가 아니라 글자로 찾아, 그 글자가 없는 재료의 레시피는 빼지 않는다")
+    void recommend_treatsLikeWildcardsAsLiteral() {
+        // given
+        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("%", "AI추천테스트_이")));
+        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+            List.of(new AiRecommendedRecipe(kimchiStew.getId(), "추천 이유")), PICK_USAGE));
+
+        // when
+        aiRecipeRecommendFacade.recommend(MEMBER_ID, "% 빼고 찌개");
+
+        // then
+        ArgumentCaptor<List<AiRecipeOption>> candidates = ArgumentCaptor.forClass(List.class);
+        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        assertThat(candidates.getValue()).extracting(AiRecipeOption::id)
+            .contains(kimchiStew.getId(), soybeanStew.getId());
+    }
+
     @Test
     @DisplayName("조건 분석이 실패하면 추천 없이 FALLBACK을 주고, 두 번째 AI는 부르지 않는다")
     void recommend_fallsBackWithoutRecipesWhenConditionFails() {

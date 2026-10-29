@@ -31,10 +31,11 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
     List<RecipeIngredient> findAllWithIngredient(@Param("recipeId") Long recipeId);
     boolean existsByIngredientId(Long ingredientId);
 
+    // name은 LIKE 특수문자를 '!'로 이스케이프한 값이어야 한다. MySQL 문자열에서 백슬래시는 그 자체로 이스케이프 문자라 '!'를 쓴다
     @Query("""
             SELECT DISTINCT ri.recipe.id
             FROM RecipeIngredient ri
-            WHERE ri.ingredient.name LIKE CONCAT('%', :name, '%')
+            WHERE ri.ingredient.name LIKE CONCAT('%', :name, '%') ESCAPE '!'
             """)
     List<Long> findRecipeIdsByIngredientNameContaining(@Param("name") String name);
 
