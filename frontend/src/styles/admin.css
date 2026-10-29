@@ -1,0 +1,189 @@
+/* 관리자 화면: 정보 밀도가 높아 쇼핑 화면보다 작은 글씨와 표를 쓴다 */
+.admin {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  background: var(--canvas);
+}
+
+.admin__side {
+  background: var(--green-house);
+  color: var(--text-on-dark);
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin__brand {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.admin__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin__nav a {
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text-on-dark-soft);
+  font-size: 14px;
+}
+
+.admin__nav a.active {
+  background: var(--green-uplift);
+  color: var(--text-on-dark);
+  font-weight: 600;
+}
+
+.admin__me {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+
+.admin__me .field__hint {
+  color: var(--text-on-dark-soft);
+}
+
+.admin__main {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.admin-login {
+  min-height: 100vh;
+  background: var(--canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+.admin-login .auth-card {
+  width: 100%;
+  margin: 0;
+}
+
+.btn--small {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table th {
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.table tr.is-clickable {
+  cursor: pointer;
+}
+
+.table tr.is-clickable:hover {
+  background: var(--green-light);
+}
+
+.table__thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--green-light);
+  display: block;
+}
+
+.admin__section {
+  margin-bottom: var(--space-4);
+}
+
+.admin__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.admin__head .page__title {
+  margin-bottom: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px var(--space-3);
+  font-size: 13px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--text-soft);
+}
+
+.kv dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.json {
+  background: var(--canvas);
+  border-radius: 8px;
+  padding: var(--space-3);
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 0;
+}
+
+@media (max-width: 899px) {
+  .admin {
+    grid-template-columns: 1fr;
+  }
+
+  .admin__side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: var(--space-3);
+  }
+
+  .admin__nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .admin__me {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+}
