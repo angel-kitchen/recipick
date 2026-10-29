@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
+import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -76,5 +78,40 @@ class FakeAiClientTest {
         assertThat(result.failureType()).isEqualTo(AiFailureType.UNAVAILABLE);
         assertThat(result.content()).isNull();
         assertThat(result.usage().inputTokens()).isNull();
+    }
+
+    @Test
+    @DisplayName("조건 분석은 한식·양식과 조리 시간만 읽고 나머지는 비워 둔다")
+    void extractConditions_readsCuisineAndMinutes() {
+        // when
+        AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions("30분 안에 되는 한식");
+
+        // then
+        assertThat(result.content()).isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of()));
+    }
+
+    @Test
+    @DisplayName("추천은 후보를 앞에서부터 최대 5개 고른다")
+    void recommendRecipes_picksFirstCandidates() {
+        // when
+        AiResult<List<AiRecommendedRecipe>> result = fakeAiClient.recommendRecipes("찌개 추천", recipes);
+
+        // then
+        assertThat(result.content()).extracting(AiRecommendedRecipe::recipeId).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    @DisplayName("추천 장애 문구가 들어오면 조건 분석은 성공하고 고르기만 실패한다")
+    void recommendRecipes_failsWhenTriggerGiven() {
+        // given
+        String text = "찌개 " + FakeAiClient.RECOMMEND_FAILURE_TRIGGER;
+
+        // when
+        AiResult<AiRecipeConditions> conditions = fakeAiClient.extractConditions(text);
+        AiResult<List<AiRecommendedRecipe>> picks = fakeAiClient.recommendRecipes(text, recipes);
+
+        // then
+        assertThat(conditions.isSuccess()).isTrue();
+        assertThat(picks.failureType()).isEqualTo(AiFailureType.UNAVAILABLE);
     }
 }
