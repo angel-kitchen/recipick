@@ -1,0 +1,189 @@
+/* 홈: 테슬라 규칙. 풀스크린, 조용한 여백, 4px 버튼, 그림자 없음 */
+.hero {
+  position: relative;
+  height: 100vh;
+  min-height: 520px;
+  margin-top: calc(-1 * var(--nav-height));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--green-house); /* 영상 파일이 없을 때 보이는 바탕 */
+  color: var(--white);
+  overflow: hidden;
+}
+
+.hero__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25); /* 글자가 밝은 영상 위에서도 읽히게 */
+}
+
+.hero__content {
+  position: relative;
+  text-align: center;
+  padding: 0 var(--space-3) var(--space-9);
+}
+
+.hero__title {
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.hero__subtitle {
+  margin: var(--space-2) 0 var(--space-5);
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.hero__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.tbtn {
+  min-width: 160px;
+  min-height: 40px;
+  padding: 4px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid transparent;
+  border-radius: var(--radius-tesla);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.33s, color 0.33s, border-color 0.33s;
+}
+
+.tbtn--primary {
+  background: var(--green-accent);
+  color: var(--white);
+}
+
+.tbtn--primary:hover {
+  background: var(--green-brand);
+}
+
+.tbtn--secondary {
+  background: var(--white);
+  color: #393c41;
+}
+
+.tbtn--secondary:hover {
+  background: #f4f4f4;
+}
+
+.section {
+  min-height: 80vh;
+  padding: var(--space-9) 0;
+  display: flex;
+  align-items: center;
+  background: var(--white);
+}
+
+.section--alt {
+  background: #f4f4f4;
+}
+
+.section__title {
+  font-size: 32px;
+  font-weight: 500;
+  color: #171a20;
+  text-align: center;
+}
+
+.section__lead {
+  margin: var(--space-2) auto var(--space-7);
+  max-width: 560px;
+  text-align: center;
+  color: #5c5e62;
+  font-size: 14px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.steps li {
+  text-align: center;
+}
+
+.steps__number {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-size: 14px;
+  color: var(--green-accent);
+  font-weight: 500;
+}
+
+.steps__title {
+  font-size: 22px;
+  font-weight: 500;
+  color: #171a20;
+}
+
+.steps__text {
+  margin-top: var(--space-2);
+  color: #5c5e62;
+  font-size: 14px;
+}
+
+.korea-map {
+  width: 100%;
+  height: 520px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f4f4f4;
+}
+
+.map-legend {
+  margin-top: var(--space-3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 14px;
+  color: #5c5e62;
+}
+
+.map-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--map-red);
+}
+
+@media (max-width: 767px) {
+  .hero__title {
+    font-size: 28px;
+  }
+
+  .hero__actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .korea-map {
+    height: 360px;
+  }
+}

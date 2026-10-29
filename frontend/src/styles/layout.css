@@ -1,0 +1,214 @@
+/* 헤더·푸터·장바구니 플로팅 버튼: 홈과 쇼핑 화면이 함께 쓴다 */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: var(--nav-height);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  transition: background-color 0.33s, color 0.33s;
+}
+
+.header--shop {
+  background: var(--white);
+  box-shadow: var(--shadow-nav);
+}
+
+.header--over-hero {
+  background: transparent;
+  backdrop-filter: none;
+  color: var(--white);
+}
+
+.header__inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.header__logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green-brand);
+  transition: color 0.33s;
+}
+
+.header--over-hero .header__logo {
+  color: var(--white);
+}
+
+.header__nav {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header__nav a,
+.header__link-button {
+  padding: 4px 16px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  border: 0;
+  border-radius: var(--radius-tesla);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.33s;
+}
+
+.header__nav a:hover,
+.header__link-button:hover,
+.header__nav a.active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.header--over-hero .header__nav a:hover,
+.header--over-hero .header__link-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.header__spacer {
+  flex: 1;
+}
+
+.header__name {
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.header--over-hero .header__name {
+  color: var(--text-on-dark-soft);
+}
+
+.header__toggle {
+  display: none;
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  align-items: center;
+}
+
+.header__toggle span {
+  width: 20px;
+  height: 2px;
+  background: currentColor;
+}
+
+.main {
+  min-height: calc(100vh - var(--nav-height));
+  padding-top: var(--nav-height);
+}
+
+.footer {
+  background: var(--green-house);
+  color: var(--text-on-dark-soft);
+  padding: var(--space-5) 0;
+  font-size: 14px;
+}
+
+.footer__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.footer__inner strong {
+  color: var(--text-on-dark);
+  font-size: 18px;
+}
+
+/* 스타벅스의 Frap: 쇼핑 중 어디서나 장바구니로 가는 둥근 버튼 */
+.frap {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 90;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--green-accent);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.24), 0 8px 12px rgba(0, 0, 0, 0.14);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.frap:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.24), 0 8px 12px rgba(0, 0, 0, 0);
+}
+
+@media (max-width: 767px) {
+  .header__toggle {
+    display: flex;
+  }
+
+  .header__nav {
+    display: none;
+    position: absolute;
+    top: var(--nav-height);
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--space-3);
+    background: var(--white);
+    color: var(--text);
+  }
+
+  .header__nav--open {
+    display: flex;
+  }
+
+  .header__spacer {
+    display: none;
+  }
+
+  .header__nav a,
+  .header__link-button {
+    padding: var(--space-3);
+  }
+}
+
+/* 현재 배송지: 로고 옆에 말줄임으로 보여 주고 누르면 배송지 화면으로 간다 */
+.header__address {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.header__address::before {
+  content: '배송지 ';
+  font-weight: 600;
+  color: var(--green-accent);
+}
+
+.header--over-hero .header__address {
+  color: var(--text-on-dark-soft);
+}
+
+@media (max-width: 767px) {
+  .header__address {
+    display: none;
+  }
+}

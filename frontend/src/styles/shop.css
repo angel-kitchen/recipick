@@ -1,0 +1,547 @@
+/* 쇼핑 화면: 스타벅스 규칙. 크림 바탕, 알약 버튼, 12px 카드, 얇은 겹 그림자 */
+.page {
+  padding: var(--space-5) 0 var(--space-9);
+}
+
+.page__title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--green-brand);
+  margin-bottom: var(--space-4);
+}
+
+.page__sub {
+  margin-bottom: var(--space-4);
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.state-message {
+  padding: var(--space-9) var(--space-3);
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.error-text {
+  color: var(--red);
+  font-size: 14px;
+}
+
+/* 버튼: 알약 모양, 누르면 살짝 작아진다 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 16px;
+  border: 1px solid var(--green-accent);
+  border-radius: var(--radius-pill);
+  background: var(--green-accent);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn--outline {
+  background: transparent;
+  color: var(--green-accent);
+}
+
+.btn--large {
+  padding: 14px 32px;
+  font-size: 16px;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.tile {
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile__image {
+  aspect-ratio: 4 / 3;
+  background: var(--green-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green-uplift);
+  font-size: 14px;
+  object-fit: cover;
+  width: 100%;
+  opacity: 1;
+}
+
+.tile__body {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.tile__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tile__meta {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.tile__price {
+  font-weight: 700;
+}
+
+.tile__actions {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--green-light);
+  color: var(--green-brand);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge--warn {
+  background: #fdecea;
+  color: var(--red);
+}
+
+/* 검색·필터 줄 */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.filters .field__input {
+  width: auto;
+  min-width: 140px;
+}
+
+.pager {
+  margin-top: var(--space-5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 입력칸 */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field__input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--text);
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: var(--green-accent);
+}
+
+.field__hint {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 14px;
+}
+
+.auth-card {
+  max-width: 420px;
+  margin: var(--space-6) auto;
+}
+
+.auth-card__footer {
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.auth-card__footer a {
+  color: var(--green-accent);
+  font-weight: 600;
+}
+
+/* 레시피 상세 */
+.detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.detail__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.list-plain {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-plain li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.steps-list {
+  padding-left: var(--space-4);
+  margin: 0;
+}
+
+.steps-list li {
+  padding: var(--space-1) 0;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepper button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--input-line);
+  background: var(--white);
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepper span {
+  min-width: 24px;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* 장바구니·주문 */
+.cart {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.cart-row {
+  display: grid;
+  grid-template-columns: auto 72px 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.cart-row:last-child {
+  border-bottom: 0;
+}
+
+.cart-row__image {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  background: var(--green-light);
+  object-fit: cover;
+}
+
+.cart-row__name {
+  font-weight: 600;
+}
+
+.cart-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.summary__row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  font-size: 14px;
+}
+
+.summary__total {
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.notice {
+  padding: var(--space-3);
+  border-radius: 8px;
+  background: #fdecea;
+  color: var(--red);
+  font-size: 14px;
+  margin-bottom: var(--space-3);
+}
+
+.notice--info {
+  background: var(--green-light);
+  color: var(--green-brand);
+}
+
+@media (max-width: 899px) {
+  .detail,
+  .cart {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 479px) {
+  .cart-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .cart-row__image {
+    display: none;
+  }
+
+  .cart-row__side {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+/* 배송지·자동 장바구니 */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: 4px 12px;
+  border: 1px solid var(--green-accent);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--green-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cart-row--auto {
+  grid-template-columns: 1fr 1.4fr auto;
+}
+
+@media (max-width: 599px) {
+  .cart-row--auto {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 레시피 상세: 왼쪽 레시피 정보, 오른쪽 자동 장바구니 패널 */
+.recipe-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.recipe-panel {
+  position: sticky;
+  top: calc(var(--nav-height) + var(--space-3));
+}
+
+@media (max-width: 899px) {
+  .recipe-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-panel {
+    position: static;
+  }
+}
+
+/* 자동 장바구니 확인: 재료마다 체크, 상품 선택, 금액 */
+.review__row {
+  display: grid;
+  grid-template-columns: auto 1fr 1.6fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review__row.is-off .cart-row__name,
+.review__row.is-off .tile__price {
+  opacity: 0.45;
+}
+
+@media (max-width: 599px) {
+  .review__row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .review__row > :nth-child(3),
+  .review__row > :nth-child(4) {
+    grid-column: 2;
+  }
+}
+
+/* 담기 완료 창 */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal__box {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.cart-group__title {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* 레시피 영상 임베드(16:9) */
+.video-embed {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--green-house);
+}
+
+.video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* 장바구니 상단 선택·삭제 줄 */
+.cart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.chip--solid {
+  background: var(--green-accent);
+  color: var(--white);
+}
+
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 직접 숫자를 입력할 수 있는 스테퍼(재고 조정) */
+.stepper__input {
+  width: 80px;
+  border: 0;
+  background: transparent;
+  text-align: center;
+  font: inherit;
+  font-weight: 600;
+}
+
+.stepper__input:focus {
+  outline: 2px solid var(--green-accent);
+}
