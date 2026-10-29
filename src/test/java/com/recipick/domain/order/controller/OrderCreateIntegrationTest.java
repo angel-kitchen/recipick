@@ -42,6 +42,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -76,6 +77,8 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Member member;
     private String token;
@@ -85,17 +88,18 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         member = memberRepository.save(Member.builder()
-                .email(UUID.randomUUID() + "@order.test")
-                .name("주문 회원")
-                .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
-                .passwordHash("hash")
-                .martId(MART_ID)
-                .build());
+            .email(UUID.randomUUID() + "@order.test")
+            .name("주문 회원")
+            .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
+            .passwordHash("hash")
+            .martId(MART_ID)
+            .build());
         token = tokens.createMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach
     void cleanUp() {
+        deletePoints(member.getId());
         for (Long orderId : orderRepository.findIdsByMemberId(member.getId())) {
             paymentRepository.findByOrderId(orderId).ifPresent(paymentRepository::delete);
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
@@ -105,6 +109,15 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
         cartItemRepository.deleteAll(cartItems);
         productRepository.deleteAll(products);
         memberRepository.delete(member);
+    }
+
+    // 주문 생성이 만든 적립 예정·포인트 이력을 외래키 역순(이력 → 사용 → 적립 → 회원 포인트)으로 지운다
+    private void deletePoints(Long memberId) {
+        jdbcTemplate.update("DELETE FROM point_history WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE pu FROM point_usage pu JOIN point_earning pe ON pu.point_earning_id = pe.id "
+            + "WHERE pe.member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM point_earning WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM member_point WHERE member_id = ?", memberId);
     }
 
     @Test
@@ -144,10 +157,10 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
 
         List<OrderItem> items = orderItemRepository.findAllByOrderIdOrderByIdAsc(order.getId());
         assertThat(items).extracting(OrderItem::getProductName, OrderItem::getUnitPrice, OrderItem::getQuantity,
-                        OrderItem::getLineAmount)
-                .containsExactly(
-                        tuple("애호박", 1500L, 2, 3000L),
-                        tuple("두부", 2000L, 1, 2000L));
+                OrderItem::getLineAmount)
+            .containsExactly(
+                tuple("애호박", 1500L, 2, 3000L),
+                tuple("두부", 2000L, 1, 2000L));
 
         List<OrderStatusHistory> histories = orderStatusHistoryRepository.findAllByOrderId(order.getId());
         assertThat(histories).singleElement().satisfies(history -> {
@@ -180,7 +193,7 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
         assertThat(retry.getStatus()).isEqualTo(200);
         assertThat(data(retry).path("orderId").asLong()).isEqualTo(data(first).path("orderId").asLong());
         assertThat(data(retry).path("portonePaymentId").asText())
-                .isEqualTo(data(first).path("portonePaymentId").asText());
+            .isEqualTo(data(first).path("portonePaymentId").asText());
         assertThat(data(retry).path("orderName").asText()).isEqualTo("애호박");
         assertThat(orderRepository.findIdsByMemberId(member.getId())).hasSize(1);
         assertThat(stockOf(zucchini)).isEqualTo(8);
@@ -194,7 +207,7 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
         CartItem cartItem = cartItem(zucchini, 2);
         createOrder("key-1", request(List.of(cartItem.getId())));
         OrderCreateRequest changed = new OrderCreateRequest(List.of(cartItem.getId()), "김철수", "01012345678",
-                "서울 종로구 삼청로 1", "101호", MART_LEGAL_DONG_CODE);
+            "서울 종로구 삼청로 1", "101호", MART_LEGAL_DONG_CODE);
 
         // when
         MockHttpServletResponse response = createOrder("key-1", changed);
@@ -228,7 +241,7 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
         Product zucchini = product(MART_ID, "애호박", 1500L, 10);
         CartItem cartItem = cartItem(zucchini, 2);
         OrderCreateRequest request = new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678",
-                "경기 광명시 하안로 1", null, OTHER_MART_LEGAL_DONG_CODE);
+            "경기 광명시 하안로 1", null, OTHER_MART_LEGAL_DONG_CODE);
 
         // when
         MockHttpServletResponse response = createOrder("key-1", request);
@@ -246,7 +259,7 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
         Product zucchini = product(MART_ID, "애호박", 1500L, 10);
         CartItem cartItem = cartItem(zucchini, 2);
         OrderCreateRequest request = new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678",
-                "서울 종로구 삼청로 1", null, "11110");
+            "서울 종로구 삼청로 1", null, "11110");
 
         // when
         MockHttpServletResponse response = createOrder("key-1", request);
@@ -336,10 +349,10 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
 
         // when
         MockHttpServletResponse response = mockMvc.perform(post("/api/orders")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request(List.of(cartItem.getId())))))
-                .andReturn().getResponse();
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(request(List.of(cartItem.getId())))))
+            .andReturn().getResponse();
 
         // then
         assertThat(response.getStatus()).isEqualTo(400);
@@ -348,16 +361,16 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
 
     private OrderCreateRequest request(List<Long> cartItemIds) {
         return new OrderCreateRequest(cartItemIds, "홍길동", "01012345678", "서울 종로구 삼청로 1", "101호",
-                MART_LEGAL_DONG_CODE);
+            MART_LEGAL_DONG_CODE);
     }
 
     private MockHttpServletResponse createOrder(String idempotencyKey, OrderCreateRequest request) throws Exception {
         MockHttpServletResponse response = mockMvc.perform(post("/api/orders")
-                        .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request)))
-                .andReturn().getResponse();
+                .header("Authorization", "Bearer " + token)
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(request)))
+            .andReturn().getResponse();
         response.setCharacterEncoding("UTF-8");
         return response;
     }
@@ -365,23 +378,23 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
     private Product product(Long martId, String name, Long price, int stock) {
         Mart mart = martRepository.findById(martId).orElseThrow();
         Product product = productRepository.save(Product.builder()
-                .mart(mart)
-                .name(name)
-                .price(price)
-                .saleUnitAmount(new BigDecimal("1"))
-                .saleUnit(SaleUnit.EA)
-                .totalQuantity(stock)
-                .build());
+            .mart(mart)
+            .name(name)
+            .price(price)
+            .saleUnitAmount(new BigDecimal("1"))
+            .saleUnit(SaleUnit.EA)
+            .totalQuantity(stock)
+            .build());
         products.add(product);
         return product;
     }
 
     private CartItem cartItem(Product product, int quantity) {
         CartItem cartItem = cartItemRepository.save(CartItem.builder()
-                .memberId(member.getId())
-                .productId(product.getId())
-                .quantity(quantity)
-                .build());
+            .memberId(member.getId())
+            .productId(product.getId())
+            .quantity(quantity)
+            .build());
         cartItems.add(cartItem);
         return cartItem;
     }

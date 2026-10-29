@@ -33,6 +33,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -68,6 +69,8 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Member member;
     private String token;
@@ -77,17 +80,18 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         member = memberRepository.save(Member.builder()
-                .email(UUID.randomUUID() + "@op.test")
-                .name("미리보기 회원")
-                .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
-                .passwordHash("hash")
-                .martId(MART_ID)
-                .build());
+            .email(UUID.randomUUID() + "@op.test")
+            .name("미리보기 회원")
+            .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
+            .passwordHash("hash")
+            .martId(MART_ID)
+            .build());
         token = tokens.createMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach
     void cleanUp() {
+        deletePoints(member.getId());
         for (Long orderId : orderRepository.findIdsByMemberId(member.getId())) {
             paymentRepository.findByOrderId(orderId).ifPresent(paymentRepository::delete);
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
@@ -97,6 +101,15 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
         cartItemRepository.deleteAll(cartItems);
         productRepository.deleteAll(products);
         memberRepository.delete(member);
+    }
+
+    // 주문 생성이 만든 적립 예정·포인트 이력을 외래키 역순(이력 → 사용 → 적립 → 회원 포인트)으로 지운다
+    private void deletePoints(Long memberId) {
+        jdbcTemplate.update("DELETE FROM point_history WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE pu FROM point_usage pu JOIN point_earning pe ON pu.point_earning_id = pe.id "
+            + "WHERE pe.member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM point_earning WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM member_point WHERE member_id = ?", memberId);
     }
 
     @Test
@@ -234,23 +247,23 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
 
     private MockHttpServletResponse preview(List<Long> cartItemIds, String legalDongCode) throws Exception {
         MockHttpServletResponse response = mockMvc.perform(post("/api/orders/preview")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(new OrderPreviewRequest(cartItemIds, legalDongCode))))
-                .andReturn().getResponse();
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(new OrderPreviewRequest(cartItemIds, legalDongCode))))
+            .andReturn().getResponse();
         response.setCharacterEncoding("UTF-8");
         return response;
     }
 
     private MockHttpServletResponse createOrder(List<Long> cartItemIds) throws Exception {
         OrderCreateRequest request = new OrderCreateRequest(cartItemIds, "홍길동", "01012345678",
-                "서울 종로구 삼청로 1", "101호", MART_LEGAL_DONG_CODE);
+            "서울 종로구 삼청로 1", "101호", MART_LEGAL_DONG_CODE);
         MockHttpServletResponse response = mockMvc.perform(post("/api/orders")
-                        .header("Authorization", "Bearer " + token)
-                        .header("Idempotency-Key", UUID.randomUUID().toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(request)))
-                .andReturn().getResponse();
+                .header("Authorization", "Bearer " + token)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(request)))
+            .andReturn().getResponse();
         response.setCharacterEncoding("UTF-8");
         assertThat(response.getStatus()).isEqualTo(201);
         return response;
@@ -259,23 +272,23 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
     private Product product(Long martId, String name, Long price, int stock) {
         Mart mart = martRepository.findById(martId).orElseThrow();
         Product product = productRepository.save(Product.builder()
-                .mart(mart)
-                .name(name)
-                .price(price)
-                .saleUnitAmount(new BigDecimal("1"))
-                .saleUnit(SaleUnit.EA)
-                .totalQuantity(stock)
-                .build());
+            .mart(mart)
+            .name(name)
+            .price(price)
+            .saleUnitAmount(new BigDecimal("1"))
+            .saleUnit(SaleUnit.EA)
+            .totalQuantity(stock)
+            .build());
         products.add(product);
         return product;
     }
 
     private CartItem cartItem(Product product, int quantity) {
         CartItem cartItem = cartItemRepository.save(CartItem.builder()
-                .memberId(member.getId())
-                .productId(product.getId())
-                .quantity(quantity)
-                .build());
+            .memberId(member.getId())
+            .productId(product.getId())
+            .quantity(quantity)
+            .build());
         cartItems.add(cartItem);
         return cartItem;
     }
