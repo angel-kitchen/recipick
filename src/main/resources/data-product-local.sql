@@ -5468,2310 +5468,2310 @@ INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, descripti
 SELECT m.id, c.id, i.id, '김치 500g', '종가', NULL, 500, 'G',
        '/images/products/kimchi.jpg', 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '김치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김치 500g' AND p.brand = '종가');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '김치 900g', '풀무원', NULL, 900, 'G',
        '/images/products/kimchi.jpg', 10900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '김치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김치 900g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '돼지고기 앞다리살 500g', '국내산', NULL, 500, 'G',
        '/images/products/pork-shoulder.jpg', 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '돼지고기 앞다리살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '돼지고기 앞다리살 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '돼지고기 앞다리살 600g', '한돈', NULL, 600, 'G',
        '/images/products/pork-shoulder.jpg', 13900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '돼지고기 앞다리살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '돼지고기 앞다리살 600g' AND p.brand = '한돈');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '두부 300g', '풀무원', NULL, 300, 'G',
        '/images/products/tofu.jpg', 2300, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '두부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '두부 300g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '두부 500g', 'CJ', NULL, 500, 'G',
        '/images/products/tofu.jpg', 3100, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '두부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '두부 500g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '대파 300g', '국내산', NULL, 300, 'G',
        '/images/products/green-onion.jpg', 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '대파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '대파 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '대파 500g', '친환경', NULL, 500, 'G',
        '/images/products/green-onion.jpg', 4200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '대파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '대파 500g' AND p.brand = '친환경');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양파 1kg', '국내산', NULL, 1000, 'G',
        '/images/products/onion.jpg', 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양파 1kg' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양파 1.5kg', '국내산 대', NULL, 1500, 'G',
        '/images/products/onion.jpg', 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양파 1.5kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진마늘 200g', '국내산', NULL, 200, 'G',
        '/images/products/minced-garlic.jpg', 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '다진마늘'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진마늘 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진마늘 500g', '국내산 대용량', NULL, 500, 'G',
        '/images/products/minced-garlic.jpg', 8500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '다진마늘'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진마늘 500g' AND p.brand = '국내산 대용량');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고춧가루 200g', '청정원', NULL, 200, 'G',
        '/images/products/chili-powder.jpg', 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '고춧가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고춧가루 200g' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고춧가루 500g', '해찬들', NULL, 500, 'G',
        '/images/products/chili-powder.jpg', 12900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '고춧가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고춧가루 500g' AND p.brand = '해찬들');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '된장 500g', '해찬들', NULL, 500, 'G',
        '/images/products/doenjang.jpg', 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '된장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '된장 500g' AND p.brand = '해찬들');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '된장 1kg', '사조', NULL, 1000, 'G',
        '/images/products/doenjang.jpg', 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '된장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '된장 1kg' AND p.brand = '사조');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '애호박 1개', '국내산', NULL, 1, 'EA',
        '/images/products/zucchini.jpg', 1500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '애호박'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '애호박 1개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '애호박 2개', '친환경', NULL, 2, 'EA',
        '/images/products/zucchini.jpg', 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '애호박'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '애호박 2개' AND p.brand = '친환경');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '청양고추 100g', '국내산', NULL, 100, 'G',
        '/images/products/green-chili.jpg', 1800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '청양고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '청양고추 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '청양고추 200g', '국내산 대', NULL, 200, 'G',
        '/images/products/green-chili.jpg', 3300, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '청양고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '청양고추 200g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '국물용 멸치 200g', '남해', NULL, 200, 'G',
        '/images/products/anchovy.jpg', 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '국물용 멸치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '국물용 멸치 200g' AND p.brand = '남해');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '국물용 멸치 400g', '통영', NULL, 400, 'G',
        '/images/products/anchovy.jpg', 10900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '국물용 멸치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '국물용 멸치 400g' AND p.brand = '통영');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '건미역 50g', '완도', NULL, 50, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '건미역'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '건미역 50g' AND p.brand = '완도');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '건미역 100g', '기장', NULL, 100, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '건미역'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '건미역 100g' AND p.brand = '기장');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 국거리 300g', '국내산 한우', NULL, 300, 'G',
        '/images/products/beef-soup.jpg', 17900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 국거리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 국거리 300g' AND p.brand = '국내산 한우');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 국거리 400g', '호주산', NULL, 400, 'G',
        '/images/products/beef-soup.jpg', 12900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 국거리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 국거리 400g' AND p.brand = '호주산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '국간장 500ml', '청정원', NULL, 500, 'ML',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '국간장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '국간장 500ml' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '국간장 900ml', '샘표', NULL, 900, 'ML',
        NULL, 7900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '국간장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '국간장 900ml' AND p.brand = '샘표');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '참기름 320ml', '오뚜기', NULL, 320, 'ML',
        NULL, 7900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '참기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '참기름 320ml' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '참기름 500ml', 'CJ', NULL, 500, 'ML',
        NULL, 11900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '참기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '참기름 500ml' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고추장 500g', '해찬들', NULL, 500, 'G',
        '/images/products/gochujang.jpg', 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '고추장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고추장 500g' AND p.brand = '해찬들');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고추장 1kg', 'CJ', NULL, 1000, 'G',
        '/images/products/gochujang.jpg', 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '고추장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고추장 1kg' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '간장 500ml', '샘표', NULL, 500, 'ML',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '간장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '간장 500ml' AND p.brand = '샘표');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '간장 900ml', '몽고', NULL, 900, 'ML',
        NULL, 7500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '간장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '간장 900ml' AND p.brand = '몽고');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '설탕 1kg', 'CJ', NULL, 1000, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '설탕'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '설탕 1kg' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '설탕 3kg', '삼양', NULL, 3000, 'G',
        NULL, 7900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '설탕'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '설탕 3kg' AND p.brand = '삼양');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '계란 10개', '특란', NULL, 10, 'EA',
        '/images/products/egg.jpg', 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '계란'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '계란 10개' AND p.brand = '특란');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '계란 30개', '대란', NULL, 30, 'EA',
        '/images/products/egg.jpg', 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '계란'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '계란 30개' AND p.brand = '대란');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '당근 2개', '국내산', NULL, 2, 'EA',
        '/images/products/carrot.jpg', 2200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '당근'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '당근 2개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '당근 4개', '국내산 대', NULL, 4, 'EA',
        '/images/products/carrot.jpg', 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '당근'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '당근 4개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소금 500g', '꽃소금', NULL, 500, 'G',
        '/images/products/salt.jpg', 1800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '소금'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소금 500g' AND p.brand = '꽃소금');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소금 1kg', '천일염', NULL, 1000, 'G',
        '/images/products/salt.jpg', 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '소금'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소금 1kg' AND p.brand = '천일염');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식용유 900ml', 'CJ 해표', NULL, 900, 'ML',
        '/images/products/cooking-oil.jpg', 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '식용유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식용유 900ml' AND p.brand = 'CJ 해표');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식용유 1.8L', '오뚜기', NULL, 1800, 'ML',
        '/images/products/cooking-oil.jpg', 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '식용유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식용유 1.8L' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '새우젓 200g', '육젓', NULL, 200, 'G',
        '/images/products/salted-shrimp.jpg', 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '새우젓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '새우젓 200g' AND p.brand = '육젓');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '새우젓 500g', '추젓', NULL, 500, 'G',
        '/images/products/salted-shrimp.jpg', 11900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '새우젓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '새우젓 500g' AND p.brand = '추젓');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '스파게티면 500g', '폰타나', NULL, 500, 'G',
        '/images/products/spaghetti.jpg', 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '스파게티면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '스파게티면 500g' AND p.brand = '폰타나');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '스파게티면 500g', '데체코', NULL, 500, 'G',
        '/images/products/spaghetti.jpg', 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '스파게티면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '스파게티면 500g' AND p.brand = '데체코');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '베이컨 200g', '대림', NULL, 200, 'G',
        '/images/products/bacon.jpg', 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '베이컨'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '베이컨 200g' AND p.brand = '대림');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '베이컨 400g', '롯데', NULL, 400, 'G',
        '/images/products/bacon.jpg', 8200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '베이컨'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '베이컨 400g' AND p.brand = '롯데');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파마산치즈 가루 100g', '서울우유', NULL, 100, 'G',
        '/images/products/parmesan.jpg', 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '파마산치즈 가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파마산치즈 가루 100g' AND p.brand = '서울우유');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파마산치즈 가루 200g', '데이지', NULL, 200, 'G',
        '/images/products/parmesan.jpg', 8500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '파마산치즈 가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파마산치즈 가루 200g' AND p.brand = '데이지');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '생크림 250ml', '서울우유', NULL, 250, 'ML',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '생크림'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '생크림 250ml' AND p.brand = '서울우유');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '생크림 500ml', '매일', NULL, 500, 'ML',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '생크림'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '생크림 500ml' AND p.brand = '매일');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '후추 50g', '오뚜기', NULL, 50, 'G',
        '/images/products/black-pepper.jpg', 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '후추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '후추 50g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '후추 100g', '백설', NULL, 100, 'G',
        '/images/products/black-pepper.jpg', 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '후추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '후추 100g' AND p.brand = '백설');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '올리브유 500ml', '사조', NULL, 500, 'ML',
        '/images/products/olive-oil.jpg', 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '올리브유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '올리브유 500ml' AND p.brand = '사조');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '올리브유 1L', '오뚜기', NULL, 1000, 'ML',
        '/images/products/olive-oil.jpg', 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '올리브유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '올리브유 1L' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '토마토소스 400g', '오뚜기', NULL, 400, 'G',
        '/images/products/tomato-sauce.jpg', 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '토마토소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '토마토소스 400g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '토마토소스 600g', '폰타나', NULL, 600, 'G',
        '/images/products/tomato-sauce.jpg', 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '토마토소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '토마토소스 600g' AND p.brand = '폰타나');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통마늘 200g', '국내산', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '통마늘'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통마늘 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통마늘 500g', '의성', NULL, 500, 'G',
        NULL, 7900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '통마늘'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통마늘 500g' AND p.brand = '의성');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '생강 100g', '국내산', NULL, 100, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '생강'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '생강 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '생강 300g', '국내산 대', NULL, 300, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '생강'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '생강 300g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '홍고추 100g', '국내산', NULL, 100, 'G',
        NULL, 2000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '홍고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '홍고추 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '홍고추 200g', '국내산 대', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '홍고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '홍고추 200g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '건고추 50g', '국내산', NULL, 50, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '건고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '건고추 50g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '건고추 100g', '영양', NULL, 100, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '건고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '건고추 100g' AND p.brand = '영양');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '꽈리고추 150g', '국내산', NULL, 150, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '꽈리고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '꽈리고추 150g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '꽈리고추 300g', '국내산 대', NULL, 300, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '꽈리고추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '꽈리고추 300g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '감자 1kg', '국내산', NULL, 1000, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '감자'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '감자 1kg' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '감자 2kg', '수미', NULL, 2000, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '감자'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '감자 2kg' AND p.brand = '수미');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '무 800g', '국내산', NULL, 800, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '무'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '무 800g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '무 1.5kg', '국내산 대', NULL, 1500, 'G',
        NULL, 4200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '무'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '무 1.5kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '콩나물 300g', '풀무원', NULL, 300, 'G',
        NULL, 1800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '콩나물'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '콩나물 300g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '콩나물 500g', '국내산', NULL, 500, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '콩나물'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '콩나물 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '시금치 200g', '국내산', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '시금치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '시금치 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '시금치 400g', '포항초', NULL, 400, 'G',
        NULL, 6200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '시금치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '시금치 400g' AND p.brand = '포항초');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '오이 2개', '국내산', NULL, 2, 'EA',
        NULL, 2200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '오이'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '오이 2개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '오이 5개', '취청', NULL, 5, 'EA',
        NULL, 4800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '오이'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '오이 5개' AND p.brand = '취청');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양배추 800g', '국내산', NULL, 800, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양배추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양배추 800g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양배추 1.5kg', '국내산 대', NULL, 1500, 'G',
        NULL, 4800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양배추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양배추 1.5kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고구마 1kg', '국내산', NULL, 1000, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '고구마'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고구마 1kg' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고구마 2kg', '호박고구마', NULL, 2000, 'G',
        NULL, 7200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '고구마'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고구마 2kg' AND p.brand = '호박고구마');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '깻잎 100g', '국내산', NULL, 100, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '깻잎'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '깻잎 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '깻잎 200g', '국내산 대', NULL, 200, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '깻잎'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '깻잎 200g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '표고버섯 150g', '국내산', NULL, 150, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '표고버섯'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '표고버섯 150g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '표고버섯 300g', '국내산 대', NULL, 300, 'G',
        NULL, 6200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '표고버섯'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '표고버섯 300g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양송이버섯 200g', '국내산', NULL, 200, 'G',
        NULL, 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양송이버섯'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양송이버섯 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양송이버섯 400g', '국내산 대', NULL, 400, 'G',
        NULL, 5800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양송이버섯'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양송이버섯 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파프리카 2개', '국내산', NULL, 2, 'EA',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '파프리카'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파프리카 2개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파프리카 4개', '국내산 대', NULL, 4, 'EA',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '파프리카'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파프리카 4개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '피망 3개', '국내산', NULL, 3, 'EA',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '피망'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '피망 3개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '피망 6개', '국내산 대', NULL, 6, 'EA',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '피망'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '피망 6개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '토마토 3개', '국내산', NULL, 3, 'EA',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '토마토'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '토마토 3개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '토마토 6개', '국내산 대', NULL, 6, 'EA',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '토마토'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '토마토 6개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '방울토마토 500g', '국내산', NULL, 500, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '방울토마토'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '방울토마토 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '방울토마토 1kg', '대추방울', NULL, 1000, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '방울토마토'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '방울토마토 1kg' AND p.brand = '대추방울');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '단호박 1개', '국내산', NULL, 1, 'EA',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '단호박'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '단호박 1개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '단호박 2개', '국내산 대', NULL, 2, 'EA',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '단호박'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '단호박 2개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고사리 150g', '국내산', NULL, 150, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '고사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고사리 150g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고사리 300g', '국내산 대', NULL, 300, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '고사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고사리 300g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '숙주 300g', '국내산', NULL, 300, 'G',
        NULL, 1800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '숙주'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '숙주 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '숙주 500g', '국내산 대', NULL, 500, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '숙주'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '숙주 500g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우거지 300g', '국내산', NULL, 300, 'G',
        NULL, 3000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '우거지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우거지 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우거지 600g', '국내산 대', NULL, 600, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '우거지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우거지 600g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '곤드레 200g', '국내산', NULL, 200, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '곤드레'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '곤드레 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '곤드레 400g', '국내산 대', NULL, 400, 'G',
        NULL, 8000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '곤드레'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '곤드레 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쑥갓 100g', '국내산', NULL, 100, 'G',
        NULL, 1800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '쑥갓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쑥갓 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쑥갓 200g', '국내산 대', NULL, 200, 'G',
        NULL, 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '쑥갓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쑥갓 200g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '미나리 200g', '국내산', NULL, 200, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '미나리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '미나리 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '미나리 400g', '청도', NULL, 400, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '미나리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '미나리 400g' AND p.brand = '청도');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우엉 200g', '국내산', NULL, 200, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '우엉'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우엉 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우엉 400g', '국내산 대', NULL, 400, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '우엉'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우엉 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '밤 300g', '국내산', NULL, 300, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '밤'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '밤 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '밤 600g', '공주', NULL, 600, 'G',
        NULL, 8000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '밤'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '밤 600g' AND p.brand = '공주');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '대추 100g', '국내산', NULL, 100, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '대추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '대추 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '대추 200g', '경산', NULL, 200, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '대추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '대추 200g' AND p.brand = '경산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '인삼 100g', '국내산', NULL, 100, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '인삼'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '인삼 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '인삼 200g', '금산', NULL, 200, 'G',
        NULL, 10500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '인삼'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '인삼 200g' AND p.brand = '금산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '셀러리 200g', '국내산', NULL, 200, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '셀러리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '셀러리 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '셀러리 400g', '국내산 대', NULL, 400, 'G',
        NULL, 4800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '셀러리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '셀러리 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '로메인 150g', '국내산', NULL, 150, 'G',
        NULL, 3000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '로메인'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '로메인 150g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '로메인 300g', '국내산 대', NULL, 300, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '로메인'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '로메인 300g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양상추 200g', '국내산', NULL, 200, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양상추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양상추 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '양상추 400g', '국내산 대', NULL, 400, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '양상추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '양상추 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '아보카도 2개', '페루산', NULL, 2, 'EA',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '아보카도'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '아보카도 2개' AND p.brand = '페루산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '아보카도 4개', '멕시코산', NULL, 4, 'EA',
        NULL, 8000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '아보카도'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '아보카도 4개' AND p.brand = '멕시코산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '옥수수 340g', '델몬트', NULL, 340, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '옥수수'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '옥수수 340g' AND p.brand = '델몬트');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '옥수수 680g', '동원', NULL, 680, 'G',
        NULL, 5000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '옥수수'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '옥수수 680g' AND p.brand = '동원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '레몬 3개', '미국산', NULL, 3, 'EA',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '레몬'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '레몬 3개' AND p.brand = '미국산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '레몬 6개', '칠레산', NULL, 6, 'EA',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '레몬'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '레몬 6개' AND p.brand = '칠레산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바질 20g', '국내산', NULL, 20, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '바질'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바질 20g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바질 50g', '국내산 대', NULL, 50, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '바질'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바질 50g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파슬리 20g', '국내산', NULL, 20, 'G',
        NULL, 2000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '파슬리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파슬리 20g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파슬리 50g', '국내산 대', NULL, 50, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '파슬리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파슬리 50g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '로즈마리 20g', '국내산', NULL, 20, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '로즈마리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '로즈마리 20g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '로즈마리 50g', '국내산 대', NULL, 50, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '로즈마리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '로즈마리 50g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '피클 300g', '오뚜기', NULL, 300, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '피클'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '피클 300g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '피클 600g', '청정원', NULL, 600, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '피클'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '피클 600g' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '견과류 150g', '견과믹스', NULL, 150, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '견과류'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '견과류 150g' AND p.brand = '견과믹스');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '견과류 300g', '견과믹스 대', NULL, 300, 'G',
        NULL, 10900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '견과류'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '견과류 300g' AND p.brand = '견과믹스 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쪽파 200g', '국내산', NULL, 200, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '쪽파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쪽파 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쪽파 400g', '국내산 대', NULL, 400, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '채소·과일' JOIN ingredient i ON i.name = '쪽파'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쪽파 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진 돼지고기 300g', '국내산', NULL, 300, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '다진 돼지고기'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진 돼지고기 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진 돼지고기 600g', '한돈', NULL, 600, 'G',
        NULL, 8500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '다진 돼지고기'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진 돼지고기 600g' AND p.brand = '한돈');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진 소고기 300g', '호주산', NULL, 300, 'G',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '다진 소고기'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진 소고기 300g' AND p.brand = '호주산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다진 소고기 500g', '한우', NULL, 500, 'G',
        NULL, 24900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '다진 소고기'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다진 소고기 500g' AND p.brand = '한우');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 불고기용 300g', '호주산', NULL, 300, 'G',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 불고기용'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 불고기용 300g' AND p.brand = '호주산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 불고기용 500g', '한우', NULL, 500, 'G',
        NULL, 29900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 불고기용'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 불고기용 500g' AND p.brand = '한우');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소갈비 1kg', '호주산', NULL, 1000, 'G',
        NULL, 24900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소갈비'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소갈비 1kg' AND p.brand = '호주산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소갈비 1.5kg', '한우', NULL, 1500, 'G',
        NULL, 69900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소갈비'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소갈비 1.5kg' AND p.brand = '한우');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 홍두깨살 500g', '호주산', NULL, 500, 'G',
        NULL, 12900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 홍두깨살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 홍두깨살 500g' AND p.brand = '호주산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 홍두깨살 1kg', '한우', NULL, 1000, 'G',
        NULL, 49900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 홍두깨살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 홍두깨살 1kg' AND p.brand = '한우');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 스테이크용 250g', '호주산 안심', NULL, 250, 'G',
        NULL, 14900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 스테이크용'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 스테이크용 250g' AND p.brand = '호주산 안심');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소고기 스테이크용 400g', '한우 등심', NULL, 400, 'G',
        NULL, 39900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소고기 스테이크용'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소고기 스테이크용 400g' AND p.brand = '한우 등심');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '돼지 등뼈 1kg', '국내산', NULL, 1000, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '돼지 등뼈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '돼지 등뼈 1kg' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '돼지 등뼈 2kg', '국내산 대', NULL, 2000, 'G',
        NULL, 11900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '돼지 등뼈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '돼지 등뼈 2kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭볶음탕용 닭 1kg', '하림', NULL, 1000, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭볶음탕용 닭'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭볶음탕용 닭 1kg' AND p.brand = '하림');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭볶음탕용 닭 1.5kg', '마니커', NULL, 1500, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭볶음탕용 닭'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭볶음탕용 닭 1.5kg' AND p.brand = '마니커');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭다리살 500g', '하림', NULL, 500, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭다리살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭다리살 500g' AND p.brand = '하림');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭다리살 1kg', '마니커', NULL, 1000, 'G',
        NULL, 11900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭다리살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭다리살 1kg' AND p.brand = '마니커');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭가슴살 500g', '하림', NULL, 500, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭가슴살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭가슴살 500g' AND p.brand = '하림');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '닭가슴살 1kg', '마니커', NULL, 1000, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '닭가슴살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '닭가슴살 1kg' AND p.brand = '마니커');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '영계 500g', '삼계탕용', NULL, 500, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '영계'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '영계 500g' AND p.brand = '삼계탕용');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '영계 1kg', '삼계탕용 2마리', NULL, 1000, 'G',
        NULL, 8500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '영계'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '영계 1kg' AND p.brand = '삼계탕용 2마리');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '햄 200g', '스팸', NULL, 200, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '햄'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '햄 200g' AND p.brand = '스팸');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '햄 340g', '롯데', NULL, 340, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '햄'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '햄 340g' AND p.brand = '롯데');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소시지 300g', '롯데', NULL, 300, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소시지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소시지 300g' AND p.brand = '롯데');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소시지 600g', 'CJ', NULL, 600, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '육류·가공육' JOIN ingredient i ON i.name = '소시지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소시지 600g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '동태 500g', '국내 해동', NULL, 500, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '동태'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '동태 500g' AND p.brand = '국내 해동');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '동태 1kg', '국내 해동 대', NULL, 1000, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '동태'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '동태 1kg' AND p.brand = '국내 해동 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '오징어 400g', '국내산', NULL, 400, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '오징어'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '오징어 400g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '오징어 800g', '동해', NULL, 800, 'G',
        NULL, 12500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '오징어'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '오징어 800g' AND p.brand = '동해');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '낙지 200g', '국내산', NULL, 200, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '낙지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '낙지 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '낙지 400g', '서해', NULL, 400, 'G',
        NULL, 18000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '낙지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '낙지 400g' AND p.brand = '서해');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쭈꾸미 300g', '국내산', NULL, 300, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '쭈꾸미'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쭈꾸미 300g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쭈꾸미 600g', '서해', NULL, 600, 'G',
        NULL, 17900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '쭈꾸미'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쭈꾸미 600g' AND p.brand = '서해');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '북어채 100g', '국내산', NULL, 100, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '북어채'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '북어채 100g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '북어채 200g', '황태', NULL, 200, 'G',
        NULL, 8000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '북어채'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '북어채 200g' AND p.brand = '황태');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고등어 400g', '노르웨이산', NULL, 400, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '고등어'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고등어 400g' AND p.brand = '노르웨이산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고등어 800g', '국내산', NULL, 800, 'G',
        NULL, 12500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '고등어'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고등어 800g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '새우 300g', '칵테일', NULL, 300, 'G',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '새우'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '새우 300g' AND p.brand = '칵테일');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '새우 500g', '흰다리', NULL, 500, 'G',
        NULL, 13900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '새우'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '새우 500g' AND p.brand = '흰다리');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바지락 300g', '해감', NULL, 300, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '바지락'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바지락 300g' AND p.brand = '해감');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바지락 500g', '국내산', NULL, 500, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '바지락'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바지락 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '홍합 500g', '국내산', NULL, 500, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '홍합'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '홍합 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '홍합 1kg', '국내산 대', NULL, 1000, 'G',
        NULL, 7900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '홍합'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '홍합 1kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '어묵 200g', '삼진', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '어묵'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '어묵 200g' AND p.brand = '삼진');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '어묵 400g', '사각', NULL, 400, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '어묵'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '어묵 400g' AND p.brand = '사각');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '맛살 200g', '크라운', NULL, 200, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '맛살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '맛살 200g' AND p.brand = '크라운');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '맛살 400g', '사조', NULL, 400, 'G',
        NULL, 5000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '맛살'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '맛살 400g' AND p.brand = '사조');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '잔멸치 100g', '남해', NULL, 100, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '잔멸치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '잔멸치 100g' AND p.brand = '남해');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '잔멸치 200g', '통영', NULL, 200, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '잔멸치'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '잔멸치 200g' AND p.brand = '통영');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다시마 50g', '완도', NULL, 50, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '다시마'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다시마 50g' AND p.brand = '완도');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '다시마 100g', '기장', NULL, 100, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '다시마'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '다시마 100g' AND p.brand = '기장');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '김가루 50g', '광천', NULL, 50, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '김가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김가루 50g' AND p.brand = '광천');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '김가루 100g', '성경', NULL, 100, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '김가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김가루 100g' AND p.brand = '성경');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '김밥김 10개', '광천', NULL, 10, 'EA',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '김밥김'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김밥김 10개' AND p.brand = '광천');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '김밥김 20개', '성경', NULL, 20, 'EA',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '김밥김'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '김밥김 20개' AND p.brand = '성경');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '안초비 50g', '국내산', NULL, 50, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '안초비'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '안초비 50g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '안초비 100g', '수입산', NULL, 100, 'G',
        NULL, 8000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '수산·건어물' JOIN ingredient i ON i.name = '안초비'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '안초비 100g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '순두부 350g', '풀무원', NULL, 350, 'G',
        NULL, 2300, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '순두부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '순두부 350g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '순두부 700g', 'CJ', NULL, 700, 'G',
        NULL, 4200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '순두부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '순두부 700g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우유 900ml', '서울우유', NULL, 900, 'ML',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '우유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우유 900ml' AND p.brand = '서울우유');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우유 1.8L', '매일', NULL, 1800, 'ML',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '우유'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우유 1.8L' AND p.brand = '매일');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '버터 200g', '서울우유 무염', NULL, 200, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '버터'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '버터 200g' AND p.brand = '서울우유 무염');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '버터 450g', '앵커', NULL, 450, 'G',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '버터'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '버터 450g' AND p.brand = '앵커');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '모차렐라 치즈 200g', '서울우유', NULL, 200, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '모차렐라 치즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '모차렐라 치즈 200g' AND p.brand = '서울우유');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '모차렐라 치즈 1kg', '대용량', NULL, 1000, 'G',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '모차렐라 치즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '모차렐라 치즈 1kg' AND p.brand = '대용량');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '체다 치즈 200g', '슬라이스', NULL, 200, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '체다 치즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '체다 치즈 200g' AND p.brand = '슬라이스');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '체다 치즈 400g', '슬라이스 대', NULL, 400, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '체다 치즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '체다 치즈 400g' AND p.brand = '슬라이스 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '요거트 400g', '플레인', NULL, 400, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '요거트'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '요거트 400g' AND p.brand = '플레인');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '요거트 800g', '플레인 대', NULL, 800, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '두부·계란·유제품' JOIN ingredient i ON i.name = '요거트'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '요거트 800g' AND p.brand = '플레인 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쌀 1kg', '국내산', NULL, 1000, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '쌀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쌀 1kg' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쌀 4kg', '신동진', NULL, 4000, 'G',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '쌀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쌀 4kg' AND p.brand = '신동진');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '찹쌀 500g', '국내산', NULL, 500, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '찹쌀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '찹쌀 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '찹쌀 1kg', '국내산 대', NULL, 1000, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '찹쌀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '찹쌀 1kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '백태 500g', '국산', NULL, 500, 'G',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '백태'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '백태 500g' AND p.brand = '국산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '백태 1kg', '국산 대', NULL, 1000, 'G',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '백태'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '백태 1kg' AND p.brand = '국산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '밀가루 1kg', 'CJ', NULL, 1000, 'G',
        NULL, 2400, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '밀가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '밀가루 1kg' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '밀가루 2.5kg', '곰표', NULL, 2500, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '밀가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '밀가루 2.5kg' AND p.brand = '곰표');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '부침가루 500g', 'CJ', NULL, 500, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '부침가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '부침가루 500g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '부침가루 1kg', '백설', NULL, 1000, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '부침가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '부침가루 1kg' AND p.brand = '백설');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '빵가루 200g', '오뚜기', NULL, 200, 'G',
        NULL, 1900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '빵가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '빵가루 200g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '빵가루 500g', '큐원', NULL, 500, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '빵가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '빵가루 500g' AND p.brand = '큐원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '전분 200g', 'CJ', NULL, 200, 'G',
        NULL, 2000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '전분'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '전분 200g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '전분 500g', '옥수수전분', NULL, 500, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '쌀·곡물·가루' JOIN ingredient i ON i.name = '전분'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '전분 500g' AND p.brand = '옥수수전분');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소면 500g', '사조', NULL, 500, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '소면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소면 500g' AND p.brand = '사조');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '소면 900g', '오뚜기', NULL, 900, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '소면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '소면 900g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '칼국수면 500g', '풀무원', NULL, 500, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '칼국수면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '칼국수면 500g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '칼국수면 1kg', 'CJ', NULL, 1000, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '칼국수면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '칼국수면 1kg' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '냉면사리 400g', '풀무원', NULL, 400, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '냉면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '냉면사리 400g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '냉면사리 800g', 'CJ', NULL, 800, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '냉면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '냉면사리 800g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쫄면사리 400g', '풀무원', NULL, 400, 'G',
        NULL, 3000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '쫄면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쫄면사리 400g' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '쫄면사리 800g', 'CJ', NULL, 800, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '쫄면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '쫄면사리 800g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '메밀면 200g', '봉평', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '메밀면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '메밀면 200g' AND p.brand = '봉평');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '메밀면 400g', '봉평 대', NULL, 400, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '메밀면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '메밀면 400g' AND p.brand = '봉평 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '당면 300g', '대상', NULL, 300, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '당면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '당면 300g' AND p.brand = '대상');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '당면 500g', 'CJ', NULL, 500, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '당면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '당면 500g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '라면사리 420g', '농심', NULL, 420, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '라면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '라면사리 420g' AND p.brand = '농심');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '라면사리 840g', '오뚜기', NULL, 840, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '라면사리'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '라면사리 840g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '펜네 500g', '데체코', NULL, 500, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '펜네'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '펜네 500g' AND p.brand = '데체코');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '펜네 1kg', '폰타나', NULL, 1000, 'G',
        NULL, 7200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '펜네'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '펜네 1kg' AND p.brand = '폰타나');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '마카로니 500g', '폰타나', NULL, 500, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '마카로니'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '마카로니 500g' AND p.brand = '폰타나');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '마카로니 1kg', '데체코', NULL, 1000, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '마카로니'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '마카로니 1kg' AND p.brand = '데체코');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '라자냐면 250g', '데체코', NULL, 250, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '라자냐면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '라자냐면 250g' AND p.brand = '데체코');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '라자냐면 500g', '바릴라', NULL, 500, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '라자냐면'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '라자냐면 500g' AND p.brand = '바릴라');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '떡국떡 500g', '국내산', NULL, 500, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '떡국떡'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '떡국떡 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '떡국떡 1kg', '국내산 대', NULL, 1000, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '떡국떡'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '떡국떡 1kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '떡볶이떡 500g', '국내산', NULL, 500, 'G',
        NULL, 3000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '떡볶이떡'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '떡볶이떡 500g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '떡볶이떡 1kg', '국내산 대', NULL, 1000, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '면·파스타·떡' JOIN ingredient i ON i.name = '떡볶이떡'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '떡볶이떡 1kg' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식빵 450g', '삼립', NULL, 450, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '식빵'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식빵 450g' AND p.brand = '삼립');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식빵 900g', '샤니', NULL, 900, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '식빵'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식빵 900g' AND p.brand = '샤니');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바게트 250g', '파리바게뜨', NULL, 250, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '바게트'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바게트 250g' AND p.brand = '파리바게뜨');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바게트 500g', '뚜레쥬르', NULL, 500, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '바게트'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바게트 500g' AND p.brand = '뚜레쥬르');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '번 4개', '햄버거번', NULL, 4, 'EA',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '번'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '번 4개' AND p.brand = '햄버거번');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '번 8개', '햄버거번 대', NULL, 8, 'EA',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '번'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '번 8개' AND p.brand = '햄버거번 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '잉글리시 머핀 4개', '국내산', NULL, 4, 'EA',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '잉글리시 머핀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '잉글리시 머핀 4개' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '잉글리시 머핀 8개', '국내산 대', NULL, 8, 'EA',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '잉글리시 머핀'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '잉글리시 머핀 8개' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '또띠아 8개', '오뚜기', NULL, 8, 'EA',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '또띠아'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '또띠아 8개' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '또띠아 16개', 'CJ', NULL, 16, 'EA',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '또띠아'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '또띠아 16개' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '유부 20개', '유부초밥용', NULL, 20, 'EA',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '유부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '유부 20개' AND p.brand = '유부초밥용');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '유부 40개', '유부초밥용 대', NULL, 40, 'EA',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '유부'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '유부 40개' AND p.brand = '유부초밥용 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '후레이크 40g', '유부초밥용', NULL, 40, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '후레이크'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '후레이크 40g' AND p.brand = '유부초밥용');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '후레이크 100g', '유부초밥용 대', NULL, 100, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '후레이크'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '후레이크 100g' AND p.brand = '유부초밥용 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '단무지 300g', '오뚜기', NULL, 300, 'G',
        NULL, 1500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '단무지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '단무지 300g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '단무지 600g', '청정원', NULL, 600, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '단무지'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '단무지 600g' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통조림 콩 400g', '오뚜기', NULL, 400, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '통조림 콩'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통조림 콩 400g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통조림 콩 800g', '델몬트', NULL, 800, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '통조림 콩'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통조림 콩 800g' AND p.brand = '델몬트');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '참치캔 150g', '동원', NULL, 150, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '참치캔'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '참치캔 150g' AND p.brand = '동원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '참치캔 450g', '사조', NULL, 450, 'G',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '빵·가공식품' JOIN ingredient i ON i.name = '참치캔'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '참치캔 450g' AND p.brand = '사조');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '청국장 200g', '국내산', NULL, 200, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '청국장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '청국장 200g' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '청국장 400g', '국내산 대', NULL, 400, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '청국장'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '청국장 400g' AND p.brand = '국내산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '액젓 500ml', '까나리', NULL, 500, 'ML',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '액젓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '액젓 500ml' AND p.brand = '까나리');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '액젓 1L', '멸치', NULL, 1000, 'ML',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '액젓'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '액젓 1L' AND p.brand = '멸치');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '케첩 500g', '오뚜기', NULL, 500, 'G',
        NULL, 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '케첩'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '케첩 500g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '케첩 1kg', '하인즈', NULL, 1000, 'G',
        NULL, 5500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '케첩'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '케첩 1kg' AND p.brand = '하인즈');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '마요네즈 500g', '오뚜기', NULL, 500, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '마요네즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '마요네즈 500g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '마요네즈 1kg', '청정원', NULL, 1000, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '마요네즈'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '마요네즈 1kg' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '머스터드 200g', '오뚜기', NULL, 200, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '머스터드'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '머스터드 200g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '머스터드 400g', '하인즈', NULL, 400, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '머스터드'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '머스터드 400g' AND p.brand = '하인즈');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '겨자 50g', '오뚜기', NULL, 50, 'G',
        NULL, 1900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '겨자'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '겨자 50g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '겨자 100g', '청정원', NULL, 100, 'G',
        NULL, 3200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '겨자'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '겨자 100g' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '굴소스 260ml', '이금기', NULL, 260, 'ML',
        NULL, 3800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '굴소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '굴소스 260ml' AND p.brand = '이금기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '굴소스 510ml', '이금기 대', NULL, 510, 'ML',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '굴소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '굴소스 510ml' AND p.brand = '이금기 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우스터소스 150ml', '오뚜기', NULL, 150, 'ML',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '우스터소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우스터소스 150ml' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '우스터소스 300ml', '하인즈', NULL, 300, 'ML',
        NULL, 4200, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '우스터소스'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '우스터소스 300ml' AND p.brand = '하인즈');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '냉면육수 340ml', '풀무원', NULL, 340, 'ML',
        NULL, 1500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '냉면육수'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '냉면육수 340ml' AND p.brand = '풀무원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '냉면육수 1.02L', '풀무원 3개입', NULL, 1020, 'ML',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '장류·소스' JOIN ingredient i ON i.name = '냉면육수'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '냉면육수 1.02L' AND p.brand = '풀무원 3개입');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '들기름 320ml', '오뚜기', NULL, 320, 'ML',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '들기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '들기름 320ml' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '들기름 500ml', '국산', NULL, 500, 'ML',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '들기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '들기름 500ml' AND p.brand = '국산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고추기름 150ml', '오뚜기', NULL, 150, 'ML',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '고추기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고추기름 150ml' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '고추기름 300ml', '청정원', NULL, 300, 'ML',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '고추기름'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '고추기름 300ml' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식초 500ml', '오뚜기', NULL, 500, 'ML',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '식초'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식초 500ml' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '식초 900ml', '사과식초', NULL, 900, 'ML',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '식초'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '식초 900ml' AND p.brand = '사과식초');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '맛술 500ml', '미림', NULL, 500, 'ML',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '맛술'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '맛술 500ml' AND p.brand = '미림');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '맛술 1L', '미림 대', NULL, 1000, 'ML',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '맛술'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '맛술 1L' AND p.brand = '미림 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '물엿 700ml', 'CJ', NULL, 700, 'ML',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '물엿'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '물엿 700ml' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '물엿 1.2L', '백설', NULL, 1200, 'ML',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '물엿'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '물엿 1.2L' AND p.brand = '백설');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통깨 100g', '국산', NULL, 100, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '통깨'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통깨 100g' AND p.brand = '국산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통깨 200g', '국산 대', NULL, 200, 'G',
        NULL, 4500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '통깨'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통깨 200g' AND p.brand = '국산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '들깻가루 100g', '국산', NULL, 100, 'G',
        NULL, 3900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '들깻가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '들깻가루 100g' AND p.brand = '국산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '들깻가루 200g', '국산 대', NULL, 200, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '들깻가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '들깻가루 200g' AND p.brand = '국산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '페페론치노 30g', '수입산', NULL, 30, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '페페론치노'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '페페론치노 30g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '페페론치노 60g', '수입산 대', NULL, 60, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '페페론치노'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '페페론치노 60g' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '월계수잎 10g', '수입산', NULL, 10, 'G',
        NULL, 2500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '월계수잎'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '월계수잎 10g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '월계수잎 20g', '수입산 대', NULL, 20, 'G',
        NULL, 4000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '월계수잎'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '월계수잎 20g' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통후추 50g', '수입산', NULL, 50, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '통후추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통후추 50g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '통후추 100g', '수입산 대', NULL, 100, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '통후추'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '통후추 100g' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '시나몬 30g', '수입산', NULL, 30, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '시나몬'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '시나몬 30g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '시나몬 60g', '수입산 대', NULL, 60, 'G',
        NULL, 6000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '시나몬'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '시나몬 60g' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바닐라익스트랙 50ml', '수입산', NULL, 50, 'ML',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '바닐라익스트랙'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바닐라익스트랙 50ml' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '바닐라익스트랙 100ml', '수입산 대', NULL, 100, 'ML',
        NULL, 11000, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '바닐라익스트랙'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '바닐라익스트랙 100ml' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '사프란 1g', '스페인산', NULL, 1, 'G',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '사프란'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '사프란 1g' AND p.brand = '스페인산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '사프란 2g', '스페인산 대', NULL, 2, 'G',
        NULL, 17900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '사프란'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '사프란 2g' AND p.brand = '스페인산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파프리카 가루 50g', '수입산', NULL, 50, 'G',
        NULL, 3500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '파프리카 가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파프리카 가루 50g' AND p.brand = '수입산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '파프리카 가루 100g', '수입산 대', NULL, 100, 'G',
        NULL, 5900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '파프리카 가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '파프리카 가루 100g' AND p.brand = '수입산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '슈가파우더 200g', 'CJ', NULL, 200, 'G',
        NULL, 2900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '슈가파우더'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '슈가파우더 200g' AND p.brand = 'CJ');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '슈가파우더 500g', '백설', NULL, 500, 'G',
        NULL, 6500, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '슈가파우더'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '슈가파우더 500g' AND p.brand = '백설');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '화이트와인 750ml', '요리용', NULL, 750, 'ML',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '화이트와인'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '화이트와인 750ml' AND p.brand = '요리용');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '화이트와인 1.5L', '요리용 대', NULL, 1500, 'ML',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '화이트와인'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '화이트와인 1.5L' AND p.brand = '요리용 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '카레가루 100g', '오뚜기', NULL, 100, 'G',
        NULL, 2800, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '카레가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '카레가루 100g' AND p.brand = '오뚜기');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '카레가루 200g', '오뚜기 대', NULL, 200, 'G',
        NULL, 4900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '카레가루'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '카레가루 200g' AND p.brand = '오뚜기 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '매실청 500ml', '청정원', NULL, 500, 'ML',
        NULL, 6900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '매실청'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '매실청 500ml' AND p.brand = '청정원');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '매실청 1L', '청정원 대', NULL, 1000, 'ML',
        NULL, 11900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '매실청'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '매실청 1L' AND p.brand = '청정원 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '메이플시럽 250ml', '캐나다산', NULL, 250, 'ML',
        NULL, 9900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '메이플시럽'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '메이플시럽 250ml' AND p.brand = '캐나다산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '메이플시럽 500ml', '캐나다산 대', NULL, 500, 'ML',
        NULL, 16900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '메이플시럽'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '메이플시럽 500ml' AND p.brand = '캐나다산 대');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '배즙 500ml', '국내산', NULL, 500, 'ML',
        NULL, 8900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '배즙'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '배즙 500ml' AND p.brand = '국내산');
 INSERT INTO product (mart_id, category_id, ingredient_id, name, brand, description, sale_unit_amount, sale_unit,
                      image_url, price, status, total_quantity, deleted, created_at, updated_at)
 SELECT m.id, c.id, i.id, '배즙 1L', '국내산 대', NULL, 1000, 'ML',
        NULL, 15900, 'SELLING', 100, FALSE, NOW(), NOW()
 FROM mart m JOIN category c ON c.name = '기름·양념·향신료' JOIN ingredient i ON i.name = '배즙'
-WHERE m.name IN ('삼청 마트', '하안 마트')
+WHERE m.id IN (1, 2) AND m.name IN ('삼청 마트', '하안 마트')
   AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = '배즙 1L' AND p.brand = '국내산 대');
 
 -- 예전 시드로 만든 DB의 상품을 새 카테고리로 옮기고, 비게 된 예전 카테고리는 숨긴다.
