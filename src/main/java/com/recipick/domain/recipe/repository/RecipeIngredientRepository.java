@@ -32,6 +32,13 @@ public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredie
     boolean existsByIngredientId(Long ingredientId);
 
     @Query("""
+            SELECT DISTINCT ri.recipe.id
+            FROM RecipeIngredient ri
+            WHERE ri.ingredient.name LIKE CONCAT('%', :name, '%')
+            """)
+    List<Long> findRecipeIdsByIngredientNameContaining(@Param("name") String name);
+
+    @Query("""
             SELECT ri.recipe.id AS recipeId, ri.ingredient.id AS ingredientId
             FROM RecipeIngredient ri
             WHERE ri.recipe.id IN :recipeIds

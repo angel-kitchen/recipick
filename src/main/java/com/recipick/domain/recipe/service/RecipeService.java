@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -64,6 +65,17 @@ public class RecipeService {
     private Recipe getActiveRecipe(Long recipeId) {
         return recipeRepository.findByIdAndStatus(recipeId, RecipeStatus.ACTIVE)
             .orElseThrow(() -> new BusinessException(RecipeErrorCode.RECIPE_NOT_FOUND));
+    }
+
+    // 등록 레시피가 100개 남짓이라 활성 레시피를 한 번에 읽고 조건은 메모리에서 거른다. 순서는 ID순으로 고정한다
+    public List<Recipe> findRecommendCandidates(RecipeRecommendCondition condition) {
+        Set<Long> excludedRecipeIds = condition.excludedIngredients().stream()
+            .flatMap(name -> recipeIngredientRepository.findRecipeIdsByIngredientNameContaining(name).stream())
+            .collect(Collectors.toSet());
+        return recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE).stream()
+            .filter(condition::matches)
+            .filter(recipe -> !excludedRecipeIds.contains(recipe.getId()))
+            .toList();
     }
 
     private Set<Long> findBookmarkedRecipeIds(Long memberId, List<Recipe> recipes) {
