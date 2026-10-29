@@ -117,6 +117,7 @@
 
 ## Git
 - 브랜치 `{prefix}/{domain}-{작업}` (feature, fix, refactor, test, docs, chore, style, hotfix). `global`·`infra` 작업은 domain 자리에 `global`, 프론트(`frontend/`)는 `web`
+- 이슈 제목 `[도메인] 작업 내용`, 프론트 작업은 `[web]`
 - 커밋 `{type}: {한국어 요약} (#{이슈번호})` (feature, fix, refactor, test, docs, chore, style), 커밋 하나에 한 가지 변경
 - `main`, `dev`에 직접 push하지 않는다.
 - 새 API를 쓰는 프론트 PR은 백엔드 PR 머지 뒤에 머지하고, API는 추가만 한다(지우거나 바꿀 때는 프론트 먼저). 프론트 PR 테스트는 `npm run build`와 로컬 화면 확인
