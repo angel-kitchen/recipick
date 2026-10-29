@@ -46,7 +46,7 @@ export default function AdminAudit() {
         </select>
       </div>
       <ErrorNotice error={error} />
-      {selected && <AuditDetail id={selected} />}
+      {selected && <AuditDetail key={selected} id={selected} />}
       <div className="card table-wrap">
         <table className="table">
           <thead>

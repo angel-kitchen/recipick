@@ -47,7 +47,7 @@ export default function AdminPayments() {
         <input className="field__input" type="date" value={filter.to} onChange={setFilterValue('to')} />
       </div>
       <ErrorNotice error={error} />
-      {selected && <PaymentDetail paymentId={selected} />}
+      {selected && <PaymentDetail key={selected} paymentId={selected} />}
       <div className="card table-wrap">
         <table className="table">
           <thead>

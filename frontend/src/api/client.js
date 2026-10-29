@@ -76,7 +76,8 @@ export function reissueToken() {
         accessToken = data.accessToken;
       })
       .catch((error) => {
-        accessToken = null;
+        // 서버 오류·네트워크 오류는 로그인 상태와 무관하므로 토큰을 지우지 않는다
+        if (error.status === 401 || error.status === 403) accessToken = null;
         throw error;
       })
       .finally(() => {
@@ -100,7 +101,8 @@ async function request(method, path, options) {
   if (res.status === 401 && !isAdminPath(path) && !path.startsWith('/api/auth/')) {
     try {
       await reissueToken();
-    } catch {
+    } catch (e) {
+      if (e.status !== 401 && e.status !== 403) throw e;
       onAuthLost();
       throw new ApiError(401, { message: '로그인이 필요합니다. 다시 로그인해 주세요.' });
     }

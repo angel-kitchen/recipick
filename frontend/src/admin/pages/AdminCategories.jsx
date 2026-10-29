@@ -14,15 +14,16 @@ export default function AdminCategories() {
     try {
       await action();
       reload();
+      return true;
     } catch (e) {
       setActionError(e);
+      return false;
     }
   };
 
   const create = async (e) => {
     e.preventDefault();
-    await act(() => api.post('/api/admin/categories', { name }));
-    setName('');
+    if (await act(() => api.post('/api/admin/categories', { name }))) setName('');
   };
 
   const startEdit = (category) => setEditing({ id: category.categoryId, name: category.name });
@@ -30,8 +31,7 @@ export default function AdminCategories() {
   const saveEdit = async (e) => {
     e.preventDefault();
     if (!editing.name.trim()) return;
-    await act(() => api.patch(`/api/admin/categories/${editing.id}`, { name: editing.name.trim() }));
-    setEditing(null);
+    if (await act(() => api.patch(`/api/admin/categories/${editing.id}`, { name: editing.name.trim() }))) setEditing(null);
   };
 
   const remove = (category) => {

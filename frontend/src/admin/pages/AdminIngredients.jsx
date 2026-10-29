@@ -9,16 +9,20 @@ function IngredientForm({ ingredient, onDone, onCancel }) {
   const editing = Boolean(ingredient);
   const [form, setForm] = useState({ name: ingredient?.name ?? '', unit: ingredient?.unit ?? 'G' });
   const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
+    setSaving(true);
     try {
       if (editing) await api.patch(`/api/admin/ingredients/${ingredient.ingredientId}`, form);
       else await api.post('/api/admin/ingredients', form);
       onDone();
     } catch (err) {
       setError(err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -49,8 +53,8 @@ function IngredientForm({ ingredient, onDone, onCancel }) {
         </label>
       </div>
       <div className="row-actions" style={{ marginTop: 0 }}>
-        <button type="submit" className="btn">
-          저장
+        <button type="submit" className="btn" disabled={saving}>
+          {saving ? '저장하는 중...' : '저장'}
         </button>
         <button type="button" className="btn btn--outline" onClick={onCancel}>
           취소

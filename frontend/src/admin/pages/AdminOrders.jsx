@@ -12,10 +12,13 @@ function OrderDetail({ orderId, onChanged }) {
   const [rejecting, setRejecting] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const run = async (action, done) => {
+    if (busy) return;
     setActionError(null);
     setMessage(null);
+    setBusy(true);
     try {
       await action();
       setMessage(done);
@@ -25,6 +28,8 @@ function OrderDetail({ orderId, onChanged }) {
       onChanged();
     } catch (e) {
       setActionError(e);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -73,6 +78,7 @@ function OrderDetail({ orderId, onChanged }) {
           <button
             type="button"
             className="btn"
+            disabled={busy}
             onClick={() => run(() => api.post(`/api/admin/orders/${orderId}/accept`), '주문을 수락했습니다.')}
           >
             수락
@@ -94,7 +100,7 @@ function OrderDetail({ orderId, onChanged }) {
             <button
               type="button"
               className="btn"
-              disabled={!reason.trim()}
+              disabled={busy || !reason.trim()}
               onClick={() =>
                 run(
                   () => api.post(`/api/admin/orders/${orderId}/reject`, { reason }, { 'Idempotency-Key': crypto.randomUUID() }),
@@ -165,7 +171,7 @@ export default function AdminOrders() {
         )}
       </div>
       <ErrorNotice error={error} />
-      {selected && <OrderDetail orderId={selected} onChanged={reload} />}
+      {selected && <OrderDetail key={selected} orderId={selected} onChanged={reload} />}
       <div className="card table-wrap">
         <table className="table">
           <thead>
