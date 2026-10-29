@@ -694,6 +694,89 @@ class PaymentCancelProcessorTest {
         verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
+    // ---------- TX1 prepare — 0원 결제(POINTS_ONLY) 취소 ----------
+
+    @Test
+    @DisplayName("본인의 0원 결제면 PG·환불 행 없이 주문 취소 접수 → 결제 CANCELED → 주문 환불 완료 → 포인트 복원 → 재고 복구까지 TX1에서 끝낸다")
+    void prepareCancelsPointsOnly() {
+        // given
+        Payment payment = pointsOnlyPayment();
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(orderService.markMemberCancelRequested(ORDER_ID, REASON)).willReturn(MemberCancelRequestResult.REQUESTED);
+        given(orderFacade.markRefunded(ORDER_ID)).willReturn(RESTORE_ITEMS);
+
+        // when
+        PaymentCancelPreparation preparation = processor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+
+        // then — 취소 시각은 멈춘 시계의 서버 시각이고 환불 작업은 없다
+        assertThat(preparation.requiresPortOneCall()).isFalse();
+        assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
+        PaymentCancelResponse response = preparation.finishedResult().response();
+        assertThat(response.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(response.canceledAt()).isEqualTo(NOW);
+        assertThat(response.refundStatus()).isNull();
+        assertThat(response.refundAmount()).isZero();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(payment.getCanceledAt()).isEqualTo(NOW);
+        InOrder inOrder = inOrder(orderService, orderFacade, pointCommandService);
+        inOrder.verify(orderService).markMemberCancelRequested(ORDER_ID, REASON);
+        inOrder.verify(orderFacade).markRefunded(ORDER_ID);
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
+        inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
+        verify(paymentService, never()).findRefundByIdempotencyKey(anyString());
+        verify(paymentService, never()).requestMemberRefund(any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("이미 취소된 0원 결제에 다시 요청하면 키와 관계없이 자산을 다시 움직이지 않고 같은 CANCELED 결과를 돌려준다")
+    void prepareReplaysCanceledPointsOnly() {
+        // given — 첫 취소가 이미 커밋됐다
+        Payment payment = pointsOnlyPayment();
+        payment.cancelPointsOnly(CANCELED_AT);
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+
+        // when
+        PaymentCancelPreparation preparation = processor.prepare(MEMBER_ID, PAYMENT_ID, "client-key-2", REASON);
+
+        // then
+        assertThat(preparation.requiresPortOneCall()).isFalse();
+        assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
+        assertThat(preparation.finishedResult().response().canceledAt()).isEqualTo(CANCELED_AT);
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+        verify(orderService, never()).markMemberCancelRequested(anyLong(), anyString());
+        verifyNoInteractions(orderFacade, pointCommandService);
+        verify(paymentService, never()).findRefundByIdempotencyKey(anyString());
+    }
+
+    @Test
+    @DisplayName("마트가 준비를 시작한 0원 결제 주문은 ORDER_ALREADY_PREPARING이고 결제·포인트·재고를 바꾸지 않는다")
+    void prepareRejectsPointsOnlyWhenMartPreparing() {
+        // given
+        Payment payment = pointsOnlyPayment();
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(orderService.markMemberCancelRequested(ORDER_ID, REASON))
+            .willReturn(MemberCancelRequestResult.MART_ALREADY_PREPARING);
+
+        // when
+        Throwable thrown = catchThrowable(() -> processor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON));
+
+        // then
+        assertErrorCode(thrown, PaymentErrorCode.ORDER_ALREADY_PREPARING);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getCanceledAt()).isNull();
+        verifyNoInteractions(orderFacade, pointCommandService);
+    }
+
+    private Payment pointsOnlyPayment() {
+        Payment payment = Payment.pointsOnly(ORDER_ID, NOW.minusMinutes(10));
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        return payment;
+    }
+
     private Payment payment(PaymentStatus status) {
         return payment(PAYMENT_ID, status);
     }

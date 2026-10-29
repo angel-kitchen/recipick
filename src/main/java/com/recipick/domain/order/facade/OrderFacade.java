@@ -12,6 +12,7 @@ import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
+import com.recipick.domain.payment.facade.PointsOnlyPaymentProcessor;
 import com.recipick.domain.payment.service.PaymentCommandService;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.payment.service.PointCommandService;
@@ -55,6 +56,7 @@ public class OrderFacade {
     private final PaymentService paymentService;
     private final PointPolicyService pointPolicyService;
     private final PointCommandService pointCommandService;
+    private final PointsOnlyPaymentProcessor pointsOnlyPaymentProcessor;
 
     @Transactional
     public OrderCreateResult createOrder(Long memberId, String idempotencyKey, OrderCreateRequest request) {
@@ -101,7 +103,10 @@ public class OrderFacade {
         // 재고 잠금 뒤에 INSERT한다. 드문 gap-lock 경합은 DB가 한 트랜잭션을 롤백하고 COMMON-010 재시도로 처리된다
         pointCommandService.createPendingEarning(
             memberId, order.getId(), order.getProductAmount(), order.getUsedPoint(), order.getPointRate());
-        PaymentCreated payment = paymentCommandService.create(order.getId(), order.getPayAmount());
+        // 외부 결제금액이 0원이면 PG 없이 이 트랜잭션에서 결제 완료까지 끝낸다. 음수는 OrderAmount가 막는다
+        PaymentCreated payment = order.getPayAmount() == 0
+            ? pointsOnlyPaymentProcessor.complete(order.getId())
+            : paymentCommandService.create(order.getId(), order.getPayAmount());
         return new OrderCreateResult(OrderCreateResponse.of(order, items, payment), true);
     }
 

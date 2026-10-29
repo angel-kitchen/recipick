@@ -3,6 +3,7 @@ package com.recipick.domain.payment.facade;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.response.PaymentConfirmResponse;
 import com.recipick.domain.payment.entity.Payment;
+import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentService;
@@ -10,6 +11,7 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.ErrorCode;
 import com.recipick.infra.portone.PortOnePaymentClient;
 import com.recipick.infra.portone.dto.PortOnePayment;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +38,9 @@ public class PaymentConfirmFacade {
             log.warn("다른 회원의 주문에 결제 확정 시도: memberId={}, orderId={}", memberId, orderId);
             throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
-        if (!payment.getPortonePaymentId().equals(portonePaymentId)) {
+        // 0원 결제는 PortOne 결제가 없어 확정할 대상이 아니다. PortOne 결제 ID가 null이라 equals 대신 Objects.equals로 비교한다
+        if (payment.getPaymentMethod() != PaymentMethod.CARD
+            || !Objects.equals(payment.getPortonePaymentId(), portonePaymentId)) {
             throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND);
         }
 

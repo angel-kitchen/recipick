@@ -2,6 +2,7 @@ package com.recipick.domain.order.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,7 @@ import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
+import com.recipick.domain.payment.facade.PointsOnlyPaymentProcessor;
 import com.recipick.domain.payment.service.PaymentCommandService;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.payment.service.PointCommandService;
@@ -91,6 +93,9 @@ class OrderFacadeTest {
     @Mock
     private PointCommandService pointCommandService;
 
+    @Mock
+    private PointsOnlyPaymentProcessor pointsOnlyPaymentProcessor;
+
     @InjectMocks
     private OrderFacade orderFacade;
 
@@ -102,23 +107,9 @@ class OrderFacadeTest {
             "서울 종로구 삼청로 1", "101호", LEGAL_DONG_CODE, 3_000L);
         String requestHash = request.requestHash();
         List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
-        List<ProductSummary> products = List.of(new ProductSummary(PRODUCT_ID, MART_ID, "애호박", null, 2_500L,
-            BigDecimal.ONE, SaleUnit.EA, ProductStatus.SELLING, 8, false));
-        Order order = pendingOrder();
-        List<OrderItem> items = List.of(OrderItem.builder().productId(PRODUCT_ID).productName("애호박").quantity(2)
-            .build());
-        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
-        given(martService.findMart(MART_ID)).willReturn(Optional.of(
-            new MartResponse(MART_ID, REGION_ID, "삼청 마트", null, null, null, MartStatus.OPEN)));
-        given(regionService.getRegionIdByLegalDongCode(LEGAL_DONG_CODE)).willReturn(Optional.of(REGION_ID));
-        given(cartService.findCartItems(MEMBER_ID, List.of(CART_ITEM_ID))).willReturn(List.of(
-            CartItem.builder().memberId(MEMBER_ID).productId(PRODUCT_ID).quantity(2).build()));
-        given(productService.findMartIdsOf(List.of(PRODUCT_ID))).willReturn(Map.of(PRODUCT_ID, MART_ID));
-        given(pointPolicyService.resolveRate(MEMBER_ID)).willReturn(POINT_RATE);
-        given(orderService.createPendingOrder(
-            MEMBER_ID, MART_ID, REGION_ID, IDEMPOTENCY_KEY, requestHash, POINT_RATE, request)).willReturn(order);
-        given(productStockService.decreaseStocks(MART_ID, quantities)).willReturn(products);
-        given(orderService.completePendingOrder(order, products, quantities)).willReturn(items);
+        List<ProductSummary> products = List.of(product(2_500L));
+        Order order = pendingOrder(5_000L, 3_000L, 3_000L, 5_000L);
+        givenOrderCreation(request, quantities, products, order);
         given(paymentCommandService.create(ORDER_ID, 5_000L)).willReturn(
             new PaymentCreated(30L, "pay_test", 5_000L, LocalDateTime.of(2026, 10, 29, 12, 5)));
 
@@ -139,6 +130,36 @@ class OrderFacadeTest {
         inOrder.verify(orderService).completePendingOrder(order, products, quantities);
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 5_000L, 3_000L, POINT_RATE);
         inOrder.verify(paymentCommandService).create(ORDER_ID, 5_000L);
+        verify(pointsOnlyPaymentProcessor, never()).complete(any());
+    }
+
+    @Test
+    @DisplayName("외부 결제금액이 0원이면 카드 결제를 만들지 않고 적립 예정 생성 뒤 0원 결제 완료 처리를 부른다")
+    void createOrder_pointsOnly() {
+        // given — 20,000원 상품 2개(상품 40,000원, 무료배송)를 40,000P로 사면 외부 결제금액은 0원이다
+        OrderCreateRequest request = new OrderCreateRequest(List.of(CART_ITEM_ID), "홍길동", "01012345678",
+            "서울 종로구 삼청로 1", "101호", LEGAL_DONG_CODE, 40_000L);
+        List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
+        List<ProductSummary> products = List.of(product(20_000L));
+        Order order = pendingOrder(40_000L, 0L, 40_000L, 0L);
+        givenOrderCreation(request, quantities, products, order);
+        given(pointsOnlyPaymentProcessor.complete(ORDER_ID)).willReturn(
+            new PaymentCreated(30L, null, 0L, null, LocalDateTime.of(2026, 10, 29, 12, 0)));
+
+        // when
+        OrderCreateResult result = orderFacade.createOrder(MEMBER_ID, IDEMPOTENCY_KEY, request);
+
+        // then
+        assertThat(result.created()).isTrue();
+        assertThat(result.response().amount()).isZero();
+        assertThat(result.response().portonePaymentId()).isNull();
+        assertThat(result.response().expiresAt()).isNull();
+        InOrder inOrder = inOrder(pointCommandService, productStockService, pointsOnlyPaymentProcessor);
+        inOrder.verify(pointCommandService).reserveUsage(MEMBER_ID, ORDER_ID, 40_000L);
+        inOrder.verify(productStockService).decreaseStocks(MART_ID, quantities);
+        inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 40_000L, 40_000L, POINT_RATE);
+        inOrder.verify(pointsOnlyPaymentProcessor).complete(ORDER_ID);
+        verify(paymentCommandService, never()).create(anyLong(), anyLong());
     }
 
     @Test
@@ -210,15 +231,39 @@ class OrderFacadeTest {
         verify(productStockService, never()).increaseStocks(any());
     }
 
+    // 새 주문 생성이 결제 생성 직전까지 거치는 회원·마트·지역·장바구니·적립률·주문·재고·금액 확정 호출을 준비한다
+    private void givenOrderCreation(OrderCreateRequest request, List<StockQuantity> quantities,
+                                    List<ProductSummary> products, Order order) {
+        List<OrderItem> items = List.of(OrderItem.builder().productId(PRODUCT_ID).productName("애호박").quantity(2)
+            .build());
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(martService.findMart(MART_ID)).willReturn(Optional.of(
+            new MartResponse(MART_ID, REGION_ID, "삼청 마트", null, null, null, MartStatus.OPEN)));
+        given(regionService.getRegionIdByLegalDongCode(LEGAL_DONG_CODE)).willReturn(Optional.of(REGION_ID));
+        given(cartService.findCartItems(MEMBER_ID, List.of(CART_ITEM_ID))).willReturn(List.of(
+            CartItem.builder().memberId(MEMBER_ID).productId(PRODUCT_ID).quantity(2).build()));
+        given(productService.findMartIdsOf(List.of(PRODUCT_ID))).willReturn(Map.of(PRODUCT_ID, MART_ID));
+        given(pointPolicyService.resolveRate(MEMBER_ID)).willReturn(POINT_RATE);
+        given(orderService.createPendingOrder(MEMBER_ID, MART_ID, REGION_ID, IDEMPOTENCY_KEY, request.requestHash(),
+            POINT_RATE, request)).willReturn(order);
+        given(productStockService.decreaseStocks(MART_ID, quantities)).willReturn(products);
+        given(orderService.completePendingOrder(order, products, quantities)).willReturn(items);
+    }
+
+    private static ProductSummary product(long price) {
+        return new ProductSummary(PRODUCT_ID, MART_ID, "애호박", null, price, BigDecimal.ONE, SaleUnit.EA,
+            ProductStatus.SELLING, 8, false);
+    }
+
     // 금액 확정은 OrderService가 하므로, 확정을 마친 상태의 주문을 돌려줘 Facade가 그 값을 적립·결제에 넘기는지만 본다
-    private Order pendingOrder() {
+    private Order pendingOrder(long productAmount, long deliveryFee, long usedPoint, long payAmount) {
         Order order = Order.builder()
             .memberId(MEMBER_ID)
             .martId(MART_ID)
-            .productAmount(5_000L)
-            .deliveryFee(3_000L)
-            .usedPoint(3_000L)
-            .payAmount(5_000L)
+            .productAmount(productAmount)
+            .deliveryFee(deliveryFee)
+            .usedPoint(usedPoint)
+            .payAmount(payAmount)
             .pointRate(POINT_RATE)
             .build();
         ReflectionTestUtils.setField(order, "id", ORDER_ID);

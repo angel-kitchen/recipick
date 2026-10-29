@@ -76,6 +76,20 @@ public class Payment extends BaseTimeEntity {
         this.expiresAt = expiresAt;
     }
 
+    // 외부 결제금액이 0원인 주문의 결제. PG가 없으니 결제 대기·만료·PortOne ID 없이 처음부터 PAID로 만든다.
+    // 운영의 POINTS_ONLY 생성 경로를 이 팩토리로 모아 결제수단·금액·초기 상태 조합을 한 곳에서 만든다
+    public static Payment pointsOnly(Long orderId, LocalDateTime paidAt) {
+        Objects.requireNonNull(paidAt, "paidAt은 필수입니다.");
+        Payment payment = Payment.builder()
+            .orderId(orderId)
+            .paymentMethod(PaymentMethod.POINTS_ONLY)
+            .amount(0L)
+            .status(PaymentStatus.PAID)
+            .build();
+        payment.paidAt = paidAt;
+        return payment;
+    }
+
     public void markPaid(String portoneTransactionId, LocalDateTime paidAt) {
         if (this.status != PaymentStatus.IN_PROGRESS) {
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
@@ -108,6 +122,17 @@ public class Payment extends BaseTimeEntity {
     // PortOne이 취소 완료를 확인했을 때만 부른다. 취소 시각은 PG가 준 값이어야 하므로 서버 시각으로 대신 채우지 않는다
     public void markCanceled(LocalDateTime canceledAt) {
         if (this.status != PaymentStatus.CANCEL_REQUESTED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        Objects.requireNonNull(canceledAt, "canceledAt은 필수입니다.");
+        this.status = PaymentStatus.CANCELED;
+        this.canceledAt = canceledAt;
+    }
+
+    // 0원 결제의 취소. 기다릴 PG가 없어 CANCEL_REQUESTED를 거치지 않고 바로 CANCELED로 끝낸다.
+    // 취소 시각은 서버가 내부 처리를 끝낸 시각이다. 카드 결제가 이 경로로 들어오면 PG 취소 없이 닫히므로 막는다
+    public void cancelPointsOnly(LocalDateTime canceledAt) {
+        if (this.paymentMethod != PaymentMethod.POINTS_ONLY || this.status != PaymentStatus.PAID) {
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
         }
         Objects.requireNonNull(canceledAt, "canceledAt은 필수입니다.");
