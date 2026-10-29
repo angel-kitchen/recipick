@@ -8,6 +8,7 @@ import com.recipick.domain.recipe.entity.AutoCartRequest;
 import com.recipick.domain.recipe.entity.AutoCartStatus;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
 import com.recipick.domain.recipe.repository.AiRequestLogRepository;
 import com.recipick.domain.recipe.repository.AutoCartItemRepository;
@@ -16,6 +17,7 @@ import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.infra.ai.dto.AiRecipeOption;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -64,6 +66,13 @@ public class AutoCartService {
         return menus.stream()
             .map(menu -> toMenu(menu, recipes.get(menu.recipeId()),
                 optionalIds.getOrDefault(menu.recipeId(), Set.of())))
+            .toList();
+    }
+
+    // AI에게는 바로 미리보기를 만들 수 있는 레시피만 보여 줘, 고를 수 없는 레시피를 추천하지 않게 한다
+    public List<AiRecipeOption> findAiRecipeOptions() {
+        return recipeRepository.findAllByStatusAndAutoCartEnabledTrueOrderByIdAsc(RecipeStatus.ACTIVE).stream()
+            .map(recipe -> new AiRecipeOption(recipe.getId(), recipe.getName()))
             .toList();
     }
 
