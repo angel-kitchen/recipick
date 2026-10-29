@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.domain.recipe.dto.request.AiRequestLogAdminSearchRequest;
 import com.recipick.domain.recipe.entity.AiRequestLog;
 import com.recipick.domain.recipe.entity.AiRequestType;
 import com.recipick.domain.recipe.entity.AiResultStatus;
@@ -12,6 +13,7 @@ import com.recipick.infra.ai.dto.AiUsage;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,15 @@ public class AiRequestLogService {
             .cacheReadTokens(usage.cacheReadTokens())
             .latencyMs(Math.toIntExact(usage.latencyMs()))
             .build());
+    }
+
+    public Page<AiRequestLog> searchForAdmin(AiRequestLogAdminSearchRequest request) {
+        return aiRequestLogRepository.searchForAdmin(
+            request.toRequestType(),
+            request.success(),
+            request.toFromAt(),
+            request.toToExclusive(),
+            request.toPageable());
     }
 
     private String toJson(Object content) {

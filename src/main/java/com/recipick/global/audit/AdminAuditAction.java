@@ -33,7 +33,8 @@ public enum AdminAuditAction {
     PAYMENT_LIST_VIEW(AdminAuditTarget.PAYMENT, true, false, false),
     PAYMENT_DETAIL_VIEW(AdminAuditTarget.PAYMENT, false, true, false),
     POINT_BALANCE_VIEW(AdminAuditTarget.MEMBER, false, false, false),
-    POINT_HISTORY_VIEW(AdminAuditTarget.MEMBER, false, false, false);
+    POINT_HISTORY_VIEW(AdminAuditTarget.MEMBER, false, false, false),
+    AI_REQUEST_LIST_VIEW(AdminAuditTarget.AI_REQUEST, true, false, false);
 
     private final AdminAuditTarget target;
     private final boolean targetOptional;
