@@ -231,6 +231,15 @@ function RecipeDetailView({ recipeId }) {
             </section>
           )}
           <section className="card">
+            <h2 className="tile__title">조리 순서</h2>
+            <ol className="steps-list">
+              {recipe.steps.map((step) => (
+                <li key={step.order}>{step.description}</li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="card">
             <h2 className="tile__title">재료</h2>
             <div className="stepper" style={{ margin: '12px 0' }}>
               <button
@@ -279,16 +288,7 @@ function RecipeDetailView({ recipeId }) {
             {recipe.ingredients.length === 0 && <p className="field__hint">등록된 재료가 없습니다.</p>}
           </section>
 
-          <section className="card">
-            <h2 className="tile__title">조리 순서</h2>
-            <ol className="steps-list">
-              {recipe.steps.map((step) => (
-                <li key={step.order}>{step.description}</li>
-              ))}
-            </ol>
-          </section>
         </div>
-
         <AutoCartPanel recipe={recipe} member={member} />
       </div>
     </div>
