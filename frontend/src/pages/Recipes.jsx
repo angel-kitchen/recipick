@@ -211,7 +211,6 @@ export default function Recipes() {
 
   // 검색어를 칠 때마다 기록이 쌓이지 않도록 필터 변경은 현재 기록을 덮어쓴다
   const current = { ...filters, sort: sort?.key, order: sort ? order : undefined };
-  const changeFilter = (key) => (event) => update({ ...current, [key]: event.target.value }, true);
   const setPage = (next) => update({ ...current, page: next > 0 ? String(next) : '' }, false);
   const cycleSort = (item) => {
     const next =
