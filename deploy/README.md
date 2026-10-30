@@ -11,7 +11,17 @@
 ├── backups/              덤프. 권한 700. pre-deploy 최근 10개, nightly 최근 7개
 ├── releases/<SHA>/       배포마다 받은 deploy/ 묶음. 최근 5개와 현재·이전 태그를 남긴다
 └── compose*.yml, nginx/, monitoring/, scripts/   현재 태그의 묶음과 똑같이 맞춘 운영 설정
+
+/opt/recipick-web/        프론트 빌드 결과. nginx가 /srv/web으로 읽기 전용 마운트한다
+├── releases/<SHA>/       커밋마다 푼 frontend/dist. 최근 5개와 현재·직전 버전을 남긴다
+└── current               nginx가 보는 링크(releases/<SHA>)
 ```
+
+**프론트는 앱과 따로 바뀐다.** CI가 바뀐 경로를 보고 `frontend/`만 바뀌었으면 백엔드 테스트·이미지·재시작을 건너뛴다. 빌드 결과(`frontend/dist`)를 S3 `deploy/web-<SHA>.tar.gz`로 올리고, SSM 명령이 같은 잠금을 잡은 뒤 `scripts/deploy-web.sh`가 `releases/<SHA>`에 풀고 `current` 링크를 바꾼다. 앱을 재시작하지 않아 끊김이 없다. 백엔드를 배포하는 실행은 프론트가 안 바뀌었어도 같은 커밋으로 다시 올린다(백엔드 배포가 대기 중에 뒤 커밋으로 교체되면 앞 커밋의 프론트 배포도 빠지기 때문). 이때 프론트는 백엔드 배포가 성공한 뒤에만 바꾼다. `/opt/recipick` 밖에 두는 이유는 아래 백엔드 배포가 그 안을 저장소와 똑같이 맞추며 모르는 파일을 지우기 때문이다.
+
+프론트를 처음 켤 때나 서버를 다시 세운 뒤에는 Actions → CI → **Run workflow**(배포 대상 브랜치)로 수동 실행한다. 수동 실행은 백엔드와 프론트를 모두 배포한다.
+
+nginx는 `/api/`만 앱으로 넘기고 나머지는 정적 파일로 준다. 모르는 경로(`/cart` 등)는 `index.html`, `index.html`은 캐시하지 않고 `/assets/`(파일명에 해시)는 1년, `images/`·`videos/`는 1시간 캐시한다.
 
 워크플로가 저장소의 `deploy/`를 S3에 올리고, SSM 명령이 잠금을 잡은 뒤 `releases/<SHA>`에 푼다. 그다음 `deploy.sh`가 운영 설정을 그 묶음과 **정확히 같게** 바꾼다. 저장소에서 지우거나 이름을 바꾼 파일은 서버에서도 사라진다. `.env`·`certbot/`·`backups/`·`releases/`만 보존한다. 서버에서 직접 고친 설정은 다음 배포에 덮어써지므로 설정은 저장소에서 고친다.
 
@@ -152,6 +162,8 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | 자동 배포가 실패 | 스크립트가 이전 태그의 이미지와 설정으로 이미 되돌렸다. Actions 로그의 서버 출력에서 원인을 본다 |
 | 배포는 성공했지만 기능이 잘못됨 | `bash /opt/recipick/releases/<이전 SHA>/scripts/deploy.sh <이전 SHA>`. 묶음이 정리되어 없으면 `/opt/recipick/scripts/deploy.sh <이전 SHA>`(현재 설정으로 이미지만 바꾼다) |
 | 스키마가 문제(아래) | 수동 |
+| 프론트 배포가 실패 | `current`는 이전 버전 그대로다(묶음 검사 실패) 또는 스크립트가 직전 버전으로 되돌렸다(nginx 확인 실패) |
+| 프론트는 배포됐지만 화면이 잘못됨 | 링크만 직전 버전으로 바꾼다. 앱·nginx 재시작은 필요 없다. 되돌릴 SHA는 Actions에서 마지막으로 정상이던 배포 실행의 커밋으로 고른다(`ls -1t releases`는 배포 순서라, 되돌린 뒤 백엔드만 바뀐 머지가 문제 있는 화면을 다시 올렸으면 그 문제 버전이 직전으로 보인다). `releases/<SHA>`가 남아 있는지 확인한 뒤 `ln -sfn releases/<직전 SHA> current.tmp && mv -T current.tmp current`. 다음 배포(백엔드만 바뀐 머지 포함)가 그 커밋의 화면을 다시 올리므로, 고친 커밋을 머지하기 전까지는 배포를 멈추거나 되돌린 화면이 덮어써질 수 있음을 팀에 알린다 |
 
 **스키마 복구.** `ddl-auto: update`는 컬럼을 추가만 하므로 이미지를 되돌려도 스키마는 남는다. 대부분은 남아도 문제가 없다. 이전 버전이 모르는 NOT NULL 컬럼이 생겨 INSERT가 실패할 때만 손댄다.
 

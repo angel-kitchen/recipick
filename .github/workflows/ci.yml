@@ -5,12 +5,45 @@ on:
     branches: [dev, main]
   push:
     branches: [dev, main]
+  # 수동 실행은 백엔드·프론트를 모두 다시 배포한다. 프론트 첫 배포와 서버 복구에 쓴다
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # 바뀐 경로로 돌릴 작업을 고른다. frontend/만 바뀌면 백엔드 테스트·재시작 배포를 건너뛴다.
+  # 트리거(paths)가 아니라 작업 조건으로 거른다. 건너뛴 작업은 성공으로 쳐서 필수 체크가 막히지 않는다
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+      frontend: ${{ steps.diff.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # 비교 기준이 없으면(수동 실행, 새 브랜치의 첫 push 등) 모두 바뀐 것으로 본다
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            files=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          else
+            files=$(git ls-files)
+          fi
+          backend=false; frontend=false
+          printf '%s\n' "$files" | grep -q '^frontend/' && frontend=true
+          printf '%s\n' "$files" | grep -v -e '^frontend/' -e '^$' -q && backend=true
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "백엔드 변경: $backend, 프론트 변경: $frontend"
+
   test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,16 +56,51 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew test
 
-  # 배포 대상 브랜치(레포 변수 DEPLOY_BRANCH)로 push됐을 때만 돈다. 11/9에 변수를 dev에서 main으로 바꾼다.
+  # PR에서도 돌려 빌드가 깨진 프론트가 머지되지 않게 한다. 결과물은 deploy-frontend가 받아 서버에 올린다.
+  # 배포 브랜치에서 백엔드를 배포하는 실행은 프론트가 안 바뀌어도 빌드해 같은 커밋으로 다시 올린다.
+  # 앞 커밋의 백엔드 배포가 대기 중에 이 실행으로 교체되면 그 커밋의 프론트 배포도 같이 사라지기 때문이다
+  frontend-build:
+    needs: changes
+    if: >-
+      needs.changes.outputs.frontend == 'true' ||
+      (needs.changes.outputs.backend == 'true' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_name == vars.DEPLOY_BRANCH)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
+  # 배포 대상 브랜치(레포 변수 DEPLOY_BRANCH)로 push됐거나 그 브랜치에서 수동 실행했을 때만 돈다. 11/9에 변수를 dev에서 main으로 바꾼다.
   # 필요한 레포 변수: DEPLOY_BRANCH, AWS_REGION, AWS_DEPLOY_ROLE_ARN, ECR_REPOSITORY, DEPLOY_BUCKET, EC2_INSTANCE_ID
   # 시크릿은 없다. AWS 인증은 OIDC로 역할을 가정하고, 서버 접속은 SSM Run Command다.
   deploy:
-    if: github.event_name == 'push' && github.ref_name == vars.DEPLOY_BRANCH
-    needs: test
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_name == vars.DEPLOY_BRANCH && needs.changes.outputs.backend == 'true'
+    needs: [changes, test]
     runs-on: ubuntu-latest
-    # 서버가 한 대라 배포는 한 번에 하나만. 뒤에 온 배포는 기다린다
+    # 대기 중인 작업은 같은 그룹의 새 작업이 오면 취소된다. 프론트와 그룹을 나눠 뒤에 온 프론트 배포가
+    # 대기 중인 백엔드 배포를 지우지 않게 한다. 같은 그룹에서 대신 도는 작업은 더 새 SHA라 빠지는 변경이 없다.
+    # 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다
     concurrency:
-      group: deploy
+      group: deploy-backend
       cancel-in-progress: false
     permissions:
       contents: read
@@ -92,6 +160,7 @@ jobs:
         id: ssm
         run: |
           # 잠금을 다운로드 전에 잡고(fd 9) 배포 스크립트에 물려준다. 설정 교체·기동·검증·복구가 끝날 때까지 유지된다.
+          # 프론트 교체나 인증서 갱신 cron이 잡고 있으면 기다린다.
           # 묶음은 운영 디렉터리에 덮어 풀지 않고 releases/<SHA>에 풀며, 운영 설정 교체는 deploy.sh가 한다.
           # 다운로드 임시 파일은 배포마다 따로 만들고 끝나면 지운다. SSM은 sh로 실행할 수 있어 POSIX 문법만 쓴다
           jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
@@ -101,7 +170,7 @@ jobs:
               "export PATH=\"$PATH:/usr/local/bin:/snap/bin\"",
               "mkdir -p /opt/recipick/releases",
               "exec 9>/opt/recipick/.deploy.lock",
-              "flock -n 9 || { echo \"다른 배포가 진행 중이라 중단\"; exit 1; }",
+              "flock -w 600 9 || { echo \"잠금을 10분 안에 얻지 못해 중단\"; exit 1; }",
               "work=$(mktemp -d /tmp/recipick-deploy-\($sha).XXXXXX)",
               "trap \"rm -rf $work\" EXIT",
               "aws s3 cp --only-show-errors s3://\($bucket)/deploy/\($sha).tar.gz $work/bundle.tar.gz",
@@ -141,5 +210,140 @@ jobs:
           echo "::endgroup::"
           if [ "$status" != "Success" ]; then
             echo "::error::배포 실패. SSM 상태: $status"
+            exit 1
+          fi
+
+  # 프론트 정적 파일만 바꾼다. 앱을 재시작하지 않아 끊김이 없고, 같은 내용을 다시 올려도 링크만 바뀐다.
+  # 백엔드도 바뀐 push면 백엔드 배포가 성공한 뒤에만 돈다. 새 화면이 아직 없는 API를 부르는 순간을 만들지 않기 위해서다
+  deploy-frontend:
+    needs: [changes, frontend-build, deploy]
+    # 앞 작업이 건너뛰어져도(프론트만 바뀌어 deploy가 skipped) 평가하려고 상태 함수를 쓴다.
+    # always()는 실행을 취소해도 돌아 취소한 배포가 나가므로 !cancelled()로 둔다
+    if: >-
+      !cancelled() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_name == vars.DEPLOY_BRANCH &&
+      needs.frontend-build.result == 'success' &&
+      (needs.changes.outputs.backend != 'true' || needs.deploy.result == 'success')
+    runs-on: ubuntu-latest
+    # 백엔드와 그룹을 나눈 이유는 deploy 작업 주석. 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다.
+    # 대기 작업을 하나만 두면, 백엔드 배포를 마치고 늦게 들어온 앞 커밋이 대기 중인 뒤 커밋을 지운 뒤
+    # 아래 최신성 검사로 스스로 건너뛰어 둘 다 배포되지 않는다. 모두 대기시키고 옛 커밋은 최신성 검사로 거른다
+    concurrency:
+      group: deploy-frontend
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+    steps:
+      - name: 배포 변수 확인
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          missing=""
+          for name in AWS_REGION AWS_DEPLOY_ROLE_ARN DEPLOY_BUCKET EC2_INSTANCE_ID; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::레포 변수가 비어 있다:$missing (deploy/README.md 3절)"
+            exit 1
+          fi
+
+      # 그룹이 따로라 백엔드 배포를 기다리는 사이 뒤 커밋의 프론트가 먼저 나갈 수 있다. 그 뒤에 이 작업이 돌면
+      # 옛 화면으로 덮어쓰므로, 이 커밋 뒤에 frontend/가 또 바뀌었으면 그 커밋의 작업에 맡기고 건너뛴다
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 더 새 프론트가 있는지 확인
+        id: fresh
+        run: |
+          git fetch -q origin "$GITHUB_REF_NAME"
+          if git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- frontend/; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::이 커밋 뒤에 frontend/가 다시 바뀌어 그 커밋의 배포에 맡기고 건너뛴다"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.fresh.outputs.stale == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+
+      - if: steps.fresh.outputs.stale == 'false'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # 백엔드 설정 묶음과 같은 deploy/ 경로를 쓴다. 배포 역할의 쓰기·EC2 역할의 읽기 권한이 이미 이 경로에 있다.
+      # 교체 스크립트도 같은 커밋 것을 함께 올린다. 서버의 scripts/는 마지막 백엔드 배포 것이라
+      # 백엔드 배포가 실패해 되돌려졌거나 서버를 다시 세운 직후에는 없거나 옛 버전일 수 있다
+      - name: 빌드 결과·교체 스크립트 업로드 (→ S3)
+        if: steps.fresh.outputs.stale == 'false'
+        run: |
+          tar -czf web.tar.gz -C dist .
+          aws s3 cp web.tar.gz "s3://$DEPLOY_BUCKET/deploy/web-$GITHUB_SHA.tar.gz"
+          aws s3 cp deploy/scripts/deploy-web.sh "s3://$DEPLOY_BUCKET/deploy/web-$GITHUB_SHA.sh"
+
+      - name: SSM Run Command로 서버에서 정적 파일 교체
+        if: steps.fresh.outputs.stale == 'false'
+        id: ssm
+        run: |
+          # 잠금을 다운로드 전에 잡아 deploy-web.sh에 물려준다. 인증서 갱신 cron이 잡고 있을 수 있어 기다린다
+          jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
+            executionTimeout: ["900"],
+            commands: [
+              "set -eu",
+              "export PATH=\"$PATH:/usr/local/bin:/snap/bin\"",
+              "exec 9>/opt/recipick/.deploy.lock",
+              "flock -w 600 9 || { echo \"잠금을 10분 안에 얻지 못해 중단\"; exit 1; }",
+              "work=$(mktemp -d /tmp/recipick-web-\($sha).XXXXXX)",
+              "trap \"rm -rf $work\" EXIT",
+              "aws s3 cp --only-show-errors s3://\($bucket)/deploy/web-\($sha).tar.gz $work/web.tar.gz",
+              "aws s3 cp --only-show-errors s3://\($bucket)/deploy/web-\($sha).sh $work/deploy-web.sh",
+              "DEPLOY_LOCK_HELD=1 bash $work/deploy-web.sh \($sha) $work/web.tar.gz"
+            ]
+          }' > params.json
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy-web $GITHUB_SHA" \
+            --parameters file://params.json \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+
+      - name: 완료 대기, 서버 출력 수집
+        if: steps.fresh.outputs.stale == 'false'
+        env:
+          COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
+        run: |
+          status=Pending
+          for i in $(seq 1 90); do
+            status=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          echo "::group::서버 표준 출력"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "::endgroup::"
+          echo "::group::서버 표준 오류"
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+          echo "::endgroup::"
+          if [ "$status" != "Success" ]; then
+            echo "::error::프론트 배포 실패. SSM 상태: $status"
             exit 1
           fi
