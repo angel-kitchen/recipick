@@ -101,6 +101,9 @@ function QuickAdd({ recipe }) {
       {open && (
         <div className="modal" role="dialog" aria-modal="true" aria-label={`${recipe.name} 재료 담기`}>
           <div className="modal__box modal__box--wide card">
+            <button type="button" className="modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
+              ×
+            </button>
             <h2 className="tile__title">{recipe.name} 1인분 재료</h2>
             <ErrorNotice error={error} />
             {loading && <ListSkeleton rows={4} />}
@@ -109,9 +112,6 @@ function QuickAdd({ recipe }) {
               <Link to={`/recipes/${recipe.recipeId}`} className="btn btn--outline">
                 인분·선택 재료 바꾸기
               </Link>
-              <button type="button" className="header__link-button" onClick={() => setOpen(false)}>
-                닫기
-              </button>
             </div>
           </div>
         </div>

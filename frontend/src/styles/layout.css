@@ -194,7 +194,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-soft);
 }
 
