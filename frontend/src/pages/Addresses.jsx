@@ -207,6 +207,7 @@ export default function Addresses() {
     const result = await api.post('/api/members/me/addresses', { ...form, select, locationAgreed });
     await refresh();
     if (welcome) {
+      setAdding(false);
       navigate(next, { replace: true });
       return;
     }
@@ -233,7 +234,10 @@ export default function Addresses() {
       </p>
       {welcome && (
         <div className="notice notice--info">
-          환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요. <Link to={next}>나중에 할게요</Link>
+          환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요.{' '}
+          <Link to={next} onClick={() => setAdding(false)}>
+            나중에 할게요
+          </Link>
         </div>
       )}
       {message && <div className="notice notice--info">{message}</div>}
