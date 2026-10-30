@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import Pager from '../components/Pager';
+import RecentViews from '../components/RecentViews';
+import { CardSkeletons } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
 import { formatAmount, formatWon } from '../labels';
 
@@ -18,7 +22,7 @@ export default function Products() {
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const { guard, modal } = usePreviousMartGuard();
 
   useEffect(() => {
@@ -44,11 +48,10 @@ export default function Products() {
   }, [keyword, categoryId, page]);
 
   const addToCart = async (product) => {
-    setMessage(null);
     setError(null);
     try {
       await api.post('/api/cart-items', { productId: product.productId, quantity: 1 });
-      setMessage(`${product.name}을(를) 장바구니에 담았습니다.`);
+      toast.show(`${product.name}을(를) 장바구니에 담았어요.`, { to: '/cart', label: '장바구니 보기' });
     } catch (e) {
       setError(e);
     }
@@ -62,6 +65,7 @@ export default function Products() {
       ) : (
         <div className="notice">이용 마트가 정해지지 않아 상품을 담을 수 없습니다. 배송지를 등록하면 가까운 마트가 정해집니다.</div>
       )}
+      <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
       <div className="filters">
         <input
           className="field__input"
@@ -90,21 +94,26 @@ export default function Products() {
       </div>
 
       {modal}
-      {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
-      {!result && !error && <p className="state-message">불러오는 중입니다.</p>}
-      {result?.content.length === 0 && <p className="state-message">조건에 맞는 상품이 없습니다.</p>}
+      {!result && !error && <CardSkeletons />}
+      {result?.content.length === 0 && (
+        <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 카테고리를 바꿔 보세요." actions={[{ to: '/products', label: '조건 지우기' }]} />
+      )}
 
       <div className="grid">
         {result?.content.map((product) => (
           <div key={product.productId} className="tile">
-            {product.imageUrl ? (
-              <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
-            ) : (
-              <div className="tile__image">이미지 준비 중</div>
-            )}
+            <Link to={`/products/${product.productId}`} className="tile__link">
+              {product.imageUrl ? (
+                <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
+              ) : (
+                <div className="tile__image">이미지 준비 중</div>
+              )}
+            </Link>
             <div className="tile__body">
-              <span className="tile__title">{product.name}</span>
+              <Link to={`/products/${product.productId}`} className="tile__title">
+                {product.name}
+              </Link>
               <span className="tile__meta">
                 {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
               </span>
