@@ -197,8 +197,8 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub": [
-            "repo:angel-kitchen/recipick:ref:refs/heads/dev",
-            "repo:angel-kitchen/recipick:ref:refs/heads/main"
+            "repo:angel-kitchen@ORG_ID/recipick@REPO_ID:ref:refs/heads/dev",
+            "repo:angel-kitchen@ORG_ID/recipick@REPO_ID:ref:refs/heads/main"
           ]
         }
       }
@@ -206,6 +206,15 @@ Elastic IP는 인스턴스에 붙어 있는 동안에도 시간당 요금이 붙
   ]
 }
 ```
+
+`sub` 앞부분은 저장소 OIDC 설정을 따른다. 이 저장소는 고유 ID 방식(`use_immutable_subject: true`)이라 조직·저장소 이름 뒤에 숫자 ID가 붙는다. 아래 명령의 `sub_claim_prefix`를 그대로 `ref:refs/heads/...` 앞에 쓴다. `repo:angel-kitchen/recipick:ref:...`로 적으면 문자열이 달라 `AssumeRoleWithWebIdentity`가 `AccessDenied`로 실패한다(10/27 실제 사례, `docs/deploy-implementation.md` 8절). 콘솔 마법사가 만든 신뢰 정책도 이름 형식이라 반드시 이 단계에서 바꾼다.
+
+```bash
+gh api repos/angel-kitchen/recipick/actions/oidc/customization/sub --jq .sub_claim_prefix
+# repo:angel-kitchen@<ORG_ID>/recipick@<REPO_ID>
+```
+
+그래도 실패하면 CloudTrail(서울)에서 `AssumeRoleWithWebIdentity` 이벤트를 열어 실제 `sub` 클레임과 비교한다.
 
 역할의 **ARN**(`arn:aws:iam::ACCOUNT_ID:role/recipick-github-deploy`)을 적어 둔다 → `AWS_DEPLOY_ROLE_ARN`.
 
