@@ -195,6 +195,9 @@ Table WEBHOOK_EVENT {
   finished_at datetime
   created_at datetime
   updated_at datetime
+  indexes {
+    (portone_payment_id, status) [name: 'idx_webhook_event_portone_payment_id_status']
+  }
 }
 
 Table REFUND {

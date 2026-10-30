@@ -47,4 +47,15 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, Payment
     List<Long> findStaleInProgressPaymentIds(@Param("afterId") Long afterId,
                                              @Param("expiredBefore") LocalDateTime expiredBefore,
                                              Pageable pageable);
+
+    // 탈퇴 정산용. 회원 주문들의 결제 ID만 읽는다 — 엔티티를 잠금 전에 올려 두면 잠금 뒤에도 영속성 컨텍스트의 예전 값을 보게 된다.
+    // 결제는 주문 생성(회원 잠금 뒤)에서만 생기므로 회원 잠금 아래에서는 잠그지 않고 읽어도 목록이 바뀌지 않는다
+    @Query("SELECT p.id FROM Payment p WHERE p.orderId IN :orderIds ORDER BY p.id")
+    List<Long> findIdsByOrderIdIn(@Param("orderIds") Collection<Long> orderIds);
+
+    // 탈퇴 정산용 잠금 읽기. 스냅숏이 아니라 최신 커밋 상태를 읽고, 탈퇴 트랜잭션이 끝날 때까지 이 결제들의 변경을 줄 세운다.
+    // 같은 종류 여러 행은 PK 오름차순으로 잠근다(잠금 순서)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.id IN :ids ORDER BY p.id")
+    List<Payment> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
 }

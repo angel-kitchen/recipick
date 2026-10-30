@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Duration;
@@ -25,7 +26,10 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "webhook_event",
     uniqueConstraints = @UniqueConstraint(
-        name = WebhookEvent.WEBHOOK_ID_UNIQUE_CONSTRAINT, columnNames = "webhook_id")
+        name = WebhookEvent.WEBHOOK_ID_UNIQUE_CONSTRAINT, columnNames = "webhook_id"),
+    // 탈퇴 정산이 결제별 미해결 웹훅을 잠금 읽기(FOR SHARE)로 본다. 인덱스가 없으면 전체 스캔이 되어 테이블 전 행이 잠긴다
+    indexes = @Index(
+        name = "idx_webhook_event_portone_payment_id_status", columnList = "portone_payment_id, status")
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class WebhookEvent extends BaseTimeEntity {

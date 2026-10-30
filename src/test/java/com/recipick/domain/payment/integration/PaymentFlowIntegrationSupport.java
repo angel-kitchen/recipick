@@ -87,6 +87,9 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
 
     // PENDING_PAYMENT 주문은 회원당 하나(pending_member_id UNIQUE)라 픽스처마다 회원 ID를 새로 쓴다
     private static final AtomicLong MEMBER_SEQUENCE = new AtomicLong(92_000L);
+    // 마트는 지역당 하나(region_id UNIQUE)라 한 테스트에서 픽스처를 둘 이상 만들면 지역 ID도 새로 써야 한다.
+    // 다른 테스트가 쓰는 작은 지역 번호(31 등)와 겹치지 않게 큰 수에서 시작한다
+    private static final AtomicLong REGION_SEQUENCE = new AtomicLong(9_330_000L);
 
     @MockitoBean
     protected PortOnePaymentClient portOnePaymentClient;
@@ -291,7 +294,7 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
 
     private Mart saveMart() {
         Mart mart = martRepository.save(Mart.builder()
-            .regionId(33L)
+            .regionId(REGION_SEQUENCE.incrementAndGet())
             .name("웹훅 흐름 테스트 마트")
             .latitude(new BigDecimal("37.3670000"))
             .longitude(new BigDecimal("127.1080000"))
