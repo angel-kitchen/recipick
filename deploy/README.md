@@ -160,7 +160,7 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | 상황 | 방법 |
 | --- | --- |
 | 자동 배포가 실패 | 스크립트가 이전 태그의 이미지와 설정으로 이미 되돌렸다. Actions 로그의 서버 출력에서 원인을 본다 |
-| 배포는 성공했지만 기능이 잘못됨 | `bash /opt/recipick/releases/<이전 SHA>/scripts/deploy.sh <이전 SHA>`. 묶음이 정리되어 없으면 `/opt/recipick/scripts/deploy.sh <이전 SHA>`(현재 설정으로 이미지만 바꾼다) |
+| 배포는 성공했지만 기능이 잘못됨 | `bash /opt/recipick/releases/<이전 SHA>/scripts/deploy.sh <이전 SHA>`. 묶음이 정리되어 없으면 `/opt/recipick/scripts/deploy.sh <이전 SHA>`(현재 설정으로 이미지만 바꾼다). 이렇게 묶음 없이 올린 태그는 다음 배포가 설정을 바꾸기 전에 그때의 운영 설정을 `releases/<그 SHA>`로 남겨, 다음 배포가 실패해도 그 설정으로 복구한다 |
 | 스키마가 문제(아래) | 수동 |
 | 프론트 배포가 실패 | `current`는 이전 버전 그대로다(묶음 검사 실패) 또는 스크립트가 직전 버전으로 되돌렸다(nginx 확인 실패) |
 | 프론트는 배포됐지만 화면이 잘못됨 | 링크만 직전 버전으로 바꾼다. 앱·nginx 재시작은 필요 없다. 되돌릴 SHA는 Actions에서 마지막으로 정상이던 배포 실행의 커밋으로 고른다(`ls -1t releases`는 배포 순서라, 되돌린 뒤 백엔드만 바뀐 머지가 문제 있는 화면을 다시 올렸으면 그 문제 버전이 직전으로 보인다). `releases/<SHA>`가 남아 있는지 확인한 뒤 `ln -sfn releases/<직전 SHA> current.tmp && mv -T current.tmp current`. 다음 배포(백엔드만 바뀐 머지 포함)가 그 커밋의 화면을 다시 올리므로, 고친 커밋을 머지하기 전까지는 배포를 멈추거나 되돌린 화면이 덮어써질 수 있음을 팀에 알린다 |
@@ -182,7 +182,7 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
      gunzip -c "$DUMP" | docker exec -i recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql \$MYSQL_DATABASE"
      echo "가져오기 성공. 앱을 다시 배포한다"
      bash "releases/$PREV/scripts/deploy.sh" "$PREV"
-   ' || echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"
+   ' || { echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"; false; }
    ```
    중간에 실패하면 DB가 비었거나 일부만 들어간 상태일 수 있다. 앱을 그 상태로 띄우지 않는 것이 이 순서의 목적이다.
    pre-deploy 덤프의 이름 끝은 **그 덤프 직후에 배포한 SHA**다. 문제 배포의 SHA가 붙은 덤프가 문제 배포 직전 상태다.

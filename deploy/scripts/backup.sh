@@ -23,8 +23,10 @@ main() {
     mkdir -p backups
     chmod 700 backups
 
-    # 처음 배포하는 서버처럼 MySQL이 아직 없으면 덤프할 것이 없다
+    # 처음 배포하는 서버처럼 MySQL이 아직 없으면 배포 전 덤프는 할 것이 없다.
+    # nightly는 운영 중에 도는 작업이라 컨테이너가 없다는 것 자체가 장애이므로 조용히 넘기지 않는다
     if ! docker inspect recipick-mysql >/dev/null 2>&1; then
+        [ "$KIND" = nightly ] && fail "MySQL 컨테이너(recipick-mysql)가 없어 nightly 백업을 하지 못했다"
         log "MySQL 컨테이너가 없어 덤프를 건너뛴다"
         return 0
     fi

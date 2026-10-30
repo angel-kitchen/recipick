@@ -3,7 +3,8 @@
 #
 # 서버 배치(DEPLOY_ROOT, 기본 /opt/recipick)
 #   .env, certbot/, backups/      서버에만 있고 배포가 건드리지 않는다
-#   releases/<태그>/              태그마다 받은 deploy/ 묶음. 롤백 때 그 태그의 설정을 다시 깐다
+#   releases/<태그>/              태그마다 받은 deploy/ 묶음. 롤백 때 그 태그의 설정을 다시 깐다.
+#                                 묶음 없이 돌던 태그는 배포 직전 운영 설정을 그 이름으로 남긴다
 #   compose*.yml, nginx/, ...     현재 태그의 묶음을 그대로 복사한 운영 설정
 #
 # 흐름: 잠금 → .env 검사 → MySQL·Redis 준비 대기 → 배포 전 덤프 → 이미지 pull
@@ -36,6 +37,7 @@ main() {
     # 이미지가 없으면 여기서 끝난다. 아직 아무것도 바꾸지 않았으므로 서비스는 그대로다
     ecr_login "$IMAGE"
     docker pull "$IMAGE:$TAG"
+    snapshot_config "$PREV_TAG" "$TAG"
 
     if activate "$TAG"; then
         log "배포 완료: $TAG"
@@ -128,6 +130,21 @@ set_tag() {
     mv -f "$tmp" .env
 }
 
+# 운영 설정에서 서버에만 있는 것. 묶음과 맞추거나 스냅샷을 뜰 때 건드리지 않는다
+CONFIG_EXCLUDES=(--exclude=/.env --exclude=/certbot/ --exclude=/backups/ --exclude=/releases/
+                 --exclude=/.deploy.lock --exclude='/.env.tmp-*')
+
+snapshot_config() {
+    # 이미지만 바꾼 수동 롤백처럼 묶음 없이 돌던 태그로 복구하면 install_config가 방금 깐 실패 태그의 설정을 그대로 쓴다.
+    # 설정을 바꾸기 전에 지금 그 태그와 함께 동작하던 운영 설정을 묶음 자리에 남겨 복구 때 이것을 깐다
+    local prev="$1" tag="$2"
+    [ -n "$prev" ] && [ "$prev" != "$tag" ] && [ ! -d "$ROOT/releases/$prev" ] || return 0
+    local tmp; tmp="$(mktemp -d "$ROOT/releases/.snapshot-XXXXXX")"
+    rsync -a "${CONFIG_EXCLUDES[@]}" "$ROOT/" "$tmp/"
+    mv "$tmp" "$ROOT/releases/$prev"
+    log "releases/$prev 묶음이 없어 현재 운영 설정을 그 이름으로 남겼다(복구용)"
+}
+
 install_config() {
     # 그 태그의 묶음과 운영 설정을 정확히 같게 만든다. 저장소에서 지우거나 이름을 바꾼 파일도 서버에서 사라진다.
     # --inplace: nginx·prometheus는 파일·디렉터리를 바인드 마운트하므로 inode를 바꾸면 컨테이너가 옛 파일을 계속 본다
@@ -136,10 +153,7 @@ install_config() {
         warn "releases/$1 묶음이 없어 현재 설정을 그대로 쓴다"
         return 0
     fi
-    rsync -a --delete --inplace \
-        --exclude=/.env --exclude=/certbot/ --exclude=/backups/ --exclude=/releases/ \
-        --exclude=/.deploy.lock --exclude='/.env.tmp-*' \
-        "$rel/" "$ROOT/"
+    rsync -a --delete --inplace "${CONFIG_EXCLUDES[@]}" "$rel/" "$ROOT/"
 }
 
 wait_nginx() {
