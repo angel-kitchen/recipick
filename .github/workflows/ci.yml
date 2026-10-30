@@ -217,8 +217,10 @@ jobs:
   # 백엔드도 바뀐 push면 백엔드 배포가 성공한 뒤에만 돈다. 새 화면이 아직 없는 API를 부르는 순간을 만들지 않기 위해서다
   deploy-frontend:
     needs: [changes, frontend-build, deploy]
+    # 앞 작업이 건너뛰어져도(프론트만 바뀌어 deploy가 skipped) 평가하려고 상태 함수를 쓴다.
+    # always()는 실행을 취소해도 돌아 취소한 배포가 나가므로 !cancelled()로 둔다
     if: >-
-      always() &&
+      !cancelled() &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       github.ref_name == vars.DEPLOY_BRANCH &&
       needs.frontend-build.result == 'success' &&
