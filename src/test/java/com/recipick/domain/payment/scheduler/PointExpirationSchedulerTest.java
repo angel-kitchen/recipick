@@ -23,8 +23,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
+import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration;
 import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
@@ -129,6 +134,26 @@ class PointExpirationSchedulerTest {
         assertThat(defaultScheduler.getThreadNamePrefix()).isEqualTo("scheduling-");
         assertThat(pointScheduler.getThreadNamePrefix()).isEqualTo("point-expiration-");
         assertThat(pointScheduler.getPoolSize()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("포인트 스케줄러를 직접 등록해도 Boot 기본 실행기 applicationTaskExecutor가 함께 있다")
+    void schedulingConfigKeepsApplicationTaskExecutor() {
+        // given — Boot 자동 구성 위에 이 설정을 얹은 작은 컨텍스트. 운영처럼 test 프로필이 아니다
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                TaskExecutionAutoConfiguration.class, TaskSchedulingAutoConfiguration.class))
+            .withUserConfiguration(PointSchedulingConfig.class);
+
+        // when, then
+        runner.run(context -> {
+            assertThat(context).hasNotFailed()
+                .hasBean("taskScheduler")
+                .hasBean(PointSchedulingConfig.POINT_EXPIRATION_TASK_SCHEDULER)
+                .hasBean(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME);
+            assertThat(context.getBean(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME))
+                .isInstanceOf(ThreadPoolTaskExecutor.class);
+        });
     }
 
     @Test
