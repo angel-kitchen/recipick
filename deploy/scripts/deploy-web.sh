@@ -20,11 +20,17 @@ main() {
     mkdir -p "$WEB_ROOT/releases"
     local rel="$WEB_ROOT/releases/$SHA"
 
-    # 다 풀고 검사한 뒤에만 이름을 바꾼다. 중간에 실패해도 current는 이전 버전 그대로다
-    rm -rf "$rel.tmp" && mkdir -p "$rel.tmp"
-    tar -xzf "$BUNDLE" -C "$rel.tmp"
-    [ -f "$rel.tmp/index.html" ] || { log "빌드 묶음에 index.html이 없어 중단"; rm -rf "$rel.tmp"; exit 1; }
-    rm -rf "$rel" && mv "$rel.tmp" "$rel"
+    if [ -d "$rel" ]; then
+        # 같은 커밋을 다시 배포(수동 재실행)할 때다. 지금 nginx가 보는 폴더일 수 있어 지우고 다시 풀지 않는다.
+        # 이 폴더는 검사를 통과한 묶음만 이름을 바꿔 만들므로 그대로 쓴다
+        log "releases/$SHA가 이미 있어 다시 풀지 않는다"
+    else
+        # 다 풀고 검사한 뒤에만 이름을 바꾼다. 중간에 실패해도 current는 이전 버전 그대로다
+        rm -rf "$rel.tmp" && mkdir -p "$rel.tmp"
+        tar -xzf "$BUNDLE" -C "$rel.tmp"
+        [ -f "$rel.tmp/index.html" ] || { log "빌드 묶음에 index.html이 없어 중단"; rm -rf "$rel.tmp"; exit 1; }
+        mv "$rel.tmp" "$rel"
+    fi
 
     local prev=""
     [ -L "$WEB_ROOT/current" ] && prev="$(basename "$(readlink "$WEB_ROOT/current")")"
