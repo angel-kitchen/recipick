@@ -266,20 +266,20 @@ CodeDeploy는 중간 선택지다. EC2에서 블루그린을 하려면 ALB가 �
 
 AWS·파이프라인
 
-- [ ] GitHub OIDC 공급자, 배포용 IAM 역할(ECR push, SSM SendCommand), EC2 인스턴스 프로파일(ECR pull, SSM 관리 인스턴스)
+- [x] GitHub OIDC 공급자, 배포용 IAM 역할(ECR push, SSM SendCommand), EC2 인스턴스 프로파일(ECR pull, SSM 관리 인스턴스)
 - [ ] 관리자 IAM 그룹(배포 담당 + 대리 1명, Session Manager·Grafana 포트 포워딩·백업 다운로드). 나머지 팀원은 Actions 로그로 본다(`deploy/aws-setup.md` 10절)
-- [ ] EC2 Ubuntu t3.medium, 루트 볼륨 30GB gp3, Elastic IP, 보안 그룹 80·443. Docker·Compose 설치, `/opt/recipick`과 `.env`(권한 600)
+- [x] EC2 Ubuntu t3.medium, 루트 볼륨 30GB gp3, Elastic IP, 보안 그룹 80·443. Docker·Compose 설치, `/opt/recipick`과 `.env`(권한 600)
 - [x] compose 파일 3개(`restart: unless-stopped`, 로그 로테이션, 메모리 제한)와 nginx 설정. 10/26 작성, 로컬에서 빈 DB 첫 기동·IP 변경 재배포 검증
-- [ ] 서버 `.env` 작성(`deploy/README.md` 4절)
-- [ ] S3 버킷(`deploy/`, `backups/`), ECR 저장소와 수명 정책
-- [ ] 레포 변수 6개(`DEPLOY_BRANCH`, `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `ECR_REPOSITORY`, `DEPLOY_BUCKET`, `EC2_INSTANCE_ID`)
-- [ ] 운영 관리자 계정을 서버에서 SQL로 한 번 생성. 로컬 시드의 비밀번호 해시는 쓰지 않는다
+- [x] 서버 `.env` 작성(`deploy/README.md` 4절)
+- [x] S3 버킷(`deploy/`, `backups/`), ECR 저장소와 수명 정책
+- [x] 레포 변수 6개(`DEPLOY_BRANCH`, `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `ECR_REPOSITORY`, `DEPLOY_BUCKET`, `EC2_INSTANCE_ID`)
+- [x] 운영 관리자 계정을 서버에서 SQL로 한 번 생성. 로컬 시드의 비밀번호 해시는 쓰지 않는다
 - [x] 배포 워크플로(`ci.yml`의 deploy 작업)와 서버 스크립트(`deploy/scripts/deploy.sh`) 작성. 동시 실행 제한, SSM 완료 대기와 출력 수집 포함
 - [x] 10/27 검토 반영: 정상 배포가 실패로 끝나던 이미지 정리 수정, 기동 실패까지 공통 복구(설정 묶음 포함), 묶음을 `releases/`에 풀고 정확히 교체, 다운로드 전 잠금, `nginx -t`·reload·경유 응답 확인, MySQL 준비 대기, `stop_grace_period` 30초, 필수 환경 변수 검사, 백업 스크립트 분리(`backup.sh`, `restore-check.sh`), Redis 영속화·메모리 정책. 로컬에서 시나리오 9개 검증(`docs/deploy-implementation.md`)
 - [x] 10/27 완료 조건 재대조: 응답 확인은 리다이렉트를 따라가 최종 200만 성공(HTTPS 전환 뒤 301에 속던 빈틈), 새 nginx의 reload 대기, 인증서 갱신 cron을 배포 잠금으로 감쌈. 자체 CA로 HTTPS 전환·HTTPS 블록 오류·인증서 없음·HTTP 롤백 로컬 검증
-- [ ] 10/30까지: 실서버에서 워크플로 첫 실행(dev 병합 → 자동 배포) 확인
-- [ ] nightly 백업 cron 등록, `BACKUP_BUCKET`·`ALERT_WEBHOOK_URL` 설정, 실서버에서 `restore-check.sh`로 복원 1회
-- [ ] 10/30까지: 도메인·DNS·HTTPS(인증서 자동 발급·갱신)
+- [x] 10/30까지: 실서버에서 워크플로 첫 실행(dev 병합 → 자동 배포) 확인. 10/27 첫 자동 배포
+- [ ] nightly 백업 cron 등록, `BACKUP_BUCKET`·`ALERT_WEBHOOK_URL` 설정, 실서버에서 `restore-check.sh`로 복원 1회. `ALERT_WEBHOOK_URL`만 남음(cron 10/29, 첫 자동 실행·복원 10/30)
+- [x] 10/30까지: 도메인·DNS·HTTPS(인증서 자동 발급·갱신). `recipick.shop`, 갱신 cron은 배포 잠금으로 감쌈
 - [ ] main 전용 룰셋(사람 승인 1~2개). 저장소 관리 권한이 있는 사람
 - [ ] 파이프라인 완성 후: dev → main 따라잡기 승격, 변수 main으로 배포 리허설 1회, 변수 dev로 복귀 확인
 - [ ] 11/9: dev → main 최종 승격, 변수 main, 태그. 배포 역할의 신뢰 정책에서 dev 제거(dev 머지로 시연 서버에 명령을 보낼 수 없게)
@@ -296,23 +296,25 @@ AWS·파이프라인
 
 업무 전달 5절을 기준으로 하고 락 대기 시간과 무중단 항목을 더했다. 전부 통과해야 배포·CI/CD 항목을 완료로 본다.
 
-| 확인 | 기준 |
-| --- | --- |
-| 외부 접근 | 인터넷에서 `POST /api/service-area/check`가 200 |
-| 인증 | 회원 가입·로그인 후 HTTPS에서 `Set-Cookie`가 동작하고 토큰 재발급 성공 |
-| 자동 배포 | dev 병합 후 서버가 새 이미지로 교체되고 헬스 체크 통과. 화면 기록을 남긴다 |
-| 재배포 안전 | 재시작해도 시드가 중복되지 않고 기동 성공 |
-| 락 대기 시간 | 운영 DB 세션의 `innodb_lock_wait_timeout`이 5 |
-| 비밀 정보 | 저장소·이미지·로그에 시크릿 없음 |
-| 웹훅 | PortOne 콘솔에 고정 주소의 `/api/webhooks/...` 등록 가능. 컨트롤러는 아직 없고 정윤 구현에 걸린다 |
-| 관리자 | 운영 관리자 계정으로 관리자 로그인 성공 |
-| 헬스 포트 | 메인 포트의 `/actuator/health`는 401, 관리 포트는 도커 네트워크 내부에서 200. 호스트 밖에서 관리 포트 접근 불가 |
-| 로그·디스크 | 컨테이너 로그 로테이션 동작, 루트 볼륨 여유 확인 |
-| 실패 복구 | 일부러 깨진 이미지·nginx 설정을 배포해 이전 태그와 설정으로 돌아오는지, 복구 후 nginx 경유 응답이 200인지 확인 |
-| 중복 배포 | 배포 중 수동 배포가 "다른 배포가 진행 중"으로 중단 |
-| 백업 | nightly가 S3에 올라가고 `restore-check.sh`로 복원 성공 |
-| HTTPS | http는 301, 인증서 발급자·만료일, 리프레시 쿠키 `Secure`, 토큰 재발급 200 |
-| 무중단 (블루그린 도입 후) | 교체 중 반복 호출에서 실패 0. 이전 색이 관찰 시간 뒤 중지되었는지 확인 |
+| 확인 | 기준 | 실서버 결과(10/30) |
+| --- | --- | --- |
+| 외부 접근 | 인터넷에서 `POST /api/service-area/check`가 200 | 통과. 200, `available: true` |
+| 인증 | 회원 가입·로그인 후 HTTPS에서 `Set-Cookie`가 동작하고 토큰 재발급 성공 | 통과. 테스트 회원 가입·로그인, curl과 브라우저 새로고침 모두 재발급 200 |
+| 자동 배포 | dev 병합 후 서버가 새 이미지로 교체되고 헬스 체크 통과. 화면 기록을 남긴다 | 통과. 10/27부터 dev 머지마다 `deploy` 성공(Actions 실행 기록) |
+| 재배포 안전 | 재시작해도 시드가 중복되지 않고 기동 성공 | 통과. 수십 번 재배포 뒤 region 2·mart 2·admin 1 |
+| 락 대기 시간 | 운영 DB 세션의 `innodb_lock_wait_timeout`이 5 | 통과. 서버 전역 5(MySQL 옵션), 앱 세션은 Hikari 초기화 SQL로 5 |
+| 비밀 정보 | 저장소·이미지·로그에 시크릿 없음 | 통과. 저장소 패턴 검색 0건, 이미지는 jar만(`.dockerignore`), 앱 로그 패턴 검색 0건 |
+| 웹훅 | PortOne 콘솔에 고정 주소의 `/api/webhooks/...` 등록 가능. 컨트롤러는 아직 없고 정윤 구현에 걸린다 | 미완. 주소 `https://recipick.shop/api/webhooks/portone`은 준비됨. 서버 `.env`의 웹훅 시크릿을 받은 뒤 등록 |
+| 관리자 | 운영 관리자 계정으로 관리자 로그인 성공 | 통과. 브라우저에서 로그인 |
+| 헬스 포트 | 메인 포트의 `/actuator/health`는 401, 관리 포트는 도커 네트워크 내부에서 200. 호스트 밖에서 관리 포트 접근 불가 | 통과. 8080 401, 8081 200, 앱 컨테이너 호스트 포트 없음, 외부에서 8081·3306·22 닫힘 |
+| 로그·디스크 | 컨테이너 로그 로테이션 동작, 루트 볼륨 여유 확인 | 통과. 네 컨테이너 `json-file` 10m×3, 루트 29G 중 5.6G(20%) |
+| 실패 복구 | 일부러 깨진 이미지·nginx 설정을 배포해 이전 태그와 설정으로 돌아오는지, 복구 후 nginx 경유 응답이 200인지 확인 | 통과. 헬스 체크를 깨뜨린 묶음으로 배포 → 이전 태그 이미지·설정으로 복구, 경유 응답 200(`docs/deploy-implementation.md` 7-3). nginx 설정 오류 복구는 로컬 검증(7-2) |
+| 중복 배포 | 배포 중 수동 배포가 "다른 배포가 진행 중"으로 중단 | 통과. 잠금을 쥔 상태에서 수동 배포가 즉시 중단, `IMAGE_TAG` 그대로 |
+| 백업 | nightly가 S3에 올라가고 `restore-check.sh`로 복원 성공 | 통과. 첫 자동 nightly 로컬·S3 크기 일치, 임시 DB 복원 테이블 33개 |
+| HTTPS | http는 301, 인증서 발급자·만료일, 리프레시 쿠키 `Secure`, 토큰 재발급 200 | 통과. Let's Encrypt, 만료 2027-01-27, `www`도 301 |
+| 무중단 (블루그린 도입 후) | 교체 중 반복 호출에서 실패 0. 이전 색이 관찰 시간 뒤 중지되었는지 확인 | 해당 없음(블루그린 미도입) |
+
+웹훅을 뺀 항목이 통과했다. 웹훅은 결제 담당에게 시크릿을 받아 서버 `.env`에 넣은 뒤 주소를 등록하면 끝난다.
 
 ## 11. 미결 사항
 
