@@ -1,0 +1,129 @@
+import { useState } from 'react';
+import { api } from '../../api/client';
+import ErrorNotice from '../../components/ErrorNotice';
+import { MART_STATUS } from '../../labels';
+import useLoad from '../useLoad';
+
+function MartForm({ mart, onDone, onCancel }) {
+  const [form, setForm] = useState({
+    latitude: String(mart.latitude),
+    longitude: String(mart.longitude),
+    serviceRadiusM: String(mart.serviceRadiusM ?? ''),
+    status: mart.status,
+  });
+  const [error, setError] = useState(null);
+  const change = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.patch(`/api/admin/marts/${mart.martId}`, {
+        latitude: form.latitude,
+        longitude: form.longitude,
+        serviceRadiusM: form.serviceRadiusM ? Number(form.serviceRadiusM) : null,
+        status: form.status,
+      });
+      onDone();
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  return (
+    <form className="card form admin__section" onSubmit={submit}>
+      <h2 className="tile__title">{mart.name} 수정</h2>
+      <ErrorNotice error={error} />
+      <div className="form-grid">
+        <label className="field">
+          <span className="field__label">위도</span>
+          <input className="field__input" value={form.latitude} onChange={change('latitude')} required />
+        </label>
+        <label className="field">
+          <span className="field__label">경도</span>
+          <input className="field__input" value={form.longitude} onChange={change('longitude')} required />
+        </label>
+        <label className="field">
+          <span className="field__label">서비스 반경(m)</span>
+          <input className="field__input" inputMode="numeric" value={form.serviceRadiusM} onChange={change('serviceRadiusM')} />
+          <span className="field__hint">지도 표시용 값입니다. 배송 가능 여부는 지역(법정동)으로 판정합니다.</span>
+        </label>
+        <label className="field">
+          <span className="field__label">운영 상태</span>
+          <select className="field__input" value={form.status} onChange={change('status')}>
+            {Object.entries(MART_STATUS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="row-actions" style={{ marginTop: 0 }}>
+        <button type="submit" className="btn">
+          저장
+        </button>
+        <button type="button" className="btn btn--outline" onClick={onCancel}>
+          취소
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function AdminMarts() {
+  const { data, error, reload } = useLoad(() => api.get('/api/admin/marts'), []);
+  const [editing, setEditing] = useState(null);
+
+  return (
+    <>
+      <div className="admin__head">
+        <h1 className="page__title">마트</h1>
+      </div>
+      <ErrorNotice error={error} />
+      {editing && (
+        <MartForm
+          key={editing.martId}
+          mart={editing}
+          onDone={() => {
+            setEditing(null);
+            reload();
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+      <div className="card table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>이름</th>
+              <th>위도</th>
+              <th>경도</th>
+              <th>반경(m)</th>
+              <th>상태</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data?.map((mart) => (
+              <tr key={mart.martId}>
+                <td>{mart.martId}</td>
+                <td>{mart.name}</td>
+                <td>{mart.latitude}</td>
+                <td>{mart.longitude}</td>
+                <td>{mart.serviceRadiusM}</td>
+                <td>{MART_STATUS[mart.status]}</td>
+                <td>
+                  <button type="button" className="chip" onClick={() => setEditing(mart)}>
+                    수정
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}

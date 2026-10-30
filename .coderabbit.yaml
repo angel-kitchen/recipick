@@ -9,25 +9,30 @@ reviews:
     docstrings:
       # 주석은 "왜"만 적는 컨벤션이라 모든 메서드에 설명을 요구하는 검사는 끈다.
       mode: "off"
+  # 생성 파일은 리뷰하지 않는다
+  path_filters:
+    - "!frontend/package-lock.json"
+    - "!frontend/dist/**"
+  # 백엔드 지침은 src 아래에만 건다. frontend 폴더 이름(service, dto, domain 등)에 백엔드 규칙이 붙지 않게 한다.
   path_instructions:
-    - path: "**/entity/**"
+    - path: "src/**/entity/**"
       instructions: |
         - setter를 두지 않고 상태 변경은 규칙을 검사하는 메서드로 하는지 확인한다.
         - enum은 EnumType.STRING, 연관관계는 LAZY인지 확인한다.
         - 금액은 Long, 개수는 int, 필요량과 판매 단위 수치는 BigDecimal인지 확인한다.
         - created_at, updated_at은 BaseTimeEntity 상속으로 채우는지 확인한다(이력 테이블은 created_at만).
         - 낙관적 락(Version)을 쓰지 않았는지 확인한다.
-    - path: "**/controller/**"
+    - path: "src/**/controller/**"
       instructions: |
         - Controller는 ResponseEntity에 ApiResponse를 담아 반환하고 비즈니스 로직을 두지 않는지 확인한다.
         - 요청 본문은 Valid로 검증하고, 엔티티를 응답으로 직접 내보내지 않는지 확인한다.
         - 로그인 회원은 LoginMember, 관리자는 LoginAdmin으로 받는지, 경로로 회원 ID를 받지 않는지 확인한다.
         - 주문 생성, 취소, 환불 요청은 Idempotency-Key 헤더를 받는지 확인한다.
-    - path: "**/dto/**"
+    - path: "src/**/dto/**"
       instructions: |
         - DTO는 record로 작성하는지 확인한다.
         - 요청 DTO에 jakarta validation 제약이 있는지 확인한다.
-    - path: "**/service/**"
+    - path: "src/**/service/**"
       instructions: |
         - 클래스는 readOnly 트랜잭션이 기본이고 상태를 바꾸는 메서드에만 Transactional이 있는지 확인한다.
         - 다른 도메인의 Entity나 Repository를 직접 쓰지 않고, 다른 Service를 직접 주입하지 않는지 확인한다.
@@ -36,27 +41,27 @@ reviews:
         - 비즈니스 오류는 BusinessException과 도메인 ErrorCode로 던지는지 확인한다.
         - 동시 요청이 겹치는 변경은 비관적 락으로 대상 행을 잠근 뒤 상태를 검증하는지 확인한다.
         - 여러 자원을 함께 잠글 때 순서가 PAYMENT, ORDERS, MEMBER_POINT, POINT_EARNING, 재고 순서인지 확인한다.
-    - path: "**/repository/**"
+    - path: "src/**/repository/**"
       instructions: |
         - 잠금 전용 조회는 findByIdForUpdate처럼 이름으로 구분하는지 확인한다.
         - 벌크 UPDATE는 JPA Auditing을 거치지 않으므로 updated_at을 함께 갱신하는지 확인한다.
         - 반복문 안의 조회로 N+1이 생기지 않는지 확인한다.
-    - path: "**/domain/payment/**"
+    - path: "src/**/domain/payment/**"
       instructions: |
         - 웹훅은 원문 body로 PortOne 서명을 검증하고 webhook_id로 한 번만 처리하는지 확인한다.
         - 환불은 내부 상태 저장과 커밋 후에 외부 호출을 하고 결과를 별도 트랜잭션으로 반영하는지 확인한다.
         - 같은 요청이 반복돼도 PG 호출, 환불 기록, 상태 변경이 중복되지 않는지 확인한다.
-    - path: "**/domain/order/**"
+    - path: "src/**/domain/order/**"
       instructions: |
         - 재고는 주문 생성 시 즉시 차감하고 취소, 만료, 실패, 환불 완료 때 한 번만 복구하는지 확인한다.
         - 같은 Idempotency-Key 재시도를 결제 대기 주문 제한보다 먼저 확인하는지 확인한다.
         - 주문서 조회는 배송 가능 여부를 오류가 아니라 상태로 응답하고, 거절은 주문 생성의 최종 검증에서만 하는지 확인한다.
-    - path: "**/global/security/**"
+    - path: "src/**/global/security/**"
       instructions: |
         - JWT는 필터에서 한 번만 파싱하는지 확인한다.
         - 401은 AuthenticationEntryPoint, 403은 AccessDeniedHandler에서 공통 응답으로 나가는지 확인한다.
         - 토큰, 비밀번호, 휴대전화 원문이 로그에 남지 않는지 확인한다.
-    - path: "**/infra/**"
+    - path: "src/**/infra/**"
       instructions: |
         - 외부 시스템 호출만 담당하고 환불 가능 여부 같은 업무 판단이 들어 있지 않은지 확인한다.
     - path: "**/application*.yml"
@@ -67,20 +72,27 @@ reviews:
       instructions: |
         - 메서드 이름은 영어, DisplayName은 한국어 문장, 본문은 given when then으로 나뉘어 있는지 확인한다.
         - 재고 차감, 결제 확정처럼 동시 요청이 겹칠 수 있는 로직에 동시성 테스트가 있는지 확인한다.
+    - path: "frontend/**"
+      instructions: |
+        - 액세스 토큰을 localStorage나 sessionStorage에 저장하지 않고 메모리에 두는지 확인한다.
+        - API를 상대 경로 /api로 호출하고 운영 주소를 코드에 적지 않는지 확인한다.
+        - 401 처리에서 재발급 요청을 동시에 여러 번 보내지 않고 하나로 모으는지 확인한다.
+        - 주문 생성 요청의 Idempotency-Key를 주문 시도마다 새로 만들고 재시도에만 같은 값을 쓰는지 확인한다.
+        - VITE_로 시작하는 환경 변수에 시크릿이 들어 있지 않은지 확인한다. 빌드 결과에 그대로 노출된다.
 
 knowledge_base:
   code_guidelines:
     # 도메인 코드에 해당 도메인의 요구사항만 붙인다. 문서는 docs/requirement.md에서 split_requirements.py로 생성한다.
     filePatterns:
       - files: ".coderabbit/requirements/member.md"
-        applyTo: "**/domain/member/**"
+        applyTo: "src/**/domain/member/**"
       - files: ".coderabbit/requirements/product.md"
-        applyTo: "**/domain/product/**"
+        applyTo: "src/**/domain/product/**"
       - files: ".coderabbit/requirements/recipe.md"
-        applyTo: "**/domain/recipe/**"
+        applyTo: "src/**/domain/recipe/**"
       - files: ".coderabbit/requirements/order.md"
-        applyTo: "**/domain/order/**"
+        applyTo: "src/**/domain/order/**"
       - files: ".coderabbit/requirements/payment.md"
-        applyTo: "**/domain/payment/**"
+        applyTo: "src/**/domain/payment/**"
       - files: ".coderabbit/requirements/auth.md"
-        applyTo: "**/global/security/**,**/global/config/SecurityConfig.java"
+        applyTo: "src/**/global/security/**,src/**/global/config/SecurityConfig.java"

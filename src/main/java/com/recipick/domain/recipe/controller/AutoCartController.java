@@ -1,10 +1,13 @@
 package com.recipick.domain.recipe.controller;
 
+import com.recipick.domain.recipe.dto.request.AiAutoCartPreviewRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartConfirmRequest;
 import com.recipick.domain.recipe.dto.request.AutoCartPreviewRequest;
 import com.recipick.domain.recipe.dto.response.AutoCartConfirmResponse;
+import com.recipick.domain.recipe.dto.response.AiAutoCartPreviewResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartSummaryResponse;
+import com.recipick.domain.recipe.facade.AiAutoCartFacade;
 import com.recipick.domain.recipe.facade.AutoCartFacade;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AutoCartController {
 
     private final AutoCartFacade autoCartFacade;
+    private final AiAutoCartFacade aiAutoCartFacade;
 
     @PostMapping("/preview")
     public ResponseEntity<ApiResponse<AutoCartPreviewResponse>> preview(
@@ -35,6 +39,14 @@ public class AutoCartController {
         return ResponseEntity.ok(ApiResponse.success(autoCartFacade.preview(memberId, request)));
     }
 
+    @PostMapping("/ai-preview")
+    public ResponseEntity<ApiResponse<AiAutoCartPreviewResponse>> previewByAi(
+        @LoginMember Long memberId,
+        @Valid @RequestBody AiAutoCartPreviewRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(aiAutoCartFacade.preview(memberId, request.text())));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<AutoCartSummaryResponse>>> findAutoCarts(
         @LoginMember Long memberId,
@@ -42,7 +54,6 @@ public class AutoCartController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(autoCartFacade.findAutoCarts(memberId, pageable)));
     }
-
 
     @GetMapping("/{autoCartRequestId}")
     public ResponseEntity<ApiResponse<AutoCartPreviewResponse>> getAutoCart(

@@ -1,15 +1,7 @@
 package com.recipick.domain.recipe.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -21,7 +13,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "ai_request_log")
+@Table(name = "ai_request_log",
+        indexes = {
+                @Index(name = "id_ai_request_log_created_at", columnList = "created_at"),
+                @Index(name = "idx_ai_request_log_member_id_created_at", columnList = "member_id, created_at")
+    }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiRequestLog {
 
@@ -29,11 +26,16 @@ public class AiRequestLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private Long memberId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "auto_cart_request_id")
     private AutoCartRequest autoCartRequest;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20)")
+    private AiRequestType requestType;
 
     @Column(columnDefinition = "text")
     private String rawText;
@@ -44,31 +46,62 @@ public class AiRequestLog {
     @Column(columnDefinition = "text")
     private String matchedRecipeIds;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20)")
+    private AiResultStatus resultStatus;
+
+    @Column(nullable = false)
     private boolean success;
 
     @Column(length = 500)
     private String failureReason;
 
+    @Column(nullable = false, length = 50)
+    private String model;
+
+    private Integer inputTokens;
+
+    private Integer outputTokens;
+
+    private Integer cacheReadTokens;
+
+    @Column(nullable = false)
+    private int latencyMs;
+
     @CreatedDate
-    @Column(updatable = false)
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // 성공 여부를 따로 받지 않고 결과 상태로 정해, FALLBACK인데 성공으로 남는 이력이 생기지 않게 한다
     @Builder
     private AiRequestLog(
             Long memberId,
             AutoCartRequest autoCartRequest,
+            AiRequestType requestType,
             String rawText,
             String parsedResult,
             String matchedRecipeIds,
-            boolean success,
-            String failureReason
+            AiResultStatus resultStatus,
+            String failureReason,
+            String model,
+            Integer inputTokens,
+            Integer outputTokens,
+            Integer cacheReadTokens,
+            int latencyMs
     ) {
         this.memberId = memberId;
         this.autoCartRequest = autoCartRequest;
+        this.requestType = requestType;
         this.rawText = rawText;
         this.parsedResult = parsedResult;
         this.matchedRecipeIds = matchedRecipeIds;
-        this.success = success;
+        this.resultStatus = resultStatus;
+        this.success = resultStatus != AiResultStatus.FALLBACK;
         this.failureReason = failureReason;
+        this.model = model;
+        this.inputTokens = inputTokens;
+        this.outputTokens = outputTokens;
+        this.cacheReadTokens = cacheReadTokens;
+        this.latencyMs = latencyMs;
     }
 }
