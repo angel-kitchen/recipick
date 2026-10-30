@@ -25,6 +25,8 @@ services:
       - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
+      # 프론트 빌드 결과. 백엔드 배포의 rsync --delete를 피해 /opt/recipick 밖에 둔다(scripts/deploy-web.sh)
+      - /opt/recipick-web:/srv/web:ro
     depends_on:
       - app
     logging: *logging
