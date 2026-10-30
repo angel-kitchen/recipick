@@ -16,4 +16,10 @@ public interface PointUsageRepository extends JpaRepository<PointUsage, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM PointUsage u WHERE u.orderId = :orderId ORDER BY u.id ASC")
     List<PointUsage> findAllByOrderIdForUpdate(@Param("orderId") Long orderId);
+
+    // 탈퇴 정산의 미정산 확인(RESERVED 사용). 사용 내역은 회원 ID를 직접 갖지 않아 적립 건을 거쳐 본다.
+    // 잠그지 않는 조회라 스냅숏을 보지만, 늦게 보이는 RESERVED는 탈퇴를 막는 쪽으로만 틀린다
+    @Query("SELECT COUNT(u) > 0 FROM PointUsage u WHERE u.pointEarning.memberId = :memberId "
+        + "AND u.status = com.recipick.domain.payment.entity.enums.PointUsageStatus.RESERVED")
+    boolean existsReservedByMemberId(@Param("memberId") Long memberId);
 }
