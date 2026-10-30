@@ -33,12 +33,13 @@ AI가 직접 판단하는 부분만 잰다. 후보 거르기·인분 범위·중
 비용이 드는 실제 호출이라 평소 `./gradlew test`와 CI에서는 건너뛴다. 키가 있는 환경에서 아래처럼 실행한다.
 
 ```bash
-read -s "ANTHROPIC_API_KEY?키 입력: " && export ANTHROPIC_API_KEY
+printf "키 입력: " && read -rs ANTHROPIC_API_KEY && echo && export ANTHROPIC_API_KEY
 AI_EVAL=true AI_EVAL_MODEL=claude-opus-5-5 ./gradlew test --tests '*ClaudeAiEvaluationTest' --rerun
 unset ANTHROPIC_API_KEY
 ```
 
-- 키는 명령어에 직접 쓰지 않고 `read -s`로 입력받는다. 명령어에 쓰면 셸 기록(`~/.zsh_history`)에 남는다.
+- 키는 명령어에 직접 쓰지 않고 `read -rs`로 화면에 보이지 않게 입력받는다. 명령어에 쓰면 셸 기록에 남는다.
+- 입력 안내를 `read`의 옵션이 아닌 `printf`로 출력하는 것은 bash(`read -p`)와 zsh(`read "변수?안내"`)의 문법이 달라서다. 이 방식은 macOS(zsh)·Linux·Git Bash에서 모두 동작한다.
 - `AI_EVAL_MODEL`을 바꿔 같은 문장으로 모델을 비교한다(기본값 `claude-opus-5-5`).
 - `--rerun`이 없으면 Gradle이 이전 결과를 재사용해 다시 호출하지 않는다.
 - 결과는 `build/ai-eval/{모델}-{시각}.md`에 문장별 정답 여부·AI 응답·응답 시간과 합계로 남는다.
