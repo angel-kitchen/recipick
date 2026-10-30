@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -51,8 +53,14 @@ public class AiRequestLogService {
             .latencyMs(Math.toIntExact(usage.latencyMs()))
             .build());
 
-        // 이력 INSERT가 실패하면 예외가 먼저 올라가 지표를 남기지 않으므로, 이력에 없는 요청이 지표에만 잡히지 않는다
-        aiRequestMetrics.record(requestType, resultStatus, aiResult);
+        // 자연어 장보기는 미리보기 저장과 같은 트랜잭션에서 이력을 남기므로 저장 뒤에 롤백될 수 있다.
+        // 이력에 없는 요청이 지표에만 잡히지 않도록 커밋에 성공한 뒤에 기록한다
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                aiRequestMetrics.record(requestType, resultStatus, aiResult);
+            }
+        });
     }
 
     public Page<AiRequestLog> searchForAdmin(AiRequestLogAdminSearchRequest request) {
