@@ -4,10 +4,13 @@ import com.recipick.domain.member.dto.MemberMembershipData;
 import com.recipick.domain.member.entity.Membership;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import java.time.LocalDateTime;
+import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -49,6 +52,11 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             @Param("type") MembershipType type);
 
     Page<Membership> findAllByMemberId(Long memberId, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Membership m WHERE m.id = :membershipId AND m.member.id = :memberId")
+    Optional<Membership> findByIdAndMemberIdForUpdate(@Param("membershipId") Long membershipId,
+            @Param("memberId") Long memberId);
 
     boolean existsByMemberId(Long memberId);
 }
