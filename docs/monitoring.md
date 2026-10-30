@@ -145,3 +145,50 @@
 | 요청을 보낼 때 그래프 변화 | 요청 수·응답 시간·커넥션 풀 그래프 갱신 |
 
 - 5xx가 한 건도 없으면 에러율 쿼리가 "데이터 없음"이 되어 `or vector(0)`을 붙여 0%로 표시한다.
+
+## 4. AI 지표
+
+### 상황
+- AI 요청은 외부 서비스(Claude) 호출이라 응답 지연·장애·요청 한도 초과가 생길 수 있고, 요청마다 토큰 비용이 든다.
+- 요청별 기록은 `ai_request_log`에 남지만, 실패율이 오르는지·응답이 느려지는지·토큰이 얼마나 쓰이는지를 보려면 매번 DB를 집계해야 한다.
+- HTTP 지표(`http_server_requests`)로는 AI 장애를 알 수 없다. AI가 실패해도 `FALLBACK` 상태의 200으로 응답하기 때문이다.
+
+### 후보
+| 후보 | 장점 | 단점 |
+| --- | --- | --- |
+| `ai_request_log`를 주기적으로 집계 | 이미 있는 데이터 | 관리자 조회 감사 기록이 남고, 실시간 추이·p95를 보기 어려움 |
+| AI 호출마다 infra(`ClaudeAiClient`)에서 지표 기록 | 호출 단위로 정확함 | 조건 추천처럼 두 번 호출하는 기능의 최종 결과(`FALLBACK` 여부)를 알 수 없음, 가짜 클라이언트에서는 지표가 없음 |
+| **이력 저장 시점에 지표 기록(선택)** | 이력과 같은 값(결과 상태·실패 사유·합산 토큰·응답 시간)이라 두 기록이 어긋나지 않음 | 조건 추천의 응답 시간은 두 호출을 합친 값 |
+
+### 선택과 이유
+- `AiRequestLogService.save`가 이력을 저장한 뒤 `AiRequestMetrics.record`를 호출한다. 이력 INSERT가 실패하면 지표도 남기지 않는다.
+- 지표 3개를 기존 Prometheus(관리 포트 `/actuator/prometheus`)로 내보낸다. 수집 설정은 바꾸지 않는다.
+
+| 지표(Prometheus 이름) | 태그 | 용도 |
+| --- | --- | --- |
+| `recipick_ai_requests_total` | `type`(AUTO_CART·RECOMMENDATION), `status`(결과 상태), `failure`(실패 사유, 성공이면 `NONE`) | 요청 수, 실패율, 실패 사유 |
+| `recipick_ai_latency_seconds` | `type` | 응답 시간 p95(히스토그램) |
+| `recipick_ai_tokens_total` | `type`, `model`, `kind`(input·output·cache_read) | 모델별 토큰 사용량(비용 추정) |
+
+- 태그에는 enum 값과 모델명만 쓴다. 회원 ID·원문을 태그로 쓰면 값마다 지표가 새로 생겨 Prometheus 저장량이 계속 늘고, 개인정보가 지표로 나간다.
+- 응답을 받지 못한 호출은 토큰을 0으로 세지 않고 건너뛴다. 이력에서 토큰을 비워 두는 기준과 같다.
+- 회원별 한도 초과(`AI-001`)로 거절한 요청은 AI를 호출하지 않고 이력도 남기지 않으므로 이 지표에 잡히지 않는다.
+
+### 대시보드 패널("Recipick 개요"에 추가)
+AI 요청은 HTTP 요청보다 훨씬 드물어 1분 구간으로는 그래프가 거의 비므로 5분 구간을 쓴다.
+
+| 패널 | 쿼리 요지 |
+| --- | --- |
+| AI 요청 수(5분, 결과별) | `sum by (type, status) (increase(recipick_ai_requests_total[5m]))` |
+| AI 실패율(FALLBACK 비율) | `failure!="NONE"` 요청 비율, 실패가 없으면 0 |
+| AI 실패 사유(5분) | `sum by (failure) (increase(...{failure!="NONE"}[5m]))` |
+| AI 응답 시간 p95 | `histogram_quantile(0.95, sum by (le, type) (rate(recipick_ai_latency_seconds_bucket[5m])))` |
+| AI 토큰 사용량(5분) | `sum by (model, kind) (increase(recipick_ai_tokens_total[5m]))` |
+
+### 트레이드오프
+- 조건 추천의 응답 시간은 두 호출의 합이라, 호출 한 번의 지연과 직접 비교하지 않는다. 기능별(`type`)로 나눠 본다.
+- 응답 시간 히스토그램을 켜서 지표 수가 조금 늘어난다. `type`이 2개라 늘어나는 양은 작다.
+- 토큰 지표는 비용 추정용이다. 실제 청구 금액은 Anthropic 콘솔 기준이다.
+
+### 결과
+- `AiRequestMetricsTest`(단위 3개): 결과 상태·실패 사유별 건수, 응답 시간 합계, 토큰 종류별 합계, 받지 못한 토큰 제외, Prometheus 이름(`_total`, `_bucket`)을 확인했다.
