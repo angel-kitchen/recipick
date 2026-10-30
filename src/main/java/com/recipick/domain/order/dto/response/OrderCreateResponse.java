@@ -9,34 +9,36 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record OrderCreateResponse(
-        Long orderId,
-        String orderNumber,
-        OrderStatus status,
-        String orderName,
-        Long productAmount,
-        Long deliveryFee,
-        Long amount,
-        Long paymentId,
-        String portonePaymentId,
-        LocalDateTime expiresAt,
-        String receiverName,
-        String receiverPhone
+    Long orderId,
+    String orderNumber,
+    OrderStatus status,
+    String orderName,
+    Long productAmount,
+    Long deliveryFee,
+    Long usedPoint,
+    Long amount,
+    Long paymentId,
+    String portonePaymentId,
+    LocalDateTime expiresAt,
+    String receiverName,
+    String receiverPhone
 ) {
 
     public static OrderCreateResponse of(Order order, List<OrderItem> items, PaymentCreated payment) {
         return new OrderCreateResponse(
-                order.getId(),
-                order.getOrderNumber(),
-                order.getStatus(),
-                OrderNameFormatter.format(items),
-                order.getProductAmount(),
-                order.getDeliveryFee(),
-                payment.amount(),
-                payment.paymentId(),
-                payment.portonePaymentId(),
-                payment.expiresAt(),
-                order.getReceiverName(),
-                order.getReceiverPhone()
+            order.getId(),
+            order.getOrderNumber(),
+            order.getStatus(),
+            OrderNameFormatter.format(items),
+            order.getProductAmount(),
+            order.getDeliveryFee(),
+            order.getUsedPoint(),
+            payment.amount(),
+            payment.paymentId(),
+            payment.portonePaymentId(),
+            payment.expiresAt(),
+            order.getReceiverName(),
+            order.getReceiverPhone()
         );
     }
 }

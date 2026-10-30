@@ -29,6 +29,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
@@ -77,19 +78,23 @@ class PaymentCancelProcessorTest {
     @Mock
     private OrderFacade orderFacade;
 
+    @Mock
+    private PointCommandService pointCommandService;
+
     private PaymentCancelProcessor processor;
 
     @BeforeEach
     void setUp() {
         // Clock은 mock이 아니라 @InjectMocks로는 못 넣는다. 시계를 멈춰 두고 직접 조립한다
         Clock fixedClock = Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL);
-        processor = new PaymentCancelProcessor(paymentService, orderService, orderFacade, fixedClock);
+        processor = new PaymentCancelProcessor(
+            paymentService, orderService, orderFacade, pointCommandService, fixedClock);
     }
 
     // ---------- TX1 prepare — 결제 전 취소 (1-4a 그대로) ----------
 
     @Test
-    @DisplayName("본인의 IN_PROGRESS 결제면 FAILED(CANCELED_BEFORE_PAY)로 바꾸고 주문 종료 → 재고 복구 순으로 부른 뒤 TX1에서 끝난다")
+    @DisplayName("본인의 IN_PROGRESS 결제면 FAILED(CANCELED_BEFORE_PAY)로 바꾸고 주문 종료 → 포인트 복원 → 재고 복구 순으로 부른 뒤 TX1에서 끝난다")
     void prepareCancelsInProgress() {
         // given
         Payment payment = payment(PaymentStatus.IN_PROGRESS);
@@ -115,8 +120,9 @@ class PaymentCancelProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(payment.getFailureReason()).isEqualTo(PaymentFailureReason.CANCELED_BEFORE_PAY);
         assertThat(payment.getPortoneTransactionId()).isNull();
-        InOrder inOrder = inOrder(orderFacade);
+        InOrder inOrder = inOrder(orderFacade, pointCommandService);
         inOrder.verify(orderFacade).closeByPaymentFailure(ORDER_ID, CancelReasonCode.MEMBER_CANCELED, REASON);
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verifyNoMoreInteractions(orderFacade);
         verify(paymentService, never()).requestMemberRefund(any(), anyString(), anyString());
@@ -137,7 +143,7 @@ class PaymentCancelProcessorTest {
         assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
         verify(paymentService, never()).findRefundByIdempotencyKey(anyString());
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -153,7 +159,7 @@ class PaymentCancelProcessorTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -169,7 +175,7 @@ class PaymentCancelProcessorTest {
 
         // then — 두 번째 요청이 재고를 또 올리면 안 된다
         assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED_BEFORE_PAY);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -185,7 +191,7 @@ class PaymentCancelProcessorTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.INVALID_PAYMENT_STATUS);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -201,7 +207,7 @@ class PaymentCancelProcessorTest {
 
         // then
         assertErrorCode(thrown, PaymentErrorCode.INVALID_PAYMENT_STATUS);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -218,7 +224,7 @@ class PaymentCancelProcessorTest {
         // then
         assertErrorCode(thrown, CommonErrorCode.DUPLICATE_REQUEST_IN_PROGRESS);
         verify(paymentService, never()).requestMemberRefund(any(), anyString(), anyString());
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     // ---------- TX1 prepare — 결제 후 취소 접수 ----------
@@ -246,7 +252,7 @@ class PaymentCancelProcessorTest {
         InOrder inOrder = inOrder(orderService, paymentService);
         inOrder.verify(orderService).markMemberCancelRequested(ORDER_ID, REASON);
         inOrder.verify(paymentService).requestMemberRefund(payment, REASON, KEY);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -456,7 +462,7 @@ class PaymentCancelProcessorTest {
     // ---------- TX2 apply ----------
 
     @Test
-    @DisplayName("SUCCEEDED면 결제 CANCELED·환불 COMPLETED로 바꾸고 주문 환불 완료 → 재고 복구 순으로 부른다")
+    @DisplayName("SUCCEEDED면 결제 CANCELED·환불 COMPLETED로 바꾸고 주문 환불 완료 → 포인트 복원 → 재고 복구 순으로 부른다")
     void applySucceeded() {
         // given
         Payment payment = payment(PaymentStatus.CANCEL_REQUESTED);
@@ -479,8 +485,9 @@ class PaymentCancelProcessorTest {
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
         assertThat(refund.getCompletedAt()).isEqualTo(CANCELED_AT);
-        InOrder inOrder = inOrder(orderFacade);
+        InOrder inOrder = inOrder(orderFacade, pointCommandService);
         inOrder.verify(orderFacade).markRefunded(ORDER_ID);
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verifyNoInteractions(orderService);
     }
@@ -505,7 +512,7 @@ class PaymentCancelProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -529,7 +536,7 @@ class PaymentCancelProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -555,7 +562,7 @@ class PaymentCancelProcessorTest {
         assertThat(refund.getPortoneCancellationId()).isEqualTo(CANCELLATION_ID);
         assertThat(refund.getFailureReason()).isEqualTo("cancellation FAILED");
         verify(orderService).restorePaidAfterMemberCancelFailure(ORDER_ID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @Test
@@ -579,7 +586,7 @@ class PaymentCancelProcessorTest {
         assertThat(refund.getPortoneCancellationId()).isNull();
         assertThat(refund.getFailureReason()).isEqualTo("HTTP 401 UNAUTHORIZED");
         verify(orderService).restorePaidAfterMemberCancelFailure(ORDER_ID);
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     @ParameterizedTest
@@ -603,7 +610,7 @@ class PaymentCancelProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
         assertThat(refund.getPortoneCancellationId()).isNull();
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -625,7 +632,7 @@ class PaymentCancelProcessorTest {
         assertThat(result.outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
         assertThat(result.response().refundStatus()).isEqualTo(RefundStatus.COMPLETED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -645,7 +652,7 @@ class PaymentCancelProcessorTest {
         assertThat(result.outcome()).isEqualTo(PaymentCancelOutcome.REQUEST_REJECTED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -665,7 +672,7 @@ class PaymentCancelProcessorTest {
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
         assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
     }
 
     @Test
@@ -684,7 +691,90 @@ class PaymentCancelProcessorTest {
         assertThat(thrown).isInstanceOf(IllegalStateException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
         assertThat(systemRefund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
-        verifyNoInteractions(orderFacade, orderService);
+        verifyNoInteractions(orderFacade, orderService, pointCommandService);
+    }
+
+    // ---------- TX1 prepare — 0원 결제(POINTS_ONLY) 취소 ----------
+
+    @Test
+    @DisplayName("본인의 0원 결제면 PG·환불 행 없이 주문 취소 접수 → 결제 CANCELED → 주문 환불 완료 → 포인트 복원 → 재고 복구까지 TX1에서 끝낸다")
+    void prepareCancelsPointsOnly() {
+        // given
+        Payment payment = pointsOnlyPayment();
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(orderService.markMemberCancelRequested(ORDER_ID, REASON)).willReturn(MemberCancelRequestResult.REQUESTED);
+        given(orderFacade.markRefunded(ORDER_ID)).willReturn(RESTORE_ITEMS);
+
+        // when
+        PaymentCancelPreparation preparation = processor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+
+        // then — 취소 시각은 멈춘 시계의 서버 시각이고 환불 작업은 없다
+        assertThat(preparation.requiresPortOneCall()).isFalse();
+        assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
+        PaymentCancelResponse response = preparation.finishedResult().response();
+        assertThat(response.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(response.canceledAt()).isEqualTo(NOW);
+        assertThat(response.refundStatus()).isNull();
+        assertThat(response.refundAmount()).isZero();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(payment.getCanceledAt()).isEqualTo(NOW);
+        InOrder inOrder = inOrder(orderService, orderFacade, pointCommandService);
+        inOrder.verify(orderService).markMemberCancelRequested(ORDER_ID, REASON);
+        inOrder.verify(orderFacade).markRefunded(ORDER_ID);
+        inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
+        inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
+        verify(paymentService, never()).findRefundByIdempotencyKey(anyString());
+        verify(paymentService, never()).requestMemberRefund(any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("이미 취소된 0원 결제에 다시 요청하면 키와 관계없이 자산을 다시 움직이지 않고 같은 CANCELED 결과를 돌려준다")
+    void prepareReplaysCanceledPointsOnly() {
+        // given — 첫 취소가 이미 커밋됐다
+        Payment payment = pointsOnlyPayment();
+        payment.cancelPointsOnly(CANCELED_AT);
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+
+        // when
+        PaymentCancelPreparation preparation = processor.prepare(MEMBER_ID, PAYMENT_ID, "client-key-2", REASON);
+
+        // then
+        assertThat(preparation.requiresPortOneCall()).isFalse();
+        assertThat(preparation.finishedResult().outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
+        assertThat(preparation.finishedResult().response().canceledAt()).isEqualTo(CANCELED_AT);
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+        verify(orderService, never()).markMemberCancelRequested(anyLong(), anyString());
+        verifyNoInteractions(orderFacade, pointCommandService);
+        verify(paymentService, never()).findRefundByIdempotencyKey(anyString());
+    }
+
+    @Test
+    @DisplayName("마트가 준비를 시작한 0원 결제 주문은 ORDER_ALREADY_PREPARING이고 결제·포인트·재고를 바꾸지 않는다")
+    void prepareRejectsPointsOnlyWhenMartPreparing() {
+        // given
+        Payment payment = pointsOnlyPayment();
+        given(paymentService.getByIdForUpdate(PAYMENT_ID)).willReturn(payment);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(orderService.markMemberCancelRequested(ORDER_ID, REASON))
+            .willReturn(MemberCancelRequestResult.MART_ALREADY_PREPARING);
+
+        // when
+        Throwable thrown = catchThrowable(() -> processor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON));
+
+        // then
+        assertErrorCode(thrown, PaymentErrorCode.ORDER_ALREADY_PREPARING);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getCanceledAt()).isNull();
+        verifyNoInteractions(orderFacade, pointCommandService);
+    }
+
+    private Payment pointsOnlyPayment() {
+        Payment payment = Payment.pointsOnly(ORDER_ID, NOW.minusMinutes(10));
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        return payment;
     }
 
     private Payment payment(PaymentStatus status) {

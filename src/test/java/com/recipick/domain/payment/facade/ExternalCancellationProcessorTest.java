@@ -19,6 +19,8 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.service.ExternalCancellationOutcome;
 import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
+import com.recipick.domain.payment.service.PointRestoreOutcome;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.infra.portone.dto.PortOneCancellation;
 import com.recipick.infra.portone.dto.PortOneCancellationStatus;
@@ -62,24 +64,28 @@ class ExternalCancellationProcessorTest {
     @Mock
     private OrderFacade orderFacade;
 
+    @Mock
+    private PointCommandService pointCommandService;
+
     private ExternalCancellationProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new ExternalCancellationProcessor(paymentService, orderFacade);
+        processor = new ExternalCancellationProcessor(paymentService, orderFacade, pointCommandService);
     }
 
     // ---------- 반영 ----------
 
     @ParameterizedTest
     @EnumSource(value = PortOneCancellationTrigger.class, names = {"CONSOLE", "PORTONE_ADMIN"})
-    @DisplayName("PAID 결제에 기존 환불이 없으면 결제 CANCELED → EXTERNAL 환불 기록 → 주문 종료 → 재고 복구 순으로 반영한다")
+    @DisplayName("PAID 결제에 기존 환불이 없으면 결제 CANCELED → EXTERNAL 환불 기록 → 주문 종료 → 포인트 정합 → 재고 복구 순으로 반영한다")
     void reconcile(PortOneCancellationTrigger trigger) {
         // given
         Payment payment = givenLocked(PaymentStatus.PAID);
         givenNoRefunds();
         String reason = "PortOne 외부 전액 취소(" + trigger + ")";
         given(orderFacade.closeByExternalCancel(ORDER_ID, reason)).willReturn(RESTORE_ITEMS);
+        given(pointCommandService.restoreForExternalCancel(ORDER_ID)).willReturn(PointRestoreOutcome.RESTORED);
         PortOneCancellation cancellation = new PortOneCancellation(CANCELLATION_ID,
             PortOneCancellationStatus.SUCCEEDED, AMOUNT, REQUESTED_AT, CANCELED_AT, trigger);
 
@@ -91,10 +97,35 @@ class ExternalCancellationProcessorTest {
         assertThat(result.reason()).isNull();
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
         assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
-        InOrder inOrder = inOrder(paymentService, orderFacade);
+        InOrder inOrder = inOrder(paymentService, orderFacade, pointCommandService);
         inOrder.verify(paymentService)
             .recordExternalRefund(payment, CANCELLATION_ID, reason, REQUESTED_AT, CANCELED_AT);
         inOrder.verify(orderFacade).closeByExternalCancel(ORDER_ID, reason);
+        inOrder.verify(pointCommandService).restoreForExternalCancel(ORDER_ID);
+        inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
+    }
+
+    @ParameterizedTest
+    @EnumSource(PointRestoreOutcome.class)
+    @DisplayName("포인트 결과(복원·1차 주문·적립 확정 유지)와 관계없이 결제·환불·주문·재고 정합화는 그대로 끝난다 — PG에서 이미 끝난 취소라 롤백하지 않는다")
+    void reconcileRegardlessOfPointOutcome(PointRestoreOutcome pointOutcome) {
+        // given
+        Payment payment = givenLocked(PaymentStatus.PAID);
+        givenNoRefunds();
+        String reason = "PortOne 외부 전액 취소(CONSOLE)";
+        given(orderFacade.closeByExternalCancel(ORDER_ID, reason)).willReturn(RESTORE_ITEMS);
+        given(pointCommandService.restoreForExternalCancel(ORDER_ID)).willReturn(pointOutcome);
+
+        // when
+        ExternalCancellationResult result = processor.apply(PAYMENT_ID, consoleSucceeded());
+
+        // then
+        assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.RECONCILED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        verify(paymentService).recordExternalRefund(payment, CANCELLATION_ID, reason, REQUESTED_AT, CANCELED_AT);
+        InOrder inOrder = inOrder(orderFacade, pointCommandService);
+        inOrder.verify(orderFacade).closeByExternalCancel(ORDER_ID, reason);
+        inOrder.verify(pointCommandService).restoreForExternalCancel(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
     }
 
@@ -303,7 +334,7 @@ class ExternalCancellationProcessorTest {
     // ---------- 실패한 마트 거절 뒤 콘솔 전액 취소 ----------
 
     @Test
-    @DisplayName("실패한 마트 거절 환불이 한 건이면 결제 CANCELED·EXTERNAL 환불 기록 뒤 환불 완료 경로로 거절 주문을 닫고 재고를 복구한다")
+    @DisplayName("실패한 마트 거절 환불이 한 건이면 결제 CANCELED·EXTERNAL 환불 기록 뒤 환불 완료 경로로 거절 주문을 닫고 포인트 정합 → 재고 복구 순으로 부른다")
     void closeRejectedOrderAfterFailedAdminRefund() {
         // given — 마트 거절 뒤 PG 취소가 실패해 결제만 PAID로 돌아갔고, 운영자가 콘솔에서 전액 취소했다
         Payment payment = givenLocked(PaymentStatus.PAID);
@@ -311,6 +342,7 @@ class ExternalCancellationProcessorTest {
         Refund failedAdmin = refund(payment, RefundStatus.FAILED, RefundRequester.ADMIN, "cancel_api");
         given(paymentService.findFailedAdminRefunds(PAYMENT_ID)).willReturn(List.of(failedAdmin));
         given(orderFacade.markRefunded(ORDER_ID)).willReturn(RESTORE_ITEMS);
+        given(pointCommandService.restoreForExternalCancel(ORDER_ID)).willReturn(PointRestoreOutcome.RESTORED);
         String reason = "PortOne 외부 전액 취소(CONSOLE)";
 
         // when
@@ -320,10 +352,11 @@ class ExternalCancellationProcessorTest {
         assertThat(result.outcome()).isEqualTo(ExternalCancellationOutcome.RECONCILED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
         assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
-        InOrder inOrder = inOrder(paymentService, orderFacade);
+        InOrder inOrder = inOrder(paymentService, orderFacade, pointCommandService);
         inOrder.verify(paymentService)
             .recordExternalRefund(payment, CANCELLATION_ID, reason, REQUESTED_AT, CANCELED_AT);
         inOrder.verify(orderFacade).markRefunded(ORDER_ID);
+        inOrder.verify(pointCommandService).restoreForExternalCancel(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(orderFacade, never()).closeByExternalCancel(any(), any());
         // 실패한 마트 거절 환불은 시도 이력으로 그대로 남는다
@@ -521,11 +554,11 @@ class ExternalCancellationProcessorTest {
             .willReturn(requestedBy == RefundRequester.ADMIN ? List.of(refund) : List.of());
     }
 
-    // 상태를 바꾸지 않는 결과는 결제·환불·주문·재고 어디에도 흔적을 남기지 않아야 한다
+    // 상태를 바꾸지 않는 결과는 결제·환불·주문·포인트·재고 어디에도 흔적을 남기지 않아야 한다
     private void assertNothingChanged(Payment payment, PaymentStatus expectedStatus) {
         assertThat(payment.getStatus()).isEqualTo(expectedStatus);
         verify(paymentService, never()).recordExternalRefund(any(), any(), any(), any(), any());
-        verifyNoInteractions(orderFacade);
+        verifyNoInteractions(orderFacade, pointCommandService);
     }
 
     private static PortOneCancellation consoleSucceeded() {

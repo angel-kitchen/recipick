@@ -9,6 +9,7 @@ import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.payment.service.PaymentVerifier;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
@@ -31,6 +32,7 @@ public class PaymentConfirmProcessor {
     private final PaymentVerifier paymentVerifier;
     private final OrderService orderService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
 
     @Transactional
     public PaymentApprovalOutcome process(Long orderId, PortOnePayment portOnePayment) {
@@ -41,6 +43,8 @@ public class PaymentConfirmProcessor {
             case APPROVED -> {
                 payment.markPaid(portOnePayment.transactionId(), portOnePayment.paidAt());
                 orderService.markPaid(orderId, portOnePayment.paidAt());
+                // 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT. 적립 예정은 배송완료까지 PENDING으로 둔다
+                pointCommandService.confirmUsage(orderId);
             }
             case PG_FAILED -> {
                 payment.fail(PaymentFailureReason.PG_FAILED, portOnePayment.transactionId());
@@ -59,7 +63,7 @@ public class PaymentConfirmProcessor {
                 closeOrder(orderId, CancelReasonCode.PAYMENT_TIMEOUT, EXPIRED_DETAIL);
             }
             case ALREADY_CLOSED -> {
-                // 만료 큐가 먼저 FAILED로 닫았는데 PG 승인이 뒤늦게 확인된 경우. 결제는 FAILED 유지, 주문·재고는 이미 닫혀 있어
+                // 만료 큐가 먼저 FAILED로 닫았는데 PG 승인이 뒤늦게 확인된 경우. 결제는 FAILED 유지, 주문·포인트·재고는 이미 닫혀 있어
                 // 건드리지 않고 돈만 돌려준다 (주문-결제 정책 5절 "만료 뒤 늦은 승인"). CANCELED는 취소 흐름 몫이라 제외
                 if (payment.getStatus() == PaymentStatus.FAILED
                     && portOnePayment.status() == PortOnePaymentStatus.PAID) {
@@ -89,9 +93,10 @@ public class PaymentConfirmProcessor {
             payment.getId(), payment.getOrderId(), amount, reason);
     }
 
-    // 락 순서 PAYMENT → ORDERS → (MEMBER_POINT → POINT_EARNING) → 재고. 주문 종료와 재고 복구 사이가 포인트 자리다
+    // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고. 주문을 닫고 사용 포인트를 되돌린 뒤 재고를 복구한다
     private void closeOrder(Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
         List<StockQuantity> items = orderFacade.closeByPaymentFailure(orderId, reasonCode, reasonDetail);
+        pointCommandService.restoreUsageAndCancelEarning(orderId);
         orderFacade.restoreStock(items);
     }
 }

@@ -12,13 +12,19 @@ import com.recipick.domain.order.repository.CartItemRepository;
 import com.recipick.domain.order.repository.OrderItemRepository;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
+import com.recipick.domain.payment.entity.MemberPoint;
+import com.recipick.domain.payment.entity.PointEarning;
+import com.recipick.domain.payment.repository.MemberPointRepository;
 import com.recipick.domain.payment.repository.PaymentRepository;
+import com.recipick.domain.payment.repository.PointEarningRepository;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class OrderCreateConcurrencyTest extends IntegrationTestSupport {
 
@@ -42,6 +49,9 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
     private static final Long MART_ID = 1L;
     private static final String LEGAL_DONG_CODE = "1111014000";
     private static final int THREADS = 5;
+    // 포인트 주문 테스트의 적립 건 주문 ID. 주문 행과 외래키로 묶이지 않아 실제 주문이 아니어도 된다
+    private static final Long EARLY_LOT_ORDER_ID = 9_600_101L;
+    private static final Long LATE_LOT_ORDER_ID = 9_600_102L;
 
     @Autowired
     private OrderFacade orderFacade;
@@ -61,6 +71,14 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @Autowired
+    private PointEarningRepository pointEarningRepository;
+    @Autowired
+    private MemberPointRepository memberPointRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private Clock clock;
 
     private final List<Member> members = new ArrayList<>();
     private final List<CartItem> cartItems = new ArrayList<>();
@@ -69,6 +87,7 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
     @AfterEach
     void cleanUp() {
         for (Member member : members) {
+            deletePoints(member.getId());
             for (Long orderId : orderRepository.findIdsByMemberId(member.getId())) {
                 paymentRepository.findByOrderId(orderId).ifPresent(paymentRepository::delete);
                 orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
@@ -81,6 +100,15 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
             productRepository.delete(product);
         }
         memberRepository.deleteAll(members);
+    }
+
+    // 주문 생성이 만든 적립 예정·포인트 이력을 외래키 역순(이력 → 사용 → 적립 → 회원 포인트)으로 지운다
+    private void deletePoints(Long memberId) {
+        jdbcTemplate.update("DELETE FROM point_history WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE pu FROM point_usage pu JOIN point_earning pe ON pu.point_earning_id = pe.id "
+            + "WHERE pe.member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM point_earning WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM member_point WHERE member_id = ?", memberId);
     }
 
     @Test
@@ -101,8 +129,39 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
         assertThat(outcomes).filteredOn(Outcome::created).hasSize(1);
         // 먼저 끝난 요청을 본 재시도는 기존 주문을, 겹친 요청은 처리 중·결제 대기 충돌을 받는다
         assertThat(outcomes).filteredOn(outcome -> !outcome.created())
-                .allSatisfy(outcome -> assertThat(outcome.errorCode())
-                        .isIn(null, "COMMON-006", "ORDER-003"));
+            .allSatisfy(outcome -> assertThat(outcome.errorCode())
+                .isIn(null, "COMMON-006", "ORDER-003"));
+    }
+
+    // 같은 주문의 중복 예약은 reserveUsage가 아니라 주문 생성의 선행 계약(회원 행 잠금 → 같은 키면 기존 주문 반환)이 막는다.
+    // 앞 예약이 첫 적립 건을 다 쓰는 모양으로 만들어, 계약이 깨지면 둘째 적립 건에서 한 번 더 예약되는 것이 보이게 한다
+    @Test
+    @DisplayName("같은 키로 동시에 포인트를 쓰는 주문을 해도 주문과 포인트 예약은 1건이고 잔액은 한 번만 준다")
+    void createOrder_sameKeyConcurrentWithPoint() throws Exception {
+        // given — 적립 건 700P(만료 빠름)·1,000P, 잔액 1,700P. 상품 1,500원 × 2에 700P를 쓴다
+        product = product(10);
+        Member member = member();
+        CartItem cartItem = cartItem(member, 2);
+        Long[] lotIds = holdPoints(member, 700L, 1_000L);
+        OrderCreateRequest request = request(cartItem, 700L);
+
+        // when
+        List<Outcome> outcomes = runConcurrently(
+            i -> () -> orderFacade.createOrder(member.getId(), "same-key-point", request));
+
+        // then — 주문·재고는 기존 같은 키 테스트와 같다
+        assertThat(orderRepository.findIdsByMemberId(member.getId())).hasSize(1);
+        assertThat(stock()).isEqualTo(8);
+        assertThat(outcomes).filteredOn(Outcome::created).hasSize(1);
+        assertThat(outcomes).filteredOn(outcome -> !outcome.created())
+            .allSatisfy(outcome -> assertThat(outcome.errorCode())
+                .isIn(null, "COMMON-006", "ORDER-003"));
+        // 포인트 예약은 한 번이다: 사용 내역 1건 700P, 첫 적립 건은 다 썼고 둘째는 그대로, 잔액은 1,700 − 700
+        assertThat(usageCount(member)).isEqualTo(1L);
+        assertThat(usageTotal(member)).isEqualTo(700L);
+        assertThat(remaining(lotIds[0])).isZero();
+        assertThat(remaining(lotIds[1])).isEqualTo(1_000L);
+        assertThat(balance(member)).isEqualTo(1_000L);
     }
 
     @Test
@@ -116,15 +175,15 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
 
         // when
         List<Outcome> outcomes = runConcurrently(
-                i -> () -> orderFacade.createOrder(member.getId(), "key-" + i, request));
+            i -> () -> orderFacade.createOrder(member.getId(), "key-" + i, request));
 
         // then
         assertThat(orderRepository.findIdsByMemberId(member.getId())).hasSize(1);
         assertThat(stock()).isEqualTo(8);
         assertThat(outcomes).filteredOn(Outcome::created).hasSize(1);
         assertThat(outcomes).filteredOn(outcome -> !outcome.created())
-                .extracting(Outcome::errorCode)
-                .containsOnly("ORDER-003");
+            .extracting(Outcome::errorCode)
+            .containsOnly("ORDER-003");
     }
 
     @Test
@@ -140,17 +199,17 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
 
         // when
         List<Outcome> outcomes = runConcurrently(i -> () -> orderFacade.createOrder(
-                members.get(i).getId(), "key-" + i, requests.get(i)));
+            members.get(i).getId(), "key-" + i, requests.get(i)));
 
         // then
         assertThat(outcomes).filteredOn(Outcome::created).hasSize(1);
         assertThat(outcomes).filteredOn(outcome -> !outcome.created())
-                .extracting(Outcome::errorCode)
-                .containsOnly("STOCK-001");
+            .extracting(Outcome::errorCode)
+            .containsOnly("STOCK-001");
         assertThat(stock()).isZero();
         long orderCount = members.stream()
-                .mapToLong(member -> orderRepository.findIdsByMemberId(member.getId()).size())
-                .sum();
+            .mapToLong(member -> orderRepository.findIdsByMemberId(member.getId()).size())
+            .sum();
         assertThat(orderCount).isEqualTo(1);
     }
 
@@ -191,40 +250,81 @@ class OrderCreateConcurrencyTest extends IntegrationTestSupport {
 
     private Member member() {
         Member member = memberRepository.save(Member.builder()
-                .email(UUID.randomUUID() + "@oc.test")
-                .name("동시 주문 회원")
-                .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
-                .passwordHash("hash")
-                .martId(MART_ID)
-                .build());
+            .email(UUID.randomUUID() + "@oc.test")
+            .name("동시 주문 회원")
+            .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
+            .passwordHash("hash")
+            .martId(MART_ID)
+            .build());
         members.add(member);
         return member;
     }
 
     private Product product(int stock) {
         return productRepository.save(Product.builder()
-                .mart(martRepository.findById(MART_ID).orElseThrow())
-                .name("애호박")
-                .price(1500L)
-                .saleUnitAmount(new BigDecimal("1"))
-                .saleUnit(SaleUnit.EA)
-                .totalQuantity(stock)
-                .build());
+            .mart(martRepository.findById(MART_ID).orElseThrow())
+            .name("애호박")
+            .price(1500L)
+            .saleUnitAmount(new BigDecimal("1"))
+            .saleUnit(SaleUnit.EA)
+            .totalQuantity(stock)
+            .build());
     }
 
     private CartItem cartItem(Member member, int quantity) {
         CartItem cartItem = cartItemRepository.save(CartItem.builder()
-                .memberId(member.getId())
-                .productId(product.getId())
-                .quantity(quantity)
-                .build());
+            .memberId(member.getId())
+            .productId(product.getId())
+            .quantity(quantity)
+            .build());
         cartItems.add(cartItem);
         return cartItem;
     }
 
     private OrderCreateRequest request(CartItem cartItem) {
         return new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678", "서울 종로구 삼청로 1",
-                "101호", LEGAL_DONG_CODE);
+            "101호", LEGAL_DONG_CODE);
+    }
+
+    private OrderCreateRequest request(CartItem cartItem, long usedPoint) {
+        return new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678", "서울 종로구 삼청로 1",
+            "101호", LEGAL_DONG_CODE, usedPoint);
+    }
+
+    // 확정된 적립 건 두 개(첫째가 하루 먼저 만료)와 두 잔량의 합과 같은 잔액을 만든다. 만료가 빠른 건부터 쓰인다
+    private Long[] holdPoints(Member member, long earlyAmount, long lateAmount) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        PointEarning early = PointEarning.pending(member.getId(), EARLY_LOT_ORDER_ID, earlyAmount);
+        early.complete(now.minusDays(2));
+        PointEarning late = PointEarning.pending(member.getId(), LATE_LOT_ORDER_ID, lateAmount);
+        late.complete(now.minusDays(1));
+        pointEarningRepository.save(early);
+        pointEarningRepository.save(late);
+        memberPointRepository.save(
+            MemberPoint.builder().memberId(member.getId()).balance(earlyAmount + lateAmount).build());
+        return new Long[] {early.getId(), late.getId()};
+    }
+
+    private long usageCount(Member member) {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM point_usage pu "
+                + "JOIN point_earning pe ON pu.point_earning_id = pe.id WHERE pe.member_id = ?",
+            Long.class, member.getId());
+    }
+
+    private long usageTotal(Member member) {
+        return jdbcTemplate.queryForObject("SELECT COALESCE(SUM(pu.amount), 0) FROM point_usage pu "
+                + "JOIN point_earning pe ON pu.point_earning_id = pe.id WHERE pe.member_id = ?",
+            Long.class, member.getId());
+    }
+
+    private long remaining(Long lotId) {
+        return jdbcTemplate.queryForObject("SELECT remaining_amount FROM point_earning WHERE id = ?",
+            Long.class, lotId);
+    }
+
+    private long balance(Member member) {
+        return jdbcTemplate.queryForObject("SELECT balance FROM member_point WHERE member_id = ?",
+            Long.class, member.getId());
     }
 
     private int stock() {

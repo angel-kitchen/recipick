@@ -10,12 +10,14 @@ import com.recipick.domain.payment.dto.MartRejectionPreparation;
 import com.recipick.domain.payment.dto.response.MartRejectionResponse;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
+import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.MartRejectionOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.audit.AdminAuditAction;
 import com.recipick.global.audit.AdminAuditCommand;
@@ -30,6 +32,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,7 +41,7 @@ import java.util.Optional;
 // 마트 거절 환불의 상태 변경 트랜잭션. 회원 취소의 PaymentCancelProcessor와 같은 TX1(접수)·TX2(반영) 구조지만
 // PG 취소가 명확히 실패해도 주문을 정상 접수로 되돌리지 않는다 — 결제만 PAID로 돌아가고 주문·마트는 거절 상태로 남는다.
 // 두 실패 정책이 한 Processor에 섞이지 않도록 따로 둔다. 업무 결과는 예외가 아니라 반환값으로 돌려준다 — 안에서 던지면 롤백된다.
-// 잠금 순서 PAYMENT → ORDERS → (2차: MEMBER_POINT → POINT_EARNING) → 재고
+// 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -46,11 +50,13 @@ public class MartRejectionProcessor {
     private final PaymentService paymentService;
     private final OrderService orderService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
     private final AdminAuditRecorder adminAuditRecorder;
+    private final Clock clock;
 
     // TX1. 거절을 접수한다. 주문 거절·결제 CANCEL_REQUESTED·ADMIN 환불·감사 로그를 한 트랜잭션으로 커밋하고
     // 실행이 필요한 PENDING 결과를 돌려준다. 실행 중 서버가 죽어도 환불 행이 남아 Worker·Fallback이 이어받는다.
-    // 재고는 여기서 건드리지 않는다 — PG 취소가 성공한 TX2에서만 한 번 복구한다
+    // 포인트·재고는 여기서 건드리지 않는다 — PG 취소가 성공한 TX2에서만 한 번 되돌린다
     @Transactional
     public MartRejectionPreparation prepare(AdminRole role, Long adminMartId, Long adminId, Long orderId,
                                             String idempotencyKey, String reason) {
@@ -62,6 +68,10 @@ public class MartRejectionProcessor {
         }
 
         Payment payment = paymentService.getByOrderIdForUpdate(orderId);
+        // 0원 결제는 PG도 환불 행도 없어 키로 찾을 환불 작업이 없다. 멱등 키 조회보다 먼저 나눈다
+        if (payment.getPaymentMethod() == PaymentMethod.POINTS_ONLY) {
+            return rejectPointsOnly(role, adminMartId, adminId, orderId, martId, payment, reason);
+        }
         // 결제 전 주문은 주문을 잠그거나 거절 전이를 부르지 않고 끝낸다
         if (payment.getStatus() == PaymentStatus.IN_PROGRESS) {
             throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_PAID);
@@ -95,6 +105,44 @@ public class MartRejectionProcessor {
         // 상태 전후 값은 주문 상태 이력 두 건에 이미 남고, 거절 사유는 자유 입력 원문이라 넣지 않는다
         adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_REJECT, orderId, martId, Map.of()));
         return MartRejectionPreparation.execute(result(MartRejectionOutcome.PENDING, payment, refund));
+    }
+
+    // 0원 결제의 마트 거절. PG·ADMIN 환불·실행기 없이 이 트랜잭션에서 결제 취소·주문 환불 완료·포인트·재고 복구까지 끝낸다.
+    // 이미 거절된 주문의 재요청은 주문 쪽 ALREADY_REJECTED로 알아보고 자산·감사 기록을 다시 남기지 않는다.
+    // 회원이 먼저 취소한 주문은 REJECTED가 아니라 NOT_REJECTABLE이 되므로 거절 성공으로 오인하지 않는다
+    private MartRejectionPreparation rejectPointsOnly(AdminRole role, Long adminMartId, Long adminId, Long orderId,
+                                                      Long martId, Payment payment, String reason) {
+        if (payment.getStatus() != PaymentStatus.PAID && payment.getStatus() != PaymentStatus.CANCELED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        MartRejectRequestResult orderResult =
+            orderService.requestMartRejection(role, adminMartId, adminId, orderId, reason);
+        if (orderResult == MartRejectRequestResult.NOT_REJECTABLE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        }
+        if (orderResult == MartRejectRequestResult.ALREADY_REJECTED) {
+            // 0원 결제의 거절은 한 트랜잭션에서 끝나므로 거절된 주문의 결제는 반드시 CANCELED다
+            if (payment.getStatus() != PaymentStatus.CANCELED) {
+                throw new IllegalStateException("거절된 0원 결제 주문의 결제가 취소되지 않았습니다. paymentId="
+                    + payment.getId() + ", status=" + payment.getStatus());
+            }
+            return finishedPointsOnly(payment);
+        }
+        // 새 거절. 결제가 이미 CANCELED인 주문은 주문 쪽에서 거절 가능으로 판정될 수 없다
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            throw new IllegalStateException("취소된 0원 결제 주문이 새로 거절됐습니다. paymentId=" + payment.getId());
+        }
+        payment.cancelPointsOnly(LocalDateTime.now(clock));
+        List<StockQuantity> items = orderFacade.markRefunded(orderId);
+        pointCommandService.restoreUsageAndCancelEarning(orderId);
+        orderFacade.restoreStock(items);
+        adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_REJECT, orderId, martId, Map.of()));
+        return finishedPointsOnly(payment);
+    }
+
+    private static MartRejectionPreparation finishedPointsOnly(Payment payment) {
+        return MartRejectionPreparation.finished(
+            new MartRejectionPaymentResult(MartRejectionOutcome.COMPLETED, MartRejectionResponse.pointsOnly(payment)));
     }
 
     // TX2. PortOne 결과를 반영한다. 실행기·웹훅이 같은 환불을 여러 번 넘겨도 끝난 환불은 다시 바꾸지 않고 그 결과를 돌려준다.
@@ -173,9 +221,9 @@ public class MartRejectionProcessor {
     private MartRejectionPaymentResult complete(Payment payment, Refund refund, PortOneCancelResult result) {
         payment.markCanceled(result.canceledAt());
         refund.complete(result.cancellationId(), result.canceledAt());
-        // 주문은 CANCEL_REQUESTED·MART_REJECTED로 접수돼 있어 기존 환불 완료 경로로 닫힌다. 마트 상태는 REJECTED 그대로다.
-        // 환불 완료와 재고 복구 사이가 2차 포인트 복구 자리다
+        // 주문은 CANCEL_REQUESTED·MART_REJECTED로 접수돼 있어 기존 환불 완료 경로로 닫힌다. 마트 상태는 REJECTED 그대로다
         List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         log.info("마트 거절 환불 완료: paymentId={}, refundId={}, orderId={}, cancellationId={}",
             payment.getId(), refund.getId(), payment.getOrderId(), result.cancellationId());

@@ -4,11 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
+import com.recipick.domain.order.entity.enums.MartStatus;
+import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.exception.OrderErrorCode;
+import com.recipick.domain.order.facade.OrderDeliveryFacade;
 import com.recipick.domain.order.facade.OrderQueryFacade;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
@@ -94,6 +100,9 @@ class OrderAdminControllerTest {
 
     @MockitoBean
     private MartRejectionFacade martRejectionFacade;
+
+    @MockitoBean
+    private OrderDeliveryFacade orderDeliveryFacade;
 
     @Test
     @DisplayName("마트 관리자 토큰으로 거절이 끝나면 토큰의 역할·마트·관리자 ID로 Facade를 부르고 200과 취소 완료 정보를 돌려준다")
@@ -223,6 +232,96 @@ class OrderAdminControllerTest {
         verifyFacadeNotCalled();
     }
 
+    @Test
+    @DisplayName("마트 관리자가 배송중으로 바꾸면 토큰의 역할·마트·관리자 ID와 요청 상태로 Facade를 부르고 200과 바뀐 상태를 돌려준다")
+    void changeDeliveryStatus() throws Exception {
+        // given
+        given(orderDeliveryFacade.changeStatus(AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, ORDER_ID, MartStatus.SHIPPING))
+            .willReturn(new OrderMartStatusResponse(ORDER_ID, OrderStatus.PAID, MartStatus.SHIPPING));
+
+        // when
+        ResultActions result = performDeliveryStatus(martAdminToken(), "{\"status\": \"SHIPPING\"}");
+
+        // then
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.message").value("배송 상태가 변경되었습니다."))
+            .andExpect(jsonPath("$.data.orderId").value(1))
+            .andExpect(jsonPath("$.data.status").value("PAID"))
+            .andExpect(jsonPath("$.data.martStatus").value("SHIPPING"));
+        verify(orderDeliveryFacade)
+            .changeStatus(AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, ORDER_ID, MartStatus.SHIPPING);
+    }
+
+    @Test
+    @DisplayName("SUPER_ADMIN 토큰이면 마트 ID 없이 Facade를 부른다")
+    void changeDeliveryStatusBySuperAdmin() throws Exception {
+        // given
+        given(orderDeliveryFacade.changeStatus(AdminRole.SUPER_ADMIN, null, ADMIN_ID, ORDER_ID, MartStatus.DELIVERED))
+            .willReturn(new OrderMartStatusResponse(ORDER_ID, OrderStatus.PAID, MartStatus.DELIVERED));
+
+        // when
+        ResultActions result = performDeliveryStatus(superAdminToken(), "{\"status\": \"DELIVERED\"}");
+
+        // then
+        result.andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.martStatus").value("DELIVERED"));
+        verify(orderDeliveryFacade).changeStatus(AdminRole.SUPER_ADMIN, null, ADMIN_ID, ORDER_ID, MartStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("배송 상태가 없으면 COMMON-001이고 Facade는 부르지 않는다")
+    void changeDeliveryStatusWithoutStatus() throws Exception {
+        // when
+        ResultActions result = performDeliveryStatus(martAdminToken(), "{}");
+
+        // then
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("COMMON-001"));
+        verifyDeliveryFacadeNotCalled();
+    }
+
+    @Test
+    @DisplayName("없는 배송 상태 값이면 COMMON-002이고 Facade는 부르지 않는다")
+    void changeDeliveryStatusWithUnknownStatus() throws Exception {
+        // when
+        ResultActions result = performDeliveryStatus(martAdminToken(), "{\"status\": \"FOO\"}");
+
+        // then
+        result.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("COMMON-002"));
+        verifyDeliveryFacadeNotCalled();
+    }
+
+    @Test
+    @DisplayName("회원 토큰으로는 배송 상태를 바꿀 수 없고 AUTH-004를 반환한다")
+    void changeDeliveryStatusWithMemberToken() throws Exception {
+        // when
+        ResultActions result = performDeliveryStatus(tokenProvider.createMemberTokens(7L).accessToken(),
+            "{\"status\": \"SHIPPING\"}");
+
+        // then
+        result.andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("AUTH-004"));
+        verifyDeliveryFacadeNotCalled();
+    }
+
+    @Test
+    @DisplayName("Facade가 ORDER-017을 던지면 409 오류 봉투로 반환한다 — 배송 단계를 건너뛴 경우")
+    void changeDeliveryStatusWithInvalidTransition() throws Exception {
+        // given
+        given(orderDeliveryFacade.changeStatus(AdminRole.MART_ADMIN, MART_ID, ADMIN_ID, ORDER_ID, MartStatus.DELIVERED))
+            .willThrow(new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION));
+
+        // when
+        ResultActions result = performDeliveryStatus(martAdminToken(), "{\"status\": \"DELIVERED\"}");
+
+        // then
+        result.andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.code").value("ORDER-017"));
+    }
+
     private ResultActions perform(String token, String idempotencyKey, String body) throws Exception {
         MockHttpServletRequestBuilder request = post("/api/admin/orders/{orderId}/reject", ORDER_ID)
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -232,6 +331,17 @@ class OrderAdminControllerTest {
             request.header("Idempotency-Key", idempotencyKey);
         }
         return mockMvc.perform(request);
+    }
+
+    private ResultActions performDeliveryStatus(String token, String body) throws Exception {
+        return mockMvc.perform(patch("/api/admin/orders/{orderId}/delivery-status", ORDER_ID)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+    }
+
+    private void verifyDeliveryFacadeNotCalled() {
+        verify(orderDeliveryFacade, never()).changeStatus(any(), any(), any(), any(), any());
     }
 
     private void verifyFacadeNotCalled() {

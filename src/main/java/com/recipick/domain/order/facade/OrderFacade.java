@@ -12,8 +12,11 @@ import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
+import com.recipick.domain.payment.facade.PointsOnlyPaymentProcessor;
 import com.recipick.domain.payment.service.PaymentCommandService;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
+import com.recipick.domain.payment.service.PointPolicyService;
 import com.recipick.domain.product.dto.MartResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.dto.StockQuantity;
@@ -23,6 +26,7 @@ import com.recipick.domain.product.service.ProductService;
 import com.recipick.domain.product.service.ProductStockService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -50,6 +54,9 @@ public class OrderFacade {
     private final ProductStockService productStockService;
     private final PaymentCommandService paymentCommandService;
     private final PaymentService paymentService;
+    private final PointPolicyService pointPolicyService;
+    private final PointCommandService pointCommandService;
+    private final PointsOnlyPaymentProcessor pointsOnlyPaymentProcessor;
 
     @Transactional
     public OrderCreateResult createOrder(Long memberId, String idempotencyKey, OrderCreateRequest request) {
@@ -72,22 +79,34 @@ public class OrderFacade {
         }
 
         Long martId = memberService.getMartId(memberId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_SELECTED));
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_SELECTED));
         MartResponse mart = martService.findMart(martId)
-                .filter(found -> found.status() == MartStatus.OPEN)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_OPEN));
+            .filter(found -> found.status() == MartStatus.OPEN)
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_OPEN));
         Long regionId = getDeliveryRegionId(request.legalDongCode(), mart.regionId());
         List<StockQuantity> quantities = cartService.findCartItems(memberId, request.cartItemIds()).stream()
-                .map(cartItem -> new StockQuantity(cartItem.getProductId(), cartItem.getQuantity()))
-                .toList();
+            .map(cartItem -> new StockQuantity(cartItem.getProductId(), cartItem.getQuantity()))
+            .toList();
         validateSameMart(quantities, martId);
 
+        // 같은 키 재시도는 위에서 기존 주문으로 끝났으므로 새 주문에만 적립률을 정한다
+        BigDecimal pointRate = pointPolicyService.resolveRate(memberId);
         Order order = orderService.createPendingOrder(
-                memberId, martId, regionId, normalizedKey, requestHash, request);
+            memberId, martId, regionId, normalizedKey, requestHash, pointRate, request);
+        // 락 순서 MEMBER → ORDERS → MEMBER_POINT → POINT_EARNING → 재고라 포인트를 재고보다 먼저 예약한다.
+        // 상품금액을 넘는 사용은 아래 금액 확정에서 ORDER-019로 거절되고, 예약·재고 차감·주문 저장이 함께 롤백된다
+        pointCommandService.reserveUsage(memberId, order.getId(), order.getUsedPoint());
         // 상품 판매 상태·재고 검증과 차감을 잠근 상태에서 한 번에 하고, 그때의 가격으로 금액을 계산한다
         List<ProductSummary> products = productStockService.decreaseStocks(martId, quantities);
         List<OrderItem> items = orderService.completePendingOrder(order, products, quantities);
-        PaymentCreated payment = paymentCommandService.create(order.getId(), order.getPayAmount());
+        // 기존 자산 잠금 순서 POINT → STOCK은 그대로 지킨다. 적립 예정 건은 현재 가격으로 정한 상품금액이 있어야 만들 수 있어
+        // 재고 잠금 뒤에 INSERT한다. 드문 gap-lock 경합은 DB가 한 트랜잭션을 롤백하고 COMMON-010 재시도로 처리된다
+        pointCommandService.createPendingEarning(
+            memberId, order.getId(), order.getProductAmount(), order.getUsedPoint(), order.getPointRate());
+        // 외부 결제금액이 0원이면 PG 없이 이 트랜잭션에서 결제 완료까지 끝낸다. 음수는 OrderAmount가 막는다
+        PaymentCreated payment = order.getPayAmount() == 0
+            ? pointsOnlyPaymentProcessor.complete(order.getId())
+            : paymentCommandService.create(order.getId(), order.getPayAmount());
         return new OrderCreateResult(OrderCreateResponse.of(order, items, payment), true);
     }
 
@@ -96,7 +115,7 @@ public class OrderFacade {
     // 따로 커밋되면 종료만 반영되고 재고 복구가 빠질 수 있어 바깥 트랜잭션 없이는 호출할 수 없게 한다.
     @Transactional(propagation = Propagation.MANDATORY)
     public List<StockQuantity> closeByPaymentFailure(
-            Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
+        Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
         return toStockQuantities(orderService.closeByPaymentFailure(orderId, reasonCode, reasonDetail));
     }
 
@@ -146,14 +165,14 @@ public class OrderFacade {
             throw new BusinessException(OrderErrorCode.INVALID_DELIVERY_INFORMATION);
         }
         return regionService.getRegionIdByLegalDongCode(legalDongCode)
-                .filter(martRegionId::equals)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.OUTSIDE_DELIVERY_AREA));
+            .filter(martRegionId::equals)
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.OUTSIDE_DELIVERY_AREA));
     }
 
     // 상품 엔티티를 미리 읽으면 재고 차감의 잠금 조회가 그 엔티티의 이전 재고 값으로 계산하므로 마트 ID만 조회한다
     private void validateSameMart(List<StockQuantity> quantities, Long martId) {
         Map<Long, Long> martIds = productService.findMartIdsOf(
-                quantities.stream().map(StockQuantity::productId).toList());
+            quantities.stream().map(StockQuantity::productId).toList());
         if (martIds.values().stream().anyMatch(productMartId -> !productMartId.equals(martId))) {
             throw new BusinessException(OrderErrorCode.CART_HAS_PREVIOUS_MART_ITEMS);
         }
@@ -161,7 +180,7 @@ public class OrderFacade {
 
     private List<StockQuantity> toStockQuantities(List<OrderItem> items) {
         return items.stream()
-                .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
-                .toList();
+            .map(item -> new StockQuantity(item.getProductId(), item.getQuantity()))
+            .toList();
     }
 }

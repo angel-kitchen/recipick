@@ -38,7 +38,10 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_NOT_REJECTABLE(HttpStatus.CONFLICT, "ORDER-015", "현재 거절할 수 없는 주문입니다."),
     INVALID_ORDER_STATUS_TRANSITION(HttpStatus.CONFLICT, "ORDER-016", "허용되지 않는 주문 상태 변경입니다."),
     INVALID_MART_STATUS_TRANSITION(HttpStatus.CONFLICT, "ORDER-017", "허용되지 않는 주문의 마트 처리 상태 변경입니다."),
-    ORDER_CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "ORDER-018", "동시 처리 충돌로 요청을 완료하지 못했습니다. 주문 상태를 확인한 뒤 다시 시도해 주세요.");
+    ORDER_CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "ORDER-018", "동시 처리 충돌로 요청을 완료하지 못했습니다. 주문 상태를 확인한 뒤 다시 시도해 주세요."),
+
+    // 주문 금액
+    USED_POINT_EXCEEDS_PRODUCT_AMOUNT(HttpStatus.BAD_REQUEST, "ORDER-019", "사용 포인트는 상품 금액을 초과할 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;

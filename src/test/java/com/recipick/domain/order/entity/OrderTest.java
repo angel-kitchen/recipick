@@ -21,11 +21,11 @@ class OrderTest {
 
     private Order order(OrderStatus status, MartStatus martStatus) {
         return Order.builder()
-                .memberId(1L)
-                .pendingMemberId(1L)
-                .status(status)
-                .martStatus(martStatus)
-                .build();
+            .memberId(1L)
+            .pendingMemberId(1L)
+            .status(status)
+            .martStatus(martStatus)
+            .build();
     }
 
     @Test
@@ -36,9 +36,9 @@ class OrderTest {
 
         // when
         Order order = Order.builder()
-                .memberId(1L)
-                .idempotencyKey(idempotencyKey)
-                .build();
+            .memberId(1L)
+            .idempotencyKey(idempotencyKey)
+            .build();
 
         // then
         assertThat(order.getIdempotencyKey()).isEqualTo("3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f");
@@ -68,7 +68,7 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.markPaid(null))
-                .isInstanceOf(NullPointerException.class);
+            .isInstanceOf(NullPointerException.class);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
     }
 
@@ -81,9 +81,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.markPaid(PAID_AT))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
 
     @ParameterizedTest
@@ -95,9 +95,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.markPaid(PAID_AT))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
     }
 
     @Test
@@ -127,19 +127,19 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.cancel(CancelReasonCode.PAYMENT_FAILED, null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
 
     @ParameterizedTest
     @CsvSource({
-            "PAID, RECEIVED, true",
-            "PAID, PREPARING, false",
-            "PAID, SHIPPING, false",
-            "PAID, DELIVERED, false",
-            "CANCEL_REQUESTED, RECEIVED, false",
-            "PENDING_PAYMENT, NONE, false"
+        "PAID, RECEIVED, true",
+        "PAID, PREPARING, false",
+        "PAID, SHIPPING, false",
+        "PAID, DELIVERED, false",
+        "CANCEL_REQUESTED, RECEIVED, false",
+        "PENDING_PAYMENT, NONE, false"
     })
     @DisplayName("결제 완료이면서 마트가 접수중일 때만 회원이 직접 취소할 수 있다")
     void isCancelableByMember(OrderStatus status, MartStatus martStatus, boolean expected) {
@@ -178,22 +178,22 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.requestMemberCancel(null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.ORDER_NOT_CANCELABLE);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.ORDER_NOT_CANCELABLE);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
     }
 
     @ParameterizedTest
     @CsvSource({
-            "PAID, RECEIVED, true",
-            "PAID, PREPARING, false",
-            "PAID, SHIPPING, false",
-            "PAID, DELIVERED, false",
-            "CANCEL_REQUESTED, RECEIVED, false",
-            "CANCEL_REQUESTED, REJECTED, false",
-            "REFUNDED, RECEIVED, false",
-            "PENDING_PAYMENT, NONE, false"
+        "PAID, RECEIVED, true",
+        "PAID, PREPARING, false",
+        "PAID, SHIPPING, false",
+        "PAID, DELIVERED, false",
+        "CANCEL_REQUESTED, RECEIVED, false",
+        "CANCEL_REQUESTED, REJECTED, false",
+        "REFUNDED, RECEIVED, false",
+        "PENDING_PAYMENT, NONE, false"
     })
     @DisplayName("결제 완료이면서 마트가 접수중일 때만 마트가 수락할 수 있다")
     void isAcceptableByMart(OrderStatus status, MartStatus martStatus, boolean expected) {
@@ -231,23 +231,91 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(order::acceptByMart)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.ORDER_NOT_ACCEPTABLE);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.RECEIVED);
     }
 
     @ParameterizedTest
+    @CsvSource({"PREPARING, SHIPPING", "SHIPPING, DELIVERED"})
+    @DisplayName("결제 완료 주문은 배송준비중에서 배송중, 배송중에서 배송완료로 한 단계씩 나아가고 주문 상태는 결제 완료로 남는다")
+    void changeDeliveryStatus(MartStatus from, MartStatus to) {
+        // given
+        Order order = order(OrderStatus.PAID, from);
+
+        // when
+        order.changeDeliveryStatus(to);
+
+        // then
+        assertThat(order.getMartStatus()).isEqualTo(to);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @ParameterizedTest
     @CsvSource({
-            "PAID, RECEIVED, true",
-            "PAID, PREPARING, false",
-            "PAID, SHIPPING, false",
-            "PAID, DELIVERED, false",
-            "CANCEL_REQUESTED, RECEIVED, false",
-            "CANCEL_REQUESTED, REJECTED, false",
-            "REFUNDED, REJECTED, false",
-            "PENDING_PAYMENT, NONE, false"
+        "RECEIVED, SHIPPING",
+        "PREPARING, DELIVERED",
+        "DELIVERED, SHIPPING",
+        "SHIPPING, SHIPPING",
+        "DELIVERED, DELIVERED",
+        "REJECTED, SHIPPING"
+    })
+    @DisplayName("배송 단계를 건너뛰거나 되돌리거나 같은 상태로 바꾸면 ORDER-017이고 마트 처리 상태는 그대로다")
+    void changeDeliveryStatus_invalidTransition(MartStatus from, MartStatus to) {
+        // given
+        Order order = order(OrderStatus.PAID, from);
+
+        // when, then
+        assertThatThrownBy(() -> order.changeDeliveryStatus(to))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        assertThat(order.getMartStatus()).isEqualTo(from);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MartStatus.class, names = {"NONE", "RECEIVED", "PREPARING", "REJECTED"})
+    @DisplayName("배송중·배송완료가 아닌 상태로는 배송 상태를 바꿀 수 없어 ORDER-017이다")
+    void changeDeliveryStatus_notDeliveryTarget(MartStatus target) {
+        // given
+        Order order = order(OrderStatus.PAID, MartStatus.PREPARING);
+
+        // when, then
+        assertThatThrownBy(() -> order.changeDeliveryStatus(target))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.PREPARING);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderStatus.class, names = "PAID", mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("결제 완료가 아닌 주문은 취소·환불 진행 또는 종료된 주문이라 배송 상태를 바꿀 수 없어 ORDER-016이다")
+    void changeDeliveryStatus_notPaid(OrderStatus status) {
+        // given
+        Order order = order(status, MartStatus.SHIPPING);
+
+        // when, then
+        assertThatThrownBy(() -> order.changeDeliveryStatus(MartStatus.DELIVERED))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(order.getStatus()).isEqualTo(status);
+        assertThat(order.getMartStatus()).isEqualTo(MartStatus.SHIPPING);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "PAID, RECEIVED, true",
+        "PAID, PREPARING, false",
+        "PAID, SHIPPING, false",
+        "PAID, DELIVERED, false",
+        "CANCEL_REQUESTED, RECEIVED, false",
+        "CANCEL_REQUESTED, REJECTED, false",
+        "REFUNDED, REJECTED, false",
+        "PENDING_PAYMENT, NONE, false"
     })
     @DisplayName("결제 완료이면서 마트가 접수중일 때만 마트가 거절할 수 있다")
     void isRejectableByMart(OrderStatus status, MartStatus martStatus, boolean expected) {
@@ -286,9 +354,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.rejectByMart("재료 소진"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.PREPARING);
         assertThat(order.getCancelReasonCode()).isNull();
@@ -303,9 +371,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.rejectByMart("재료 소진"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.ORDER_NOT_REJECTABLE);
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
         assertThat(order.getCancelReasonDetail()).isEqualTo("단순 변심");
     }
@@ -319,9 +387,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(order::restorePaidAfterMemberCancelFailure)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
         assertThat(order.getMartStatus()).isEqualTo(MartStatus.REJECTED);
     }
@@ -368,9 +436,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(order::restorePaidAfterMemberCancelFailure)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
     }
 
@@ -398,9 +466,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(order::markRefunded)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
     }
 
@@ -413,9 +481,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(order::markRefunded)
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
     }
 
     @ParameterizedTest
@@ -445,9 +513,9 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.closeByExternalCancel(null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(order.getStatus()).isEqualTo(status);
     }
 
@@ -475,6 +543,6 @@ class OrderTest {
 
         // when, then
         assertThatThrownBy(() -> order.confirmAmounts(1000L, 3000L, 4000L))
-                .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(IllegalStateException.class);
     }
 }

@@ -2,11 +2,13 @@ package com.recipick.domain.order.controller;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.order.dto.request.OrderAdminSearchRequest;
+import com.recipick.domain.order.dto.request.OrderDeliveryStatusRequest;
 import com.recipick.domain.order.dto.request.OrderRejectRequest;
 import com.recipick.domain.order.dto.response.OrderAdminDetailResponse;
 import com.recipick.domain.order.dto.response.OrderAdminSummaryResponse;
 import com.recipick.domain.order.dto.response.OrderMartStatusResponse;
 import com.recipick.domain.order.service.OrderService;
+import com.recipick.domain.order.facade.OrderDeliveryFacade;
 import com.recipick.domain.order.facade.OrderQueryFacade;
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
 import com.recipick.domain.payment.dto.response.MartRejectionResponse;
@@ -21,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +39,7 @@ public class OrderAdminController {
     private final OrderService orderService;
     private final OrderQueryFacade orderQueryFacade;
     private final MartRejectionFacade martRejectionFacade;
+    private final OrderDeliveryFacade orderDeliveryFacade;
 
     // size는 application.yml의 spring.data.web.pageable.max-page-size(100)로 잘린다. 정렬은 id 내림차순 고정이라 sort는 무시한다
     @GetMapping
@@ -85,5 +89,17 @@ public class OrderAdminController {
             case PG_FAILED, REQUEST_REJECTED ->
                 throw new IllegalStateException("실패 outcome이 응답으로 넘어왔습니다: " + result.outcome());
         };
+    }
+
+    // 배송완료는 포인트 적립 확정까지 이어져 주문·포인트를 조립하는 Facade가 처리한다
+    @PatchMapping("/{orderId}/delivery-status")
+    public ResponseEntity<ApiResponse<OrderMartStatusResponse>> changeDeliveryStatus(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long orderId,
+        @Valid @RequestBody OrderDeliveryStatusRequest request
+    ) {
+        OrderMartStatusResponse response = orderDeliveryFacade.changeStatus(AdminRole.valueOf(principal.role()),
+            principal.martId(), principal.id(), orderId, request.status());
+        return ResponseEntity.ok(ApiResponse.success("배송 상태가 변경되었습니다.", response));
     }
 }

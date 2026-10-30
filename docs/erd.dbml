@@ -225,6 +225,10 @@ Table POINT_EARNING {
   expires_on date
   created_at datetime
   updated_at datetime
+  indexes {
+    (member_id, status) [name: 'idx_point_earning_member_id_status']
+    (status, member_id, expires_on) [name: 'idx_point_earning_status_member_expires']
+  }
 }
 
 Table POINT_USAGE {
@@ -239,6 +243,7 @@ Table POINT_USAGE {
   updated_at datetime
   indexes {
     (point_earning_id, order_id) [unique]
+    order_id [name: 'idx_point_usage_order_id']
   }
 }
 
@@ -250,6 +255,10 @@ Table POINT_HISTORY {
   type varchar(30)
   amount bigint
   created_at datetime
+  indexes {
+    (member_id, created_at) [name: 'idx_point_history_member_created']
+    (member_id, order_id, created_at) [name: 'idx_point_history_member_order_created']
+  }
 }
 
 Table MEMBER_POINT {

@@ -297,6 +297,102 @@ class PaymentTest {
         assertThat(payment.getCanceledAt()).isNull();
     }
 
+    @Test
+    @DisplayName("0원 결제는 PortOne 번호·만료 시각 없이 금액 0원의 결제 완료 상태로 만들어진다")
+    void pointsOnly() {
+        // given
+        LocalDateTime paidAt = LocalDateTime.of(2026, 10, 29, 14, 0);
+
+        // when
+        Payment payment = Payment.pointsOnly(1L, paidAt);
+
+        // then
+        assertThat(payment.getOrderId()).isEqualTo(1L);
+        assertThat(payment.getPaymentMethod()).isEqualTo(PaymentMethod.POINTS_ONLY);
+        assertThat(payment.getAmount()).isZero();
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getPaidAt()).isEqualTo(paidAt);
+        assertThat(payment.getPortonePaymentId()).isNull();
+        assertThat(payment.getPortoneTransactionId()).isNull();
+        assertThat(payment.getExpiresAt()).isNull();
+        assertThat(payment.getFailureReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("결제 완료 시각 없이는 0원 결제를 만들 수 없다")
+    void pointsOnlyWithoutPaidAt() {
+        // when
+        Throwable thrown = catchThrowable(() -> Payment.pointsOnly(1L, null));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("0원 결제는 취소 요청 단계 없이 결제 완료에서 바로 취소 완료로 바뀌고 서버의 내부 취소 시각을 남긴다")
+    void cancelPointsOnly() {
+        // given
+        Payment payment = Payment.pointsOnly(1L, LocalDateTime.of(2026, 10, 29, 14, 0));
+
+        // when
+        payment.cancelPointsOnly(CANCELED_AT);
+
+        // then
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+    }
+
+    @Test
+    @DisplayName("취소 시각 없이는 0원 결제를 취소할 수 없다")
+    void cancelPointsOnlyWithoutCanceledAt() {
+        // given
+        Payment payment = Payment.pointsOnly(1L, LocalDateTime.of(2026, 10, 29, 14, 0));
+
+        // when
+        Throwable thrown = catchThrowable(() -> payment.cancelPointsOnly(null));
+
+        // then
+        assertThat(thrown).isInstanceOf(NullPointerException.class);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getCanceledAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("카드 결제는 PG 취소 없이 닫히면 안 되므로 0원 결제 취소로 바꿀 수 없다")
+    void cancelPointsOnlyWhenCard() {
+        // given
+        Payment payment = paymentWith(PaymentStatus.PAID);
+
+        // when
+        Throwable thrown = catchThrowable(() -> payment.cancelPointsOnly(CANCELED_AT));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getCanceledAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 취소된 0원 결제는 다시 취소할 수 없다 — 취소 시각을 덮어쓰지 않는다")
+    void cancelPointsOnlyWhenCanceled() {
+        // given
+        Payment payment = Payment.pointsOnly(1L, LocalDateTime.of(2026, 10, 29, 14, 0));
+        payment.cancelPointsOnly(CANCELED_AT);
+
+        // when
+        Throwable thrown = catchThrowable(() -> payment.cancelPointsOnly(CANCELED_AT.plusMinutes(1)));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOfSatisfying(BusinessException.class, exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PaymentErrorCode.INVALID_PAYMENT_STATUS));
+        assertThat(payment.getCanceledAt()).isEqualTo(CANCELED_AT);
+    }
+
     private Payment paymentWith(PaymentStatus status) {
         return Payment.builder()
             .orderId(1L)

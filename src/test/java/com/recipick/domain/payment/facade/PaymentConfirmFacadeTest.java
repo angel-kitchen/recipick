@@ -150,6 +150,23 @@ class PaymentConfirmFacadeTest {
     }
 
     @Test
+    @DisplayName("0원 결제는 PortOne 결제가 없어 확정 대상이 아니므로 PortOne 결제 ID가 없어도 오류 없이 PAYMENT_NOT_FOUND다")
+    void pointsOnlyPayment() {
+        // given — 주문 생성 때 이미 PAID로 끝난 0원 결제에 확정 API가 잘못 들어왔다
+        Payment pointsOnly = Payment.pointsOnly(ORDER_ID, PAID_AT);
+        ReflectionTestUtils.setField(pointsOnly, "id", PAYMENT_ID);
+        given(paymentService.getByOrderId(ORDER_ID)).willReturn(pointsOnly);
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+
+        // when
+        Throwable thrown = catchThrowable(() -> facade.confirm(MEMBER_ID, ORDER_ID, PORTONE_PAYMENT_ID));
+
+        // then
+        assertErrorCode(thrown, PaymentErrorCode.PAYMENT_NOT_FOUND);
+        verifyNoInteractions(portOnePaymentClient, paymentConfirmProcessor, systemRefundExecutionFacade);
+    }
+
+    @Test
     @DisplayName("PortOne 조회가 실패하면 그 예외를 그대로 올리고 Processor도 재조회도 하지 않는다")
     void portOneLookupFails() {
         // given

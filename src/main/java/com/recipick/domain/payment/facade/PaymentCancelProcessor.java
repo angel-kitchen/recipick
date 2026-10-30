@@ -10,6 +10,7 @@ import com.recipick.domain.payment.dto.response.PaymentCancelResponse;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentFailureReason;
+import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
@@ -17,6 +18,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentService;
+import com.recipick.domain.payment.service.PointCommandService;
 import com.recipick.domain.product.dto.StockQuantity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
@@ -33,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 // 결제 취소의 상태 변경 트랜잭션. 결제 후 취소는 PortOne 호출을 사이에 두고 TX1(prepare)·TX2(apply)로 나뉜다.
 // 두 메서드 모두 PAYMENT 잠금으로 시작하고, 업무 결과는 예외가 아니라 반환값으로 돌려준다 — 안에서 던지면 롤백돼 버린다.
-// 잠금 순서 PAYMENT → ORDERS → (2차: MEMBER_POINT → POINT_EARNING) → 재고.
+// 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고. 결제 후 취소의 포인트는 TX1(접수)에서 건드리지 않고
+// PG 환불이 성공한 TX2에서만 되돌린다 — 먼저 돌려주면 환불이 실패해 결제가 PAID로 돌아와도 포인트만 돌아간 채 남는다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -46,6 +49,7 @@ public class PaymentCancelProcessor {
     private final PaymentService paymentService;
     private final OrderService orderService;
     private final OrderFacade orderFacade;
+    private final PointCommandService pointCommandService;
     private final Clock clock;
 
     // TX1. 취소를 접수한다. 결제 전 취소는 여기서 끝나고, 결제 후 취소는 CANCEL_REQUESTED·REFUND REQUESTED를 커밋한 뒤
@@ -60,6 +64,11 @@ public class PaymentCancelProcessor {
         if (!orderService.getMemberIdOf(orderId).equals(memberId)) {
             log.warn("다른 회원의 결제에 취소 시도: memberId={}, paymentId={}", memberId, paymentId);
             throw new BusinessException(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        }
+
+        // 0원 결제는 환불 행이 없어 키로 찾을 환불 작업도 없다. 멱등 키 조회보다 먼저 나눈다
+        if (payment.getPaymentMethod() == PaymentMethod.POINTS_ONLY) {
+            return cancelPointsOnly(payment, reason);
         }
 
         // 같은 키 = 같은 환불 작업. 새 환불을 만들지 않고 그 행의 상태로 답한다
@@ -124,9 +133,9 @@ public class PaymentCancelProcessor {
 
     private PaymentCancelPreparation cancelBeforePay(Payment payment, String reason) {
         payment.fail(PaymentFailureReason.CANCELED_BEFORE_PAY, null);
-        // 주문 종료와 재고 복구 사이가 2차 포인트 복구 자리다
         List<StockQuantity> items =
             orderFacade.closeByPaymentFailure(payment.getOrderId(), CancelReasonCode.MEMBER_CANCELED, reason);
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         return finishedBeforePay(payment);
     }
@@ -137,7 +146,38 @@ public class PaymentCancelProcessor {
     }
 
     private PaymentCancelPreparation requestCancelAfterPay(Payment payment, String idempotencyKey, String reason) {
-        // 주문이 먼저 판정한다 — 마트가 준비를 시작했으면 결제 쪽은 아무것도 바꾸지 않는다
+        requestOrderCancel(payment, reason);
+        payment.requestCancel();
+        Refund refund = paymentService.requestMemberRefund(payment, reason, idempotencyKey);
+        return PaymentCancelPreparation.callPortOne(refund.getId(), payment.getPortonePaymentId(), payment.getAmount());
+    }
+
+    // 0원 결제의 회원 취소. PG·환불 행이 없어 이 트랜잭션에서 결제 취소·주문 환불 완료·포인트·재고 복구까지 끝낸다.
+    // POINTS_ONLY는 외부 환불 작업 행이 없어 Idempotency-Key별 재요청 결과를 저장하지 않는다.
+    // 이미 CANCELED면 terminal-state 멱등으로 현재 완료 결과만 돌려주고 자산은 다시 바꾸지 않는다 —
+    // 마트 거절로 취소된 결제에도 같은 응답이 나가는 점은 카드 결제(409)와 다르지만 돈·포인트·재고는 움직이지 않는다
+    private PaymentCancelPreparation cancelPointsOnly(Payment payment, String reason) {
+        if (payment.getStatus() == PaymentStatus.CANCELED) {
+            return finishedPointsOnly(payment);
+        }
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        requestOrderCancel(payment, reason);
+        payment.cancelPointsOnly(LocalDateTime.now(clock));
+        List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
+        orderFacade.restoreStock(items);
+        return finishedPointsOnly(payment);
+    }
+
+    private PaymentCancelPreparation finishedPointsOnly(Payment payment) {
+        return PaymentCancelPreparation.finished(new PaymentCancelResult(
+            PaymentCancelOutcome.CANCELED, PaymentCancelResponse.pointsOnly(payment)));
+    }
+
+    // 주문이 먼저 판정한다 — 마트가 준비를 시작했으면 결제 쪽은 아무것도 바꾸지 않는다
+    private void requestOrderCancel(Payment payment, String reason) {
         MemberCancelRequestResult orderResult = orderService.markMemberCancelRequested(payment.getOrderId(), reason);
         if (orderResult == MemberCancelRequestResult.MART_ALREADY_PREPARING) {
             throw new BusinessException(PaymentErrorCode.ORDER_ALREADY_PREPARING);
@@ -145,9 +185,6 @@ public class PaymentCancelProcessor {
         if (orderResult == MemberCancelRequestResult.INVALID_ORDER_STATUS) {
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
         }
-        payment.requestCancel();
-        Refund refund = paymentService.requestMemberRefund(payment, reason, idempotencyKey);
-        return PaymentCancelPreparation.callPortOne(refund.getId(), payment.getPortonePaymentId(), payment.getAmount());
     }
 
     // 같은 키의 재요청. 다른 결제·다른 사유·회원 환불이 아닌 행이면 키를 잘못 재사용한 것이다
@@ -178,8 +215,8 @@ public class PaymentCancelProcessor {
     private PaymentCancelResult complete(Payment payment, Refund refund, PortOneCancelResult result) {
         payment.markCanceled(result.canceledAt());
         refund.complete(result.cancellationId(), result.canceledAt());
-        // 환불 완료와 재고 복구 사이가 2차 포인트 복구 자리다
         List<StockQuantity> items = orderFacade.markRefunded(payment.getOrderId());
+        pointCommandService.restoreUsageAndCancelEarning(payment.getOrderId());
         orderFacade.restoreStock(items);
         return afterPay(PaymentCancelOutcome.CANCELED, payment, refund);
     }

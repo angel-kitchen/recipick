@@ -34,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 탈퇴 기능이 아직 없어, 회원 행을 잠근 채 주문 생성이 잠금에 걸리길 기다렸다가 작업하고 커밋하는 트랜잭션으로 탈퇴 경합을 흉내 낸다
@@ -67,6 +68,8 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Member member;
     private Product product;
@@ -74,6 +77,7 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
 
     @AfterEach
     void cleanUp() {
+        deletePoints(member.getId());
         for (Long orderId : orderRepository.findIdsByMemberId(member.getId())) {
             paymentRepository.findByOrderId(orderId).ifPresent(paymentRepository::delete);
             orderStatusHistoryRepository.deleteAll(orderStatusHistoryRepository.findAllByOrderId(orderId));
@@ -83,6 +87,15 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         cartItemRepository.delete(cartItem);
         productRepository.delete(product);
         memberRepository.findById(member.getId()).ifPresent(memberRepository::delete);
+    }
+
+    // 주문 생성이 만든 적립 예정·포인트 이력을 외래키 역순(이력 → 사용 → 적립 → 회원 포인트)으로 지운다
+    private void deletePoints(Long memberId) {
+        jdbcTemplate.update("DELETE FROM point_history WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE pu FROM point_usage pu JOIN point_earning pe ON pu.point_earning_id = pe.id "
+            + "WHERE pe.member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM point_earning WHERE member_id = ?", memberId);
+        jdbcTemplate.update("DELETE FROM member_point WHERE member_id = ?", memberId);
     }
 
     @Test
@@ -96,8 +109,8 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
 
         // when
         assertThatThrownBy(() -> orderFacade.createOrder(member.getId(), "key", request))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
         withdrawal.get(WAIT_SECONDS, TimeUnit.SECONDS);
 
         // then
@@ -112,13 +125,13 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         OrderCreateRequest request = prepare(10);
         CountDownLatch locked = new CountDownLatch(1);
         Future<?> withdrawal = lockMemberThen(locked, () -> em.createNativeQuery("UPDATE member SET withdrawn_at = CURRENT_TIMESTAMP WHERE id = :id")
-                        .setParameter("id", member.getId()).executeUpdate());
+            .setParameter("id", member.getId()).executeUpdate());
         assertThat(locked.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
         // when
         assertThatThrownBy(() -> orderFacade.createOrder(member.getId(), "key", request))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
         withdrawal.get(WAIT_SECONDS, TimeUnit.SECONDS);
 
         // then
@@ -133,7 +146,7 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         OrderCreateRequest request = prepare(10);
         CountDownLatch locked = new CountDownLatch(1);
         Future<?> first = lockMemberThen(locked,
-                () -> orderFacade.createOrder(member.getId(), "same-key", request));
+            () -> orderFacade.createOrder(member.getId(), "same-key", request));
         assertThat(locked.await(WAIT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
         // when
@@ -143,7 +156,7 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         // then: 잠금 뒤에 스냅샷이 만들어져야 앞 트랜잭션이 커밋한 주문을 멱등 조회로 찾는다
         assertThat(retried.created()).isFalse();
         assertThat(orderRepository.findIdsByMemberId(member.getId()))
-                .containsExactly(retried.response().orderId());
+            .containsExactly(retried.response().orderId());
         assertThat(stock()).isEqualTo(8);
     }
 
@@ -175,9 +188,9 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
 
     private long countMemberLockWaiters() {
         Number count = (Number) em.createNativeQuery(
-                        "SELECT COUNT(*) FROM information_schema.PROCESSLIST "
-                                + "WHERE ID <> CONNECTION_ID() AND INFO LIKE '%from member %for update%'")
-                .getSingleResult();
+                "SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                    + "WHERE ID <> CONNECTION_ID() AND INFO LIKE '%from member %for update%'")
+            .getSingleResult();
         return count.longValue();
     }
 
@@ -195,36 +208,36 @@ class OrderCreateMemberLockTest extends IntegrationTestSupport {
         member = member();
         cartItem = cartItem(member, 2);
         return new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678", "서울 종로구 삼청로 1",
-                "101호", LEGAL_DONG_CODE);
+            "101호", LEGAL_DONG_CODE);
     }
 
     private Member member() {
         return memberRepository.save(Member.builder()
-                .email(UUID.randomUUID() + "@ml.test")
-                .name("회원 잠금 테스트 회원")
-                .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
-                .passwordHash("hash")
-                .martId(MART_ID)
-                .build());
+            .email(UUID.randomUUID() + "@ml.test")
+            .name("회원 잠금 테스트 회원")
+            .phone("010" + String.format("%08d", ThreadLocalRandom.current().nextInt(100000000)))
+            .passwordHash("hash")
+            .martId(MART_ID)
+            .build());
     }
 
     private Product product(int stock) {
         return productRepository.save(Product.builder()
-                .mart(martRepository.findById(MART_ID).orElseThrow())
-                .name("애호박")
-                .price(1500L)
-                .saleUnitAmount(new BigDecimal("1"))
-                .saleUnit(SaleUnit.EA)
-                .totalQuantity(stock)
-                .build());
+            .mart(martRepository.findById(MART_ID).orElseThrow())
+            .name("애호박")
+            .price(1500L)
+            .saleUnitAmount(new BigDecimal("1"))
+            .saleUnit(SaleUnit.EA)
+            .totalQuantity(stock)
+            .build());
     }
 
     private CartItem cartItem(Member member, int quantity) {
         return cartItemRepository.save(CartItem.builder()
-                .memberId(member.getId())
-                .productId(product.getId())
-                .quantity(quantity)
-                .build());
+            .memberId(member.getId())
+            .productId(product.getId())
+            .quantity(quantity)
+            .build());
     }
 
     private int stock() {

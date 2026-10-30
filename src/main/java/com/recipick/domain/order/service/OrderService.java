@@ -34,6 +34,7 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
 import com.recipick.global.response.PageResponse;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -61,8 +62,8 @@ public class OrderService {
 
     // 결제 전 회원 취소도 결제 실패와 같은 종료 흐름을 탄다. 마트 거절은 결제 후 환불 흐름을 타므로 이 메서드로 종료하면 안 된다
     private static final Set<CancelReasonCode> BEFORE_PAYMENT_CLOSE_REASONS = EnumSet.of(
-            CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH,
-            CancelReasonCode.MEMBER_CANCELED);
+        CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH,
+        CancelReasonCode.MEMBER_CANCELED);
 
     // 외부 취소로 종료할 때 재고를 복구하는 마트 처리 상태. 배송이 시작되면 상품이 마트에 없어 재고를 더하면 실물보다 많아진다
     private static final Set<MartStatus> STOCK_STILL_IN_MART = EnumSet.of(MartStatus.RECEIVED, MartStatus.PREPARING);
@@ -96,26 +97,28 @@ public class OrderService {
         return orderItemRepository.findAllByOrderIdOrderByIdAsc(orderId);
     }
 
-    // 금액은 재고를 잠근 뒤 completePendingOrder에서 채운다. 락 순서 ORDERS → 재고를 지키려고 주문부터 저장한다
+    // 금액은 재고를 잠근 뒤 completePendingOrder에서 채운다. 락 순서 ORDERS → 재고를 지키려고 주문부터 저장한다.
+    // 사용 포인트와 적립률은 이때 주문에 고정한다. 금액 확정·적립 예정·재시도 응답은 모두 이 저장값을 기준으로 삼는다
     @Transactional
     public Order createPendingOrder(Long memberId, Long martId, Long regionId, String idempotencyKey,
-            String requestHash, OrderCreateRequest request) {
+                                    String requestHash, BigDecimal pointRate, OrderCreateRequest request) {
         Order order = Order.builder()
-                .orderNumber(generateOrderNumber())
-                .memberId(memberId)
-                .martId(martId)
-                .pendingMemberId(memberId)
-                .idempotencyKey(idempotencyKey)
-                .requestHash(requestHash)
-                .status(OrderStatus.PENDING_PAYMENT)
-                .martStatus(MartStatus.NONE)
-                .usedPoint(0L)
-                .receiverName(request.receiverName())
-                .receiverPhone(request.receiverPhone())
-                .address(request.address())
-                .detailAddress(request.detailAddress())
-                .regionId(regionId)
-                .build();
+            .orderNumber(generateOrderNumber())
+            .memberId(memberId)
+            .martId(martId)
+            .pendingMemberId(memberId)
+            .idempotencyKey(idempotencyKey)
+            .requestHash(requestHash)
+            .status(OrderStatus.PENDING_PAYMENT)
+            .martStatus(MartStatus.NONE)
+            .usedPoint(request.usedPoint())
+            .pointRate(pointRate)
+            .receiverName(request.receiverName())
+            .receiverPhone(request.receiverPhone())
+            .address(request.address())
+            .detailAddress(request.detailAddress())
+            .regionId(regionId)
+            .build();
         // 같은 회원의 요청은 Facade가 회원 행을 잠가 직렬화하지만, 신규 행 중복은 UNIQUE 제약으로 최종 방어한다.
         // 재고를 잠그기 전에 flush해 중복 요청이 상품 락을 기다리지 않고 바로 끝나게 한다
         try {
@@ -124,31 +127,32 @@ public class OrderService {
             throw new BusinessException(toCreateConflict(e), e);
         }
         orderStatusHistoryRepository.save(history(order, OrderStatusType.ORDER, null,
-                order.getStatus().name(), OrderStatusActor.MEMBER, null));
+            order.getStatus().name(), OrderStatusActor.MEMBER, null));
         return order;
     }
 
     // products는 quantities와 같은 순서로 차감된 상품이다
     @Transactional
     public List<OrderItem> completePendingOrder(
-            Order order, List<ProductSummary> products, List<StockQuantity> quantities) {
+        Order order, List<ProductSummary> products, List<StockQuantity> quantities) {
         List<OrderItem> items = new ArrayList<>(products.size());
         for (int i = 0; i < products.size(); i++) {
             ProductSummary product = products.get(i);
             int quantity = quantities.get(i).quantity();
             items.add(OrderItem.builder()
-                    .order(order)
-                    .productId(product.productId())
-                    .productName(product.name())
-                    .unitPrice(product.price())
-                    .saleUnitAmount(product.saleUnitAmount())
-                    .saleUnit(product.saleUnit())
-                    .lineAmount(product.price() * quantity)
-                    .quantity(quantity)
-                    .build());
+                .order(order)
+                .productId(product.productId())
+                .productName(product.name())
+                .unitPrice(product.price())
+                .saleUnitAmount(product.saleUnitAmount())
+                .saleUnit(product.saleUnit())
+                .lineAmount(product.price() * quantity)
+                .quantity(quantity)
+                .build());
         }
         long productAmount = items.stream().mapToLong(OrderItem::getLineAmount).sum();
-        OrderAmount amount = OrderAmount.of(productAmount);
+        // 사용 포인트는 인자로 다시 받지 않고 주문에 저장한 값을 쓴다. 상품금액을 넘으면 여기서 ORDER-019가 난다
+        OrderAmount amount = OrderAmount.of(productAmount, order.getUsedPoint());
         order.confirmAmounts(amount.productAmount(), amount.deliveryFee(), amount.payAmount());
         return orderItemRepository.saveAll(items);
     }
@@ -156,40 +160,40 @@ public class OrderService {
     // 결제 Facade가 주문을 잠그기 전에 부르므로 엔티티를 올리지 않고 값만 읽는다
     public Long getMemberIdOf(Long orderId) {
         return orderRepository.findMemberIdById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     // 관리자 결제 상세 감사 기록(PAYMENT_DETAIL_VIEW)은 마트 ID가 필수. 회원의 현재 이용 마트가 아니라 주문 당시 마트를 준다
     public Long getMartIdOf(Long orderId) {
         return orderRepository.findMartIdById(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     public PageResponse<OrderSummaryResponse> searchMemberOrders(
-            Long memberId, OrderSearchRequest request, Pageable pageable) {
+        Long memberId, OrderSearchRequest request, Pageable pageable) {
         Page<Order> orders = orderRepository.searchByMember(memberId, request.statusGroup(), pageable);
         Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
         return PageResponse.from(orders.map(order ->
-                OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+            OrderSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
     }
 
     // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
     // 마트 존재 여부와 감사 기록은 도메인을 조립하는 OrderQueryFacade에서 처리한다.
     @Transactional(readOnly = true)
     public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
-            AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
+        AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
         Long martId = resolveMartId(role, adminMartId, request.martId());
         Page<Order> orders = orderRepository.searchByMart(martId, request.martStatus(), pageable);
         Map<Long, List<OrderItem>> itemsByOrderId = itemsByOrderId(orders.getContent());
         return PageResponse.from(orders.map(order ->
-                OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
+            OrderAdminSummaryResponse.of(order, itemsByOrderId.get(order.getId()))));
     }
 
     // 다른 회원의 주문이면 "그 주문은 있다"를 알리지 않도록 없는 주문과 같이 답한다
     public OrderDetailResponse getMemberOrder(Long memberId, Long orderId) {
         Order order = orderRepository.findById(orderId)
-                .filter(found -> found.getMemberId().equals(memberId))
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            .filter(found -> found.getMemberId().equals(memberId))
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
         return OrderDetailResponse.of(order, findOrderItems(orderId));
     }
 
@@ -197,12 +201,12 @@ public class OrderService {
     @Transactional
     public OrderAdminDetailResponse getAdminOrder(AdminRole role, Long adminMartId, Long orderId) {
         Order order = orderRepository.findById(orderId)
-                .filter(found -> found.getMartStatus() != MartStatus.NONE)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            .filter(found -> found.getMartStatus() != MartStatus.NONE)
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
         verifyMartScope(role, adminMartId, order);
         auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_DETAIL_VIEW, orderId, order.getMartId(), Map.of()));
         return OrderAdminDetailResponse.of(order, findOrderItems(orderId),
-                orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
+            orderStatusHistoryRepository.findAllByOrderIdOrderByIdAsc(orderId));
     }
 
     // 주문 행만 잠근다. 회원 취소는 결제 → 주문 순서로 잠그므로 교착이 없고, 잠근 뒤 상태를 보므로 둘 중 하나만 성공한다
@@ -223,8 +227,41 @@ public class OrderService {
         order.acceptByMart();
 
         orderStatusHistoryRepository.save(martHistory(
-                order, fromMartStatus.name(), order.getMartStatus().name(), adminId));
+            order, fromMartStatus.name(), order.getMartStatus().name(), adminId));
         auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_ACCEPT, orderId, order.getMartId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(fromMartStatus, order.getMartStatus()))));
+        return OrderMartStatusResponse.from(order);
+    }
+
+    // 배송완료는 포인트 적립 확정과 한 트랜잭션이어야 해서 OrderDeliveryFacade 안에서만 부른다.
+    // 따로 커밋되면 배송완료인데 적립이 확정되지 않은 주문이 남는다. 주문 행만 잠그고 결제는 잠그지 않는다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OrderMartStatusResponse changeDeliveryStatus(
+        AdminRole role, Long adminMartId, Long adminId, Long orderId, MartStatus target) {
+        Order order = getOrderForUpdate(orderId);
+        // 결제 전 주문은 관리자 조회·수락과 같이 없는 주문으로 답한다
+        if (order.getMartStatus() == MartStatus.NONE) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        verifyMartScope(role, adminMartId, order);
+        // 같은 상태 반복 판정보다 먼저 본다. 환불로 끝난 배송완료 주문에 배송완료가 다시 와도 성공으로 숨기지 않는다
+        if (order.getStatus() != OrderStatus.PAID) {
+            throw new BusinessException(OrderErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        }
+        // 배송 API는 배송중·배송완료만 정한다. 배송준비중 주문에 배송준비중 요청이 와도 성공으로 답하지 않는다
+        if (target != MartStatus.SHIPPING && target != MartStatus.DELIVERED) {
+            throw new BusinessException(OrderErrorCode.INVALID_MART_STATUS_TRANSITION);
+        }
+        // 같은 요청이 반복되면 이력·감사 없이 현재 상태를 돌려준다
+        if (order.getMartStatus() == target) {
+            return OrderMartStatusResponse.from(order);
+        }
+
+        MartStatus fromMartStatus = order.getMartStatus();
+        order.changeDeliveryStatus(target);
+
+        orderStatusHistoryRepository.save(martHistory(order, fromMartStatus.name(), target.name(), adminId));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_DELIVERY_CHANGE, orderId,
+            order.getMartId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(fromMartStatus, target))));
         return OrderMartStatusResponse.from(order);
     }
 
@@ -239,7 +276,7 @@ public class OrderService {
             return Map.of();
         }
         return orderRepository.findMemberIdsByIdIn(orderIds).stream()
-                .collect(Collectors.toMap(OrderMemberId::getOrderId, OrderMemberId::getMemberId));
+            .collect(Collectors.toMap(OrderMemberId::getOrderId, OrderMemberId::getMemberId));
     }
 
     // 결제 Facade가 PAYMENT를 먼저 잠근 트랜잭션 안에서 호출한다(락 순서 PAYMENT → ORDERS)
@@ -256,15 +293,15 @@ public class OrderService {
         order.markPaid(paidAt);
 
         orderStatusHistoryRepository.saveAll(List.of(
-                systemHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null),
-                systemHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(), null)
+            systemHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null),
+            systemHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(), null)
         ));
     }
 
     // 재고 복구는 호출한 Facade가 하므로, 이번 호출로 종료된 경우에만 주문 상품을 돌려준다
     @Transactional
     public List<OrderItem> closeByPaymentFailure(
-            Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
+        Long orderId, CancelReasonCode reasonCode, String reasonDetail) {
         if (!BEFORE_PAYMENT_CLOSE_REASONS.contains(reasonCode)) {
             throw new IllegalArgumentException("결제 전 종료 사유가 아닙니다: " + reasonCode);
         }
@@ -278,7 +315,7 @@ public class OrderService {
         order.cancel(reasonCode, reasonDetail);
 
         orderStatusHistoryRepository.save(systemHistory(
-                order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), reasonCode.name()));
+            order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), reasonCode.name()));
         return orderItemRepository.findAllByOrderId(orderId);
     }
 
@@ -298,7 +335,7 @@ public class OrderService {
         order.requestMemberCancel(reasonDetail);
 
         orderStatusHistoryRepository.save(history(order, OrderStatusType.ORDER, fromStatus.name(),
-                order.getStatus().name(), OrderStatusActor.MEMBER, CancelReasonCode.MEMBER_CANCELED.name()));
+            order.getStatus().name(), OrderStatusActor.MEMBER, CancelReasonCode.MEMBER_CANCELED.name()));
         return MemberCancelRequestResult.REQUESTED;
     }
 
@@ -308,7 +345,7 @@ public class OrderService {
     // 결제 전 주문·다른 마트 주문은 수락과 같이 예외다 — 상태가 아니라 접근 범위 문제라 TX1째 롤백한다
     @Transactional(propagation = Propagation.MANDATORY)
     public MartRejectRequestResult requestMartRejection(
-            AdminRole role, Long adminMartId, Long adminId, Long orderId, String reasonDetail) {
+        AdminRole role, Long adminMartId, Long adminId, Long orderId, String reasonDetail) {
         Order order = getOrderForUpdate(orderId);
         if (order.getMartStatus() == MartStatus.NONE) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
@@ -327,10 +364,10 @@ public class OrderService {
         order.rejectByMart(reasonDetail);
 
         orderStatusHistoryRepository.saveAll(List.of(
-                martHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), adminId,
-                        CancelReasonCode.MART_REJECTED.name()),
-                martHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(),
-                        adminId, reasonDetail)
+            martHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), adminId,
+                CancelReasonCode.MART_REJECTED.name()),
+            martHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(),
+                adminId, reasonDetail)
         ));
         return MartRejectRequestResult.REJECTED;
     }
@@ -347,7 +384,7 @@ public class OrderService {
         order.restorePaidAfterMemberCancelFailure();
 
         orderStatusHistoryRepository.save(systemHistory(
-                order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null));
+            order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null));
     }
 
     // 재고 복구는 호출한 Facade가 포인트 복구 뒤에 하므로, 이번 호출로 환불 완료된 경우에만 주문 상품을 돌려준다
@@ -363,7 +400,7 @@ public class OrderService {
         order.markRefunded();
 
         orderStatusHistoryRepository.save(systemHistory(order, OrderStatusType.ORDER, fromStatus.name(),
-                order.getStatus().name(), order.getCancelReasonCode().name()));
+            order.getStatus().name(), order.getCancelReasonCode().name()));
         return orderItemRepository.findAllByOrderId(orderId);
     }
 
@@ -381,11 +418,11 @@ public class OrderService {
         order.closeByExternalCancel(reasonDetail);
 
         orderStatusHistoryRepository.save(systemHistory(order, OrderStatusType.ORDER, fromStatus.name(),
-                order.getStatus().name(), CancelReasonCode.EXTERNAL_CANCELED.name()));
+            order.getStatus().name(), CancelReasonCode.EXTERNAL_CANCELED.name()));
         if (!STOCK_STILL_IN_MART.contains(order.getMartStatus())) {
             // 실물은 관리자가 확인해 재고 조정으로 맞춘다
             log.warn("외부 취소로 종료했지만 배송이 시작된 주문이라 재고를 복구하지 않음: orderId={}, martStatus={}",
-                    orderId, order.getMartStatus());
+                orderId, order.getMartStatus());
             return List.of();
         }
         return orderItemRepository.findAllByOrderId(orderId);
@@ -412,8 +449,8 @@ public class OrderService {
     // 주문마다 상품을 읽으면 페이지 크기만큼 쿼리가 늘어나므로 한 번에 읽어 주문별로 나눈다
     private Map<Long, List<OrderItem>> itemsByOrderId(List<Order> orders) {
         return orderItemRepository.findAllByOrderIdInOrderByIdAsc(orders.stream().map(Order::getId).toList())
-                .stream()
-                .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+            .stream()
+            .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
     }
 
     // 상품 도메인 관리자 API(ProductService.resolveMartId)와 같은 규칙이다. 다른 마트를 지정하면 403으로 거절한다
@@ -436,11 +473,11 @@ public class OrderService {
 
     private Order getOrderForUpdate(Long orderId) {
         return orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 
     private OrderStatusHistory systemHistory(
-            Order order, OrderStatusType statusType, String from, String to, String reason) {
+        Order order, OrderStatusType statusType, String from, String to, String reason) {
         return history(order, statusType, from, to, OrderStatusActor.SYSTEM, reason);
     }
 
@@ -451,27 +488,27 @@ public class OrderService {
 
     // 마트 거절은 주문 상태도 함께 바꾸므로 이력 종류와 사유를 받는다
     private OrderStatusHistory martHistory(
-            Order order, OrderStatusType statusType, String from, String to, Long adminId, String reason) {
+        Order order, OrderStatusType statusType, String from, String to, Long adminId, String reason) {
         return OrderStatusHistory.builder()
-                .order(order)
-                .statusType(statusType)
-                .fromStatus(from)
-                .toStatus(to)
-                .actor(OrderStatusActor.MART)
-                .changedByAdminId(adminId)
-                .reason(reason)
-                .build();
+            .order(order)
+            .statusType(statusType)
+            .fromStatus(from)
+            .toStatus(to)
+            .actor(OrderStatusActor.MART)
+            .changedByAdminId(adminId)
+            .reason(reason)
+            .build();
     }
 
     private OrderStatusHistory history(
-            Order order, OrderStatusType statusType, String from, String to, OrderStatusActor actor, String reason) {
+        Order order, OrderStatusType statusType, String from, String to, OrderStatusActor actor, String reason) {
         return OrderStatusHistory.builder()
-                .order(order)
-                .statusType(statusType)
-                .fromStatus(from)
-                .toStatus(to)
-                .actor(actor)
-                .reason(reason)
-                .build();
+            .order(order)
+            .statusType(statusType)
+            .fromStatus(from)
+            .toStatus(to)
+            .actor(actor)
+            .reason(reason)
+            .build();
     }
 }

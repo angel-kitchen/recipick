@@ -32,6 +32,19 @@ public record PaymentCancelResponse(
         );
     }
 
+    // 0원 결제는 PG를 거치지 않아 환불 작업이 없다. 취소 시각은 서버가 내부 취소를 끝낸 시각이다
+    public static PaymentCancelResponse pointsOnly(Payment payment) {
+        return new PaymentCancelResponse(
+            payment.getId(),
+            payment.getOrderId(),
+            payment.getStatus(),
+            payment.getFailureReason(),
+            payment.getCanceledAt(),
+            null,
+            0L
+        );
+    }
+
     public static PaymentCancelResponse afterPay(Payment payment, Refund refund) {
         return new PaymentCancelResponse(
             payment.getId(),
