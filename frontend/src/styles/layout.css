@@ -64,6 +64,7 @@
 }
 
 .header__nav a:hover,
+.header__menu > summary:hover,
 .header__link-button:hover,
 .header__nav a.active {
   background: rgba(0, 0, 0, 0.06);
@@ -210,5 +211,94 @@
 @media (max-width: 767px) {
   .header__address {
     display: none;
+  }
+}
+
+/* 헤더 오른쪽: 찜·장바구니(개수)·마이페이지 메뉴 */
+.header__nav .header__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-tesla);
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 4px 12px;
+  font-size: 14px;
+  line-height: 1.25em;
+  letter-spacing: -0.5px;
+}
+
+.header__item .icon {
+  flex: none;
+}
+
+.header__count {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--green-accent);
+  color: var(--white);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.header__menu {
+  position: relative;
+}
+
+.header__menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.header__menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.header__menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2);
+  background: var(--white);
+  color: var(--text);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.header__menu-list a,
+.header__menu-list button {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .header__nav .header__item {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .header__count {
+    position: static;
+  }
+
+  .header__menu-list {
+    position: static;
+    box-shadow: none;
+    padding: 0 0 0 var(--space-3);
   }
 }

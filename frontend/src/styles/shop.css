@@ -545,3 +545,307 @@
 .stepper__input:focus {
   outline: 2px solid var(--green-accent);
 }
+
+/* 카드 위에 겹치는 찜 하트(카드 전체가 링크라 버튼을 링크 밖에 둔다) */
+.tile-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-wrap > .tile {
+  flex: 1;
+}
+
+.bookmark-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bookmark-btn.is-on {
+  color: var(--red);
+}
+
+.bookmark-btn:disabled {
+  opacity: 0.5;
+}
+
+.tile-wrap > .bookmark-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* 마이페이지 */
+.mypage-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.info-list {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.info-list dt {
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.info-list dd {
+  margin: 0;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+}
+
+.order-row:first-child {
+  border-top: 0;
+}
+
+.tile__link {
+  display: block;
+}
+
+/* 정렬 줄: 글자 버튼을 가는 선으로 나눈다 */
+.sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-3);
+  padding: 8px 12px;
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.sort-bar__item {
+  padding: 4px 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sort-bar__item:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.sort-bar__item.is-on {
+  color: var(--green-accent);
+  font-weight: 700;
+}
+
+/* 최근 본 항목 줄 */
+.recent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.recent__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.recent__clear {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* 빈 목록 안내 */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-9) var(--space-3);
+  text-align: center;
+}
+
+.empty__icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--space-2);
+  border-radius: 50%;
+  background: var(--green-light);
+  color: var(--green-brand);
+}
+
+.empty__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.empty .row-actions {
+  margin-top: var(--space-3);
+}
+
+/* 불러오는 중 뼈대 */
+.skeleton {
+  background: linear-gradient(90deg, var(--ceramic) 25%, #f6f4f1 50%, var(--ceramic) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton--line {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.skeleton-card .tile__body {
+  gap: var(--space-2);
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* 화면 아래 토스트 */
+.toast-area {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  z-index: 200;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--green-house);
+  color: var(--text-on-dark);
+  font-size: 14px;
+  box-shadow: var(--shadow-card);
+  pointer-events: auto;
+  animation: toast-in 0.25s ease-out;
+}
+
+.toast a {
+  color: var(--green-light);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 분류·종류 칩 줄 */
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.chip-row__label {
+  flex: none;
+  min-width: 36px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 인분 직접 입력 칸 */
+.stepper__input--servings {
+  width: 40px;
+}
+
+/* 레시피 카드의 재료 담기 버튼: 카드 오른쪽 아래에 겹쳐 두고, 글자가 가리지 않게 여백을 둔다 */
+.tile-wrap--quick .tile__body {
+  padding-right: 104px;
+}
+
+.quick-add {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.modal__box--wide {
+  max-width: 720px;
+}
+
+/* 인분을 바꿔 재료 양이 달라졌을 때 잠깐 강조 */
+.amount-flash {
+  border-radius: 4px;
+  animation: amount-flash 0.9s ease-out;
+}
+
+@keyframes amount-flash {
+  from {
+    background: rgba(0, 112, 74, 0.22);
+    transform: scale(1.08);
+  }
+  to {
+    background: transparent;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amount-flash {
+    animation: none;
+  }
+}
+
+/* 배송지가 없거나 서비스 지역이 아닐 때 화면 위에 계속 보이는 안내 */
+.delivery-notice {
+  margin-top: var(--space-3);
+}
+
+.delivery-notice .notice {
+  margin-bottom: 0;
+}

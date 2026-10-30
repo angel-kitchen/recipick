@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Footer from './Footer';
+import DeliveryNotice from './DeliveryNotice';
 import Header from './Header';
+import { ToastProvider } from './Toast';
 
 export default function Layout() {
   const { member } = useAuth();
@@ -9,9 +11,10 @@ export default function Layout() {
   const showCartButton = member && pathname !== '/cart' && !pathname.startsWith('/checkout');
 
   return (
-    <>
+    <ToastProvider>
       <Header />
       <main className="main">
+        <DeliveryNotice />
         <Outlet />
       </main>
       <Footer />
@@ -23,6 +26,6 @@ export default function Layout() {
           </svg>
         </Link>
       )}
-    </>
+    </ToastProvider>
   );
 }

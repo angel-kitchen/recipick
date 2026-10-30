@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { rememberSources } from '../cartSource';
+import { notifyCartChanged, rememberSources } from '../cartSource';
 import { UNAVAILABLE_REASON, formatAmount, formatWon } from '../labels';
 import ErrorNotice from './ErrorNotice';
 import usePreviousMartGuard from './usePreviousMartGuard';
@@ -21,6 +21,9 @@ export default function AutoCartReview({ preview, disabled = false }) {
   const [added, setAdded] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 장바구니 묶음 이름. 같은 레시피라도 인분이 다르면 따로 보인다
+  const menuLabels = preview.menus.map((menu) => `${menu.name} ${menu.servings}인분`);
 
   const chosenProductId = (item) => {
     const choice = choices[item.ingredientId];
@@ -63,14 +66,17 @@ export default function AutoCartReview({ preview, disabled = false }) {
     const done = [];
     try {
       for (const line of picked) {
-        await api.post('/api/cart-items', { productId: line.productId, quantity: line.quantity });
-        done.push(line);
+        const res = await api.post('/api/cart-items', { productId: line.productId, quantity: line.quantity });
+        // 서버는 같은 상품을 새 줄로 만들지 않고 수량을 더한다. 합친 총 수량을 받아 두었다가 알려 준다
+        done.push({ ...line, total: res?.quantity ?? line.quantity });
       }
-      rememberSources(member.memberId, done.map((line) => line.productId), preview.menus.map((menu) => menu.name));
+      rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
+      notifyCartChanged();
       setAdded({ lines: done });
     } catch (e) {
       // 일부만 담겼을 수 있어 담긴 만큼은 기억해 장바구니에서 레시피가 보이게 한다
-      rememberSources(member.memberId, done.map((line) => line.productId), preview.menus.map((menu) => menu.name));
+      rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
+      if (done.length > 0) notifyCartChanged();
       setError(
         done.length > 0 ? new Error(`${e.message} (앞의 ${done.length}개는 장바구니에 담겼습니다. 장바구니를 확인해 주세요.)`) : e,
       );
@@ -172,13 +178,18 @@ export default function AutoCartReview({ preview, disabled = false }) {
           <div className="modal__box card">
             <h2 className="tile__title">장바구니에 담겼습니다</h2>
             <p className="field__hint">
-              {preview.menus.map((menu) => menu.name).join(', ')} 재료 {added.lines.length}개
+              {menuLabels.join(', ')} 재료 {added.lines.length}개
             </p>
             <ul className="list-plain" style={{ margin: '12px 0' }}>
               {added.lines.map((line) => (
                 <li key={line.productId}>
                   <span>
                     {line.name} × {line.quantity}
+                    {line.total > line.quantity && (
+                      <span className="tile__meta" style={{ display: 'block' }}>
+                        이미 담겨 있어서 합쳐서 총 {line.total}개가 됐어요
+                      </span>
+                    )}
                   </span>
                   <span>{formatWon(line.price)}</span>
                 </li>

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { readSources } from '../cartSource';
+import { notifyCartChanged, readSources } from '../cartSource';
 import ConfirmModal from '../components/ConfirmModal';
+import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import PendingOrderNotice from '../components/PendingOrderNotice';
+import { ListSkeleton } from '../components/Skeleton';
+import { deliveryBlock } from '../delivery';
 import { CART_STATUS, formatAmount, formatWon } from '../labels';
 
 export default function Cart() {
@@ -50,6 +53,7 @@ export default function Cart() {
     setError(null);
     try {
       await action();
+      notifyCartChanged();
       await load();
     } catch (e) {
       setError(e);
@@ -80,7 +84,7 @@ export default function Cart() {
     return (
       <div className="container page">
         <ErrorNotice error={error} />
-        {!error && <p className="state-message">불러오는 중입니다.</p>}
+        {!error && <ListSkeleton />}
       </div>
     );
   }
@@ -129,6 +133,10 @@ export default function Cart() {
               ))}
             </div>
           )}
+          {/* 이름 끝의 인분을 떼고 세어야 인분만 다른 같은 레시피가 여러 레시피로 잡히지 않는다 */}
+          {new Set(recipes.map((name) => name.replace(/ \d+인분$/, ''))).size > 1 && (
+            <div className="tile__meta">여러 레시피에 함께 쓰여요</div>
+          )}
           <div className="cart-row__name">{item.productName}</div>
           <div className="tile__meta">
             {formatAmount(item.saleUnitAmount, item.saleUnit)} · {formatWon(item.price)}
@@ -175,9 +183,15 @@ export default function Cart() {
       )}
 
       {cart.items.length === 0 ? (
-        <p className="state-message">
-          장바구니가 비어 있습니다. <Link to="/recipes">레시피 보러 가기</Link> · <Link to="/products">상품 보러 가기</Link>
-        </p>
+        <EmptyState
+          icon="cart"
+          title="장바구니가 비어 있어요"
+          hint="레시피에서 재료를 한 번에 담거나, 상품을 직접 골라 담을 수 있어요."
+          actions={[
+            { to: '/recipes', label: '레시피 보러 가기' },
+            { to: '/products', label: '상품 보러 가기' },
+          ]}
+        />
       ) : (
         <div className="cart">
           <div className="stack">
@@ -227,7 +241,8 @@ export default function Cart() {
               type="button"
               className="btn btn--large btn--block"
               style={{ marginTop: 16 }}
-              disabled={chosen.length === 0}
+              disabled={chosen.length === 0 || Boolean(deliveryBlock(member))}
+              title={deliveryBlock(member)?.text}
               onClick={() => navigate('/checkout', { state: { cartItemIds: chosen.map((item) => item.cartItemId) } })}
             >
               주문하기

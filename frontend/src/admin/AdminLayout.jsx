@@ -13,6 +13,7 @@ const ITEMS = [
   { to: '/admin/categories', label: '카테고리', roles: [SUPER] },
   { to: '/admin/members', label: '회원·멤버십', roles: [SUPER] },
   { to: '/admin/payments', label: '결제', roles: [SUPER] },
+  { to: '/admin/ai-requests', label: 'AI 요청', roles: [SUPER] },
   { to: '/admin/audit', label: '감사 로그', roles: [SUPER] },
 ];
 

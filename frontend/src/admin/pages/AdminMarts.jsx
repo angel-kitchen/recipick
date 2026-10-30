@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api/client';
 import ErrorNotice from '../../components/ErrorNotice';
 import { MART_STATUS } from '../../labels';
+import { useAdmin } from '../AdminContext';
 import useLoad from '../useLoad';
 
 function MartForm({ mart, onDone, onCancel }) {
@@ -71,16 +72,95 @@ function MartForm({ mart, onDone, onCancel }) {
   );
 }
 
+function MartCreateForm({ onDone, onCancel }) {
+  const [form, setForm] = useState({ regionId: '', name: '', latitude: '', longitude: '', serviceRadiusM: '' });
+  const [error, setError] = useState(null);
+  const change = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.post('/api/admin/marts', {
+        regionId: Number(form.regionId),
+        name: form.name,
+        latitude: form.latitude,
+        longitude: form.longitude,
+        serviceRadiusM: form.serviceRadiusM ? Number(form.serviceRadiusM) : null,
+      });
+      onDone();
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  return (
+    <form className="card form admin__section" onSubmit={submit}>
+      <h2 className="tile__title">마트 등록</h2>
+      <ErrorNotice error={error} />
+      <div className="form-grid">
+        <label className="field">
+          <span className="field__label">이름</span>
+          <input className="field__input" value={form.name} onChange={change('name')} maxLength={50} required />
+        </label>
+        <label className="field">
+          <span className="field__label">지역 ID</span>
+          <input className="field__input" inputMode="numeric" value={form.regionId} onChange={change('regionId')} required />
+          <span className="field__hint">배송 가능 여부를 판정하는 지역(법정동)의 ID입니다.</span>
+        </label>
+        <label className="field">
+          <span className="field__label">위도</span>
+          <input className="field__input" value={form.latitude} onChange={change('latitude')} required />
+        </label>
+        <label className="field">
+          <span className="field__label">경도</span>
+          <input className="field__input" value={form.longitude} onChange={change('longitude')} required />
+        </label>
+        <label className="field">
+          <span className="field__label">서비스 반경(m)</span>
+          <input className="field__input" inputMode="numeric" value={form.serviceRadiusM} onChange={change('serviceRadiusM')} />
+        </label>
+      </div>
+      <div className="row-actions" style={{ marginTop: 0 }}>
+        <button type="submit" className="btn">
+          등록
+        </button>
+        <button type="button" className="btn btn--outline" onClick={onCancel}>
+          취소
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function AdminMarts() {
   const { data, error, reload } = useLoad(() => api.get('/api/admin/marts'), []);
   const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const { admin } = useAdmin();
+  // 서버가 마트 등록을 SUPER_ADMIN에게만 허용한다
+  const canCreate = admin.role === 'SUPER_ADMIN';
 
   return (
     <>
       <div className="admin__head">
         <h1 className="page__title">마트</h1>
+        {canCreate && (
+          <button type="button" className="btn" onClick={() => setCreating(true)}>
+            마트 등록
+          </button>
+        )}
       </div>
       <ErrorNotice error={error} />
+      {canCreate && creating && (
+        <MartCreateForm
+          onDone={() => {
+            setCreating(false);
+            reload();
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      )}
       {editing && (
         <MartForm
           key={editing.martId}

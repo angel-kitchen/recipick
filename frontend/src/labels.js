@@ -12,6 +12,9 @@ export const DISH_TYPE = {
   ETC: '기타',
 };
 
+// 서버 spicyLevel은 0~3이다
+export const spicyText = (level) => (level ? `맵기 ${'●'.repeat(level)}${'○'.repeat(3 - level)}` : '안 매움');
+
 export const DIFFICULTY = { EASY: '쉬움', NORMAL: '보통', HARD: '어려움' };
 
 export const SALE_UNIT = { G: 'g', ML: 'ml', EA: '개' };
@@ -48,6 +51,10 @@ export const ORDER_STATUS = {
   CANCEL_REQUESTED: '취소 요청',
   REFUNDED: '환불됨',
 };
+
+export const ORDER_GROUP = { ONGOING: '진행 중', DELIVERED: '배송 완료', CANCELED_REFUNDED: '취소·환불' };
+export const AUTO_CART_STATUS = { PREVIEWED: '미리보기', CONFIRMED: '담기 완료' };
+export const MEMBERSHIP_TYPE = { PAID: '유료', TRIAL: '무료 체험' };
 
 export const formatWon = (amount) => `${Number(amount).toLocaleString('ko-KR')}원`;
 
@@ -133,4 +140,26 @@ export const AUDIT_ACTION = {
   PAYMENT_DETAIL_VIEW: '결제 상세 조회',
   POINT_BALANCE_VIEW: '포인트 잔액 조회',
   POINT_HISTORY_VIEW: '포인트 이력 조회',
+};
+
+export const AI_REQUEST_TYPE = { AUTO_CART: '자동 장바구니', RECOMMENDATION: '레시피 추천' };
+export const AI_RESULT_STATUS = {
+  PREVIEWED: '미리보기',
+  NEEDS_SELECTION: '선택 필요',
+  NO_MATCH: '일치 없음',
+  RECOMMENDED: '추천 완료',
+  FALLBACK: '대체 결과',
+};
+
+export const MEMBERSHIP_SOURCE = {
+  ADMIN_GRANT: '관리자 지급',
+  TRIAL: '무료 체험',
+  SUBSCRIBE: '구독',
+  TRIAL_CONVERT: '체험 전환',
+};
+export const MEMBERSHIP_STATUS = {
+  ACTIVE: '이용 중',
+  CANCEL_RESERVED: '해지 예약',
+  EXPIRED: '만료',
+  TERMINATED: '종료',
 };

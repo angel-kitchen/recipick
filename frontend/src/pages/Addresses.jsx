@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
@@ -119,7 +120,9 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
         </span>
         {area && (
           <span className={area.available ? 'field__hint' : 'error-text'}>
-            {area.available ? `배송 가능 지역입니다. 이용 마트: ${area.martName}` : '아직 서비스 지역이 아닙니다.'}
+            {area.available
+              ? `배송 가능 지역입니다. 이용 마트: ${area.martName}`
+              : '아직 서비스 지역이 아닙니다. 저장은 할 수 있지만 지금은 재료 담기와 주문을 이용할 수 없어요.'}
           </span>
         )}
       </div>
@@ -157,7 +160,12 @@ export default function Addresses() {
   const { member, reloadMember } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [adding, setAdding] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // 로그인 직후 배송지가 없어서 넘어온 경우. 등록 폼을 바로 열고, 끝나거나 건너뛰면 가려던 곳으로 보낸다
+  const welcome = Boolean(location.state?.welcome);
+  const next = location.state?.next ?? '/recipes';
+  const [adding, setAdding] = useState(welcome);
   const [editingId, setEditingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState(null);
@@ -198,6 +206,11 @@ export default function Addresses() {
   const create = async (form, { select, locationAgreed }) => {
     const result = await api.post('/api/members/me/addresses', { ...form, select, locationAgreed });
     await refresh();
+    if (welcome) {
+      setAdding(false);
+      navigate(next, { replace: true });
+      return;
+    }
     setAdding(false);
     setMessage(
       result.martChanged
@@ -219,6 +232,14 @@ export default function Addresses() {
       <p className="page__sub">
         {member.mart ? `이용 마트: ${member.mart.name}` : '선택된 배송지가 없어 이용 마트가 정해지지 않았습니다.'}
       </p>
+      {welcome && (
+        <div className="notice notice--info">
+          환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요.{' '}
+          <Link to={next} onClick={() => setAdding(false)}>
+            나중에 할게요
+          </Link>
+        </div>
+      )}
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
       {!data && !error && <p className="state-message">불러오는 중입니다.</p>}

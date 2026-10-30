@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import Pager from '../components/Pager';
+import RecentViews from '../components/RecentViews';
+import { CardSkeletons } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
+import { notifyCartChanged } from '../cartSource';
+import { deliveryBlock } from '../delivery';
 import { formatAmount, formatWon } from '../labels';
 
 const PAGE_SIZE = 12;
 
 export default function Products() {
   const { member } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState([]);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
+  const toast = useToast();
   const { guard, modal } = usePreviousMartGuard();
+  const block = deliveryBlock(member);
 
   useEffect(() => {
     api.get('/api/categories').then(setCategories).catch(() => setCategories([]));
@@ -44,24 +51,29 @@ export default function Products() {
   }, [keyword, categoryId, page]);
 
   const addToCart = async (product) => {
-    setMessage(null);
     setError(null);
     try {
       await api.post('/api/cart-items', { productId: product.productId, quantity: 1 });
-      setMessage(`${product.name}을(를) 장바구니에 담았습니다.`);
+      notifyCartChanged();
+      toast.show(`${product.name}을(를) 장바구니에 담았어요.`, { to: '/cart', label: '장바구니 보기' });
     } catch (e) {
       setError(e);
     }
   };
 
+  // 검색어·카테고리를 화면 상태로 들고 있어서 주소만 옮겨서는 지워지지 않는다. 주소의 검색어도 함께 비운다
+  const clearFilters = () => {
+    setKeyword('');
+    setCategoryId('');
+    setPage(0);
+    setSearchParams({});
+  };
+
   return (
     <div className="container page">
       <h1 className="page__title">상품</h1>
-      {member?.mart ? (
-        <p className="page__sub">이용 마트: {member.mart.name}</p>
-      ) : (
-        <div className="notice">이용 마트가 정해지지 않아 상품을 담을 수 없습니다. 배송지를 등록하면 가까운 마트가 정해집니다.</div>
-      )}
+      {member.mart && <p className="page__sub">이용 마트: {member.mart.name}</p>}
+      <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
       <div className="filters">
         <input
           className="field__input"
@@ -90,21 +102,26 @@ export default function Products() {
       </div>
 
       {modal}
-      {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
-      {!result && !error && <p className="state-message">불러오는 중입니다.</p>}
-      {result?.content.length === 0 && <p className="state-message">조건에 맞는 상품이 없습니다.</p>}
+      {!result && !error && <CardSkeletons />}
+      {result?.content.length === 0 && (
+        <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 카테고리를 바꿔 보세요." actions={[{ onClick: clearFilters, label: '조건 지우기' }]} />
+      )}
 
       <div className="grid">
         {result?.content.map((product) => (
           <div key={product.productId} className="tile">
-            {product.imageUrl ? (
-              <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
-            ) : (
-              <div className="tile__image">이미지 준비 중</div>
-            )}
+            <Link to={`/products/${product.productId}`} className="tile__link">
+              {product.imageUrl ? (
+                <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
+              ) : (
+                <div className="tile__image">이미지 준비 중</div>
+              )}
+            </Link>
             <div className="tile__body">
-              <span className="tile__title">{product.name}</span>
+              <Link to={`/products/${product.productId}`} className="tile__title">
+                {product.name}
+              </Link>
               <span className="tile__meta">
                 {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
               </span>
@@ -113,7 +130,13 @@ export default function Products() {
                 {product.soldOut ? (
                   <span className="badge badge--warn">품절</span>
                 ) : (
-                  <button type="button" className="btn btn--outline" onClick={() => guard(() => addToCart(product))}>
+                  <button
+                    type="button"
+                    className="btn btn--outline"
+                    disabled={Boolean(block)}
+                    title={block?.text}
+                    onClick={() => guard(() => addToCart(product))}
+                  >
                     담기
                   </button>
                 )}
