@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -146,6 +146,29 @@ export default function Recipes() {
   const [all, setAll] = useState(null);
   const [error, setError] = useState(null);
 
+  // 입력창 값을 주소(searchParams)에서 바로 읽으면 한글 조합 중에 글자가 덮여 밀려 써진다.
+  // 그래서 입력값을 따로 들고, 조합이 끝나고 잠깐 멈췄을 때만 주소에 반영한다
+  const [keywordInput, setKeywordInput] = useState(filters.keyword);
+  const [composing, setComposing] = useState(false);
+  const committedKeyword = useRef(filters.keyword);
+
+  // 뒤로 가기 등 외부에서 주소가 바뀌었을 때만 입력창을 맞춘다. 우리가 반영한 값이면 타이핑 중인 글자를 건드리지 않는다
+  useEffect(() => {
+    if (filters.keyword === committedKeyword.current) return;
+    committedKeyword.current = filters.keyword;
+    setKeywordInput(filters.keyword);
+  }, [filters.keyword]);
+
+  useEffect(() => {
+    if (composing || keywordInput === committedKeyword.current) return undefined;
+    const timer = setTimeout(() => {
+      committedKeyword.current = keywordInput;
+      update({ ...current, keyword: keywordInput }, true);
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keywordInput, composing]);
+
   useEffect(() => {
     let ignore = false;
     setError(null);
@@ -201,12 +224,17 @@ export default function Recipes() {
       <h1 className="page__title">레시피</h1>
       <AiAutoCartBox />
       <RecentViews type="recipe" title="최근 본 레시피" toPath={(id) => `/recipes/${id}`} />
-      <div className="filters">
+      <div className="filters filters--end">
         <input
           className="field__input"
           placeholder="레시피 이름 검색"
-          value={filters.keyword}
-          onChange={changeFilter('keyword')}
+          value={keywordInput}
+          onChange={(e) => setKeywordInput(e.target.value)}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={(e) => {
+            setKeywordInput(e.target.value);
+            setComposing(false);
+          }}
           maxLength={50}
         />
       </div>
