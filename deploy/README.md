@@ -63,20 +63,20 @@
    ```
 4. 인증서를 먼저 준비한다. 저장소의 nginx는 HTTPS 설정(`app-https.conf`)이라 인증서가 없으면 nginx가 뜨지 못하고, 첫 배포라 돌아갈 이전 설정도 없다.
    - 기존 서버를 옮기는 경우: 옛 서버의 `/opt/recipick/certbot/`을 그대로 복사한다.
-   - 새로 발급하는 경우: 도메인 A 레코드가 새 서버를 가리키게 한 뒤, nginx가 아직 없어 80번이 비어 있으므로 standalone으로 발급한다.
+   - 새로 발급하는 경우: `@`와 `www` A 레코드를 모두 새 서버로 바꾸고 `dig +short <도메인>`, `dig +short www.<도메인>`이 새 IP인지 확인한다. 두 이름 모두 80번으로 이 서버에 닿아야 발급된다. nginx가 아직 없어 80번이 비어 있으므로 standalone으로 발급한다.
    ```bash
    mkdir -p /opt/recipick/certbot/www /opt/recipick/certbot/conf
    docker run --rm -p 80:80 -v /opt/recipick/certbot/conf:/etc/letsencrypt certbot/certbot:v4.1.1 \
      certonly --standalone -d <도메인> -d www.<도메인> --email <메일> --agree-tos --no-eff-email
    ```
-   standalone으로 받은 인증서는 갱신도 standalone으로 시도해 nginx가 80번을 쓰는 동안 실패한다. 5번 배포가 끝나면 갱신 방식을 webroot로 바꾼다.
-   ```bash
-   cd /opt/recipick
-   docker compose --profile certbot run --rm certbot reconfigure --cert-name <도메인> --webroot -w /var/www/certbot
-   ```
 5. 같은 묶음으로 배포한다. MySQL·Redis가 없으면 스크립트가 먼저 띄우고 healthy가 될 때까지 기다린다.
    ```bash
    bash releases/<SHA>/scripts/deploy.sh <SHA>
+   ```
+   4번에서 standalone으로 새로 발급했다면, 배포가 성공해 nginx가 80번에서 `/var/www/certbot`을 서빙하는 상태에서 갱신 방식을 webroot로 바꾼다. standalone 갱신은 nginx가 80번을 쓰는 동안 실패한다. `reconfigure`는 바뀐 방식으로 시험 검증을 하므로 nginx가 떠 있어야 한다.
+   ```bash
+   cd /opt/recipick
+   docker compose --profile certbot run --rm certbot reconfigure --cert-name <도메인> --webroot -w /var/www/certbot
    ```
 6. 운영 관리자 계정을 SQL로 한 번 만든다. 로컬 관리자 시드(`data-admin-local.sql`)의 비밀번호 해시는 쓰지 않는다. 비밀번호 해시는 로컬에서 앱의 인코더로 만들어 가져온다.
 7. `docs/deploy-strategy.md` 10-1 체크리스트대로 확인한다. 가장 먼저 `curl -L https://<도메인>/api/categories`.
