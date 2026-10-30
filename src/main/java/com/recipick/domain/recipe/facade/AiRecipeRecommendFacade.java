@@ -49,7 +49,8 @@ public class AiRecipeRecommendFacade {
         }
 
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(conditionResult.content());
-        List<Recipe> candidates = recipeService.findRecommendCandidates(condition);
+        // 조건을 하나도 읽지 못했는데 전체 레시피에서 고르면 문장과 무관한 추천이 나가므로 후보를 비운다
+        List<Recipe> candidates = condition.isEmpty() ? List.of() : recipeService.findRecommendCandidates(condition);
         if (candidates.isEmpty()) {
             saveLog(memberId, text, AiResultStatus.NO_MATCH, conditionResult, List.of());
             return AiRecipeRecommendResponse.noMatch();

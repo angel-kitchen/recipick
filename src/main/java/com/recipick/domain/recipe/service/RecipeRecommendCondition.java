@@ -31,6 +31,11 @@ public record RecipeRecommendCondition(
             cleanIngredients(conditions.excludedIngredients()));
     }
 
+    public boolean isEmpty() {
+        return cuisineType == null && dishType == null && maxCookingMinutes == null
+            && maxSpicyLevel == null && excludedIngredients.isEmpty();
+    }
+
     // 조리 시간·맵기가 비어 있는 레시피는 조건을 만족하는지 알 수 없으므로, 그 조건을 걸었을 때는 빼고 보여 준다
     public boolean matches(Recipe recipe) {
         return (cuisineType == null || cuisineType == recipe.getCuisine())
