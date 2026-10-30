@@ -233,9 +233,9 @@ export default function Addresses() {
         {member.mart ? `이용 마트: ${member.mart.name}` : '선택된 배송지가 없어 이용 마트가 정해지지 않았습니다.'}
       </p>
       {welcome && (
-        <div className="notice notice--info">
-          환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요.{' '}
-          <Link to={next} onClick={() => setAdding(false)}>
+        <div className="notice notice--info notice--action">
+          <span>환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요.</span>
+          <Link to={next} className="btn btn--muted" onClick={() => setAdding(false)}>
             나중에 할게요
           </Link>
         </div>

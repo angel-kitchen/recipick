@@ -849,3 +849,32 @@
 .delivery-notice .notice {
   margin-bottom: 0;
 }
+
+/* 덜 중요한 보조 동작용 회색 작은 버튼 */
+.btn--muted {
+  padding: 4px 12px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn--muted:hover {
+  background: var(--line);
+}
+
+/* 안내 문구는 왼쪽, 버튼은 오른쪽 끝 */
+.notice--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.info-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
