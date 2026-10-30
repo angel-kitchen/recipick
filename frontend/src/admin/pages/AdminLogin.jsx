@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import ErrorNotice from '../../components/ErrorNotice';
 import { useAdmin } from '../AdminContext';
 
@@ -57,6 +57,9 @@ export default function AdminLogin() {
         <button type="submit" className="btn btn--large btn--block" disabled={submitting}>
           {submitting ? '로그인 중...' : '로그인'}
         </button>
+        <p className="field__hint" style={{ textAlign: 'center' }}>
+          <Link to="/login">회원 로그인으로 이동</Link>
+        </p>
       </form>
     </div>
   );
