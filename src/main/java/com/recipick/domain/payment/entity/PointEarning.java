@@ -97,7 +97,7 @@ public class PointEarning extends BaseTimeEntity {
                 yield true;
             }
             case CANCELED -> false;
-            case COMPLETED, EXPIRED -> throw invalidTransition("적립 취소");
+            case COMPLETED, EXPIRED, FORFEITED -> throw invalidTransition("적립 취소");
         };
     }
 
@@ -120,7 +120,8 @@ public class PointEarning extends BaseTimeEntity {
         this.remainingAmount += restoredAmount;
     }
 
-    // 소멸한 잔량을 돌려준다. 서비스가 그 값으로 회원 잔액 차감과 EXPIRED 이력을 처리하고, 0이면 아무것도 하지 않는다
+    // 소멸한 잔량을 돌려준다. 서비스가 그 값으로 회원 잔액 차감과 EXPIRED 이력을 처리하고, 0이면 아무것도 하지 않는다.
+    // 탈퇴로 이미 소멸한 적립 건은 만료할 잔량이 없다
     public long expire() {
         return switch (status) {
             case COMPLETED -> {
@@ -129,8 +130,26 @@ public class PointEarning extends BaseTimeEntity {
                 this.remainingAmount = 0L;
                 yield expired;
             }
-            case EXPIRED -> 0L;
+            case EXPIRED, FORFEITED -> 0L;
             case PENDING, CANCELED -> throw invalidTransition("적립 만료");
+        };
+    }
+
+    // 탈퇴 소멸. 남은 잔량을 돌려주고 서비스가 그 값으로 회원 잔액 차감과 WITHDRAWAL_FORFEITED 이력을 처리한다.
+    // 다 써서 잔량이 0인 적립 건은 소멸할 금액이 없어 상태를 바꾸지 않고, 이미 소멸한 건은 다시 소멸하지 않는다
+    public long forfeit() {
+        return switch (status) {
+            case COMPLETED -> {
+                if (remainingAmount == 0L) {
+                    yield 0L;
+                }
+                long forfeited = remainingAmount;
+                this.status = PointEarningStatus.FORFEITED;
+                this.remainingAmount = 0L;
+                yield forfeited;
+            }
+            case FORFEITED -> 0L;
+            case PENDING, CANCELED, EXPIRED -> throw invalidTransition("탈퇴 소멸");
         };
     }
 

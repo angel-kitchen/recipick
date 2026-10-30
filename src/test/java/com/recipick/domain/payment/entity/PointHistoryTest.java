@@ -87,6 +87,48 @@ class PointHistoryTest {
     }
 
     @Test
+    @DisplayName("탈퇴 소멸 이력은 탈퇴 소멸된 적립 건에만 남고, 탈퇴 소멸은 주문 없이, 복원 직후 소멸은 그 주문으로 남는다")
+    void withdrawalForfeitedFactory() {
+        // given
+        PointEarning earning = completedEarning();
+        earning.forfeit();
+
+        // when
+        PointHistory forfeited = PointHistory.withdrawalForfeited(earning, null, 500L);
+        PointHistory forfeitedAfterRestore = PointHistory.withdrawalForfeited(earning, USAGE_ORDER_ID, 300L);
+
+        // then
+        assertThat(forfeited.getType()).isEqualTo(PointHistoryType.WITHDRAWAL_FORFEITED);
+        assertThat(forfeited.getOrderId()).isNull();
+        assertThat(forfeited.getAmount()).isEqualTo(500L);
+        assertThat(forfeited.getMemberId()).isEqualTo(MEMBER_ID);
+        assertThat(forfeited.getPointEarning()).isSameAs(earning);
+        assertThat(forfeitedAfterRestore.getOrderId()).isEqualTo(USAGE_ORDER_ID);
+        assertThat(forfeitedAfterRestore.getAmount()).isEqualTo(300L);
+    }
+
+    @Test
+    @DisplayName("탈퇴 소멸되지 않은 적립 건이나 0원으로는 탈퇴 소멸 이력을 만들 수 없다 — 자연 만료 건과 섞이지 않는다")
+    void rejectWithdrawalForfeitedNotForfeited() {
+        // given
+        PointEarning completed = completedEarning();
+        PointEarning expired = completedEarning();
+        expired.expire();
+        PointEarning forfeited = completedEarning();
+        forfeited.forfeit();
+
+        // when
+        Throwable fromCompleted = catchThrowable(() -> PointHistory.withdrawalForfeited(completed, null, 500L));
+        Throwable fromExpired = catchThrowable(() -> PointHistory.withdrawalForfeited(expired, null, 500L));
+        Throwable zeroAmount = catchThrowable(() -> PointHistory.withdrawalForfeited(forfeited, null, 0L));
+
+        // then
+        assertThat(fromCompleted).isInstanceOf(IllegalStateException.class);
+        assertThat(fromExpired).isInstanceOf(IllegalStateException.class);
+        assertThat(zeroAmount).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("대상의 현재 상태와 맞지 않는 이력은 만들 수 없다 — 적립 예정 건의 확정 이력, 예약 상태의 확정 이력")
     void rejectMismatchedStatus() {
         // given

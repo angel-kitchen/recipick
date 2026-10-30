@@ -7,5 +7,6 @@ public enum PointHistoryType {
     USE_RESERVED,
     USE_CONFIRMED,
     RESTORED,
-    EXPIRED
+    EXPIRED,
+    WITHDRAWAL_FORFEITED
 }
