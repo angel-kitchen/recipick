@@ -13,7 +13,7 @@
 .page__sub {
   margin-bottom: var(--space-4);
   color: var(--text-soft);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .state-message {
@@ -24,7 +24,7 @@
 
 .error-text {
   color: var(--red);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 /* 버튼: 알약 모양, 누르면 살짝 작아진다 */
@@ -37,7 +37,7 @@
   border-radius: var(--radius-pill);
   background: var(--green-accent);
   color: var(--white);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -95,7 +95,7 @@
   align-items: center;
   justify-content: center;
   color: var(--green-uplift);
-  font-size: 14px;
+  font-size: 16px;
   object-fit: cover;
   width: 100%;
   opacity: 1;
@@ -115,7 +115,7 @@
 }
 
 .tile__meta {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-soft);
 }
 
@@ -134,7 +134,7 @@
   border-radius: var(--radius-pill);
   background: var(--green-light);
   color: var(--green-brand);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .field__label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -197,7 +197,7 @@
 }
 
 .field__hint {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-soft);
 }
 
@@ -205,7 +205,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .auth-card {
@@ -216,7 +216,7 @@
 .auth-card__footer {
   margin-top: var(--space-3);
   text-align: center;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-soft);
 }
 
@@ -251,7 +251,7 @@
   gap: var(--space-3);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .steps-list {
@@ -333,7 +333,7 @@
   display: flex;
   justify-content: space-between;
   padding: var(--space-1) 0;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .summary__total {
@@ -349,7 +349,7 @@
   border-radius: 8px;
   background: #fdecea;
   color: var(--red);
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: var(--space-3);
 }
 
@@ -408,7 +408,7 @@
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--green-accent);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -601,7 +601,7 @@
 
 .info-list dt {
   color: var(--text-soft);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .info-list dd {
@@ -644,7 +644,7 @@
   background: transparent;
   color: var(--text-soft);
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
 }
 
@@ -668,13 +668,13 @@
 }
 
 .recent__title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .recent__clear {
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* 빈 목록 안내 */
@@ -758,7 +758,7 @@
   border-radius: var(--radius-pill);
   background: var(--green-house);
   color: var(--text-on-dark);
-  font-size: 14px;
+  font-size: 16px;
   box-shadow: var(--shadow-card);
   pointer-events: auto;
   animation: toast-in 0.25s ease-out;
@@ -792,7 +792,7 @@
 .chip-row__label {
   flex: none;
   min-width: 36px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -811,7 +811,7 @@
   right: 12px;
   bottom: 12px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .modal__box--wide {
@@ -856,7 +856,7 @@
   border-color: var(--line);
   background: transparent;
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 16px;
   white-space: nowrap;
 }
 
@@ -877,4 +877,48 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+/* 담겼습니다 박스: 가운데 정렬과 오른쪽 위 닫기 */
+.modal__box {
+  position: relative;
+}
+
+.modal__box--center {
+  text-align: center;
+}
+
+.modal__box--center .list-plain li {
+  text-align: left;
+}
+
+.modal__close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.row-actions--center {
+  justify-content: center;
+}
+
+.review-summary {
+  margin-bottom: var(--space-3);
+}
+
+/* 레시피 이름 검색: AI 검색창의 버튼과 같은 오른쪽 끝에 맞춘다 */
+.filters--end {
+  justify-content: flex-end;
+}
+
+.filters--end .field__input {
+  width: 280px;
+  max-width: 100%;
 }
