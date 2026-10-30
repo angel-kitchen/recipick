@@ -284,12 +284,15 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # 백엔드 설정 묶음과 같은 deploy/ 경로를 쓴다. 배포 역할의 쓰기·EC2 역할의 읽기 권한이 이미 이 경로에 있다
-      - name: 빌드 결과 업로드 (frontend/dist → S3)
+      # 백엔드 설정 묶음과 같은 deploy/ 경로를 쓴다. 배포 역할의 쓰기·EC2 역할의 읽기 권한이 이미 이 경로에 있다.
+      # 교체 스크립트도 같은 커밋 것을 함께 올린다. 서버의 scripts/는 마지막 백엔드 배포 것이라
+      # 백엔드 배포가 실패해 되돌려졌거나 서버를 다시 세운 직후에는 없거나 옛 버전일 수 있다
+      - name: 빌드 결과·교체 스크립트 업로드 (→ S3)
         if: steps.fresh.outputs.stale == 'false'
         run: |
           tar -czf web.tar.gz -C dist .
           aws s3 cp web.tar.gz "s3://$DEPLOY_BUCKET/deploy/web-$GITHUB_SHA.tar.gz"
+          aws s3 cp deploy/scripts/deploy-web.sh "s3://$DEPLOY_BUCKET/deploy/web-$GITHUB_SHA.sh"
 
       - name: SSM Run Command로 서버에서 정적 파일 교체
         if: steps.fresh.outputs.stale == 'false'
@@ -306,7 +309,8 @@ jobs:
               "work=$(mktemp -d /tmp/recipick-web-\($sha).XXXXXX)",
               "trap \"rm -rf $work\" EXIT",
               "aws s3 cp --only-show-errors s3://\($bucket)/deploy/web-\($sha).tar.gz $work/web.tar.gz",
-              "DEPLOY_LOCK_HELD=1 bash /opt/recipick/scripts/deploy-web.sh \($sha) $work/web.tar.gz"
+              "aws s3 cp --only-show-errors s3://\($bucket)/deploy/web-\($sha).sh $work/deploy-web.sh",
+              "DEPLOY_LOCK_HELD=1 bash $work/deploy-web.sh \($sha) $work/web.tar.gz"
             ]
           }' > params.json
           command_id=$(aws ssm send-command \
