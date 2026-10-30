@@ -226,10 +226,13 @@ jobs:
       needs.frontend-build.result == 'success' &&
       (needs.changes.outputs.backend != 'true' || needs.deploy.result == 'success')
     runs-on: ubuntu-latest
-    # 백엔드와 그룹을 나눈 이유는 deploy 작업 주석. 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다
+    # 백엔드와 그룹을 나눈 이유는 deploy 작업 주석. 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다.
+    # 대기 작업을 하나만 두면, 백엔드 배포를 마치고 늦게 들어온 앞 커밋이 대기 중인 뒤 커밋을 지운 뒤
+    # 아래 최신성 검사로 스스로 건너뛰어 둘 다 배포되지 않는다. 모두 대기시키고 옛 커밋은 최신성 검사로 거른다
     concurrency:
       group: deploy-frontend
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       id-token: write
