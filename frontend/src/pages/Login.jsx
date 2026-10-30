@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 
 export default function Login() {
   const { member, login } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,15 +12,22 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const destination = location.state?.from ?? '/recipes';
 
-  if (member) return <Navigate to={destination} replace />;
+  // 배송지가 없으면 서비스 이용의 첫 단계로 배송지 등록을 먼저 안내한다(건너뛰면 원래 가려던 곳으로 간다)
+  if (member) {
+    return member.currentAddress ? (
+      <Navigate to={destination} replace />
+    ) : (
+      <Navigate to="/addresses" replace state={{ welcome: true, next: destination }} />
+    );
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
+      // 로그인되면 위의 Navigate가 알맞은 곳으로 보낸다
       await login(email, password);
-      navigate(destination, { replace: true });
     } catch (e) {
       setError(e);
     } finally {

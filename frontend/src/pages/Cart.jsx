@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import PendingOrderNotice from '../components/PendingOrderNotice';
 import { ListSkeleton } from '../components/Skeleton';
+import { deliveryBlock } from '../delivery';
 import { CART_STATUS, formatAmount, formatWon } from '../labels';
 
 export default function Cart() {
@@ -240,7 +241,8 @@ export default function Cart() {
               type="button"
               className="btn btn--large btn--block"
               style={{ marginTop: 16 }}
-              disabled={chosen.length === 0}
+              disabled={chosen.length === 0 || Boolean(deliveryBlock(member))}
+              title={deliveryBlock(member)?.text}
               onClick={() => navigate('/checkout', { state: { cartItemIds: chosen.map((item) => item.cartItemId) } })}
             >
               주문하기

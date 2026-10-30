@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import ErrorNotice from '../../components/ErrorNotice';
 import Pager from '../../components/Pager';
@@ -9,6 +9,21 @@ export default function AdminAiRequests() {
   const [filter, setFilter] = useState({ requestType: '', success: '', from: '', to: '' });
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState(null);
+  // 상세가 열리면 키보드·스크린 리더 사용자도 알 수 있게 포커스를 옮기고, 닫으면 눌렀던 버튼으로 돌려준다
+  const detailRef = useRef(null);
+  const triggerRef = useRef(null);
+  useEffect(() => {
+    if (selected) detailRef.current?.focus();
+  }, [selected]);
+
+  const open = (log, trigger) => {
+    triggerRef.current = trigger;
+    setSelected(log);
+  };
+  const close = () => {
+    setSelected(null);
+    triggerRef.current?.focus();
+  };
   const { data, error, loading } = useLoad(() => api.get('/api/admin/ai-requests', { ...filter, page, size: 20 }), [filter, page]);
 
   const setFilterValue = (key) => (e) => {
@@ -41,10 +56,12 @@ export default function AdminAiRequests() {
       <ErrorNotice error={error} />
       {selected && (
         <section className="card admin__section">
-          <h2 className="tile__title">요청 {selected.aiRequestId} 상세</h2>
+          <h2 ref={detailRef} tabIndex={-1} className="tile__title">
+            요청 {selected.aiRequestId} 상세
+          </h2>
           <pre className="json">{JSON.stringify(selected, null, 2)}</pre>
           <div className="row-actions">
-            <button type="button" className="btn btn--outline" onClick={() => setSelected(null)}>
+            <button type="button" className="btn btn--outline" onClick={close}>
               닫기
             </button>
           </div>
@@ -68,7 +85,7 @@ export default function AdminAiRequests() {
           </thead>
           <tbody>
             {!loading && data?.content.map((log) => (
-              <tr key={log.aiRequestId} className="is-clickable" onClick={() => setSelected(log)}>
+              <tr key={log.aiRequestId} className="is-clickable" onClick={() => open(log, null)}>
                 <td>{log.aiRequestId}</td>
                 <td>{log.memberId ?? '-'}</td>
                 <td>{AI_REQUEST_TYPE[log.requestType] ?? log.requestType}</td>
@@ -85,7 +102,7 @@ export default function AdminAiRequests() {
                     aria-label={`요청 ${log.aiRequestId} 상세 보기`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelected(log);
+                      open(log, e.currentTarget);
                     }}
                   >
                     상세

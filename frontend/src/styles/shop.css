@@ -840,3 +840,12 @@
     animation: none;
   }
 }
+
+/* 배송지가 없거나 서비스 지역이 아닐 때 화면 위에 계속 보이는 안내 */
+.delivery-notice {
+  margin-top: var(--space-3);
+}
+
+.delivery-notice .notice {
+  margin-bottom: 0;
+}

@@ -10,6 +10,7 @@ import ErrorNotice from '../components/ErrorNotice';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
 import { CardSkeletons, ListSkeleton } from '../components/Skeleton';
+import { deliveryBlock } from '../delivery';
 import { CUISINE, DIFFICULTY, DISH_TYPE, spicyText } from '../labels';
 
 const PAGE_SIZE = 12;
@@ -66,13 +67,13 @@ function QuickAdd({ recipe }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const blockedText = !member.membership?.active
-    ? '멤버십 회원만 이용할 수 있어요'
-    : !member.mart
-      ? '배송지를 등록하면 이용할 수 있어요'
+  const blockedText =
+    deliveryBlock(member)?.text ??
+    (!member.membership?.active
+      ? '멤버십 회원만 이용할 수 있어요'
       : !recipe.autoCartAvailable
         ? '아직 자동으로 담을 수 없는 레시피예요'
-        : null;
+        : null);
 
   const start = async () => {
     setError(null);
@@ -148,6 +149,8 @@ export default function Recipes() {
   useEffect(() => {
     let ignore = false;
     setError(null);
+    // 이전 필터의 정렬 결과가 새 결과가 올 때까지(또는 실패해도) 남지 않게 비운다
+    if (sort) setAll(null);
     const load = sort
       ? fetchAll(filters, () => ignore).then((list) => !ignore && setAll(list))
       : api.get('/api/recipes', { ...filters, page, size: PAGE_SIZE }).then((data) => !ignore && setResult(data));

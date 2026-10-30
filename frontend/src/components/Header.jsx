@@ -34,11 +34,15 @@ export default function Header() {
       return undefined;
     }
     let ignore = false;
-    const reload = () =>
-      api
+    // 담기가 연달아 일어나면 조회가 겹친다. 늦게 도착한 옛 응답이 최신 개수를 덮지 않게 마지막 조회만 반영한다
+    let latest = 0;
+    const reload = () => {
+      const mine = ++latest;
+      return api
         .get('/api/cart-items')
-        .then((cart) => !ignore && setCartCount(cart.items.length))
+        .then((cart) => !ignore && mine === latest && setCartCount(cart.items.length))
         .catch(() => {});
+    };
     reload();
     window.addEventListener('cart-changed', reload);
     return () => {

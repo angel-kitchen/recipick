@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import { notifyCartChanged } from '../cartSource';
+import { deliveryBlock } from '../delivery';
 import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
 import { PRODUCT_STATUS, formatAmount, formatWon } from '../labels';
@@ -21,6 +22,7 @@ export default function ProductDetail() {
   const toast = useToast();
   const { member } = useAuth();
   const { guard, modal } = usePreviousMartGuard();
+  const block = deliveryBlock(member);
 
   useEffect(() => {
     let ignore = false;
@@ -107,13 +109,14 @@ export default function ProductDetail() {
                 </button>
               </div>
               <div className="row-actions">
-                <button type="button" className="btn btn--outline" disabled={busy} onClick={() => guard(addToCart)}>
+                <button type="button" className="btn btn--outline" disabled={busy || Boolean(block)} title={block?.text} onClick={() => guard(addToCart)}>
                   장바구니 담기
                 </button>
                 <button
                   type="button"
                   className="btn"
-                  disabled={busy}
+                  disabled={busy || Boolean(block)}
+                  title={block?.text}
                   onClick={() =>
                     guard(async () => {
                       if (await addToCart()) navigate('/cart');

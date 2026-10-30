@@ -6,6 +6,7 @@ import AutoCartReview from '../components/AutoCartReview';
 import BookmarkButton from '../components/BookmarkButton';
 import ErrorNotice from '../components/ErrorNotice';
 import { ListSkeleton } from '../components/Skeleton';
+import { deliveryBlock } from '../delivery';
 import { CUISINE, DIFFICULTY, DISH_TYPE, formatAmount } from '../labels';
 import { recordRecent } from '../recentViews';
 
@@ -21,7 +22,8 @@ function youtubeId(url) {
 
 // 자동 장바구니 패널은 쓸 수 없는 경우에도 숨기지 않고 이유를 보여 준다
 function blockedReason(recipe, member) {
-  if (!member.mart) return { text: '배송지를 등록하면 이용 마트의 상품으로 재료를 계산해 드려요.', to: '/addresses', label: '배송지 등록' };
+  const delivery = deliveryBlock(member);
+  if (delivery) return { text: delivery.notice, to: '/addresses', label: delivery.label };
   if (!member.membership?.active) return { text: '자동 장바구니는 멤버십 회원만 이용할 수 있어요.' };
   if (!recipe.autoCartAvailable) {
     return { text: '이 레시피는 재료와 상품 연결이 끝나지 않아 아직 자동으로 담을 수 없어요. 재료를 눌러 직접 담아 주세요.' };

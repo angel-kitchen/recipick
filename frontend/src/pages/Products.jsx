@@ -10,6 +10,7 @@ import { CardSkeletons } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
 import { notifyCartChanged } from '../cartSource';
+import { deliveryBlock } from '../delivery';
 import { formatAmount, formatWon } from '../labels';
 
 const PAGE_SIZE = 12;
@@ -25,6 +26,7 @@ export default function Products() {
   const [error, setError] = useState(null);
   const toast = useToast();
   const { guard, modal } = usePreviousMartGuard();
+  const block = deliveryBlock(member);
 
   useEffect(() => {
     api.get('/api/categories').then(setCategories).catch(() => setCategories([]));
@@ -70,11 +72,7 @@ export default function Products() {
   return (
     <div className="container page">
       <h1 className="page__title">상품</h1>
-      {member?.mart ? (
-        <p className="page__sub">이용 마트: {member.mart.name}</p>
-      ) : (
-        <div className="notice">이용 마트가 정해지지 않아 상품을 담을 수 없습니다. 배송지를 등록하면 가까운 마트가 정해집니다.</div>
-      )}
+      {member.mart && <p className="page__sub">이용 마트: {member.mart.name}</p>}
       <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
       <div className="filters">
         <input
@@ -132,7 +130,13 @@ export default function Products() {
                 {product.soldOut ? (
                   <span className="badge badge--warn">품절</span>
                 ) : (
-                  <button type="button" className="btn btn--outline" onClick={() => guard(() => addToCart(product))}>
+                  <button
+                    type="button"
+                    className="btn btn--outline"
+                    disabled={Boolean(block)}
+                    title={block?.text}
+                    onClick={() => guard(() => addToCart(product))}
+                  >
                     담기
                   </button>
                 )}
