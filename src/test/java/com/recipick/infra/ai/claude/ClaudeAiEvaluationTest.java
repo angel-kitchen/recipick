@@ -58,8 +58,9 @@ class ClaudeAiEvaluationTest {
     @BeforeAll
     static void setUp() throws IOException {
         model = System.getenv().getOrDefault("AI_EVAL_MODEL", DEFAULT_MODEL);
+        // 평가 결과로 운영 모델을 고르므로 타임아웃·재시도·최대 토큰은 ClaudeProperties 기본값과 같게 둔다
         ClaudeProperties properties = new ClaudeProperties(
-            System.getenv("ANTHROPIC_API_KEY"), model, Duration.ofSeconds(30), 2, 4096);
+            System.getenv("ANTHROPIC_API_KEY"), model, Duration.ofSeconds(15), 2, 4096);
         anthropicClient = AnthropicOkHttpClient.builder()
             .apiKey(properties.apiKey())
             .timeout(properties.timeout())
