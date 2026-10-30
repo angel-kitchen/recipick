@@ -73,7 +73,7 @@
    ```bash
    bash releases/<SHA>/scripts/deploy.sh <SHA>
    ```
-   4번에서 standalone으로 새로 발급했다면, 배포가 성공해 nginx가 80번에서 `/var/www/certbot`을 서빙하는 상태에서 갱신 방식을 webroot로 바꾼다. standalone 갱신은 nginx가 80번을 쓰는 동안 실패한다. `reconfigure`는 바뀐 방식으로 시험 검증을 하므로 nginx가 떠 있어야 한다.
+   인증서의 갱신 설정이 standalone이면(4번에서 새로 발급했거나, 복사한 `certbot/conf/renewal/<도메인>.conf`에 `authenticator = standalone`이 있으면) 배포가 성공해 nginx가 80번에서 `/var/www/certbot`을 서빙하는 상태에서 갱신 방식을 webroot로 바꾼다. 이미 `webroot`면 건너뛴다. standalone 갱신은 nginx가 80번을 쓰는 동안 실패한다. `reconfigure`는 바뀐 방식으로 시험 검증을 하므로 nginx가 떠 있어야 한다.
    ```bash
    cd /opt/recipick
    docker compose --profile certbot run --rm certbot reconfigure --cert-name <도메인> --webroot -w /var/www/certbot
