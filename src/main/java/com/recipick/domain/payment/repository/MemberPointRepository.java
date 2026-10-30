@@ -19,6 +19,9 @@ public interface MemberPointRepository extends JpaRepository<MemberPoint, Long> 
         + "VALUES (:memberId, 0, :now, :now) ON DUPLICATE KEY UPDATE member_id = member_id", nativeQuery = true)
     void insertIfAbsent(@Param("memberId") Long memberId, @Param("now") LocalDateTime now);
 
+    // 잠그지 않는 존재 확인. 행이 있는 회원에게 INSERT를 시도하지 않으려고 먼저 본다
+    boolean existsByMemberId(Long memberId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT mp FROM MemberPoint mp WHERE mp.memberId = :memberId")
     Optional<MemberPoint> findByMemberIdForUpdate(@Param("memberId") Long memberId);

@@ -118,6 +118,49 @@ class PointExpirationConcurrencyTest extends IntegrationTestSupport {
         assertThat(historyCount("EXPIRED")).isEqualTo(1L);
     }
 
+    // MEMBER_POINT 행 보장은 잠그지 않는 존재 확인 뒤 없을 때만 INSERT한다. 두 트랜잭션이 모두 "없음"을 본 뒤에야 같이
+    // 출발시켜 존재 확인과 INSERT 사이의 경합을 일부러 만든다. 늦은 쪽의 INSERT는 member_id UNIQUE에서 앞선 커밋을
+    // 기다린 뒤 아무것도 바꾸지 않아야 한다
+    @Test
+    @DisplayName("포인트 행이 없는 회원을 두 트랜잭션이 '없음'으로 본 뒤 동시에 만들어도 행은 하나이고 잔액은 0이다")
+    void firstRowIsCreatedOnceUnderContention() throws Exception {
+        // given — 행이 없는 회원. 둘 다 존재 확인을 마칠 때까지 서로 기다린다
+        LocalDate today = LocalDate.now(clock);
+        CountDownLatch bothSawMissing = new CountDownLatch(2);
+
+        // when
+        List<Object> results = runConcurrently(List.of(
+            createRowThenExpire(today, bothSawMissing),
+            createRowThenExpire(today, bothSawMissing)));
+
+        // then — 소멸할 포인트가 없어 둘 다 0이고, 행은 하나뿐이다
+        assertThat(results).containsExactly(0L, 0L);
+        assertThat(queryLong("SELECT COUNT(*) FROM member_point WHERE member_id = ?", MEMBER_ID)).isEqualTo(1L);
+        assertThat(queryLong("SELECT balance FROM member_point WHERE member_id = ?", MEMBER_ID)).isZero();
+    }
+
+    // 한 트랜잭션 안에서 존재 확인 → 상대도 "없음"을 볼 때까지 대기 → expireMember(행 보장·잠금·소멸 0건)
+    private Callable<Object> createRowThenExpire(LocalDate today, CountDownLatch bothSawMissing) {
+        return () -> transactionTemplate.execute(status -> {
+            assertThat(memberPointRepository.existsByMemberId(MEMBER_ID)).isFalse();
+            bothSawMissing.countDown();
+            awaitOrFail(bothSawMissing);
+            return pointCommandService.expireMember(MEMBER_ID, today);
+        });
+    }
+
+    // 상대 트랜잭션이 15초 안에 오지 않으면 멈추지 않고 실패로 끝낸다
+    private static void awaitOrFail(CountDownLatch latch) {
+        try {
+            if (!latch.await(15, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("15초 안에 상대 트랜잭션의 존재 확인이 끝나지 않았습니다.");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("존재 확인을 기다리다 중단됐습니다.", e);
+        }
+    }
+
     // 만료 건(어제 만료)과 유효 건(1년 뒤 만료)을 만들고 잔액을 두 잔량의 합으로 맞춘다
     private Long[] holdPoints(long staleAmount, long validAmount) {
         LocalDateTime now = LocalDateTime.now(clock);

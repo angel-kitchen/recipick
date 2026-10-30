@@ -45,7 +45,10 @@ public class PointCommandService {
     private final PointHistoryRepository pointHistoryRepository;
     private final Clock clock;
 
-    // 주문 생성에서 주문 INSERT 뒤·재고 차감 전에 부른다
+    // 주문 생성에서 주문 INSERT 뒤·재고 차감 전에, 이 트랜잭션이 만든 주문 ID로만 부른다.
+    // 같은 주문의 중복 예약은 이 메서드가 아니라 OrderFacade의 선행 계약(회원 행 잠금 → 같은 키면 기존 주문 반환 → 새 주문
+    // INSERT 뒤 호출)이 막는다. 아래 같은 주문 확인은 잠그지 않는 조회라 다른 트랜잭션의 커밋을 못 볼 수 있어서,
+    // 그 계약 없이 다른 Facade가 직접 부르면 같은 주문에 두 번 예약될 수 있다
     @Transactional(propagation = Propagation.MANDATORY)
     public void reserveUsage(Long memberId, Long orderId, long usedPoint) {
         requireId(memberId, "회원 ID");
@@ -61,7 +64,10 @@ public class PointCommandService {
         LocalDate today = now.toLocalDate();
         MemberPoint memberPoint = lockMemberPoint(memberId, now);
 
-        List<PointUsage> existing = pointUsageRepository.findAllByOrderIdForUpdate(orderId);
+        // 같은 트랜잭션이 다시 부르면 앞서 만든 사용 행이 있지만 첫 예약에는 행이 없다. 없는 행을 잠그며 찾으면
+        // order_id 인덱스의 빈 구간이 잠겨 다른 회원 주문의 INSERT와 교착하므로 잠그지 않고 읽는다.
+        // 같은 회원의 재호출은 바로 위 MEMBER_POINT 잠금에서 이미 줄을 선다
+        List<PointUsage> existing = pointUsageRepository.findAllByOrderIdOrderByIdAsc(orderId);
         if (!existing.isEmpty()) {
             requireSameReservation(orderId, existing, usedPoint);
             return;
@@ -256,9 +262,13 @@ public class PointCommandService {
             || earning.getStatus() == PointEarningStatus.EXPIRED;
     }
 
-    // 회원 포인트 변경의 첫 잠금. 처음 포인트를 다루는 회원은 잠글 행이 없어 먼저 행을 보장한다
+    // 회원 포인트 변경의 첫 잠금. 처음 포인트를 다루는 회원은 잠글 행이 없어 먼저 행을 보장한다.
+    // 행이 있는 회원에게도 INSERT를 시도하면 PK 끝의 빈 구간 잠금이 커밋까지 남아 모든 회원의 포인트 변경이 한 줄로 서므로,
+    // 잠그지 않는 조회로 없을 때만 넣고 있으면 유니크 키로만 잠근다. 처음 쓰는 회원이 동시에 와도 member_id UNIQUE가 막는다
     private MemberPoint lockMemberPoint(Long memberId, LocalDateTime now) {
-        memberPointRepository.insertIfAbsent(memberId, now);
+        if (!memberPointRepository.existsByMemberId(memberId)) {
+            memberPointRepository.insertIfAbsent(memberId, now);
+        }
         return memberPointRepository.findByMemberIdForUpdate(memberId)
             .orElseThrow(() -> new IllegalStateException("회원 포인트 행을 보장한 뒤에도 찾을 수 없습니다. memberId=" + memberId));
     }
