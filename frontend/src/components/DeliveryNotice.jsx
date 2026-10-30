@@ -12,8 +12,11 @@ export default function DeliveryNotice() {
 
   return (
     <div className="container delivery-notice">
-      <div className={`notice ${block.tone === 'info' ? 'notice--info' : ''}`} role="status">
-        {block.notice} <Link to="/addresses">{block.label}</Link>
+      <div className={`notice notice--action ${block.tone === 'info' ? 'notice--info' : ''}`} role="status">
+        <span>{block.notice}</span>
+        <Link to="/addresses" className="btn btn--muted">
+          {block.label}
+        </Link>
       </div>
     </div>
   );
