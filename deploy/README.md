@@ -61,12 +61,25 @@
    cp releases/<SHA>/.env.example .env && chmod 600 .env
    vi .env    # IMAGE=<계정ID>.dkr.ecr.ap-northeast-2.amazonaws.com/recipick, 비밀번호, JWT_SECRET, PORTONE_*, BACKUP_BUCKET
    ```
-4. 같은 묶음으로 배포한다. MySQL·Redis가 없으면 스크립트가 먼저 띄우고 healthy가 될 때까지 기다린다.
+4. 인증서를 먼저 준비한다. 저장소의 nginx는 HTTPS 설정(`app-https.conf`)이라 인증서가 없으면 nginx가 뜨지 못하고, 첫 배포라 돌아갈 이전 설정도 없다.
+   - 기존 서버를 옮기는 경우: 옛 서버의 `/opt/recipick/certbot/`을 그대로 복사한다.
+   - 새로 발급하는 경우: 도메인 A 레코드가 새 서버를 가리키게 한 뒤, nginx가 아직 없어 80번이 비어 있으므로 standalone으로 발급한다.
+   ```bash
+   mkdir -p /opt/recipick/certbot/www /opt/recipick/certbot/conf
+   docker run --rm -p 80:80 -v /opt/recipick/certbot/conf:/etc/letsencrypt certbot/certbot:v4.1.1 \
+     certonly --standalone -d <도메인> -d www.<도메인> --email <메일> --agree-tos --no-eff-email
+   ```
+   standalone으로 받은 인증서는 갱신도 standalone으로 시도해 nginx가 80번을 쓰는 동안 실패한다. 5번 배포가 끝나면 갱신 방식을 webroot로 바꾼다.
+   ```bash
+   cd /opt/recipick
+   docker compose --profile certbot run --rm certbot reconfigure --cert-name <도메인> --webroot -w /var/www/certbot
+   ```
+5. 같은 묶음으로 배포한다. MySQL·Redis가 없으면 스크립트가 먼저 띄우고 healthy가 될 때까지 기다린다.
    ```bash
    bash releases/<SHA>/scripts/deploy.sh <SHA>
    ```
-5. 운영 관리자 계정을 SQL로 한 번 만든다. 로컬 관리자 시드(`data-admin-local.sql`)의 비밀번호 해시는 쓰지 않는다. 비밀번호 해시는 로컬에서 앱의 인코더로 만들어 가져온다.
-6. `docs/deploy-strategy.md` 10-1 체크리스트대로 확인한다. 가장 먼저 `curl http://<Elastic IP>/api/categories`.
+6. 운영 관리자 계정을 SQL로 한 번 만든다. 로컬 관리자 시드(`data-admin-local.sql`)의 비밀번호 해시는 쓰지 않는다. 비밀번호 해시는 로컬에서 앱의 인코더로 만들어 가져온다.
+7. `docs/deploy-strategy.md` 10-1 체크리스트대로 확인한다. 가장 먼저 `curl -L https://<도메인>/api/categories`.
 
 이후 배포는 워크플로가 한다. 서버에서 수동으로 배포할 때도 같은 명령을 쓴다.
 
