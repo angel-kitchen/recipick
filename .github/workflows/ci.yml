@@ -56,10 +56,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew test
 
-  # PR에서도 돌려 빌드가 깨진 프론트가 머지되지 않게 한다. 결과물은 deploy-frontend가 받아 서버에 올린다
+  # PR에서도 돌려 빌드가 깨진 프론트가 머지되지 않게 한다. 결과물은 deploy-frontend가 받아 서버에 올린다.
+  # 배포 브랜치에서 백엔드를 배포하는 실행은 프론트가 안 바뀌어도 빌드해 같은 커밋으로 다시 올린다.
+  # 앞 커밋의 백엔드 배포가 대기 중에 이 실행으로 교체되면 그 커밋의 프론트 배포도 같이 사라지기 때문이다
   frontend-build:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: >-
+      needs.changes.outputs.frontend == 'true' ||
+      (needs.changes.outputs.backend == 'true' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_name == vars.DEPLOY_BRANCH)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -207,7 +213,7 @@ jobs:
             exit 1
           fi
 
-  # 프론트 정적 파일만 바꾼다. 앱을 재시작하지 않아 끊김이 없다.
+  # 프론트 정적 파일만 바꾼다. 앱을 재시작하지 않아 끊김이 없고, 같은 내용을 다시 올려도 링크만 바뀐다.
   # 백엔드도 바뀐 push면 백엔드 배포가 성공한 뒤에만 돈다. 새 화면이 아직 없는 API를 부르는 순간을 만들지 않기 위해서다
   deploy-frontend:
     needs: [changes, frontend-build, deploy]
