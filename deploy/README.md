@@ -163,7 +163,7 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | 배포는 성공했지만 기능이 잘못됨 | `bash /opt/recipick/releases/<이전 SHA>/scripts/deploy.sh <이전 SHA>`. 묶음이 정리되어 없으면 `/opt/recipick/scripts/deploy.sh <이전 SHA>`(현재 설정으로 이미지만 바꾼다) |
 | 스키마가 문제(아래) | 수동 |
 | 프론트 배포가 실패 | `current`는 이전 버전 그대로다(묶음 검사 실패) 또는 스크립트가 직전 버전으로 되돌렸다(nginx 확인 실패) |
-| 프론트는 배포됐지만 화면이 잘못됨 | 링크만 직전 버전으로 바꾼다. 앱·nginx 재시작은 필요 없다. `cd /opt/recipick-web && ls -1t releases` 로 직전 SHA를 고른 뒤 `ln -sfn releases/<직전 SHA> current.tmp && mv -T current.tmp current`. 다음 배포(백엔드만 바뀐 머지 포함)가 그 커밋의 화면을 다시 올리므로, 고친 커밋을 머지하기 전까지는 배포를 멈추거나 되돌린 화면이 덮어써질 수 있음을 팀에 알린다 |
+| 프론트는 배포됐지만 화면이 잘못됨 | 링크만 직전 버전으로 바꾼다. 앱·nginx 재시작은 필요 없다. 되돌릴 SHA는 Actions에서 마지막으로 정상이던 배포 실행의 커밋으로 고른다(`ls -1t releases`는 배포 순서라, 되돌린 뒤 백엔드만 바뀐 머지가 문제 있는 화면을 다시 올렸으면 그 문제 버전이 직전으로 보인다). `releases/<SHA>`가 남아 있는지 확인한 뒤 `ln -sfn releases/<직전 SHA> current.tmp && mv -T current.tmp current`. 다음 배포(백엔드만 바뀐 머지 포함)가 그 커밋의 화면을 다시 올리므로, 고친 커밋을 머지하기 전까지는 배포를 멈추거나 되돌린 화면이 덮어써질 수 있음을 팀에 알린다 |
 
 **스키마 복구.** `ddl-auto: update`는 컬럼을 추가만 하므로 이미지를 되돌려도 스키마는 남는다. 대부분은 남아도 문제가 없다. 이전 버전이 모르는 NOT NULL 컬럼이 생겨 INSERT가 실패할 때만 손댄다.
 
