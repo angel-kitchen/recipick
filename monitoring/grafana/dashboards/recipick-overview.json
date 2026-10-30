@@ -379,7 +379,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\",failure!=\"NONE\"}[5m])) or sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\"}[5m])) * 0) / sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\"}[5m]))",
+          "expr": "(((sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\",failure!=\"NONE\"}[5m]))) or sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\"}[5m])) * 0) / (sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\"}[5m])) > 0)) or sum by (type) (rate(recipick_ai_requests_total{job=\"recipick\"}[5m])) * 0",
           "legendFormat": "{{type}}"
         }
       ]

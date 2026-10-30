@@ -161,7 +161,8 @@
 | **이력 저장 시점에 지표 기록(선택)** | 이력과 같은 값(결과 상태·실패 사유·합산 토큰·응답 시간)이라 두 기록이 어긋나지 않음 | 조건 추천의 응답 시간은 두 호출을 합친 값 |
 
 ### 선택과 이유
-- `AiRequestLogService.save`가 이력을 저장한 뒤 `AiRequestMetrics.record`를 호출한다. 이력 INSERT가 실패하면 지표도 남기지 않는다.
+- `AiRequestLogService.save`가 이력을 저장하고, 트랜잭션이 커밋된 뒤(`afterCommit`)에 `AiRequestMetrics.record`를 호출한다. 자연어 장보기는 미리보기 저장과 같은 트랜잭션에서 이력을 남겨 저장 뒤에 롤백될 수 있으므로, 롤백되면 지표도 남기지 않는다.
+- 결과 상태·실패 사유 조합과 응답 시간은 앱이 뜰 때 0으로 미리 등록한다. 새 조합이 첫 요청 때 1로 처음 나타나면 Prometheus의 `increase`·`rate`가 그 요청을 0으로 계산해, 드물게 오는 첫 실패가 대시보드에서 빠지기 때문이다.
 - 지표 3개를 기존 Prometheus(관리 포트 `/actuator/prometheus`)로 내보낸다. 수집 설정은 바꾸지 않는다.
 
 | 지표(Prometheus 이름) | 태그 | 용도 |
@@ -180,7 +181,7 @@ AI 요청은 HTTP 요청보다 훨씬 드물어 1분 구간으로는 그래프�
 | 패널 | 쿼리 요지 |
 | --- | --- |
 | AI 요청 수(5분, 결과별) | `sum by (type, status) (increase(recipick_ai_requests_total[5m]))` |
-| AI 실패율(FALLBACK 비율) | `failure!="NONE"` 요청 비율, 실패가 없으면 0 |
+| AI 실패율(FALLBACK 비율) | `failure!="NONE"` 요청 비율. 실패가 없거나 5분 동안 요청이 없으면(0/0) 0 |
 | AI 실패 사유(5분) | `sum by (failure) (increase(...{failure!="NONE"}[5m]))` |
 | AI 응답 시간 p95 | `histogram_quantile(0.95, sum by (le, type) (rate(recipick_ai_latency_seconds_bucket[5m])))` |
 | AI 토큰 사용량(5분) | `sum by (model, kind) (increase(recipick_ai_tokens_total[5m]))` |
@@ -189,6 +190,8 @@ AI 요청은 HTTP 요청보다 훨씬 드물어 1분 구간으로는 그래프�
 - 조건 추천의 응답 시간은 두 호출의 합이라, 호출 한 번의 지연과 직접 비교하지 않는다. 기능별(`type`)로 나눠 본다.
 - 응답 시간 히스토그램을 켜서 지표 수가 조금 늘어난다. `type`이 2개라 늘어나는 양은 작다.
 - 토큰 지표는 비용 추정용이다. 실제 청구 금액은 Anthropic 콘솔 기준이다.
+- 토큰 지표의 모델명은 실행 중에 정해지는 값이라 미리 등록하지 않는다. 모델마다 첫 요청의 토큰은 증가량 그래프에서 빠질 수 있지만, 누적 합계에는 들어간다.
 
 ### 결과
-- `AiRequestMetricsTest`(단위 3개): 결과 상태·실패 사유별 건수, 응답 시간 합계, 토큰 종류별 합계, 받지 못한 토큰 제외, Prometheus 이름(`_total`, `_bucket`)을 확인했다.
+- `AiRequestMetricsTest`(단위 4개): 결과 상태·실패 사유별 건수, 응답 시간 합계, 토큰 종류별 합계, 받지 못한 토큰 제외, Prometheus 이름(`_total`, `_bucket`), 요청 전 0 등록을 확인했다.
+- `AiRequestLogServiceMetricsTest`(통합 2개): 커밋되면 지표가 한 번 기록되고, 바깥 트랜잭션이 롤백되면 이력과 지표가 모두 남지 않는 것을 확인했다.
