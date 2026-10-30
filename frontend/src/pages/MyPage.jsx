@@ -125,23 +125,31 @@ export default function MyPage() {
             <dt>이용 마트</dt>
             <dd>{member.mart?.name ?? '배송지를 등록하면 정해져요'}</dd>
             <dt>현재 배송지</dt>
-            <dd>
-              {member.currentAddress ? (
-                <>
-                  {member.currentAddress.address} {member.currentAddress.detailAddress}{' '}
-                  {!member.currentAddress.serviceAvailable && <span className="badge badge--warn">서비스 지역 아님</span>}
-                </>
-              ) : (
-                '등록된 배송지가 없어요'
-              )}{' '}
-              <Link to="/addresses">관리</Link>
+            <dd className="info-list__row">
+              <span>
+                {member.currentAddress ? (
+                  <>
+                    {member.currentAddress.address} {member.currentAddress.detailAddress}{' '}
+                    {!member.currentAddress.serviceAvailable && <span className="badge badge--warn">서비스 지역 아님</span>}
+                  </>
+                ) : (
+                  '등록된 배송지가 없어요'
+                )}
+              </span>
+              <Link to="/addresses" className="btn btn--muted">
+                관리
+              </Link>
             </dd>
             <dt>멤버십</dt>
-            <dd>
-              {member.membership?.active
-                ? `${MEMBERSHIP_TYPE[member.membership.type] ?? member.membership.type} · ${formatDateTime(member.membership.endAt)}까지`
-                : '이용 중이 아니에요'}{' '}
-              <Link to="/membership">자세히</Link>
+            <dd className="info-list__row">
+              <span>
+                {member.membership?.active
+                  ? `${MEMBERSHIP_TYPE[member.membership.type] ?? member.membership.type} · ${formatDateTime(member.membership.endAt)}까지`
+                  : '이용 중이 아니에요'}
+              </span>
+              <Link to="/membership" className="btn btn--muted">
+                자세히
+              </Link>
             </dd>
           </dl>
         </section>
