@@ -79,4 +79,25 @@ class AiRequestMetricsTest {
             .contains("recipick_ai_latency_seconds_bucket")
             .contains("recipick_ai_tokens_total{kind=\"input\",model=\"claude-opus-5-5\",type=\"AUTO_CART\"} 900.0");
     }
+
+    @Test
+    @DisplayName("요청이 오기 전에 결과 상태·실패 사유 조합과 응답 시간을 0으로 등록해 첫 요청도 증가량에 잡히게 한다")
+    void constructor_registersSeriesBeforeFirstRequest() {
+        // given
+        SimpleMeterRegistry fresh = new SimpleMeterRegistry();
+
+        // when
+        new AiRequestMetrics(fresh);
+
+        // then
+        assertThat(fresh.get(AiRequestMetrics.REQUESTS)
+            .tags("type", "AUTO_CART", "status", "FALLBACK", "failure", "TIMEOUT")
+            .counter().count()).isZero();
+        assertThat(fresh.get(AiRequestMetrics.REQUESTS)
+            .tags("type", "RECOMMENDATION", "status", "RECOMMENDED", "failure", "NONE")
+            .counter().count()).isZero();
+        assertThat(fresh.get(AiRequestMetrics.LATENCY).tags("type", "RECOMMENDATION").timer().count()).isZero();
+        assertThat(fresh.find(AiRequestMetrics.REQUESTS).tags("status", "PREVIEWED", "failure", "TIMEOUT")
+            .counter()).isNull();
+    }
 }
