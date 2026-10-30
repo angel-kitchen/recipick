@@ -182,7 +182,7 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
      gunzip -c "$DUMP" | docker exec -i recipick-mysql sh -c "MYSQL_PWD=\$MYSQL_ROOT_PASSWORD mysql \$MYSQL_DATABASE"
      echo "가져오기 성공. 앱을 다시 배포한다"
      bash "releases/$PREV/scripts/deploy.sh" "$PREV"
-   ' || echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"
+   ' || { echo "복원 중단. 앱은 멈춘 상태로 둔다. 원인을 확인한 뒤 다시 시도한다"; false; }
    ```
    중간에 실패하면 DB가 비었거나 일부만 들어간 상태일 수 있다. 앱을 그 상태로 띄우지 않는 것이 이 순서의 목적이다.
    pre-deploy 덤프의 이름 끝은 **그 덤프 직후에 배포한 SHA**다. 문제 배포의 SHA가 붙은 덤프가 문제 배포 직전 상태다.
