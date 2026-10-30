@@ -33,13 +33,17 @@ AI가 직접 판단하는 부분만 잰다. 후보 거르기·인분 범위·중
 비용이 드는 실제 호출이라 평소 `./gradlew test`와 CI에서는 건너뛴다. 키가 있는 환경에서 아래처럼 실행한다.
 
 ```bash
-AI_EVAL=true ANTHROPIC_API_KEY=<키> AI_EVAL_MODEL=claude-opus-5-5 ./gradlew test --tests '*ClaudeAiEvaluationTest' --rerun
+read -s "ANTHROPIC_API_KEY?키 입력: " && export ANTHROPIC_API_KEY
+AI_EVAL=true AI_EVAL_MODEL=claude-opus-5-5 ./gradlew test --tests '*ClaudeAiEvaluationTest' --rerun
+unset ANTHROPIC_API_KEY
 ```
 
+- 키는 명령어에 직접 쓰지 않고 `read -s`로 입력받는다. 명령어에 쓰면 셸 기록(`~/.zsh_history`)에 남는다.
 - `AI_EVAL_MODEL`을 바꿔 같은 문장으로 모델을 비교한다(기본값 `claude-opus-5-5`).
 - `--rerun`이 없으면 Gradle이 이전 결과를 재사용해 다시 호출하지 않는다.
 - 결과는 `build/ai-eval/{모델}-{시각}.md`에 문장별 정답 여부·AI 응답·응답 시간과 합계로 남는다.
-- 한 번 실행에 호출 50번이 든다.
+- 한 번 실행에 문장 50개(장보기 30, 조건 20)를 한 번씩 호출한다. 429·5xx·연결 오류는 SDK가 최대 2번 재시도하므로 실제 호출은 더 늘 수 있다.
+- 타임아웃(15초)·재시도(2회)·최대 토큰(4096)은 운영 기본값(`ClaudeProperties`)과 같게 둬, 운영에서 시간 초과될 응답은 평가에서도 실패로 센다.
 
 ## 5. 결과
 실행 후 `build/ai-eval/`의 요약을 옮겨 적는다.
