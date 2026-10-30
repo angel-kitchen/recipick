@@ -119,9 +119,11 @@ function QuickAdd({ recipe }) {
   );
 }
 
-async function fetchAll(filters) {
+// 효과가 정리되면(isCanceled) 남은 쪽을 더 받지 않는다
+async function fetchAll(filters, isCanceled) {
   let content = [];
   for (let page = 0; ; page += 1) {
+    if (isCanceled()) return content;
     const data = await api.get('/api/recipes', { ...filters, page, size: FETCH_SIZE });
     content = content.concat(data.content);
     if (page + 1 >= data.totalPages) return content;
@@ -147,7 +149,7 @@ export default function Recipes() {
     let ignore = false;
     setError(null);
     const load = sort
-      ? fetchAll(filters).then((list) => !ignore && setAll(list))
+      ? fetchAll(filters, () => ignore).then((list) => !ignore && setAll(list))
       : api.get('/api/recipes', { ...filters, page, size: PAGE_SIZE }).then((data) => !ignore && setResult(data));
     load.catch((e) => !ignore && setError(e));
     return () => {

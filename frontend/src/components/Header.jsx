@@ -27,19 +27,23 @@ export default function Header() {
     if (menuRef.current) menuRef.current.open = false;
   }, [pathname]);
 
-  // 쿠팡·네이버처럼 장바구니 아이콘 옆에 담긴 개수를 보여 준다. 화면을 옮길 때마다 새로 읽는다
+  // 쿠팡·네이버처럼 장바구니 아이콘 옆에 담긴 개수를 보여 준다. 화면을 옮길 때와 담기·삭제 뒤에 새로 읽는다
   useEffect(() => {
     if (!member) {
       setCartCount(0);
       return undefined;
     }
     let ignore = false;
-    api
-      .get('/api/cart-items')
-      .then((cart) => !ignore && setCartCount(cart.items.length))
-      .catch(() => {});
+    const reload = () =>
+      api
+        .get('/api/cart-items')
+        .then((cart) => !ignore && setCartCount(cart.items.length))
+        .catch(() => {});
+    reload();
+    window.addEventListener('cart-changed', reload);
     return () => {
       ignore = true;
+      window.removeEventListener('cart-changed', reload);
     };
   }, [member, pathname]);
 

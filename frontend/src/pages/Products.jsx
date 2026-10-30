@@ -9,13 +9,14 @@ import RecentViews from '../components/RecentViews';
 import { CardSkeletons } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
+import { notifyCartChanged } from '../cartSource';
 import { formatAmount, formatWon } from '../labels';
 
 const PAGE_SIZE = 12;
 
 export default function Products() {
   const { member } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState([]);
@@ -51,10 +52,19 @@ export default function Products() {
     setError(null);
     try {
       await api.post('/api/cart-items', { productId: product.productId, quantity: 1 });
+      notifyCartChanged();
       toast.show(`${product.name}을(를) 장바구니에 담았어요.`, { to: '/cart', label: '장바구니 보기' });
     } catch (e) {
       setError(e);
     }
+  };
+
+  // 검색어·카테고리를 화면 상태로 들고 있어서 주소만 옮겨서는 지워지지 않는다. 주소의 검색어도 함께 비운다
+  const clearFilters = () => {
+    setKeyword('');
+    setCategoryId('');
+    setPage(0);
+    setSearchParams({});
   };
 
   return (
@@ -97,7 +107,7 @@ export default function Products() {
       <ErrorNotice error={error} />
       {!result && !error && <CardSkeletons />}
       {result?.content.length === 0 && (
-        <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 카테고리를 바꿔 보세요." actions={[{ to: '/products', label: '조건 지우기' }]} />
+        <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 카테고리를 바꿔 보세요." actions={[{ onClick: clearFilters, label: '조건 지우기' }]} />
       )}
 
       <div className="grid">

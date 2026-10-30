@@ -8,40 +8,55 @@ import { ListSkeleton } from '../components/Skeleton';
 import { AUTO_CART_STATUS, formatDateTime, formatWon } from '../labels';
 
 const PAGE_SIZE = 10;
+const FETCH_SIZE = 100;
 
-// 자동 담기 미리보기를 만든 기록. 누르면 그 미리보기를 다시 열어 담을 수 있다
+// 서버 목록에는 담기 전 미리보기(PREVIEWED)도 들어 있다. 레시피를 열 때마다 생기는 임시 기록이라
+// 담은 기록(CONFIRMED)만 모아 보여 주고, 쪽 나누기는 걸러낸 뒤에 한다
+async function fetchConfirmed(isCanceled) {
+  let list = [];
+  for (let page = 0; ; page += 1) {
+    if (isCanceled()) return list;
+    const data = await api.get('/api/auto-carts', { page, size: FETCH_SIZE });
+    list = list.concat(data.content.filter((item) => item.status === 'CONFIRMED'));
+    if (page + 1 >= data.totalPages) return list;
+  }
+}
+
+// 자동 담기로 장바구니에 담은 기록. 누르면 그 기록을 다시 볼 수 있다
 export default function AutoCartHistory() {
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState(null);
+  const [all, setAll] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let ignore = false;
-    api
-      .get('/api/auto-carts', { page, size: PAGE_SIZE })
-      .then((data) => !ignore && setResult(data))
+    fetchConfirmed(() => ignore)
+      .then((list) => !ignore && setAll(list))
       .catch((e) => !ignore && setError(e));
     return () => {
       ignore = true;
     };
-  }, [page]);
+  }, []);
+
+  const totalPages = all ? Math.ceil(all.length / PAGE_SIZE) : 0;
+  const content = all ? all.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) : [];
 
   return (
     <div className="container page">
       <h1 className="page__title">자동 담기 기록</h1>
       <ErrorNotice error={error} />
-      {!result && !error && <ListSkeleton />}
-      {result?.content.length === 0 && (
+      {!all && !error && <ListSkeleton />}
+      {all?.length === 0 && (
         <EmptyState
           icon="recipe"
           title="자동 담기 기록이 없어요"
-          hint="레시피에서 재료 미리보기를 만들면 여기에 남아요."
+          hint="레시피에서 재료를 장바구니에 담으면 여기에 남아요."
           actions={[{ to: '/recipes', label: '레시피 보러 가기' }]}
         />
       )}
-      {result?.content.length > 0 && (
+      {content.length > 0 && (
         <section className="card">
-          {result.content.map((item) => (
+          {content.map((item) => (
             <Link key={item.autoCartRequestId} to={`/auto-carts/${item.autoCartRequestId}`} className="order-row">
               <span>
                 <span className="cart-row__name">{item.menuSummary}</span>
@@ -59,7 +74,7 @@ export default function AutoCartHistory() {
           ))}
         </section>
       )}
-      {result && <Pager page={result.page} totalPages={result.totalPages} onChange={setPage} />}
+      {all && <Pager page={page} totalPages={totalPages} onChange={setPage} />}
     </div>
   );
 }

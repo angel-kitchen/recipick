@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api/client';
 import ErrorNotice from '../../components/ErrorNotice';
 import { MART_STATUS } from '../../labels';
+import { useAdmin } from '../AdminContext';
 import useLoad from '../useLoad';
 
 function MartForm({ mart, onDone, onCancel }) {
@@ -136,17 +137,22 @@ export default function AdminMarts() {
   const { data, error, reload } = useLoad(() => api.get('/api/admin/marts'), []);
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
+  const { admin } = useAdmin();
+  // 서버가 마트 등록을 SUPER_ADMIN에게만 허용한다
+  const canCreate = admin.role === 'SUPER_ADMIN';
 
   return (
     <>
       <div className="admin__head">
         <h1 className="page__title">마트</h1>
-        <button type="button" className="btn" onClick={() => setCreating(true)}>
-          마트 등록
-        </button>
+        {canCreate && (
+          <button type="button" className="btn" onClick={() => setCreating(true)}>
+            마트 등록
+          </button>
+        )}
       </div>
       <ErrorNotice error={error} />
-      {creating && (
+      {canCreate && creating && (
         <MartCreateForm
           onDone={() => {
             setCreating(false);

@@ -7,11 +7,11 @@ import useLoad from '../useLoad';
 
 const MEMBERSHIP_TYPE = { PAID: '유료', TRIAL: '체험' };
 
-function MembershipHistory({ member, onClose }) {
+function MembershipHistory({ member, version, onClose }) {
   const [page, setPage] = useState(0);
   const { data, error } = useLoad(
     () => api.get(`/api/admin/members/${member.memberId}/memberships`, { page, size: 10 }),
-    [member.memberId, page],
+    [member.memberId, page, version],
   );
 
   return (
@@ -71,6 +71,8 @@ export default function AdminMembers() {
   const [message, setMessage] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [historyMember, setHistoryMember] = useState(null);
+  // 지급하면 올려서, 열려 있는 이력도 새로 읽게 한다
+  const [historyVersion, setHistoryVersion] = useState(0);
   const { data, error, reload } = useLoad(() => api.get('/api/admin/members', { ...filter, page, size: 20 }), [filter, page]);
 
   const setFilterValue = (key) => (e) => {
@@ -86,6 +88,7 @@ export default function AdminMembers() {
       const result = await api.post(`/api/admin/members/${member.memberId}/memberships`);
       setMessage(`멤버십을 지급했습니다. 종료 ${formatDateTime(result.endAt)}`);
       reload();
+      setHistoryVersion((value) => value + 1);
     } catch (e) {
       setActionError(e);
     }
@@ -108,7 +111,12 @@ export default function AdminMembers() {
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error ?? actionError} />
       {historyMember && (
-        <MembershipHistory key={historyMember.memberId} member={historyMember} onClose={() => setHistoryMember(null)} />
+        <MembershipHistory
+          key={historyMember.memberId}
+          member={historyMember}
+          version={historyVersion}
+          onClose={() => setHistoryMember(null)}
+        />
       )}
       <div className="card table-wrap">
         <table className="table">

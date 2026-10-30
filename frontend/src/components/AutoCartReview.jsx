@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { rememberSources } from '../cartSource';
+import { notifyCartChanged, rememberSources } from '../cartSource';
 import { UNAVAILABLE_REASON, formatAmount, formatWon } from '../labels';
 import ErrorNotice from './ErrorNotice';
 import usePreviousMartGuard from './usePreviousMartGuard';
@@ -71,10 +71,12 @@ export default function AutoCartReview({ preview, disabled = false }) {
         done.push({ ...line, total: res?.quantity ?? line.quantity });
       }
       rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
+      notifyCartChanged();
       setAdded({ lines: done });
     } catch (e) {
       // 일부만 담겼을 수 있어 담긴 만큼은 기억해 장바구니에서 레시피가 보이게 한다
       rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
+      if (done.length > 0) notifyCartChanged();
       setError(
         done.length > 0 ? new Error(`${e.message} (앞의 ${done.length}개는 장바구니에 담겼습니다. 장바구니를 확인해 주세요.)`) : e,
       );

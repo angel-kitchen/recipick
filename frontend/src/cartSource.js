@@ -18,6 +18,9 @@ function write(memberId, value) {
   }
 }
 
+// 헤더의 장바구니 개수가 화면을 옮기지 않아도 바로 바뀌도록 담기·삭제 성공 뒤에 알린다
+export const notifyCartChanged = () => window.dispatchEvent(new Event('cart-changed'));
+
 export function rememberSources(memberId, productIds, recipeNames) {
   const all = read(memberId);
   productIds.forEach((productId) => {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
+import { notifyCartChanged } from '../cartSource';
 import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
 import { PRODUCT_STATUS, formatAmount, formatWon } from '../labels';
@@ -14,6 +15,9 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState(null);
+  // 요청 중에는 다시 담지 않는다. 연달아 눌러도 막히도록 상태가 아니라 ref로 먼저 확인한다
+  const adding = useRef(false);
+  const [busy, setBusy] = useState(false);
   const toast = useToast();
   const { member } = useAuth();
   const { guard, modal } = usePreviousMartGuard();
@@ -37,14 +41,21 @@ export default function ProductDetail() {
 
   // 담기에 성공하면 true. 바로 구매는 이 값을 보고 장바구니로 넘어간다
   const addToCart = async () => {
+    if (adding.current) return false;
+    adding.current = true;
+    setBusy(true);
     setError(null);
     try {
       await api.post('/api/cart-items', { productId: product.productId, quantity });
+      notifyCartChanged();
       toast.show(`${product.name} ${quantity}개를 장바구니에 담았어요.`, { to: '/cart', label: '장바구니 보기' });
       return true;
     } catch (e) {
       setError(e);
       return false;
+    } finally {
+      adding.current = false;
+      setBusy(false);
     }
   };
 
@@ -96,12 +107,13 @@ export default function ProductDetail() {
                 </button>
               </div>
               <div className="row-actions">
-                <button type="button" className="btn btn--outline" onClick={() => guard(addToCart)}>
+                <button type="button" className="btn btn--outline" disabled={busy} onClick={() => guard(addToCart)}>
                   장바구니 담기
                 </button>
                 <button
                   type="button"
                   className="btn"
+                  disabled={busy}
                   onClick={() =>
                     guard(async () => {
                       if (await addToCart()) navigate('/cart');

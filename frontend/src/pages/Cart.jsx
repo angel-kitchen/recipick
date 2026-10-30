@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { readSources } from '../cartSource';
+import { notifyCartChanged, readSources } from '../cartSource';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
@@ -52,6 +52,7 @@ export default function Cart() {
     setError(null);
     try {
       await action();
+      notifyCartChanged();
       await load();
     } catch (e) {
       setError(e);
@@ -131,7 +132,10 @@ export default function Cart() {
               ))}
             </div>
           )}
-          {recipes.length > 1 && <div className="tile__meta">여러 레시피에 함께 쓰여요</div>}
+          {/* 이름 끝의 인분을 떼고 세어야 인분만 다른 같은 레시피가 여러 레시피로 잡히지 않는다 */}
+          {new Set(recipes.map((name) => name.replace(/ \d+인분$/, ''))).size > 1 && (
+            <div className="tile__meta">여러 레시피에 함께 쓰여요</div>
+          )}
           <div className="cart-row__name">{item.productName}</div>
           <div className="tile__meta">
             {formatAmount(item.saleUnitAmount, item.saleUnit)} · {formatWon(item.price)}
