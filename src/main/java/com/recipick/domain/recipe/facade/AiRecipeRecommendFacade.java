@@ -49,13 +49,20 @@ public class AiRecipeRecommendFacade {
         }
 
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(conditionResult.content());
-        List<Recipe> candidates = recipeService.findRecommendCandidates(condition);
+        // 조건을 하나도 읽지 못했는데 전체 레시피에서 고르면 문장과 무관한 추천이 나가므로 후보를 비운다
+        List<Recipe> candidates = condition.isEmpty() ? List.of() : recipeService.findRecommendCandidates(condition);
         if (candidates.isEmpty()) {
             saveLog(memberId, text, AiResultStatus.NO_MATCH, conditionResult, List.of());
             return AiRecipeRecommendResponse.noMatch();
         }
 
         AiResult<List<AiRecommendedRecipe>> pickResult = aiClient.recommendRecipes(text, toOptions(candidates));
+        // 빈 목록은 AI가 후보 중 맞는 레시피가 없다고 판단한 것이라 장애가 아닌 정상 결과다
+        if (pickResult.isSuccess() && pickResult.content().isEmpty()) {
+            saveLog(memberId, text, AiResultStatus.NO_MATCH,
+                combine(conditionResult, pickResult, null), List.of());
+            return AiRecipeRecommendResponse.noMatch();
+        }
         List<Recommendation> recommendations = pickResult.isSuccess()
             ? AiRecipeRecommendResolver.select(pickResult.content(), candidates)
             : List.of();

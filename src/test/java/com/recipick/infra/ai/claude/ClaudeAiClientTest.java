@@ -13,11 +13,8 @@ import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.Usage;
 import com.recipick.infra.ai.claude.ClaudeAiClient.ConditionOutput;
 import com.recipick.infra.ai.claude.ClaudeAiClient.MenuOutput;
-import com.recipick.infra.ai.dto.AiExtractedMenu;
-import com.recipick.infra.ai.dto.AiFailureType;
-import com.recipick.infra.ai.dto.AiRecipeConditions;
-import com.recipick.infra.ai.dto.AiRecipeOption;
-import com.recipick.infra.ai.dto.AiResult;
+import com.recipick.infra.ai.dto.*;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -79,5 +76,30 @@ class ClaudeAiClientTest {
 
         // then
         assertThat(conditions).isEqualTo(new AiRecipeConditions("KOREAN", "STEW", 20, 0, List.of("오이")));
+    }
+
+    @Test
+    @DisplayName("추천 응답 블록이 없으면 맞는 레시피가 없다는 뜻으로 오해하지 않도록 실패로 돌려준다")
+    @SuppressWarnings("unchecked")
+    void recommendRecipes_failsWhenNoResponseBlock() {
+        // given
+        StructuredMessage<ClaudeAiClient.RecommendOutput> message = mock(StructuredMessage.class);
+        Usage usage = mock(Usage.class);
+        when(usage.inputTokens()).thenReturn(900L);
+        when(usage.outputTokens()).thenReturn(10L);
+        when(usage.cacheReadInputTokens()).thenReturn(Optional.empty());
+        when(message.usage()).thenReturn(usage);
+        when(message.model()).thenReturn(Model.of("claude-opus-5-5"));
+        when(message.stopReason()).thenReturn(Optional.of(StopReason.END_TURN));
+        when(message.content()).thenReturn(List.of());
+        when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+
+        // when
+        AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(
+            "찌개 추천", List.of(new AiRecipeOption(1L, "김치찌개")));
+
+        // then
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.failureType()).isEqualTo(AiFailureType.INVALID_RESPONSE);
     }
 }

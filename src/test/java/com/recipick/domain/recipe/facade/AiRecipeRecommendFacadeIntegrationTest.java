@@ -272,6 +272,43 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("분석한 조건이 하나도 없으면 전체 레시피에서 고르지 않고 NO_MATCH를 준다")
+    void recommend_noMatchWhenNoConditionRead() {
+        // given
+        givenConditions(new AiRecipeConditions(null, null, null, null, List.of()));
+
+        // when
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "통오징어찜");
+
+        // then
+        assertThat(response.status()).isEqualTo(AiResultStatus.NO_MATCH);
+        verify(aiClient, never()).recommendRecipes(anyString(), anyList());
+        assertThat(findLogs()).singleElement().satisfies(log -> {
+            assertThat(log.isSuccess()).isTrue();
+            assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH);
+        });
+    }
+
+    @Test
+    @DisplayName("AI가 후보 중 맞는 레시피가 없다고 빈 목록을 주면 장애가 아니라 NO_MATCH로 본다")
+    void recommend_noMatchWhenAiPicksNothing() {
+        // given
+        givenConditions(CONDITIONS);
+        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(List.of(), PICK_USAGE));
+
+        // when
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "통오징어찜 같은 찌개");
+
+        // then
+        assertThat(response.status()).isEqualTo(AiResultStatus.NO_MATCH);
+        assertThat(findLogs()).singleElement().satisfies(log -> {
+            assertThat(log.isSuccess()).isTrue();
+            assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH);
+            assertThat(log.getFailureReason()).isNull();
+        });
+    }
+
+    @Test
     @DisplayName("멤버십이 없으면 AI를 부르기 전에 거절한다")
     void recommend_rejectsWithoutMembership() {
         // given
