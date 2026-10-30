@@ -3,8 +3,15 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import AutoCartReview from '../components/AutoCartReview';
+import BookmarkButton from '../components/BookmarkButton';
 import ErrorNotice from '../components/ErrorNotice';
+import { ListSkeleton } from '../components/Skeleton';
 import { CUISINE, DIFFICULTY, DISH_TYPE, formatAmount } from '../labels';
+import { recordRecent } from '../recentViews';
+
+// 서버가 받는 인분 범위
+const MIN_SERVINGS = 1;
+const MAX_SERVINGS = 10;
 
 // watch?v=, youtu.be/, embed/, shorts/ 주소에서 11자리 영상 ID를 꺼낸다. 형식이 다르면 null이라 임베드하지 않는다
 function youtubeId(url) {
@@ -33,14 +40,15 @@ function AutoCartPanel({ recipe, member }) {
   // 선택 재료를 빠르게 여러 번 누를 때 늦게 온 이전 응답이 최신 미리보기를 덮지 않게 마지막 요청만 반영한다
   const latestRequest = useRef(0);
 
-  // 인분이 바뀌면 이전 미리보기는 맞지 않는다. 선택 재료는 미리보기를 접지 않고 toggleOptional에서 다시 계산한다
+  // 화면을 열면 미리보기를 바로 펼치고, 인분이 바뀌면 접지 않고 그 자리에서 다시 계산한다.
+  // 담을 수 없는 경우(멤버십·배송지 없음 등)에는 계산하지 않는다
   useEffect(() => {
-    latestRequest.current += 1;
-    setPreview(null);
-    setLoading(false);
-  }, [recipe.servings, recipe.recipeId]);
+    if (!blocked) makePreview(optionalIds, true);
+    // 처음 열 때와 인분이 바뀔 때만 계산한다(선택 재료 변경은 toggleOptional이 맡는다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe.servings]);
 
-  const makePreview = async (ids) => {
+  const makePreview = async (ids, dropOnError = false) => {
     const requestId = ++latestRequest.current;
     setError(null);
     setLoading(true);
@@ -53,6 +61,8 @@ function AutoCartPanel({ recipe, member }) {
     } catch (e) {
       if (requestId !== latestRequest.current) return;
       setError(e);
+      // 인분이 바뀐 뒤 계산에 실패하면 옛 인분의 미리보기가 남지 않게 접는다
+      if (dropOnError) setPreview(null);
       return false;
     } finally {
       if (requestId === latestRequest.current) setLoading(false);
@@ -107,14 +117,16 @@ function AutoCartPanel({ recipe, member }) {
             </div>
           )}
           <ErrorNotice error={error} />
-          {!preview ? (
-            <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={loading} onClick={() => makePreview(optionalIds)}>
-              {loading ? '계산하는 중...' : '재료 미리보기'}
-            </button>
-          ) : (
+          {preview ? (
             <div style={{ marginTop: 12 }}>
               <AutoCartReview preview={preview} disabled={loading} />
             </div>
+          ) : loading ? (
+            <ListSkeleton rows={5} />
+          ) : (
+            <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} onClick={() => makePreview(optionalIds)}>
+              재료 다시 불러오기
+            </button>
           )}
         </>
       )}
@@ -122,9 +134,18 @@ function AutoCartPanel({ recipe, member }) {
   );
 }
 
+// 다른 레시피로 넘어가면 인분·선택 재료·미리보기가 모두 처음 상태여야 해서 레시피마다 새로 만든다
 export default function RecipeDetail() {
   const { recipeId } = useParams();
-  const [servings, setServings] = useState(null);
+  return <RecipeDetailView key={recipeId} recipeId={recipeId} />;
+}
+
+function RecipeDetailView({ recipeId }) {
+  // 영상 기준 인분이 아니라 1인분부터 보여 준다
+  const [servings, setServings] = useState(1);
+  const [bookmarked, setBookmarked] = useState(false);
+  // 직접 입력 중인 인분 글자. 입력을 마칠 때(포커스를 옮기거나 Enter) 범위에 맞춰 반영한다
+  const [servingsText, setServingsText] = useState('1');
   const [recipe, setRecipe] = useState(null);
   const [error, setError] = useState(null);
   const { member } = useAuth();
@@ -134,12 +155,32 @@ export default function RecipeDetail() {
     setError(null);
     api
       .get(`/api/recipes/${recipeId}`, { servings })
-      .then((data) => !ignore && setRecipe(data))
+      .then((data) => {
+        if (ignore) return;
+        setRecipe(data);
+        setBookmarked(data.bookmarked);
+        recordRecent(member.memberId, 'recipe', { id: data.recipeId, name: data.name });
+      })
       .catch((e) => !ignore && setError(e));
     return () => {
       ignore = true;
     };
   }, [recipeId, servings]);
+
+  useEffect(() => {
+    if (recipe) setServingsText(String(recipe.servings));
+  }, [recipe?.servings]);
+
+  const commitServings = () => {
+    const typed = Number.parseInt(servingsText, 10);
+    if (Number.isNaN(typed)) {
+      setServingsText(String(recipe.servings));
+      return;
+    }
+    const next = Math.min(MAX_SERVINGS, Math.max(MIN_SERVINGS, typed));
+    setServingsText(String(next));
+    if (next !== recipe.servings) setServings(next);
+  };
 
   if (!recipe) {
     return (
@@ -154,7 +195,10 @@ export default function RecipeDetail() {
 
   return (
     <div className="container page">
-      <h1 className="page__title">{recipe.name}</h1>
+      <h1 className="page__title">
+        {recipe.name}{' '}
+        <BookmarkButton recipeId={recipe.recipeId} bookmarked={bookmarked} onChange={setBookmarked} onError={setError} />
+      </h1>
       <div className="detail__facts">
         <span className="badge">{CUISINE[recipe.cuisineType]}</span>
         <span className="badge">{DISH_TYPE[recipe.dishType]}</span>
@@ -190,13 +234,28 @@ export default function RecipeDetail() {
               <button
                 type="button"
                 aria-label="인분 줄이기"
-                disabled={recipe.servings <= 1}
+                disabled={recipe.servings <= MIN_SERVINGS}
                 onClick={() => setServings(recipe.servings - 1)}
               >
                 −
               </button>
-              <span>{recipe.servings}인분</span>
-              <button type="button" aria-label="인분 늘리기" onClick={() => setServings(recipe.servings + 1)}>
+              <input
+                className="stepper__input stepper__input--servings"
+                inputMode="numeric"
+                aria-label="인분"
+                value={servingsText}
+                maxLength={2}
+                onChange={(e) => setServingsText(e.target.value.replace(/\D/g, ''))}
+                onBlur={commitServings}
+                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+              <span>인분</span>
+              <button
+                type="button"
+                aria-label="인분 늘리기"
+                disabled={recipe.servings >= MAX_SERVINGS}
+                onClick={() => setServings(recipe.servings + 1)}
+              >
                 +
               </button>
             </div>
@@ -208,7 +267,10 @@ export default function RecipeDetail() {
                     {ingredient.name}
                     {!ingredient.required && ' (선택)'}
                   </Link>
-                  <span>{formatAmount(ingredient.requiredAmount, ingredient.unit)}</span>
+                  {/* 글자가 바뀌면 새 요소가 되어 강조 애니메이션이 다시 재생된다 */}
+                  <span key={formatAmount(ingredient.requiredAmount, ingredient.unit)} className="amount-flash">
+                    {formatAmount(ingredient.requiredAmount, ingredient.unit)}
+                  </span>
                 </li>
               ))}
             </ul>
