@@ -90,9 +90,11 @@ jobs:
       github.ref_name == vars.DEPLOY_BRANCH && needs.changes.outputs.backend == 'true'
     needs: [changes, test]
     runs-on: ubuntu-latest
-    # 서버가 한 대라 배포는 한 번에 하나만. 뒤에 온 배포는 기다린다
+    # 대기 중인 작업은 같은 그룹의 새 작업이 오면 취소된다. 프론트와 그룹을 나눠 뒤에 온 프론트 배포가
+    # 대기 중인 백엔드 배포를 지우지 않게 한다. 같은 그룹에서 대신 도는 작업은 더 새 SHA라 빠지는 변경이 없다.
+    # 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다
     concurrency:
-      group: deploy
+      group: deploy-backend
       cancel-in-progress: false
     permissions:
       contents: read
@@ -152,6 +154,7 @@ jobs:
         id: ssm
         run: |
           # 잠금을 다운로드 전에 잡고(fd 9) 배포 스크립트에 물려준다. 설정 교체·기동·검증·복구가 끝날 때까지 유지된다.
+          # 프론트 교체나 인증서 갱신 cron이 잡고 있으면 기다린다.
           # 묶음은 운영 디렉터리에 덮어 풀지 않고 releases/<SHA>에 풀며, 운영 설정 교체는 deploy.sh가 한다.
           # 다운로드 임시 파일은 배포마다 따로 만들고 끝나면 지운다. SSM은 sh로 실행할 수 있어 POSIX 문법만 쓴다
           jq -n --arg bucket "$DEPLOY_BUCKET" --arg sha "$GITHUB_SHA" '{
@@ -161,7 +164,7 @@ jobs:
               "export PATH=\"$PATH:/usr/local/bin:/snap/bin\"",
               "mkdir -p /opt/recipick/releases",
               "exec 9>/opt/recipick/.deploy.lock",
-              "flock -n 9 || { echo \"다른 배포가 진행 중이라 중단\"; exit 1; }",
+              "flock -w 600 9 || { echo \"잠금을 10분 안에 얻지 못해 중단\"; exit 1; }",
               "work=$(mktemp -d /tmp/recipick-deploy-\($sha).XXXXXX)",
               "trap \"rm -rf $work\" EXIT",
               "aws s3 cp --only-show-errors s3://\($bucket)/deploy/\($sha).tar.gz $work/bundle.tar.gz",
@@ -215,9 +218,9 @@ jobs:
       needs.frontend-build.result == 'success' &&
       (needs.changes.outputs.backend != 'true' || needs.deploy.result == 'success')
     runs-on: ubuntu-latest
-    # 백엔드 배포와 같은 그룹이라 서버 작업이 겹치지 않는다
+    # 백엔드와 그룹을 나눈 이유는 deploy 작업 주석. 서버 작업이 겹치지 않는 것은 .deploy.lock이 맡는다
     concurrency:
-      group: deploy
+      group: deploy-frontend
       cancel-in-progress: false
     permissions:
       contents: read
@@ -240,23 +243,45 @@ jobs:
             echo "::error::레포 변수가 비어 있다:$missing (deploy/README.md 3절)"
             exit 1
           fi
-      - uses: actions/download-artifact@v4
+
+      # 그룹이 따로라 백엔드 배포를 기다리는 사이 뒤 커밋의 프론트가 먼저 나갈 수 있다. 그 뒤에 이 작업이 돌면
+      # 옛 화면으로 덮어쓰므로, 이 커밋 뒤에 frontend/가 또 바뀌었으면 그 커밋의 작업에 맡기고 건너뛴다
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 더 새 프론트가 있는지 확인
+        id: fresh
+        run: |
+          git fetch -q origin "$GITHUB_REF_NAME"
+          if git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- frontend/; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::이 커밋 뒤에 frontend/가 다시 바뀌어 그 커밋의 배포에 맡기고 건너뛴다"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.fresh.outputs.stale == 'false'
+        uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - if: steps.fresh.outputs.stale == 'false'
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       # 백엔드 설정 묶음과 같은 deploy/ 경로를 쓴다. 배포 역할의 쓰기·EC2 역할의 읽기 권한이 이미 이 경로에 있다
       - name: 빌드 결과 업로드 (frontend/dist → S3)
+        if: steps.fresh.outputs.stale == 'false'
         run: |
           tar -czf web.tar.gz -C dist .
           aws s3 cp web.tar.gz "s3://$DEPLOY_BUCKET/deploy/web-$GITHUB_SHA.tar.gz"
 
       - name: SSM Run Command로 서버에서 정적 파일 교체
+        if: steps.fresh.outputs.stale == 'false'
         id: ssm
         run: |
           # 잠금을 다운로드 전에 잡아 deploy-web.sh에 물려준다. 인증서 갱신 cron이 잡고 있을 수 있어 기다린다
@@ -282,6 +307,7 @@ jobs:
           echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
 
       - name: 완료 대기, 서버 출력 수집
+        if: steps.fresh.outputs.stale == 'false'
         env:
           COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
         run: |
