@@ -25,6 +25,7 @@ public class AiRequestLogService {
     private final AiRequestLogRepository aiRequestLogRepository;
     private final AutoCartRequestRepository autoCartRequestRepository;
     private final ObjectMapper objectMapper;
+    private final AiRequestMetrics aiRequestMetrics;
 
     @Transactional
     public void save(Long memberId, AiRequestType requestType, String rawText, AiResultStatus resultStatus,
@@ -49,6 +50,9 @@ public class AiRequestLogService {
             .cacheReadTokens(usage.cacheReadTokens())
             .latencyMs(Math.toIntExact(usage.latencyMs()))
             .build());
+
+        // 이력 INSERT가 실패하면 예외가 먼저 올라가 지표를 남기지 않으므로, 이력에 없는 요청이 지표에만 잡히지 않는다
+        aiRequestMetrics.record(requestType, resultStatus, aiResult);
     }
 
     public Page<AiRequestLog> searchForAdmin(AiRequestLogAdminSearchRequest request) {
