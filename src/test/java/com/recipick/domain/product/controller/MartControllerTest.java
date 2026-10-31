@@ -87,7 +87,8 @@ class MartControllerTest {
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data[0].martId").value(1))
             .andExpect(jsonPath("$.data[0].name").value("삼청 마트"))
-            .andExpect(jsonPath("$.data[0].latitude").value(37.586))
+            .andExpect(jsonPath("$.data[0].latitude").value("37.5860000"))
+            .andExpect(jsonPath("$.data[0].longitude").value("126.9820000"))
             .andExpect(jsonPath("$.data[0].serviceRadiusM").value(2000))
             .andExpect(jsonPath("$.data[0].regionId").doesNotExist());
     }
