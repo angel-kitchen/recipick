@@ -14,7 +14,7 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   // 주소가 정해지면 바로 배송 가능 여부를 보여 준다
-  const area = useServiceArea(form.legalDongCode);
+  const { area } = useServiceArea(form.legalDongCode);
 
   const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 

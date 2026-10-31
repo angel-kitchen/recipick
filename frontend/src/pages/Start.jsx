@@ -21,9 +21,10 @@ export default function Start() {
     pending ? { address: pending.address, legalDongCode: pending.legalDongCode, dongName: '' } : null,
   );
   const [detailAddress, setDetailAddress] = useState(pending?.detailAddress ?? '');
-  const [error, setError] = useState(null);
+  // 로그인 직후 보관한 주소를 저장하지 못해서 돌아온 경우 그 이유를 먼저 보여 준다
+  const [error, setError] = useState(() => (location.state?.notice ? new Error(location.state.notice) : null));
   const [submitting, setSubmitting] = useState(false);
-  const area = useServiceArea(place?.legalDongCode);
+  const { area, failed } = useServiceArea(place?.legalDongCode);
 
   if (loading) return <p className="state-message">불러오는 중입니다.</p>;
   if (member?.currentAddress) return <Navigate to={next} replace />;
@@ -57,7 +58,11 @@ export default function Start() {
       legalDongCode: place.legalDongCode,
     };
     if (!member) {
-      savePendingAddress(value);
+      // 저장하지 못한 채 가입으로 넘어가면 로그인한 뒤 주소가 없어 이 화면으로 되돌아오므로 여기서 멈춘다
+      if (!savePendingAddress(value)) {
+        setError(new Error('가입 전 주소를 저장할 수 없습니다. 브라우저 저장소 설정을 확인한 뒤 다시 시도해 주세요.'));
+        return;
+      }
       navigate('/signup');
       return;
     }
@@ -150,7 +155,10 @@ export default function Start() {
               아직 서비스 지역이 아니에요. 가입하고 레시피는 둘러볼 수 있지만 재료 담기와 주문은 할 수 없어요.
             </div>
           )}
-          {place && !area && <p className="field__hint">배송 가능 여부를 확인하고 있어요.</p>}
+          {place && !area && !failed && <p className="field__hint">배송 가능 여부를 확인하고 있어요.</p>}
+          {place && failed && (
+            <p className="error-text">배송 가능 여부를 확인하지 못했어요. 주소를 다시 선택해 주세요.</p>
+          )}
 
           <label className="field">
             <span className="field__label">상세 주소</span>

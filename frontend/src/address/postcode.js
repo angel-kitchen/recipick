@@ -40,24 +40,24 @@ export async function openPostcode(onSelect) {
   }).open();
 }
 
-// 주소가 정해지면 로그인 없이 배송 가능 여부를 확인한다(저장하지 않는다). 확인 전이나 실패하면 null
+// 주소가 정해지면 로그인 없이 배송 가능 여부를 확인한다(저장하지 않는다).
+// 확인 중이면 { area: null, failed: false }, 조회가 실패하면 { area: null, failed: true }.
+// 실패해도 주소 입력은 계속할 수 있어서 호출한 쪽이 안내만 바꾼다
 export function useServiceArea(legalDongCode) {
-  const [area, setArea] = useState(null);
+  const [result, setResult] = useState({ area: null, failed: false });
 
   useEffect(() => {
-    setArea(null);
+    setResult({ area: null, failed: false });
     if (!legalDongCode || legalDongCode.length !== 10) return undefined;
     let ignore = false;
     api
       .post('/api/service-area/check', { legalDongCode })
-      .then((data) => !ignore && setArea(data))
-      .catch(() => {
-        // 확인에 실패해도 주소 입력은 계속할 수 있어 안내만 비워 둔다
-      });
+      .then((data) => !ignore && setResult({ area: data, failed: false }))
+      .catch(() => !ignore && setResult({ area: null, failed: true }));
     return () => {
       ignore = true;
     };
   }, [legalDongCode]);
 
-  return area;
+  return result;
 }

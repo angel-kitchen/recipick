@@ -28,12 +28,19 @@ export default function Login() {
     if (!pending || saveStarted.current) return;
     saveStarted.current = true;
     setSaveState('saving');
+    let saved = false;
     registerAddress(pending)
       .then(() => {
+        saved = true;
         clearPendingAddress();
         return reloadMember();
       })
       .catch((e) => {
+        // 저장은 됐고 회원 정보만 못 읽은 경우: 다시 저장하면 같은 배송지가 또 생기므로 새로고침으로 복구한다
+        if (saved) {
+          window.location.reload();
+          return;
+        }
         setError(e);
         setSaveState('failed');
       });
@@ -46,7 +53,7 @@ export default function Login() {
       return <p className="state-message">배송지를 저장하는 중입니다.</p>;
     }
     // 배송지가 없으면 동네부터 정하게 한다(실패했다면 보관한 주소를 채워 다시 시도할 수 있다)
-    return <Navigate to="/start" replace state={{ next: destination }} />;
+    return <Navigate to="/start" replace state={{ next: destination, notice: error?.message }} />;
   }
 
   const handleSubmit = async (event) => {

@@ -19,8 +19,10 @@ export function readPendingAddress() {
 export function savePendingAddress({ address, detailAddress, legalDongCode }) {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ address, detailAddress, legalDongCode }));
+    return true;
   } catch {
-    // 저장소를 못 쓰면 가입한 뒤 배송지를 다시 입력하게 된다
+    // 저장소를 못 쓰면 호출한 쪽이 가입으로 넘어가지 않고 이유를 알려야 한다
+    return false;
   }
 }
 
