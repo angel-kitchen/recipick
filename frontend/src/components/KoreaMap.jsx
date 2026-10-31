@@ -9,11 +9,13 @@ function toMapMarts(list) {
       ...mart,
       latitude: Number(mart.latitude),
       longitude: Number(mart.longitude),
-      serviceRadiusM: Number(mart.serviceRadiusM),
+      serviceRadiusM: mart.serviceRadiusM == null ? null : Number(mart.serviceRadiusM),
     }))
     .filter(
       (mart) =>
-        Number.isFinite(mart.latitude) && Number.isFinite(mart.longitude) && Number.isFinite(mart.serviceRadiusM),
+        Number.isFinite(mart.latitude) &&
+        Number.isFinite(mart.longitude) &&
+        (mart.serviceRadiusM === null || Number.isFinite(mart.serviceRadiusM)),
     );
 }
 
@@ -68,13 +70,15 @@ export default function KoreaMap() {
       const color = open ? '#e31b23' : '#8e8e8e';
       const position = [mart.latitude, mart.longitude];
       // 서비스 반경은 배송 가능 지역을 보여준다
-      L.circle(position, {
-        radius: mart.serviceRadiusM,
-        color,
-        weight: 1,
-        fillColor: color,
-        fillOpacity: 0.12,
-      }).addTo(map);
+      if (mart.serviceRadiusM !== null) {
+        L.circle(position, {
+          radius: mart.serviceRadiusM,
+          color,
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 0.12,
+        }).addTo(map);
+      }
       // 이름을 HTML 문자열로 넣지 않고 텍스트 노드로 넣어 마트 이름에 태그가 섞여도 실행되지 않게 한다
       const popup = document.createElement('strong');
       popup.textContent = mart.name;
