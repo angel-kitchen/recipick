@@ -477,28 +477,54 @@ Table BILLING_KEY_ISSUE_REQUEST {
 Table MEMBERSHIP_PAYMENT {
   id bigint [pk]
   membership_id bigint
-  billing_key_id bigint
-  portone_payment_id varchar(255) [unique]
+  idempotency_key varchar(100) [unique]
+  request_hash varchar(64)
   amount bigint
   status varchar(30)
   billing_date date
   period_start_date date
   period_end_date date
-  attempt_count int
-  last_attempt_at datetime
+  grace_deadline_at datetime
   next_retry_at datetime
   failure_reason varchar(500)
   paid_at datetime
+  membership_applied_at datetime
   created_at datetime
   updated_at datetime
   indexes {
     (membership_id, period_start_date) [unique]
+    (membership_id, status) [name: 'idx_membership_payment_membership_id_status']
+  }
+}
+Table MEMBERSHIP_PAYMENT_ATTEMPT {
+  id bigint [pk, increment]
+  membership_payment_id bigint [not null]
+  attempt_no int [not null]
+  billing_key_id bigint [not null]
+  portone_payment_id varchar(255) [not null, unique]
+  status varchar(20) [not null]
+  requested_at datetime [not null]
+  lease_expires_at datetime [not null]
+  dispatched_at datetime
+  completed_at datetime
+  pg_paid_at datetime
+  failure_reason varchar(500)
+  ops_review_required_at datetime
+  ops_review_reason varchar(40)
+  refund_required_at datetime
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (membership_payment_id, attempt_no) [unique]
+    (membership_payment_id, status) [name: 'idx_membership_payment_attempt_payment_id_status']
+    (billing_key_id, status) [name: 'idx_membership_payment_attempt_billing_key_id_status']
   }
 }
 
 Table MEMBERSHIP_REFUND {
   id bigint [pk]
   membership_payment_id bigint
+  membership_payment_attempt_id bigint [not null]
   amount bigint
   used_days int
   used_day_fee bigint
@@ -513,6 +539,10 @@ Table MEMBERSHIP_REFUND {
   completed_at datetime
   created_at datetime
   updated_at datetime
+  indexes {
+    (membership_payment_id, status) [name: 'idx_membership_refund_payment_id_status']
+    (membership_payment_attempt_id, requested_by, status) [name: 'idx_membership_refund_attempt_requester_status']
+  }
 }
 
 Ref: MEMBER.mart_id > MART.id
@@ -566,8 +596,10 @@ Ref: BILLING_KEY.member_id > MEMBER.id
 Ref: BILLING_KEY_ISSUE_REQUEST.member_id > MEMBER.id
 Ref: BILLING_KEY_ISSUE_REQUEST.billing_key_id > BILLING_KEY.id
 Ref: MEMBERSHIP_PAYMENT.membership_id > MEMBERSHIP.id
-Ref: MEMBERSHIP_PAYMENT.billing_key_id > BILLING_KEY.id
+Ref: MEMBERSHIP_PAYMENT_ATTEMPT.membership_payment_id > MEMBERSHIP_PAYMENT.id
+Ref: MEMBERSHIP_PAYMENT_ATTEMPT.billing_key_id > BILLING_KEY.id
 Ref: MEMBERSHIP_REFUND.membership_payment_id > MEMBERSHIP_PAYMENT.id
+Ref: MEMBERSHIP_REFUND.membership_payment_attempt_id > MEMBERSHIP_PAYMENT_ATTEMPT.id
 
 TableGroup member_admin_membership {
   REGION
@@ -617,5 +649,6 @@ TableGroup membership_billing {
   BILLING_KEY
   BILLING_KEY_ISSUE_REQUEST
   MEMBERSHIP_PAYMENT
+  MEMBERSHIP_PAYMENT_ATTEMPT
   MEMBERSHIP_REFUND
 }
