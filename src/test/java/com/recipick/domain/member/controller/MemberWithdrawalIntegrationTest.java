@@ -110,6 +110,21 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
                 processor(checker).withdraw(member.getId(), new MemberWithdrawRequest(password, 0L)));
     }
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"PAID,SUBSCRIBE", "TRIAL,TRIAL"})
+    @DisplayName("결제 대기와 전환 대기는 정산 검사 전에 회원 탈퇴를 차단한다")
+    void refusesPendingMembership(MembershipType type, MembershipSource source) {
+        // given
+        LocalDateTime start = LocalDateTime.now(clock).minusDays(8);
+        histories.saveAndFlush(Membership.builder().member(member).type(type).source(source)
+                .startAt(start).activatedAt(type == MembershipType.TRIAL ? start : null)
+                .endAt(start.plusDays(7)).autoRenew(true).build());
+        // when, then
+        assertThatThrownBy(() -> withdraw((id, balance) -> { throw new AssertionError("정산 검사 전에 거절"); }))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP));
+    }
+
     @Test
     @DisplayName("정산 확인이 연결되지 않으면 API는 503이며 회원 정보를 변경하지 않는다")
     void refusesWithoutSettlementContract() throws Exception {

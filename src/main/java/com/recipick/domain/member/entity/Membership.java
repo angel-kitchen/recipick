@@ -56,7 +56,7 @@ public class Membership extends BaseTimeEntity {
 
     private LocalDateTime endAt;
 
-    // 기존 행은 백필 후 다음 단계부터 혜택 판정에 사용한다.
+    // 실제 활성화된 시각부터 혜택을 제공한다.
     private LocalDateTime activatedAt;
 
     private LocalDateTime graceEndAt;
@@ -113,14 +113,34 @@ public class Membership extends BaseTimeEntity {
     }
 
     public boolean isActive(LocalDateTime now) {
-        return terminatedAt == null && !now.isBefore(startAt) && now.isBefore(endAt);
+        return terminatedAt == null && activatedAt != null && !now.isBefore(activatedAt)
+                && !now.isBefore(startAt) && now.isBefore(effectiveEnd());
+    }
+
+    public LocalDateTime effectiveEnd() {
+        return graceEndAt != null ? graceEndAt : endAt;
+    }
+
+    public boolean isPaymentPending() {
+        return type == MembershipType.PAID && activatedAt == null && terminatedAt == null;
+    }
+
+    public boolean isConversionPending(LocalDateTime now) {
+        return type == MembershipType.TRIAL && terminatedAt == null && autoRenew
+                && cancelReservedAt == null && !now.isBefore(endAt);
     }
 
     public Optional<MembershipStatus> getStatus(LocalDateTime now) {
         if (terminatedAt != null) {
             return Optional.of(MembershipStatus.TERMINATED);
         }
-        if (!now.isBefore(endAt)) {
+        if (isPaymentPending()) {
+            return Optional.of(MembershipStatus.PAYMENT_PENDING);
+        }
+        if (isConversionPending(now)) {
+            return Optional.of(MembershipStatus.CONVERSION_PENDING);
+        }
+        if (!now.isBefore(effectiveEnd())) {
             return Optional.of(MembershipStatus.EXPIRED);
         }
         if (now.isBefore(startAt)) {
@@ -134,7 +154,7 @@ public class Membership extends BaseTimeEntity {
     }
 
     public void reserveCancellation(LocalDateTime now) {
-        if (!isActive(now)) {
+        if (!isActive(now) && !isPaymentPending() && !isConversionPending(now)) {
             throw new BusinessException(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND);
         }
         if (source == MembershipSource.ADMIN_GRANT) {
@@ -145,11 +165,12 @@ public class Membership extends BaseTimeEntity {
         }
         autoRenew = false;
         cancelReservedAt = now;
+        graceEndAt = null;
     }
 
     // 환불 완료 여부와 요청 멱등성은 호출하는 Service가 확인한다.
     public void terminateAfterRefund(LocalDateTime completedAt) {
-        if (type != MembershipType.PAID || source == MembershipSource.ADMIN_GRANT) {
+        if (type != MembershipType.PAID || source == MembershipSource.ADMIN_GRANT || activatedAt == null) {
             throw new BusinessException(MemberErrorCode.NOT_TERMINABLE);
         }
         if (terminatedAt != null) {
@@ -161,5 +182,6 @@ public class Membership extends BaseTimeEntity {
         // 결과 불명이 기간 만료 뒤에 확정돼도 환불 완료 기록은 반영해야 한다.
         terminatedAt = completedAt;
         autoRenew = false;
+        graceEndAt = null;
     }
 }

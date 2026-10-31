@@ -21,7 +21,6 @@ import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,7 +50,7 @@ public class MembershipGrantService {
             throw new BusinessException(AuthErrorCode.SUPER_ADMIN_ONLY);
         }
         LocalDateTime now = LocalDateTime.now(clock);
-        if (!membershipRepository.findActiveMemberships(memberId, now, PageRequest.of(0, 1)).isEmpty()) {
+        if (membershipRepository.existsBlocking(memberId, now)) {
             throw new BusinessException(MemberErrorCode.MEMBERSHIP_ALREADY_ACTIVE);
         }
         Membership membership = membershipRepository.save(Membership.builder()

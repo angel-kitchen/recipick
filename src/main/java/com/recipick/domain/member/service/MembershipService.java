@@ -29,11 +29,18 @@ public class MembershipService {
 
     public MembershipMeResponse getMe(Long memberId) {
         validateMember(memberId);
-        Optional<Membership> membership = findActive(memberId, LocalDateTime.now(clock));
+        LocalDateTime now = LocalDateTime.now(clock);
+        Optional<Membership> membership = findActive(memberId, now);
         MembershipMeResponse.Current current = membership.map(value -> new MembershipMeResponse.Current(
                 value.getId(), value.getType().name(), value.getSource().name(), value.getStartAt(), value.getEndAt(),
                 value.isAutoRenew(), value.getBillingAnchorDate(), value.getCancelReservedAt())).orElse(null);
-        return new MembershipMeResponse(current != null, current, isTrialEligible(memberId));
+        MembershipMeResponse.Pending pending = current == null
+                ? membershipRepository.findPendingMemberships(memberId, now, PageRequest.of(0, 1)).stream()
+                        .findFirst().map(value -> new MembershipMeResponse.Pending(value.getId(), value.getType().name(),
+                                value.getSource().name(), value.getStatus(now).orElseThrow().name(), value.getStartAt(),
+                                value.getEndAt(), value.isAutoRenew(), value.getCancelReservedAt())).orElse(null)
+                : null;
+        return new MembershipMeResponse(current != null, current, isTrialEligible(memberId), pending);
     }
 
     public boolean isActive(Long memberId) {
@@ -62,8 +69,12 @@ public class MembershipService {
                 .orElseGet(() -> new MembershipSummary(false, null, null));
     }
 
+    public boolean existsBlocking(Long memberId, LocalDateTime now) {
+        return membershipRepository.existsBlocking(memberId, now);
+    }
+
     public boolean isTrialEligible(Long memberId) {
-        if (membershipRepository.existsByMemberId(memberId)) {
+        if (membershipRepository.existsByMemberIdAndActivatedAtIsNotNull(memberId)) {
             return false;
         }
         return memberRepository.findById(memberId).filter(member -> !member.isWithdrawn())

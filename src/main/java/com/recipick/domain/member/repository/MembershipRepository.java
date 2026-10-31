@@ -19,7 +19,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     @Query("""
             SELECT m FROM Membership m
             WHERE m.member.id = :memberId
-              AND m.startAt <= :now AND m.endAt > :now
+              AND m.startAt <= :now AND COALESCE(m.graceEndAt, m.endAt) > :now
+              AND m.activatedAt IS NOT NULL AND m.activatedAt <= :now
               AND m.terminatedAt IS NULL
             ORDER BY m.startAt DESC, m.id DESC
             """)
@@ -30,7 +31,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     @Query("""
             SELECT m FROM Membership m
             WHERE m.member.id = :memberId
-              AND m.startAt <= :at AND m.endAt > :at
+              AND m.startAt <= :at AND COALESCE(m.graceEndAt, m.endAt) > :at
+              AND m.activatedAt IS NOT NULL AND m.activatedAt <= :at
               AND (m.terminatedAt IS NULL OR m.terminatedAt > :at)
             ORDER BY m.startAt DESC, m.id DESC
             """)
@@ -40,7 +42,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     @Query("""
             SELECT new com.recipick.domain.member.dto.MemberMembershipData(m.member.id, m.type, m.endAt)
             FROM Membership m
-            WHERE m.member.id IN :memberIds AND m.startAt <= :now AND m.endAt > :now
+            WHERE m.member.id IN :memberIds AND m.startAt <= :now AND COALESCE(m.graceEndAt, m.endAt) > :now
+              AND m.activatedAt IS NOT NULL AND m.activatedAt <= :now
               AND m.terminatedAt IS NULL
             ORDER BY m.startAt DESC, m.id DESC
             """)
@@ -59,4 +62,30 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             @Param("memberId") Long memberId);
 
     boolean existsByMemberId(Long memberId);
+
+    boolean existsByMemberIdAndActivatedAtIsNotNull(Long memberId);
+
+    @Query("""
+            SELECT COUNT(m) > 0 FROM Membership m
+            WHERE m.member.id = :memberId AND m.terminatedAt IS NULL
+              AND ((m.activatedAt IS NOT NULL AND m.activatedAt <= :now
+                    AND m.startAt <= :now AND COALESCE(m.graceEndAt, m.endAt) > :now)
+                OR (m.type = com.recipick.domain.member.entity.enums.MembershipType.PAID
+                    AND m.activatedAt IS NULL)
+                OR (m.type = com.recipick.domain.member.entity.enums.MembershipType.TRIAL
+                    AND m.autoRenew = true AND m.cancelReservedAt IS NULL AND m.endAt <= :now))
+            """)
+    boolean existsBlocking(@Param("memberId") Long memberId, @Param("now") LocalDateTime now);
+
+    @Query("""
+            SELECT m FROM Membership m
+            WHERE m.member.id = :memberId AND m.terminatedAt IS NULL
+              AND ((m.type = com.recipick.domain.member.entity.enums.MembershipType.PAID
+                    AND m.activatedAt IS NULL)
+                OR (m.type = com.recipick.domain.member.entity.enums.MembershipType.TRIAL
+                    AND m.autoRenew = true AND m.cancelReservedAt IS NULL AND m.endAt <= :now))
+            ORDER BY m.startAt DESC, m.id DESC
+            """)
+    List<Membership> findPendingMemberships(@Param("memberId") Long memberId,
+            @Param("now") LocalDateTime now, Pageable pageable);
 }

@@ -59,7 +59,7 @@ class MemberWithdrawalProcessorTest {
         order.verify(members).getMemberForUpdate(1L);
         order.verify(encoder).matches("password", "encoded");
         order.verify(orders).existsInProgressOrder(1L);
-        order.verify(memberships).isActive(1L);
+        order.verify(memberships).existsBlocking(eq(1L), any(LocalDateTime.class));
         order.verify(checker).requireSettled(1L, 0L);
         order.verify(blocks).recordWithdrawal(eq(1L), any(LocalDateTime.class));
         order.verify(withdrawal).withdraw(eq(member), any(LocalDateTime.class));

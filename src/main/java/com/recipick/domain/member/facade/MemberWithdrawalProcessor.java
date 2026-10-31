@@ -43,7 +43,8 @@ public class MemberWithdrawalProcessor {
         if (orders.existsInProgressOrder(memberId)) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_ORDER);
         }
-        if (memberships.isActive(memberId)) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (memberships.existsBlocking(memberId, now)) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP);
         }
         List<WithdrawalSettlementChecker> checkers = settlementCheckers.orderedStream().toList();
@@ -58,7 +59,6 @@ public class MemberWithdrawalProcessor {
             throw new BusinessException(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY);
         }
         checkers.forEach(checker -> checker.requireSettled(memberId, request.acknowledgedPointBalance()));
-        LocalDateTime now = LocalDateTime.now(clock);
         trialBlocks.recordWithdrawal(memberId, now);
         withdrawal.withdraw(member, now);
     }

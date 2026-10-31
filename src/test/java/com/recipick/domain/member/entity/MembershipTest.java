@@ -26,6 +26,20 @@ class MembershipTest {
                 .startAt(START).activatedAt(START).endAt(END).autoRenew(source != MembershipSource.ADMIN_GRANT).build();
     }
 
+    @Test
+    @DisplayName("아직 활성화되지 않은 결제 대기는 환불 완료 반영으로 종료하지 않는다")
+    void rejectsUnactivatedRefundTermination() {
+        // given
+        Membership pending = Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
+                .startAt(START).endAt(END).autoRenew(true).build();
+        // when
+        Throwable thrown = catchThrowable(() -> pending.terminateAfterRefund(START.plusDays(1)));
+        // then
+        assertThat(thrown).isInstanceOfSatisfying(BusinessException.class,
+                error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.NOT_TERMINABLE));
+        assertThat(pending.getTerminatedAt()).isNull();
+    }
+
     @ParameterizedTest
     @CsvSource({"TRIAL,TRIAL", "PAID,ADMIN_GRANT"})
     @DisplayName("체험과 관리자 지급은 시작 시각과 같은 활성화 시각을 기록한다")

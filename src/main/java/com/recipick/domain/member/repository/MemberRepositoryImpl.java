@@ -51,7 +51,9 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
             return null;
         }
         return JPAExpressions.selectOne().from(membership)
-                .where(membership.member.id.eq(member.id), membership.startAt.loe(now), membership.endAt.gt(now),
+                .where(membership.member.id.eq(member.id), membership.startAt.loe(now),
+                        membership.activatedAt.isNotNull(), membership.activatedAt.loe(now),
+                        membership.graceEndAt.coalesce(membership.endAt).gt(now),
                         membership.terminatedAt.isNull(),
                         type == null ? null : membership.type.eq(type),
                         source == null ? null : membership.source.eq(source)).exists();
@@ -62,7 +64,9 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
             return null;
         }
         BooleanExpression exists = JPAExpressions.selectOne().from(membership)
-                .where(membership.member.id.eq(member.id), membership.startAt.loe(now), membership.endAt.gt(now),
+                .where(membership.member.id.eq(member.id), membership.startAt.loe(now),
+                        membership.activatedAt.isNotNull(), membership.activatedAt.loe(now),
+                        membership.graceEndAt.coalesce(membership.endAt).gt(now),
                         membership.terminatedAt.isNull()).exists();
         return active ? exists : exists.not();
     }

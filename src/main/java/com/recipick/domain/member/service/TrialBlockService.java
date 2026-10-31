@@ -39,7 +39,7 @@ public class TrialBlockService {
         }
         Member member = members.findById(memberId).filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
-        if (memberships.existsByMemberId(memberId)) {
+        if (memberships.existsByMemberIdAndActivatedAtIsNotNull(memberId)) {
             blocks.extendBlock(hasher.hash(member.getPhone()), withdrawnAt.plusYears(1), withdrawnAt);
         }
     }
