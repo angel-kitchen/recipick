@@ -73,6 +73,10 @@ recipick:
     window: 1m
     auth-limit: 10
     api-limit: 120
+  billing-key:
+    # 카드 등록 API 스위치. 운영 기본 false — 테스트 채널 환경에서만 BILLING_KEY_REGISTRATION_ENABLED=true로 켠다.
+    # 실채널 차단은 이 값과 무관하게 코드가 한다(docs/api/billing-key-registration.md)
+    registration-enabled: ${BILLING_KEY_REGISTRATION_ENABLED:false}
 ---
 spring:
   config:

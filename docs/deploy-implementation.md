@@ -173,3 +173,94 @@ AWS 서버(EC2 t3.medium 1대, `recipick.shop`)에서 `docs/deploy-strategy.md` 
 - `ALERT_WEBHOOK_URL`: 비어 있다. 이 값이 없으면 `backup.sh`는 실패해도 알림을 보내지 않고 로그(`/var/log/recipick-backup.log`)에만 남긴다. 디스코드나 슬랙 웹훅 주소를 넣는다.
 - 관리자 IAM 그룹(배포 담당 + 대리 1명): 만들지 않았다. 지금은 배포 담당만 Session Manager·백업 다운로드가 가능하다. 대리 1명을 정한 뒤 `deploy/aws-setup.md` 10절대로 만든다.
 - 블루그린은 운영 서버에서 부하 없이 앱 1개와 모니터링의 실제 메모리를 재고(`docker stats`, `free -m`), 앱 두 개가 들어갈 여유가 있을 때만 검토한다. 부하 테스트는 로컬 측정으로 옮겨 이 판단에 쓰지 않는다. 스케줄 작업 단일 실행 규칙이 컨벤션에 들어간 것도 선행 조건이다.
+
+## 10. 3차 2단계 스키마 변경 (Expand → Contract)
+
+이 절의 소절 번호는 `10-A`~`10-D`다(위 7-3·9절이 가리키는 `docs/deploy-strategy.md`의 10-1 체크리스트와 섞이지 않게).
+
+운영은 `ddl-auto: update`지만 스키마 변경은 아래 명시 SQL로 먼저 적용하고, 앱 기동 뒤 Hibernate가 추가로 바꾼 것이 없는지
+`information_schema` 스냅숏 diff로 확인한다. 제약 이름은 엔티티와 DDL에서 같다 — Hibernate `update`는 UNIQUE를 매 기동마다
+"drop 시도 → create"(`hibernate.schema_update.unique_constraint_strategy` 기본 `DROP_RECREATE_QUIETLY`)하므로 이름이 다르면 같은
+컬럼에 중복 UNIQUE 인덱스가 생긴다. 자료형·NULL 여부·`DATETIME(6)`은 `SHOW CREATE TABLE`로 기존 컬럼과 같은 형식인지 확인한다.
+
+**MySQL DDL은 문장마다 즉시 커밋된다.** MySQL 8의 원자적 DDL은 "한 문장이 반쯤 적용된 채 남지 않는다"는 뜻이지 여러 `ALTER`를 한
+트랜잭션으로 묶어 되돌린다는 뜻이 아니다. 그래서 문장마다 실행 기록표에 적고, 실패하면 기록표의 되돌리기 문장을 역순으로 실행한다.
+이전 앱의 `ddl-auto`가 컬럼을 되살린다는 가정은 롤백 근거로 쓰지 않는다 — Expand는 아무것도 지우지 않으므로 이전 이미지를 다시
+배포해도 이전 앱이 보던 컬럼이 그대로 있고, 이전 앱은 새 컬럼·테이블을 모른 채 지나간다(이 테이블을 쓰는 이전 코드 없음).
+
+실행자는 배포 담당. **실행 전 필수 조건:** `SHOW CREATE TABLE`로 실제 스키마를 확인하고, 각 절의 사전 확인 쿼리로 기존 행 유무를
+본 뒤 멈춤 조건에 해당하면 진행하지 않는다.
+
+### 10-A. PR-2a — billing_key 확장, billing_key_issue_request 생성 (추가만)
+
+```sql
+-- A-0 백업
+--   mysqldump --single-transaction --no-create-db <db> billing_key > backup_billing_key_YYYYMMDD.sql
+-- A-1 형식 확인 (id·created_at·updated_at 정의를 A-3에 그대로 쓴다)
+SHOW CREATE TABLE billing_key;
+
+-- A-2 billing_key 컬럼·인덱스
+ALTER TABLE billing_key                                               -- A-2-1
+  ADD COLUMN delete_requested_at DATETIME(6) NULL,
+  ADD COLUMN deleted_at DATETIME(6) NULL;
+ALTER TABLE billing_key                                               -- A-2-2
+  ADD INDEX idx_billing_key_member_id_status (member_id, status);
+-- A-2-3 기존 UNIQUE 인덱스(Hibernate 생성 이름 UK_…)를 엔티티가 명시한 이름으로 바꾼다. 내용은 그대로이고 메타데이터만 바뀐다.
+--       엔티티와 이름이 같아야 기동 때 Hibernate가 같은 인덱스로 인식하고, 서비스가 UNIQUE 충돌을 제약 이름으로 식별한다
+SELECT INDEX_NAME FROM information_schema.STATISTICS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'billing_key'
+   AND COLUMN_NAME = 'portone_billing_key' AND NON_UNIQUE = 0;         -- 결과 1개(예: UK_abc123…)
+ALTER TABLE billing_key RENAME INDEX <위에서 조회한 이름> TO uk_billing_key_portone_billing_key;
+
+-- A-3 발급 요청 테이블
+CREATE TABLE billing_key_issue_request (
+  id             BIGINT       NOT NULL AUTO_INCREMENT,
+  member_id      BIGINT       NOT NULL,
+  issue_id       VARCHAR(64)  NOT NULL,
+  status         VARCHAR(20)  NOT NULL,
+  expires_at     DATETIME(6)  NOT NULL,
+  used_at        DATETIME(6)  NULL,
+  billing_key_id BIGINT       NULL,
+  created_at     DATETIME(6)  NULL,
+  updated_at     DATETIME(6)  NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_billing_key_issue_request_issue_id (issue_id),
+  CONSTRAINT fk_billing_key_issue_request_billing_key
+    FOREIGN KEY (billing_key_id) REFERENCES billing_key (id)
+) ENGINE = InnoDB;
+```
+
+| 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
+| --- | --- | --- | --- | --- |
+| A-2-1 | `ADD COLUMN` 2개 | | | `ALTER TABLE billing_key DROP COLUMN delete_requested_at, DROP COLUMN deleted_at;` |
+| A-2-2 | `ADD INDEX` | | | `ALTER TABLE billing_key DROP INDEX idx_billing_key_member_id_status;` |
+| A-2-3 | `RENAME INDEX` | | | `ALTER TABLE billing_key RENAME INDEX uk_billing_key_portone_billing_key TO <원래 이름>;` |
+| A-3 | `CREATE TABLE` | | | `DROP TABLE billing_key_issue_request;`(행이 있으면 보관 뒤) |
+
+적용 뒤 10-B의 스냅숏 쿼리를 앱 기동 전·후에 떠서 diff가 없어야 한다. 스모크: `GET /api/billing-keys/me`(200).
+
+### 10-B. 스냅숏·확인 SQL (앱 기동 전 1회, 기동 뒤 1회 → diff 없음)
+
+```sql
+SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE()
+   AND TABLE_NAME IN ('billing_key', 'billing_key_issue_request',
+                      'membership_payment', 'membership_payment_attempt', 'membership_refund')
+ ORDER BY TABLE_NAME, ORDINAL_POSITION;
+SELECT TABLE_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+  FROM information_schema.REFERENTIAL_CONSTRAINTS
+ WHERE CONSTRAINT_SCHEMA = DATABASE()
+   AND TABLE_NAME IN ('billing_key_issue_request', 'membership_payment',
+                      'membership_payment_attempt', 'membership_refund')
+ ORDER BY TABLE_NAME, CONSTRAINT_NAME;
+SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols
+  FROM information_schema.STATISTICS
+ WHERE TABLE_SCHEMA = DATABASE()
+   AND TABLE_NAME IN ('billing_key', 'billing_key_issue_request',
+                      'membership_payment', 'membership_payment_attempt', 'membership_refund')
+ GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE
+ ORDER BY TABLE_NAME, INDEX_NAME;
+-- 기대: 같은 컬럼 조합의 인덱스가 두 개인 테이블 없음(중복 UK 없음), 새 컬럼·FK·인덱스 이름이 설계와 같음,
+--       기동 로그에 alter table·create table 없음
+```
