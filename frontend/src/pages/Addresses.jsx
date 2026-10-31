@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { kakaoAvailable } from '../address/kakao';
 import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
+import LocationPickerModal from '../components/LocationPickerModal';
 
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
 
@@ -13,6 +15,7 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
   const [locationAgreed, setLocationAgreed] = useState(Boolean(member.locationAgreed));
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
   // 주소가 정해지면 바로 배송 가능 여부를 보여 준다
   const { area } = useServiceArea(form.legalDongCode);
 
@@ -60,6 +63,21 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
           />
           <button type="button" className="btn btn--outline" onClick={search}>
             주소 찾기
+          </button>
+          <button
+            type="button"
+            className="btn btn--outline"
+            disabled={!locationAgreed || !kakaoAvailable}
+            title={
+              !kakaoAvailable
+                ? '지금은 현재 위치 기능을 사용할 수 없어요'
+                : !locationAgreed
+                  ? '위치 정보 이용에 동의하면 쓸 수 있어요'
+                  : undefined
+            }
+            onClick={() => setLocating(true)}
+          >
+            현재 위치로 찾기
           </button>
         </div>
         <span className="chips">
@@ -115,6 +133,15 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
           </button>
         )}
       </div>
+      {locating && (
+        <LocationPickerModal
+          onClose={() => setLocating(false)}
+          onConfirm={({ address, legalDongCode }) => {
+            setLocating(false);
+            setForm((prev) => ({ ...prev, address, legalDongCode }));
+          }}
+        />
+      )}
     </form>
   );
 }
