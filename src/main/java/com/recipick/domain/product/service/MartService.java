@@ -158,6 +158,7 @@ public class MartService {
     @Transactional(readOnly = true)
     public List<MartMapResponse> findOpenMartsForMap(){
         return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
+            .filter(mart -> mart.getLatitude() != null && mart.getLongitude() != null)
             .map(MartMapResponse::from)
             .toList();
     }
