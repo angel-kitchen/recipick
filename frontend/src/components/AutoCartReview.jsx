@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { notifyCartChanged, rememberSources } from '../cartSource';
 import { UNAVAILABLE_REASON, formatAmount, formatWon } from '../labels';
+import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import usePreviousMartGuard from './usePreviousMartGuard';
 
@@ -19,6 +20,8 @@ export default function AutoCartReview({ preview, disabled = false }) {
   // 재료별 선택. 값이 없거나 새 미리보기의 후보에 없으면 서버가 추천한 상품, NONE이면 담지 않음
   const [choices, setChoices] = useState({});
   const [added, setAdded] = useState(null);
+  // 담으려는 상품 중 이미 장바구니에 있는 것들. 있으면 담기 전에 한 번 더 묻는다
+  const [duplicates, setDuplicates] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -83,6 +86,28 @@ export default function AutoCartReview({ preview, disabled = false }) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // 서버는 같은 상품을 새 줄로 만들지 않고 수량을 더하므로, 담기 전에 이미 있는 상품을 알려 주고 확인받는다.
+  // 장바구니를 읽지 못하면 묻지 않고 담기 요청이 서버 검증에 맡긴다
+  const startAdd = async () => {
+    let found = [];
+    try {
+      const cart = await api.get('/api/cart-items');
+      found = picked.flatMap((line) => {
+        const inCart = cart.items.find((item) => item.productId === line.productId);
+        return inCart ? [{ ...line, current: inCart.quantity }] : [];
+      });
+    } catch {
+      // 확인에 실패해도 담기는 계속할 수 있다
+    }
+    if (found.length > 0) setDuplicates(found);
+    else await doAdd();
+  };
+
+  const confirmDuplicates = () => {
+    setDuplicates(null);
+    doAdd();
   };
 
   const orderNow = async () => {
@@ -169,11 +194,32 @@ export default function AutoCartReview({ preview, disabled = false }) {
         })}
       </div>
 
-      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || submitting || picked.length === 0} onClick={() => guard(doAdd)}>
+      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || submitting || picked.length === 0} onClick={() => guard(startAdd)}>
         {submitting ? '담는 중...' : `${picked.length}개 장바구니에 담기`}
       </button>
 
       {modal}
+      {duplicates && (
+        <ConfirmModal
+          title="이미 장바구니에 중복된 재료가 있어요"
+          confirmLabel="또 담기"
+          cancelLabel="취소"
+          onConfirm={confirmDuplicates}
+          onCancel={() => setDuplicates(null)}
+        >
+          또 담으시겠어요? 같은 상품은 새로 담지 않고 수량이 합쳐져요.
+          <ul className="list-plain" style={{ margin: '12px 0 0' }}>
+            {duplicates.map((line) => (
+              <li key={line.productId}>
+                <span>{line.name}</span>
+                <span>
+                  {line.current}개 → {line.current + line.quantity}개
+                </span>
+              </li>
+            ))}
+          </ul>
+        </ConfirmModal>
+      )}
       {added && (
         <div className="modal" role="dialog" aria-modal="true" aria-label="장바구니에 담겼습니다">
           <div className="modal__box card modal__box--center">
