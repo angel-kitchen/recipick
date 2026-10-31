@@ -55,7 +55,7 @@ export default function KoreaMap() {
       scrollWheelZoom: false, // 페이지 스크롤이 지도에 걸리지 않게 한다
     });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 18,
     }).addTo(map);
 
