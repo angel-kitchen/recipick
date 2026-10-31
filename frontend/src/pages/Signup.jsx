@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import ErrorNotice from '../components/ErrorNotice';
+import { readPendingAddress } from '../pendingAddress';
 
 const INITIAL = { email: '', name: '', password: '', phone: '', termsAgreed: false, privacyAgreed: false };
 
@@ -10,6 +11,8 @@ export default function Signup() {
   const [form, setForm] = useState(INITIAL);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // 시작 화면에서 확인한 동네. 가입하고 로그인하면 배송지로 저장된다
+  const pending = readPendingAddress();
 
   const change = (key) => (event) =>
     setForm((prev) => ({
@@ -35,6 +38,14 @@ export default function Signup() {
     <div className="container page">
       <form className="card auth-card form" onSubmit={handleSubmit}>
         <h1 className="page__title">회원가입</h1>
+        {pending && (
+          <div className="notice notice--info notice--action">
+            <span>시작할 동네: {pending.address}</span>
+            <Link to="/start" className="btn btn--muted">
+              변경
+            </Link>
+          </div>
+        )}
         <ErrorNotice error={error} />
         <label className="field">
           <span className="field__label">이메일</span>
