@@ -19,6 +19,7 @@ import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
+import com.recipick.domain.payment.repository.WebhookEventRepository;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
@@ -59,6 +60,9 @@ class PaymentServiceTest {
     @Mock
     private RefundRepository refundRepository;
 
+    @Mock
+    private WebhookEventRepository webhookEventRepository;
+
     @Captor
     private ArgumentCaptor<Refund> refundCaptor;
 
@@ -68,7 +72,7 @@ class PaymentServiceTest {
     void setUp() {
         // Clock은 mock이 아니라 @InjectMocks로는 못 넣는다. 시계를 10:07:30에 멈춰 두고 직접 조립한다
         Clock fixedClock = Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL);
-        paymentService = new PaymentService(paymentRepository, refundRepository, fixedClock);
+        paymentService = new PaymentService(paymentRepository, refundRepository, webhookEventRepository, fixedClock);
     }
 
     @Test

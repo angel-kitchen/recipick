@@ -4,10 +4,13 @@ import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
+import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
+import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.PaymentRepository;
 import com.recipick.domain.payment.repository.RefundRepository;
+import com.recipick.domain.payment.repository.WebhookEventRepository;
 import com.recipick.domain.payment.repository.dto.PaymentAdminSearchCondition;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
@@ -17,6 +20,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -35,8 +39,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PaymentService {
 
+    // 탈퇴 정산이 미해결로 보는 상태. 결제는 PG 결과를 기다리는 중이고, 웹훅은 아직 반영이 끝나지 않았거나 사람이 봐야 하는 것이다.
+    // MANUAL_REVIEW는 처리 종료 상태지만 돈의 행방이 정리되지 않았으므로 미해결이다
+    private static final Set<PaymentStatus> UNSETTLED_PAYMENT_STATUSES =
+        Set.of(PaymentStatus.IN_PROGRESS, PaymentStatus.CANCEL_REQUESTED);
+    private static final List<WebhookEventStatus> UNSETTLED_WEBHOOK_STATUSES = List.of(
+        WebhookEventStatus.RECEIVED, WebhookEventStatus.PROCESSING,
+        WebhookEventStatus.RETRY_PENDING, WebhookEventStatus.MANUAL_REVIEW);
+
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
+    private final WebhookEventRepository webhookEventRepository;
     private final Clock clock;
 
     public Payment getByOrderId(Long orderId) {
@@ -139,6 +152,37 @@ public class PaymentService {
     // 결제 만료 Fallback Sweep용. expiredBefore 이전에 만료됐는데 아직 IN_PROGRESS인 결제 ID를 afterId 다음부터 limit건 읽는다
     public List<Long> findStaleInProgressPaymentIds(LocalDateTime expiredBefore, Long afterId, int limit) {
         return paymentRepository.findStaleInProgressPaymentIds(afterId, expiredBefore, PageRequest.ofSize(limit));
+    }
+
+    // 탈퇴 정산용. 이 회원 주문들의 결제에 미해결 결제·환불·웹훅이 남아 있는지 본다. 회원 잠금 트랜잭션 안에서만 뜻이 있다.
+    // 결제 확정·늦은 승인 환불·외부 취소는 PAYMENT만 잠그고 MEMBER는 잠그지 않으므로 회원 잠금만으로는 직렬화되지 않고,
+    // REPEATABLE READ에서 잠그지 않는 읽기는 이 트랜잭션의 첫 조회 때 스냅숏을 보므로 그사이 커밋된 환불·웹훅을 놓친다.
+    // 그래서 판정에 쓰는 결제·환불·웹훅은 모두 잠금 읽기(최신 커밋)로 하고, 잠금이 적용되지 않는 스칼라 exists 대신 행을 받아 본다.
+    // 잠금 순서는 PAYMENT(PK 오름차순) → REFUND → WEBHOOK_EVENT다. 하나라도 있으면 그 자리에서 끝낸다 — 막힐 트랜잭션이다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean existsUnsettledForWithdrawal(Collection<Long> orderIds) {
+        if (orderIds.isEmpty()) {
+            return false;
+        }
+        List<Long> paymentIds = paymentRepository.findIdsByOrderIdIn(orderIds);
+        if (paymentIds.isEmpty()) {
+            return false;
+        }
+        List<Payment> payments = paymentRepository.findAllByIdInForUpdate(paymentIds);
+        if (payments.stream().anyMatch(payment -> UNSETTLED_PAYMENT_STATUSES.contains(payment.getStatus()))) {
+            return true;
+        }
+        if (!refundRepository.findOpenForWithdrawalForShare(paymentIds).isEmpty()) {
+            return true;
+        }
+        // 0원 결제(POINTS_ONLY)는 PortOne 결제 ID가 없어 웹훅이 올 수 없다
+        List<String> portonePaymentIds = payments.stream()
+            .map(Payment::getPortonePaymentId)
+            .filter(Objects::nonNull)
+            .toList();
+        return !portonePaymentIds.isEmpty()
+            && !webhookEventRepository.findOpenForWithdrawalForShare(portonePaymentIds, UNSETTLED_WEBHOOK_STATUSES)
+            .isEmpty();
     }
 
     // SYSTEM 환불은 한 결제에 최대 한 건이다. 웹훅 재전송·재조회로 같은 자리에 다시 들어와도

@@ -262,6 +262,96 @@ class PointEarningTest {
         assertThat(earning.isUsableOn(today)).isFalse();
     }
 
+    @Test
+    @DisplayName("탈퇴 소멸하면 남은 잔량을 돌려주고 FORFEITED·잔량 0이 되며, 다시 소멸하면 0을 돌려준다")
+    void forfeit() {
+        // given
+        PointEarning earning = completed(500L, DELIVERED_AT);
+        earning.use(200L);
+
+        // when
+        long first = earning.forfeit();
+        long second = earning.forfeit();
+
+        // then
+        assertThat(first).isEqualTo(300L);
+        assertThat(second).isZero();
+        assertThat(earning.getStatus()).isEqualTo(PointEarningStatus.FORFEITED);
+        assertThat(earning.getRemainingAmount()).isZero();
+        assertThat(earning.isUsableOn(DELIVERED_AT.toLocalDate())).isFalse();
+    }
+
+    @Test
+    @DisplayName("다 써서 잔량이 0인 적립 건은 소멸할 금액이 없어 0을 돌려주고 COMPLETED로 남는다")
+    void forfeitExhaustedLot() {
+        // given
+        PointEarning earning = completed(500L, DELIVERED_AT);
+        earning.use(500L);
+
+        // when
+        long forfeited = earning.forfeit();
+
+        // then
+        assertThat(forfeited).isZero();
+        assertThat(earning.getStatus()).isEqualTo(PointEarningStatus.COMPLETED);
+        assertThat(earning.getRemainingAmount()).isZero();
+    }
+
+    @Test
+    @DisplayName("적립 예정·취소·만료된 적립 건은 탈퇴 소멸할 수 없다 — 탈퇴 정산이 걸러야 할 상태가 들어온 것이라 내부 오류다")
+    void rejectForfeitNotCompleted() {
+        // given
+        PointEarning pending = PointEarning.pending(MEMBER_ID, ORDER_ID, 500L);
+        PointEarning canceled = PointEarning.pending(MEMBER_ID, ORDER_ID, 500L);
+        canceled.cancel();
+        PointEarning expired = completed(500L, DELIVERED_AT);
+        expired.expire();
+
+        // when
+        Throwable pendingThrown = catchThrowable(pending::forfeit);
+        Throwable canceledThrown = catchThrowable(canceled::forfeit);
+        Throwable expiredThrown = catchThrowable(expired::forfeit);
+
+        // then
+        assertThat(pendingThrown).isInstanceOf(IllegalStateException.class);
+        assertThat(canceledThrown).isInstanceOf(IllegalStateException.class);
+        assertThat(expiredThrown).isInstanceOf(IllegalStateException.class);
+        assertThat(pending.getStatus()).isEqualTo(PointEarningStatus.PENDING);
+        assertThat(canceled.getStatus()).isEqualTo(PointEarningStatus.CANCELED);
+        assertThat(expired.getStatus()).isEqualTo(PointEarningStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("탈퇴 소멸된 적립 건은 취소할 수 없다")
+    void rejectCancelAfterForfeit() {
+        // given
+        PointEarning earning = completed(500L, DELIVERED_AT);
+        earning.forfeit();
+
+        // when
+        Throwable thrown = catchThrowable(earning::cancel);
+
+        // then
+        assertThat(thrown).isInstanceOf(IllegalStateException.class);
+        assertThat(earning.getStatus()).isEqualTo(PointEarningStatus.FORFEITED);
+    }
+
+    @Test
+    @DisplayName("탈퇴 소멸된 적립 건을 만료하면 만료할 잔량이 없어 0을 돌려주고 FORFEITED로 남는다")
+    void expireAfterForfeit() {
+        // given
+        PointEarning earning = completed(500L, DELIVERED_AT);
+        earning.forfeit();
+
+        // when
+        long expired = earning.expire();
+
+        // then
+        assertThat(expired).isZero();
+        assertThat(earning.getStatus()).isEqualTo(PointEarningStatus.FORFEITED);
+        assertThat(earning.getRemainingAmount()).isZero();
+    }
+
     private static PointEarning completed(long amount, LocalDateTime deliveredAt) {
         PointEarning earning = PointEarning.pending(MEMBER_ID, ORDER_ID, amount);
         earning.complete(deliveredAt);

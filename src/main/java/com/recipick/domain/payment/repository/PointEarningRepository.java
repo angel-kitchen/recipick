@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.PointEarning;
+import com.recipick.domain.payment.entity.enums.PointEarningStatus;
 import com.recipick.domain.payment.repository.dto.PointExpirySummary;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
@@ -73,4 +74,13 @@ public interface PointEarningRepository extends JpaRepository<PointEarning, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM PointEarning e WHERE e.id IN :ids ORDER BY e.id ASC")
     List<PointEarning> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
+
+    // 탈퇴 정산의 미정산 확인(PENDING 적립). 잠그지 않는 조회라 이 트랜잭션의 스냅숏을 보지만,
+    // 늦게 보이는 PENDING은 탈퇴를 막는 쪽으로만 틀려 재시도하면 통과한다
+    boolean existsByMemberIdAndStatus(Long memberId, PointEarningStatus status);
+
+    // 탈퇴 정산의 원장 확인. 확정 적립은 MEMBER_POINT 증가와 함께만 생기므로 회원 포인트 행이 없는데 잔량이 남은 확정 적립이
+    // 있으면 원장이 깨진 것이다. 만료일은 보지 않는다 — 만료 배치 전 잔량이라도 행 없이 남아 있을 수는 없다
+    boolean existsByMemberIdAndStatusAndRemainingAmountGreaterThan(Long memberId, PointEarningStatus status,
+                                                                   long remainingAmount);
 }

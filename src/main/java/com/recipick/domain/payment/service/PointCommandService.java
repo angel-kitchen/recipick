@@ -222,6 +222,61 @@ public class PointCommandService {
         return expireStaleLots(memberPoint, memberId, today);
     }
 
+    // 회원 탈퇴 정산. 회원 잠금 트랜잭션 안에서 PointSettlementChecker가 부른다.
+    // 적립 예정(PENDING)·사용 예약(RESERVED)이 남아 있으면 정산이 끝나지 않은 것이라 막고, 지연 만료까지 끝낸 실제 잔액이
+    // 회원이 안내받고 확인한 잔액과 같을 때만 남은 포인트를 전부 소멸시킨다. 다르면 최신 잔액을 다시 확인하도록 거절한다.
+    // 포인트를 가진 적이 없는 회원(MEMBER_POINT 없음)에게는 행을 만들지 않는다 — 탈퇴하는 회원에게 새 행과 빈 구간 잠금을 남기지 않는다.
+    // 잔액과 적립 건 합계가 다르면 회원이 고칠 수 없는 원장 오류라 업무 오류(409)가 아닌 내부 오류로 던져 운영이 보게 한다.
+    // 거절은 모두 예외라 호출자의 탈퇴 트랜잭션과 함께 지연 만료까지 롤백된다
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void forfeitForWithdrawal(Long memberId, long acknowledgedBalance) {
+        requireId(memberId, "회원 ID");
+        if (acknowledgedBalance < 0) {
+            throw new IllegalArgumentException("확인한 포인트 잔액은 음수일 수 없습니다: " + acknowledgedBalance);
+        }
+
+        if (!memberPointRepository.existsByMemberId(memberId)) {
+            requireNoUnsettled(memberId);
+            // 확정 적립은 MEMBER_POINT 증가와 함께만 생긴다. 행이 없는데 잔량 있는 확정 적립이 있으면 원장이 깨진 것이다
+            if (pointEarningRepository.existsByMemberIdAndStatusAndRemainingAmountGreaterThan(
+                memberId, PointEarningStatus.COMPLETED, 0L)) {
+                throw new IllegalStateException("회원 포인트 행이 없는데 잔량이 남은 확정 적립 건이 있습니다. memberId="
+                    + memberId);
+            }
+            requireAcknowledged(0L, acknowledgedBalance);
+            return;
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        MemberPoint memberPoint = memberPointRepository.findByMemberIdForUpdate(memberId)
+            .orElseThrow(() -> new IllegalStateException("회원 포인트 행이 있다고 확인한 뒤 찾을 수 없습니다. memberId="
+                + memberId));
+        expireStaleLots(memberPoint, memberId, today);
+        requireNoUnsettled(memberId);
+
+        List<PointEarning> usable = pointEarningRepository.findUsableForUpdate(memberId, today);
+        long usableTotal = usable.stream().mapToLong(PointEarning::getRemainingAmount).sum();
+        if (memberPoint.getBalance() != usableTotal) {
+            throw new IllegalStateException("포인트 잔액과 사용 가능 적립 건 합계가 다릅니다. memberId=" + memberId
+                + ", balance=" + memberPoint.getBalance() + ", usableTotal=" + usableTotal);
+        }
+        requireAcknowledged(memberPoint.getBalance(), acknowledgedBalance);
+        if (usableTotal == 0) {
+            return;
+        }
+
+        // 탈퇴 소멸은 주문과 상관없어 이력에 주문을 남기지 않는다. 소멸할 잔량이 없는 적립 건은 이력도 남기지 않는다
+        long forfeited = 0L;
+        for (PointEarning lot : usable) {
+            long amount = lot.forfeit();
+            if (amount > 0) {
+                pointHistoryRepository.save(PointHistory.withdrawalForfeited(lot, null, amount));
+                forfeited += amount;
+            }
+        }
+        memberPoint.decrease(forfeited);
+    }
+
     // 적립 건이 없는 주문은 포인트가 없던 1차 주문이라 할 일이 없다(정상 경로라 로그를 남기지 않는다).
     // 적립 건 엔티티를 잠금 전에 읽어 두면 잠금 뒤에도 예전 값을 보게 되므로 회원 ID 값만 꺼낸다
     private Optional<Long> findPointMemberId(Long orderId) {
@@ -257,9 +312,11 @@ public class PointCommandService {
         }
     }
 
+    // 확정·만료·탈퇴 소멸은 모두 거래가 끝난 적립이다. 되돌리거나 다시 지급하지 않는다
     private static boolean isEarningFinalized(PointEarning earning) {
         return earning.getStatus() == PointEarningStatus.COMPLETED
-            || earning.getStatus() == PointEarningStatus.EXPIRED;
+            || earning.getStatus() == PointEarningStatus.EXPIRED
+            || earning.getStatus() == PointEarningStatus.FORFEITED;
     }
 
     // 회원 포인트 변경의 첫 잠금. 처음 포인트를 다루는 회원은 잠글 행이 없어 먼저 행을 보장한다.
@@ -320,11 +377,35 @@ public class PointCommandService {
             pointHistoryRepository.save(PointHistory.restored(usage));
             return;
         }
+        // 원래 적립 건이 탈퇴로 소멸했다. 탈퇴한 회원에게 포인트를 다시 주지 않으므로 잔액에 넣지 않고, 되돌렸다는 기록과
+        // 그 사용분의 탈퇴 소멸 이력만 남긴다. 복원 대상은 적립 예정 주문뿐이라 정상 흐름에서는 오지 않지만,
+        // 오더라도 예외로 외부 취소를 롤백시키지 않는다. 아래 만료 처리보다 먼저 봐야 한다 — 소멸 건에 EXPIRED 이력은 남길 수 없다
+        if (source.getStatus() == PointEarningStatus.FORFEITED) {
+            pointHistoryRepository.save(PointHistory.restored(usage));
+            pointHistoryRepository.save(PointHistory.withdrawalForfeited(source, usage.getOrderId(), amount));
+            return;
+        }
         // 원래 만료일이 지났다. 그 적립 건에 남아 있던 잔량을 먼저 소멸시키고, 환불된 사용분은 되돌렸다는 기록만 남긴 채
         // 잔액에 넣지 않고 바로 소멸시킨다. 소멸 금액은 적립 건 잔량이 아니라 이 사용분이다
         expireLot(memberPoint, source);
         pointHistoryRepository.save(PointHistory.restored(usage));
         pointHistoryRepository.save(PointHistory.expired(source, usage.getOrderId(), amount));
+    }
+
+    // 적립 예정·사용 예약은 주문이 끝나면 확정되거나 되돌아가는 돈이다. 남아 있으면 정산이 끝나지 않은 것이라 탈퇴를 막는다.
+    // 잠그지 않는 조회라 이 트랜잭션의 스냅숏을 보지만, 늦게 보이는 PENDING·RESERVED는 막는 쪽으로만 틀려 재시도하면 통과한다
+    private void requireNoUnsettled(Long memberId) {
+        if (pointEarningRepository.existsByMemberIdAndStatus(memberId, PointEarningStatus.PENDING)
+            || pointUsageRepository.existsReservedByMemberId(memberId)) {
+            throw new BusinessException(PaymentErrorCode.POINT_UNSETTLED_FOR_WITHDRAWAL);
+        }
+    }
+
+    // 회원이 화면에서 확인한 잔액과 다르면 그사이 잔액이 바뀐 것이다. 최신 잔액을 다시 안내받고 재시도하도록 거절한다
+    private static void requireAcknowledged(long balance, long acknowledgedBalance) {
+        if (balance != acknowledgedBalance) {
+            throw new BusinessException(PaymentErrorCode.POINT_BALANCE_MISMATCH);
+        }
     }
 
     // 같은 주문의 예약 재호출. confirmUsage는 한 트랜잭션에서 전부 확정하므로 정상이라면 전부 RESERVED이거나 전부 CONFIRMED다

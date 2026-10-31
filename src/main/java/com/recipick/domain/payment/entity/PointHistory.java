@@ -102,6 +102,13 @@ public class PointHistory {
         return new PointHistory(earning, orderId, PointHistoryType.EXPIRED, amount);
     }
 
+    // 탈퇴 소멸은 주문이 없어 orderId가 null이고, 이미 탈퇴 소멸된 적립 건으로 사용분이 복원된 직후의 소멸은 그 주문을 남긴다.
+    // 자연 만료(EXPIRED)와 구분해 탈퇴로 사라진 포인트만 따로 집계할 수 있게 한다
+    public static PointHistory withdrawalForfeited(PointEarning earning, Long orderId, long amount) {
+        requireEarningStatus(earning, PointEarningStatus.FORFEITED, PointHistoryType.WITHDRAWAL_FORFEITED);
+        return new PointHistory(earning, orderId, PointHistoryType.WITHDRAWAL_FORFEITED, amount);
+    }
+
     private static PointHistory ofEarning(PointEarning earning, PointEarningStatus expected, PointHistoryType type) {
         requireEarningStatus(earning, expected, type);
         return new PointHistory(earning, earning.getOrderId(), type, earning.getAmount());

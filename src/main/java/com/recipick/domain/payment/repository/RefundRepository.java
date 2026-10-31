@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.Refund;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -149,4 +151,19 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
         @Param("afterId") Long afterId,
         @Param("requestedBefore") LocalDateTime requestedBefore,
         Pageable pageable);
+
+    // 탈퇴 정산용 잠금 읽기(FOR SHARE). 트랜잭션 스냅숏이 아니라 최신 커밋을 읽어야 회원 잠금 뒤에 커밋된 늦은 승인 환불을 놓치지 않는다.
+    // 미해결은 REQUESTED(요청 주체 무관)와 SYSTEM FAILED(돈이 PG에 남은 채 자동 반환이 끝난 것)다.
+    // 잠금이 적용되지 않는 스칼라 exists 대신 행을 돌려주고 호출자가 비어 있는지 본다
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT r
+            FROM Refund r
+            WHERE r.payment.id IN :paymentIds
+              AND (r.status = com.recipick.domain.payment.entity.enums.RefundStatus.REQUESTED
+                OR (r.status = com.recipick.domain.payment.entity.enums.RefundStatus.FAILED
+                  AND r.requestedBy = com.recipick.domain.payment.entity.enums.RefundRequester.SYSTEM))
+            ORDER BY r.id
+            """)
+    List<Refund> findOpenForWithdrawalForShare(@Param("paymentIds") Collection<Long> paymentIds);
 }

@@ -4,5 +4,6 @@ public enum PointEarningStatus {
     PENDING,
     COMPLETED,
     CANCELED,
-    EXPIRED
+    EXPIRED,
+    FORFEITED
 }
