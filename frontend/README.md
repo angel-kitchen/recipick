@@ -74,7 +74,6 @@ src/
   pages/               화면 하나당 파일 하나
   styles/              tokens.css(색·간격), layout.css, home.css(테슬라 스타일), shop.css(스타벅스 스타일)
   labels.js            서버 enum 값을 화면 글자로 바꾸는 표
-  mocks/marts.js       마트 공개 API가 생기기 전까지 쓰는 임시 지도 데이터
 ```
 
 ## 디자인 규칙
@@ -87,4 +86,4 @@ src/
 액세스 토큰은 브라우저 메모리에만 보관합니다. 새로고침하면 httpOnly 리프레시 쿠키로 `POST /api/auth/reissue`를 호출해 다시 받습니다.
 
 ## 지도 데이터
-홈 지도는 `GET /api/config/marts`를 호출합니다. 이 API가 없거나 실패하면 `src/mocks/marts.js`의 임시 데이터를 보여줍니다.
+홈 지도는 로그인 없이 `GET /api/config/marts`를 호출해 운영 중인 마트를 표시합니다. 호출이 실패하거나 목록이 비어 있으면 지도 아래에 안내 문구만 보여주고, 임시 데이터는 쓰지 않습니다.
