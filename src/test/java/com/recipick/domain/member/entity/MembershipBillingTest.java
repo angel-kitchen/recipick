@@ -9,6 +9,7 @@ import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,51 @@ class MembershipBillingTest {
         return Membership.builder().member(Member.builder().build()).type(MembershipType.TRIAL)
                 .source(MembershipSource.TRIAL).startAt(START).activatedAt(START).endAt(START.plusDays(7))
                 .autoRenew(true).build();
+    }
+
+    @Test
+    @DisplayName("자동갱신 첫 결제에 유예 종료가 없으면 실제 기간과 활성화 시각을 변경하지 않는다")
+    void rejectsMissingGraceBeforeActivation() {
+        // given
+        Membership value = pending();
+        // when, then
+        assertThatThrownBy(() -> value.activateAfterFirstPayment(START.plusMinutes(1), END, null))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT));
+        assertThat(value.getActivatedAt()).isNull();
+        assertThat(value.getStartAt()).isEqualTo(START);
+        assertThat(value.getEndAt()).isEqualTo(END);
+        assertThat(value.getBillingAnchorDate()).isEqualTo(START.toLocalDate());
+        assertThat(value.isAutoRenew()).isTrue();
+    }
+
+    @Test
+    @DisplayName("자동갱신 연장에 유예 종료가 없으면 기존 기간과 유예를 변경하지 않는다")
+    void rejectsMissingGraceBeforeExtension() {
+        // given
+        Membership value = pending();
+        value.activateAfterFirstPayment(START, END, END.plusDays(3));
+        // when, then
+        assertThatThrownBy(() -> value.extendAfterRenewal(END.plusMonths(1), null))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT));
+        assertThat(value.getEndAt()).isEqualTo(END);
+        assertThat(value.getGraceEndAt()).isEqualTo(END.plusDays(3));
+        assertThat(value.isAutoRenew()).isTrue();
+    }
+
+    @Test
+    @DisplayName("해지 예약 후 수락된 결제는 유예 종료 없이 반영하고 예약을 유지한다")
+    void acceptsMissingGraceWhenCancellationIsReserved() {
+        // given
+        Membership value = pending();
+        value.reserveCancellation(START);
+        // when, then
+        assertThat(value.activateAfterFirstPayment(START, END, null)).isEqualTo(MembershipBillingResult.ACTIVATED);
+        assertThat(value.extendAfterRenewal(END.plusMonths(1), null)).isEqualTo(MembershipBillingResult.EXTENDED);
+        assertThat(value.getGraceEndAt()).isNull();
+        assertThat(value.getCancelReservedAt()).isEqualTo(START);
+        assertThat(value.isAutoRenew()).isFalse();
     }
 
     @Test
@@ -160,7 +206,7 @@ class MembershipBillingTest {
         assertThatThrownBy(() -> Membership.pendingPaid(Member.builder().build(), MembershipSource.SUBSCRIBE,
                 START, END, null)).isInstanceOfSatisfying(BusinessException.class,
                         error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.AUTOPAY_CONSENT_REQUIRED));
-        assertThatThrownBy(() -> value.activateAfterFirstPayment(START, START, null))
+        assertThatThrownBy(() -> value.activateAfterFirstPayment(START, START, END.plusDays(3)))
                 .isInstanceOf(BusinessException.class);
         assertThat(value.getActivatedAt()).isNull();
     }

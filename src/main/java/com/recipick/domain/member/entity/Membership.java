@@ -144,6 +144,7 @@ public class Membership extends BaseTimeEntity {
         if (!isPaymentPending()) {
             return MembershipBillingResult.CONFLICT;
         }
+        validateRenewalGrace(newGraceEndAt);
         validatePeriod(pgPaidAt, newEndAt, newGraceEndAt);
         startAt = pgPaidAt;
         activatedAt = pgPaidAt;
@@ -178,6 +179,7 @@ public class Membership extends BaseTimeEntity {
         if (!endAt.isBefore(newEndAt)) {
             return MembershipBillingResult.ALREADY_APPLIED;
         }
+        validateRenewalGrace(newGraceEndAt);
         validatePeriod(startAt, newEndAt, newGraceEndAt);
         endAt = newEndAt;
         graceEndAt = cancelReservedAt == null ? newGraceEndAt : null;
@@ -212,6 +214,12 @@ public class Membership extends BaseTimeEntity {
         }
         autoRenew = false;
         return MembershipBillingResult.CONVERSION_CLOSED;
+    }
+
+    private void validateRenewalGrace(LocalDateTime newGraceEndAt) {
+        if (autoRenew && cancelReservedAt == null && newGraceEndAt == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
     }
 
     private static void validatePeriod(LocalDateTime start, LocalDateTime end, LocalDateTime graceEnd) {
