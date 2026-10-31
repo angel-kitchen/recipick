@@ -1,2 +1,6 @@
 node_modules
 dist
+
+# 로컬 환경 변수(카카오 JavaScript 키 등)는 저장소에 올리지 않는다
+.env.local
+.env.*.local
