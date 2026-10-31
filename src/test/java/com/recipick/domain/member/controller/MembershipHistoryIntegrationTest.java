@@ -93,7 +93,7 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
 
     private Membership membership(Member owner, MembershipType type, MembershipSource source,
             LocalDateTime start, LocalDateTime end) {
-        return Membership.builder().member(owner).type(type).source(source).startAt(start).endAt(end)
+        return Membership.builder().member(owner).type(type).source(source).startAt(start).activatedAt(start).endAt(end)
                 .autoRenew(source != MembershipSource.ADMIN_GRANT)
                 .grantedByAdmin(source == MembershipSource.ADMIN_GRANT ? admin : null).build();
     }

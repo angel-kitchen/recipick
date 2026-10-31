@@ -99,7 +99,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         LocalDateTime now = LocalDateTime.now(clock);
         member.agreeToLocation(now);
         memberships.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(1)).endAt(now.plusDays(29)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(29)).build());
 
         // when
         MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());

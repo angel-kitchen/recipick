@@ -56,7 +56,7 @@ public class MembershipGrantService {
         }
         Membership membership = membershipRepository.save(Membership.builder()
                 .member(member).grantedByAdmin(admin).type(MembershipType.PAID).source(MembershipSource.ADMIN_GRANT)
-                .startAt(now).endAt(now.plusDays(GRANT_DAYS)).autoRenew(false).build());
+                .startAt(now).activatedAt(now).endAt(now.plusDays(GRANT_DAYS)).autoRenew(false).build());
         auditRecorder.record(new AdminAuditCommand(AdminAuditAction.MEMBERSHIP_GRANT, membership.getId(),
                 member.getMartId(), Map.of(
                         AdminAuditField.TYPE, new AdminAuditChange(null, membership.getType()),

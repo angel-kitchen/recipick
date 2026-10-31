@@ -94,6 +94,8 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         assertThat(Duration.between(start, end)).isEqualTo(Duration.ofDays(30));
         assertThat(start.getOffset().getTotalSeconds()).isEqualTo(9 * 3600);
         Membership saved = memberships.findById(data.path("membershipId").asLong()).orElseThrow();
+        assertThat(saved.getActivatedAt()).isEqualTo(saved.getStartAt());
+        assertThat(saved.getGraceEndAt()).isNull();
         assertThat(saved.getMember().getId()).isEqualTo(member.getId());
         assertThat(saved.getGrantedByAdmin().getId()).isEqualTo(admin.getId());
         assertThat(saved.getStartAt()).isBetween(before, LocalDateTime.now(clock));
@@ -140,7 +142,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         LocalDateTime now = LocalDateTime.now(clock);
         memberships.saveAndFlush(Membership.builder().member(member).grantedByAdmin(admin)
                 .type(MembershipType.valueOf(type)).source(MembershipSource.valueOf(source))
-                .startAt(now.minusDays(1)).endAt(now.plusDays(6)).build());
+                .startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(6)).build());
 
         // when
         MockHttpServletResponse response = grant(member.getId(), token);
@@ -156,7 +158,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         Membership membership = Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(1)).endAt(now.plusDays(29))
+                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(29))
                 .autoRenew(true).build();
         membership.reserveCancellation(now);
         memberships.saveAndFlush(membership);
@@ -176,7 +178,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         Membership previous = Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(31))
+                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(31)).activatedAt(now.minusDays(31))
                 .endAt(terminated ? now.plusDays(1) : now.minusDays(1)).build();
         if (terminated) {
             previous.terminateAfterRefund(now.minusHours(1));

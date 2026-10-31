@@ -37,6 +37,55 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("기존 행은 백필 전에도 혜택을 유지하고 백필은 결제 대기 유료 행을 제외한다")
+    void backfillsOnlyTrialAndAdminGrantWithoutChangingBenefits() {
+        // given
+        LocalDateTime start = LocalDateTime.of(2026, 10, 1, 10, 0);
+        Member member = persistMember("activation@example.com", "01099990003");
+        Membership trial = Membership.builder().member(member).type(MembershipType.TRIAL)
+                .source(MembershipSource.TRIAL).startAt(start).activatedAt(start)
+                .endAt(start.plusDays(7)).build();
+        Membership grant = Membership.builder().member(member).type(MembershipType.PAID)
+                .source(MembershipSource.ADMIN_GRANT).startAt(start).activatedAt(start)
+                .endAt(start.plusDays(30)).build();
+        Membership pending = Membership.builder().member(member).type(MembershipType.PAID)
+                .source(MembershipSource.SUBSCRIBE).startAt(start).endAt(start.plusMonths(1)).build();
+        Membership conversion = Membership.builder().member(member).type(MembershipType.PAID)
+                .source(MembershipSource.TRIAL_CONVERT).startAt(start).endAt(start.plusMonths(1)).build();
+        entityManager.persist(trial);
+        entityManager.persist(grant);
+        entityManager.persist(pending);
+        entityManager.persist(conversion);
+        entityManager.flush();
+        Long trialId = trial.getId();
+        Long grantId = grant.getId();
+        Long pendingId = pending.getId();
+        Long conversionId = conversion.getId();
+        entityManager.clear();
+        assertThat(entityManager.find(Membership.class, trialId).getActivatedAt()).isEqualTo(start);
+        assertThat(entityManager.find(Membership.class, grantId).getGraceEndAt()).isNull();
+        // 기존 데이터의 NULL 컬럼 상태를 재현한다.
+        entityManager.createNativeQuery("UPDATE membership SET activated_at = NULL WHERE id IN (:trial, :grant)")
+                .setParameter("trial", trialId).setParameter("grant", grantId).executeUpdate();
+        entityManager.clear();
+        Membership legacy = entityManager.find(Membership.class, trialId);
+        assertThat(legacy.getActivatedAt()).isNull();
+        assertThat(legacy.isActive(start.plusDays(1))).isTrue();
+        assertThat(legacy.getStatus(start.plusDays(1))).contains(com.recipick.domain.member.entity.enums.MembershipStatus.ACTIVE);
+        String backfill = "UPDATE membership SET activated_at = start_at, updated_at = NOW() "
+                + "WHERE activated_at IS NULL AND source IN ('TRIAL', 'ADMIN_GRANT')";
+        // when
+        entityManager.createNativeQuery(backfill).executeUpdate();
+        entityManager.clear();
+        // then
+        assertThat(entityManager.find(Membership.class, trialId).getActivatedAt()).isEqualTo(start);
+        assertThat(entityManager.find(Membership.class, grantId).getActivatedAt()).isEqualTo(start);
+        assertThat(entityManager.find(Membership.class, pendingId).getActivatedAt()).isNull();
+        assertThat(entityManager.find(Membership.class, conversionId).getActivatedAt()).isNull();
+        assertThat(entityManager.createNativeQuery(backfill).executeUpdate()).isZero();
+    }
+
+    @Test
     @DisplayName("서비스 밖 주소와 회원의 현재 배송지 참조를 저장하고 다시 조회한다")
     void persistsSelectedAddressAndOwnership() {
         // given
@@ -88,7 +137,7 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
         Member member = persistMember("membership@example.com", "01099990002");
         Membership membership = Membership.builder().member(member)
                 .type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
-                .startAt(start).endAt(start.plusMonths(1)).autoRenew(true).build();
+                .startAt(start).activatedAt(start).endAt(start.plusMonths(1)).autoRenew(true).build();
         entityManager.persist(membership);
         membership.reserveCancellation(start.plusDays(1));
         // when

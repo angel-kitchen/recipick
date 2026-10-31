@@ -108,7 +108,7 @@ class MembershipTypeAtIntegrationTest extends IntegrationTestSupport {
         Member other = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@other.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).passwordHash("hash").build());
         memberships.saveAndFlush(Membership.builder().member(other).type(MembershipType.TRIAL)
-                .source(MembershipSource.TRIAL).startAt(START).endAt(START.plusDays(7)).build());
+                .source(MembershipSource.TRIAL).startAt(START).activatedAt(START).endAt(START.plusDays(7)).build());
 
         // when
         Optional<MembershipType> type = service.getTypeAt(member.getId(), START.plusDays(1));
@@ -120,6 +120,6 @@ class MembershipTypeAtIntegrationTest extends IntegrationTestSupport {
     private Membership membership(MembershipType type, LocalDateTime start, LocalDateTime end) {
         return Membership.builder().member(member).type(type)
                 .source(type == MembershipType.TRIAL ? MembershipSource.TRIAL : MembershipSource.SUBSCRIBE)
-                .startAt(start).endAt(end).autoRenew(true).build();
+                .startAt(start).activatedAt(start).endAt(end).autoRenew(true).build();
     }
 }

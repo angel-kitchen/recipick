@@ -109,6 +109,6 @@ class MembershipSummaryIntegrationTest extends IntegrationTestSupport {
     private Membership membership(Member member, int startDays, int endDays, MembershipType type) {
         return Membership.builder().member(member).type(type)
                 .source(type == MembershipType.TRIAL ? MembershipSource.TRIAL : MembershipSource.SUBSCRIBE)
-                .startAt(NOW.plusDays(startDays)).endAt(NOW.plusDays(endDays)).autoRenew(true).build();
+                .startAt(NOW.plusDays(startDays)).activatedAt(NOW.plusDays(startDays)).endAt(NOW.plusDays(endDays)).autoRenew(true).build();
     }
 }

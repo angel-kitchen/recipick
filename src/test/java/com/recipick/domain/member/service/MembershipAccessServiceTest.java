@@ -40,7 +40,7 @@ class MembershipAccessServiceTest {
         // given
         given(members.existsByIdAndWithdrawnAtIsNull(1L)).willReturn(true);
         Membership membership = Membership.builder().type(MembershipType.TRIAL).source(MembershipSource.TRIAL)
-                .startAt(NOW).endAt(NOW.plusDays(7)).build();
+                .startAt(NOW).activatedAt(NOW).endAt(NOW.plusDays(7)).build();
         given(memberships.findActiveMemberships(1L, NOW, PageRequest.of(0, 1))).willReturn(List.of(membership));
 
         // when

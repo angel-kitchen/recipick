@@ -82,7 +82,7 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
     void returnsCurrentMembership(String type, String source, boolean autoRenew) throws Exception {
         // given
         Membership membership = Membership.builder().member(member).type(MembershipType.valueOf(type))
-                .source(MembershipSource.valueOf(source)).startAt(now.minusDays(1)).endAt(now.plusDays(6))
+                .source(MembershipSource.valueOf(source)).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(6))
                 .autoRenew(autoRenew)
                 .billingAnchorDate(type.equals("PAID") && autoRenew ? now.minusDays(1).toLocalDate() : null).build();
         memberships.saveAndFlush(membership);
@@ -173,7 +173,7 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
     void countsExpiredAdminGrantAsHistory() throws Exception {
         // given
         memberships.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
 
         // when
         MockHttpServletResponse response = request(token);
@@ -190,7 +190,7 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
         // given
         Member other = createMember();
         memberships.saveAndFlush(Membership.builder().member(other).type(MembershipType.TRIAL)
-                .source(MembershipSource.TRIAL).startAt(now.minusDays(1)).endAt(now.plusDays(6)).build());
+                .source(MembershipSource.TRIAL).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(6)).build());
 
         // when
         MockHttpServletResponse response = mockMvc.perform(get("/api/memberships/me")
@@ -237,7 +237,7 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
 
     private Membership membership(LocalDateTime start, LocalDateTime end) {
         return Membership.builder().member(member).type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
-                .startAt(start).endAt(end).autoRenew(true).billingAnchorDate(start.toLocalDate()).build();
+                .startAt(start).activatedAt(start).endAt(end).autoRenew(true).billingAnchorDate(start.toLocalDate()).build();
     }
 
     private MockHttpServletResponse request(String access) throws Exception {

@@ -8,6 +8,7 @@ import com.recipick.domain.member.entity.enums.MembershipStatus;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.global.exception.CommonErrorCode;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,36 @@ class MembershipTest {
 
     private Membership membership(MembershipType type, MembershipSource source) {
         return Membership.builder().type(type).source(source)
-                .startAt(START).endAt(END).autoRenew(source != MembershipSource.ADMIN_GRANT).build();
+                .startAt(START).activatedAt(START).endAt(END).autoRenew(source != MembershipSource.ADMIN_GRANT).build();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"TRIAL,TRIAL", "PAID,ADMIN_GRANT"})
+    @DisplayName("체험과 관리자 지급은 시작 시각과 같은 활성화 시각을 기록한다")
+    void recordsActivationAtStart(MembershipType type, MembershipSource source) {
+        // given
+        Membership membership = membership(type, source);
+        // when
+        LocalDateTime activatedAt = membership.getActivatedAt();
+        // then
+        assertThat(activatedAt).isEqualTo(START);
+        assertThat(membership.getGraceEndAt()).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"TRIAL,TRIAL", "PAID,ADMIN_GRANT"})
+    @DisplayName("체험과 관리자 지급은 활성화 시각 누락이나 시작 시각과의 불일치를 거절한다")
+    void rejectsInvalidActivation(MembershipType type, MembershipSource source) {
+        // given
+        var builder = Membership.builder().type(type).source(source).startAt(START).endAt(END);
+        // when
+        Throwable missing = catchThrowable(builder::build);
+        Throwable different = catchThrowable(() -> builder.activatedAt(START.plusSeconds(1)).build());
+        // then
+        for (Throwable thrown : new Throwable[]{missing, different}) {
+            assertThat(thrown).isInstanceOfSatisfying(BusinessException.class,
+                    e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT));
+        }
     }
 
     @ParameterizedTest
@@ -161,7 +191,7 @@ class MembershipTest {
     void rejectsInvalidPeriod(int days) {
         // given
         var builder = Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
-                .startAt(START).endAt(START.plusDays(days));
+                .startAt(START).activatedAt(START).endAt(START.plusDays(days));
         // when
         Throwable thrown = catchThrowable(builder::build);
         // then
