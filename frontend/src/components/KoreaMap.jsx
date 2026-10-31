@@ -52,7 +52,8 @@ export default function KoreaMap() {
         [32.5, 123.5],
         [39.5, 132.5],
       ],
-      scrollWheelZoom: false, // 페이지 스크롤이 지도에 걸리지 않게 한다
+      // 마우스 휠로 확대·축소한다. 지도 위에서는 휠이 페이지 스크롤 대신 지도 확대에 쓰인다
+      scrollWheelZoom: true,
     });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
