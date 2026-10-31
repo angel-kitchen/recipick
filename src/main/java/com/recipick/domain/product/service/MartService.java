@@ -25,6 +25,7 @@ import com.recipick.global.config.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import com.recipick.domain.product.dto.MartMapResponse;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -152,6 +153,13 @@ public class MartService {
     @Transactional(readOnly = true)
     public Optional<MartResponse> findMart(Long martId) {
         return martRepository.findById(martId).map(MartResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MartMapResponse> findOpenMartsForMap(){
+        return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
+            .map(MartMapResponse::from)
+            .toList();
     }
 }
 
