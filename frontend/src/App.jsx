@@ -14,6 +14,7 @@ import AdminProducts from './admin/pages/AdminProducts';
 import AdminRecipes from './admin/pages/AdminRecipes';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import RequireDelivery from './components/RequireDelivery';
 import Addresses from './pages/Addresses';
 import AutoCartHistory from './pages/AutoCartHistory';
 import AutoCartPreview from './pages/AutoCartPreview';
@@ -31,6 +32,7 @@ import Products from './pages/Products';
 import RecipeDetail from './pages/RecipeDetail';
 import Recipes from './pages/Recipes';
 import Signup from './pages/Signup';
+import Start from './pages/Start';
 
 export default function App() {
   return (
@@ -55,6 +57,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/start" element={<Start />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
@@ -64,10 +67,12 @@ export default function App() {
           <Route path="/mypage" element={<MyPage />} />
           <Route path="/membership" element={<Membership />} />
           <Route path="/addresses" element={<Addresses />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/:productId" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
+          <Route element={<RequireDelivery />}>
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:productId" element={<ProductDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+          </Route>
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:orderId" element={<OrderDetail />} />
         </Route>

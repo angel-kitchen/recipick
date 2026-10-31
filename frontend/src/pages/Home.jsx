@@ -44,7 +44,7 @@ export default function Home() {
               </>
             ) : (
               <>
-                <Link to="/signup" className="tbtn tbtn--primary">
+                <Link to="/start" className="tbtn tbtn--primary">
                   시작하기
                 </Link>
                 <Link to="/login" className="tbtn tbtn--secondary">
