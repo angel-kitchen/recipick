@@ -1,80 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 
-// 시드 데이터(data.sql)의 시연 지역. 법정동 코드를 외우지 않아도 눌러서 채울 수 있게 한다
-const DEMO_REGIONS = [
-  { name: '서울 종로구 삼청동', code: '1111014000' },
-  { name: '경기 광명시 하안동', code: '4121010300' },
-];
-
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
-
-// 카카오(다음) 우편번호 검색. 키 없이 쓰는 공개 스크립트이고 결과에 법정동 코드(bcode)가 들어 있다
-let postcodeLoading = null;
-function loadPostcode() {
-  if (window.daum?.Postcode) return Promise.resolve();
-  if (!postcodeLoading) {
-    postcodeLoading = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
-      script.onload = resolve;
-      script.onerror = () => {
-        postcodeLoading = null;
-        reject(new Error('주소 검색을 불러오지 못했습니다. 네트워크를 확인해 주세요.'));
-      };
-      document.head.appendChild(script);
-    });
-  }
-  return postcodeLoading;
-}
 
 function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
   const { member } = useAuth();
   const [form, setForm] = useState(initial);
   const [select, setSelect] = useState(true);
   const [locationAgreed, setLocationAgreed] = useState(Boolean(member.locationAgreed));
-  const [area, setArea] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // 주소가 정해지면 바로 배송 가능 여부를 보여 준다
+  const area = useServiceArea(form.legalDongCode);
 
   const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  // 법정동 코드는 서버가 요구하는 값이라 화면에 보이지 않게 주소 검색 결과에서 받아 온다
-  const openPostcode = async () => {
+  const search = async () => {
     setError(null);
     try {
-      await loadPostcode();
-      new window.daum.Postcode({
-        oncomplete: (data) =>
-          setForm((prev) => ({
-            ...prev,
-            address: data.roadAddress || data.jibunAddress,
-            legalDongCode: data.bcode,
-          })),
-      }).open();
+      await openPostcode(({ address, legalDongCode }) => setForm((prev) => ({ ...prev, address, legalDongCode })));
     } catch (e) {
       setError(e);
     }
   };
-
-  const pickRegion = (region) => setForm((prev) => ({ ...prev, address: region.name, legalDongCode: region.code }));
-
-  // 주소가 정해지면 바로 배송 가능 여부를 보여 준다
-  useEffect(() => {
-    setArea(null);
-    if (form.legalDongCode.length !== 10) return undefined;
-    let ignore = false;
-    api
-      .post('/api/service-area/check', { legalDongCode: form.legalDongCode })
-      .then((data) => !ignore && setArea(data))
-      .catch(() => {});
-    return () => {
-      ignore = true;
-    };
-  }, [form.legalDongCode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -107,13 +58,18 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
             placeholder="주소 찾기를 눌러 검색하세요"
             required
           />
-          <button type="button" className="btn btn--outline" onClick={openPostcode}>
+          <button type="button" className="btn btn--outline" onClick={search}>
             주소 찾기
           </button>
         </div>
         <span className="chips">
           {DEMO_REGIONS.map((region) => (
-            <button key={region.code} type="button" className="chip" onClick={() => pickRegion(region)}>
+            <button
+              key={region.code}
+              type="button"
+              className="chip"
+              onClick={() => setForm((prev) => ({ ...prev, address: region.name, legalDongCode: region.code }))}
+            >
               {region.name} (시연)
             </button>
           ))}
@@ -136,10 +92,17 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
             <input type="checkbox" checked={select} onChange={(e) => setSelect(e.target.checked)} />
             현재 배송지로 선택
           </label>
-          <label className="check">
-            <input type="checkbox" checked={locationAgreed} onChange={(e) => setLocationAgreed(e.target.checked)} />
-            위치 정보 이용에 동의합니다. (선택)
-          </label>
+          {!member.locationAgreed && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={locationAgreed}
+                onChange={(e) => setLocationAgreed(e.target.checked)}
+                required
+              />
+              위치 정보 이용에 동의합니다. (필수)
+            </label>
+          )}
         </>
       )}
       <div className="row-actions">
@@ -160,12 +123,7 @@ export default function Addresses() {
   const { member, reloadMember } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const location = useLocation();
-  const navigate = useNavigate();
-  // 로그인 직후 배송지가 없어서 넘어온 경우. 등록 폼을 바로 열고, 끝나거나 건너뛰면 가려던 곳으로 보낸다
-  const welcome = Boolean(location.state?.welcome);
-  const next = location.state?.next ?? '/recipes';
-  const [adding, setAdding] = useState(welcome);
+  const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState(null);
@@ -206,11 +164,6 @@ export default function Addresses() {
   const create = async (form, { select, locationAgreed }) => {
     const result = await api.post('/api/members/me/addresses', { ...form, select, locationAgreed });
     await refresh();
-    if (welcome) {
-      setAdding(false);
-      navigate(next, { replace: true });
-      return;
-    }
     setAdding(false);
     setMessage(
       result.martChanged
@@ -232,14 +185,6 @@ export default function Addresses() {
       <p className="page__sub">
         {member.mart ? `이용 마트: ${member.mart.name}` : '선택된 배송지가 없어 이용 마트가 정해지지 않았습니다.'}
       </p>
-      {welcome && (
-        <div className="notice notice--info notice--action">
-          <span>환영해요! 먼저 배송지를 등록해 주세요. 서비스 지역인지 바로 알려 드려요.</span>
-          <Link to={next} className="btn btn--muted" onClick={() => setAdding(false)}>
-            나중에 할게요
-          </Link>
-        </div>
-      )}
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
       {!data && !error && <p className="state-message">불러오는 중입니다.</p>}
