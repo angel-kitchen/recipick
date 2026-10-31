@@ -78,9 +78,9 @@ class MembershipHistoryServiceTest {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         Membership startsNow = Membership.builder().type(MembershipType.TRIAL).source(MembershipSource.TRIAL)
-                .startAt(now).endAt(now.plusDays(7)).build();
+                .startAt(now).activatedAt(now).endAt(now.plusDays(7)).build();
         Membership endsNow = Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
-                .startAt(now.minusMonths(1)).endAt(now).autoRenew(true).build();
+                .startAt(now.minusMonths(1)).activatedAt(now.minusMonths(1)).endAt(now).autoRenew(true).build();
         given(members.findById(1L)).willReturn(Optional.of(Member.builder().build()));
         given(memberships.findAllByMemberId(1L, request.toPageable()))
                 .willReturn(new PageImpl<>(List.of(startsNow, endsNow), request.toPageable(), 2));

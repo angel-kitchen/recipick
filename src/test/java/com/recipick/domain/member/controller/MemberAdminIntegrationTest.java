@@ -261,7 +261,7 @@ class MemberAdminIntegrationTest extends IntegrationTestSupport {
 
     private Membership saveMembership(int index, MembershipType type, MembershipSource source, int start, int end) {
         return memberships.saveAndFlush(Membership.builder().member(fixtures.get(index)).type(type).source(source)
-                .startAt(now.plusDays(start)).endAt(now.plusDays(end))
+                .startAt(now.plusDays(start)).activatedAt(now.plusDays(start)).endAt(now.plusDays(end))
                 .autoRenew(source != MembershipSource.ADMIN_GRANT).build());
     }
 

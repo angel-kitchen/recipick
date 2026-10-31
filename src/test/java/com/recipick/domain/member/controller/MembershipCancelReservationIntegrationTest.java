@@ -81,7 +81,7 @@ class MembershipCancelReservationIntegrationTest extends IntegrationTestSupport 
 
     private Membership membership(Member owner, MembershipType type, MembershipSource source,
             LocalDateTime start, LocalDateTime end) {
-        return Membership.builder().member(owner).type(type).source(source).startAt(start).endAt(end)
+        return Membership.builder().member(owner).type(type).source(source).startAt(start).activatedAt(start).endAt(end)
                 .autoRenew(source != MembershipSource.ADMIN_GRANT)
                 .billingAnchorDate(source == MembershipSource.TRIAL ? null : start.toLocalDate())
                 .consentedAmount(3900L).consentTextVersion("v1").autopayConsentedAt(start).build();

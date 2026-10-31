@@ -197,3 +197,34 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | Grafana 접속 | 로컬에서 `aws ssm start-session --target <INSTANCE_ID> --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host=<grafana 컨테이너 IP>,portNumber=3000,localPortNumber=3000` 후 `http://localhost:3000`. 컨테이너 IP는 `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' recipick-grafana` |
 | infra 설정 변경 적용 | `docker compose -f compose.infra.yml up -d`. 해당 서비스가 잠깐 재시작되므로 시연 시간을 피한다 |
 | 메모리·디스크 확인 | `docker stats --no-stream`, `df -h /`, `docker system df` |
+
+
+## 멤버십 활성화 컬럼 배포·백필 (3차 준비)
+
+PR-A-1은 `membership.activated_at`, `grace_end_at`을 NULL 허용 컬럼으로 추가하고, 새 체험·관리자 지급의 `activated_at`을 `start_at`과 같게 저장한다. 혜택·상태·체험 자격 판정은 기존 규칙을 유지한다. 아직 체험 시작 API는 없으며, 관리자 지급은 현재 생성 경로에 반영한다.
+
+배포 담당이 아래 순서로 확인한다. PR-A-2의 판정 변경은 백필 완료를 확인한 뒤 배포한다. 이 문서 추가만으로 운영 SQL을 실행하지 않는다.
+
+1. 운영 `ddl-auto: update`와 기존 백업 절차를 확인하고 PR-A-1을 배포한다.
+2. 아래 조회로 두 컬럼 생성, 기존 이용권의 발급 경로별 건수와 백필 대상 건수를 기록한다. 이 단계에서 `SUBSCRIBE`·`TRIAL_CONVERT` 행은 0건이어야 한다. 예상과 다르면 회원·결제 담당과 확인한 뒤 진행한다.
+3. `TRIAL`·`ADMIN_GRANT`의 미활성화 행만 백필한다. 종료·만료 이력도 포함하며, 결제 대기 유료 이용권에는 값을 채우지 않는다.
+4. 백필 대상이 0건인지 확인하고 결과를 회원 담당에게 전달한다. 그 뒤 PR-A-2를 배포한다.
+
+```sql
+SHOW COLUMNS FROM membership WHERE Field IN ('activated_at', 'grace_end_at');
+SELECT source, COUNT(*) AS total_count,
+       SUM(activated_at IS NULL) AS unactivated_count
+FROM membership GROUP BY source;
+SELECT COUNT(*) AS backfill_count FROM membership
+WHERE activated_at IS NULL AND source IN ('TRIAL', 'ADMIN_GRANT');
+
+UPDATE membership
+SET activated_at = start_at, updated_at = NOW()
+WHERE activated_at IS NULL AND source IN ('TRIAL', 'ADMIN_GRANT');
+
+-- 실행 후 0건 확인
+SELECT COUNT(*) AS remaining_count FROM membership
+WHERE activated_at IS NULL AND source IN ('TRIAL', 'ADMIN_GRANT');
+```
+
+`SUBSCRIBE`·`TRIAL_CONVERT`의 `activated_at`은 첫 결제 성공 반영만 기록한다. 위 백필을 다시 실행해도 해당 경로는 포함하지 않는다. 새 환경변수는 필요 없다.

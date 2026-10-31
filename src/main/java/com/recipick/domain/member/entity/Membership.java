@@ -56,6 +56,11 @@ public class Membership extends BaseTimeEntity {
 
     private LocalDateTime endAt;
 
+    // 기존 행은 백필 후 다음 단계부터 혜택 판정에 사용한다.
+    private LocalDateTime activatedAt;
+
+    private LocalDateTime graceEndAt;
+
     private boolean autoRenew;
 
     private LocalDate billingAnchorDate;
@@ -79,6 +84,7 @@ public class Membership extends BaseTimeEntity {
             MembershipSource source,
             LocalDateTime startAt,
             LocalDateTime endAt,
+            LocalDateTime activatedAt,
             boolean autoRenew,
             LocalDate billingAnchorDate,
             Long consentedAmount,
@@ -88,12 +94,17 @@ public class Membership extends BaseTimeEntity {
         if (type == null || source == null || startAt == null || endAt == null || !startAt.isBefore(endAt)) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
         }
+        if ((source == MembershipSource.TRIAL || source == MembershipSource.ADMIN_GRANT)
+                && !startAt.equals(activatedAt)) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
         this.member = member;
         this.grantedByAdmin = grantedByAdmin;
         this.type = type;
         this.source = source;
         this.startAt = startAt;
         this.endAt = endAt;
+        this.activatedAt = activatedAt;
         this.autoRenew = autoRenew;
         this.billingAnchorDate = billingAnchorDate;
         this.consentedAmount = consentedAmount;

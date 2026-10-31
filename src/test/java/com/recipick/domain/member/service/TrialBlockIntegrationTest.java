@@ -36,7 +36,7 @@ class TrialBlockIntegrationTest extends IntegrationTestSupport {
 
     private void history(Member member, LocalDateTime now) {
         memberships.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
     }
 
     @Test

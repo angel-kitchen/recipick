@@ -92,6 +92,6 @@ class MembershipCancelReservationServiceTest {
 
     private Membership membership(LocalDateTime start, LocalDateTime end) {
         return Membership.builder().type(MembershipType.TRIAL).source(MembershipSource.TRIAL)
-                .startAt(start).endAt(end).autoRenew(true).build();
+                .startAt(start).activatedAt(start).endAt(end).autoRenew(true).build();
     }
 }
