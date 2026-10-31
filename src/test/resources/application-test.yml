@@ -4,6 +4,9 @@ recipick:
     enabled: false
   rate-limit:
     enabled: false
+  # 테스트는 PortOne 더미 설정(테스트 채널 키)이라 카드 등록 API를 연다. 닫힌 동작은 BillingKeyRegistrationDisabledApiTest가 본다
+  billing-key:
+    registration-enabled: true
 
 spring:
   jpa:
