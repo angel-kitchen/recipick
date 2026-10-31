@@ -37,7 +37,7 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("기존 행은 백필 전에도 혜택을 유지하고 백필은 결제 대기 유료 행을 제외한다")
+    @DisplayName("백필로 기존 혜택을 복구하고 결제 대기 유료 행은 제외한다")
     void backfillsOnlyTrialAndAdminGrantWithoutChangingBenefits() {
         // given
         LocalDateTime start = LocalDateTime.of(2026, 10, 1, 10, 0);
@@ -70,8 +70,8 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
         entityManager.clear();
         Membership legacy = entityManager.find(Membership.class, trialId);
         assertThat(legacy.getActivatedAt()).isNull();
-        assertThat(legacy.isActive(start.plusDays(1))).isTrue();
-        assertThat(legacy.getStatus(start.plusDays(1))).contains(com.recipick.domain.member.entity.enums.MembershipStatus.ACTIVE);
+        assertThat(legacy.isActive(start.plusDays(1))).isFalse();
+
         String backfill = "UPDATE membership SET activated_at = start_at, updated_at = NOW() "
                 + "WHERE activated_at IS NULL AND source IN ('TRIAL', 'ADMIN_GRANT')";
         // when
@@ -79,6 +79,7 @@ class MemberEntityIntegrationTest extends IntegrationTestSupport {
         entityManager.clear();
         // then
         assertThat(entityManager.find(Membership.class, trialId).getActivatedAt()).isEqualTo(start);
+        assertThat(entityManager.find(Membership.class, trialId).isActive(start.plusDays(1))).isTrue();
         assertThat(entityManager.find(Membership.class, grantId).getActivatedAt()).isEqualTo(start);
         assertThat(entityManager.find(Membership.class, pendingId).getActivatedAt()).isNull();
         assertThat(entityManager.find(Membership.class, conversionId).getActivatedAt()).isNull();

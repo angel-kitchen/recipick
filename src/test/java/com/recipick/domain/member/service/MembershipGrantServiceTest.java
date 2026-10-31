@@ -17,12 +17,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class MembershipGrantServiceTest {
@@ -41,7 +39,7 @@ class MembershipGrantServiceTest {
         ReflectionTestUtils.setField(admin, "id", 2L);
         given(members.getMemberForUpdate(1L)).willReturn(member);
         given(admins.findById(2L)).willReturn(Optional.of(admin));
-        given(memberships.findActiveMemberships(1L, start, PageRequest.of(0, 1))).willReturn(List.of());
+        given(memberships.existsBlocking(1L, start)).willReturn(false);
         given(memberships.save(any(Membership.class))).willAnswer(invocation -> {
             Membership value = invocation.getArgument(0);
             ReflectionTestUtils.setField(value, "id", 3L);
@@ -59,7 +57,7 @@ class MembershipGrantServiceTest {
         InOrder order = inOrder(members, admins, memberships);
         order.verify(members).getMemberForUpdate(1L);
         order.verify(admins).findById(2L);
-        order.verify(memberships).findActiveMemberships(1L, start, PageRequest.of(0, 1));
+        order.verify(memberships).existsBlocking(1L, start);
         order.verify(memberships).save(any(Membership.class));
     }
 }

@@ -77,10 +77,12 @@ class MembershipCancelReservationServiceTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1})
-    @DisplayName("기간 종료 시각부터는 활성 이용권이 아니므로 해지 예약을 거절한다")
+    @DisplayName("유예 없는 유료 이용권은 기간 종료 시각부터 해지 예약을 거절한다")
     void rejectsAtAndAfterEnd(int secondsAfterEnd) {
         // given
-        Membership membership = membership(now.minusDays(7), now.minusSeconds(secondsAfterEnd));
+        Membership membership = Membership.builder().type(MembershipType.PAID).source(MembershipSource.SUBSCRIBE)
+                .startAt(now.minusDays(30)).activatedAt(now.minusDays(30))
+                .endAt(now.minusSeconds(secondsAfterEnd)).autoRenew(true).build();
         given(members.findByIdForUpdate(1L)).willReturn(Optional.of(Member.builder().build()));
         given(memberships.findByIdAndMemberIdForUpdate(10L, 1L)).willReturn(Optional.of(membership));
         // when, then

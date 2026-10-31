@@ -135,6 +135,21 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
     }
 
     @ParameterizedTest
+    @CsvSource({"PAID,SUBSCRIBE", "TRIAL,TRIAL"})
+    @DisplayName("결제 대기·전환 대기 이용권이 있으면 관리자 지급을 거절한다")
+    void rejectsPendingMembership(MembershipType type, MembershipSource source) throws Exception {
+        // given
+        LocalDateTime start = LocalDateTime.now(clock).minusDays(8);
+        memberships.saveAndFlush(Membership.builder().member(member).type(type).source(source)
+                .startAt(start).activatedAt(type == MembershipType.TRIAL ? start : null)
+                .endAt(start.plusDays(7)).autoRenew(true).build());
+        // when
+        MockHttpServletResponse response = grant(member.getId(), token);
+        // then
+        assertError(response, 409, "MEMBERSHIP-002");
+    }
+
+    @ParameterizedTest
     @CsvSource({"TRIAL,TRIAL", "PAID,SUBSCRIBE", "PAID,ADMIN_GRANT"})
     @DisplayName("활성 체험·유료·관리자 지급 이용권이 있으면 추가 지급하지 않는다")
     void rejectsActiveMembership(String type, String source) throws Exception {

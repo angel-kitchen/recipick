@@ -142,7 +142,7 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
                 .containsExactly(grant.getId().toString(), terminated.getId().toString(),
                         reserved.getId().toString(), expired.getId().toString());
         assertThat(result.path("content").findValuesAsText("status"))
-                .containsExactly("ACTIVE", "TERMINATED", "CANCEL_RESERVED", "EXPIRED");
+                .containsExactly("ACTIVE", "TERMINATED", "CANCEL_RESERVED", "CONVERSION_PENDING");
         assertThat(result.path("content").findValuesAsText("source"))
                 .containsExactly("ADMIN_GRANT", "TRIAL_CONVERT", "SUBSCRIBE", "TRIAL");
         assertThat(result.path("content").get(0).path("grantedByAdminId").asLong()).isEqualTo(admin.getId());

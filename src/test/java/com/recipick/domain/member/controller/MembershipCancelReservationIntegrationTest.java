@@ -107,6 +107,44 @@ class MembershipCancelReservationIntegrationTest extends IntegrationTestSupport 
     }
 
     @ParameterizedTest
+    @CsvSource({"PAID,SUBSCRIBE,PAYMENT_PENDING", "TRIAL,TRIAL,EXPIRED"})
+    @DisplayName("결제 대기와 전환 대기도 해지 예약하고 응답 상태를 구분한다")
+    void reservesPendingMembership(MembershipType type, MembershipSource source, String status) throws Exception {
+        // given
+        LocalDateTime start = now.minusDays(8);
+        Membership pending = Membership.builder().member(member).type(type).source(source)
+                .startAt(start).activatedAt(type == MembershipType.TRIAL ? start : null)
+                .endAt(now.minusDays(1)).autoRenew(true).build();
+        memberships.saveAndFlush(pending);
+        // when
+        var response = reserve(pending.getId());
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("status").asText()).isEqualTo(status);
+        assertThat(data(response).path("autoRenew").asBoolean()).isFalse();
+        assertThat(data(response).path("cancelReservedAt").isNull()).isFalse();
+        assertThat(membershipService.isActive(member.getId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("유예 중 해지 예약은 유예를 지워 즉시 만료시킨다")
+    void endsGraceOnReservation() throws Exception {
+        // given
+        Membership value = membership(member, MembershipType.PAID, MembershipSource.SUBSCRIBE,
+                now.minusDays(31), now.minusDays(1));
+        org.springframework.test.util.ReflectionTestUtils.setField(value, "graceEndAt", now.plusDays(2));
+        memberships.saveAndFlush(value);
+        assertThat(membershipService.isActive(member.getId())).isTrue();
+        // when
+        var response = reserve(value.getId());
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(data(response).path("status").asText()).isEqualTo("EXPIRED");
+        assertThat(memberships.findById(value.getId()).orElseThrow().getGraceEndAt()).isNull();
+        assertThat(membershipService.isActive(member.getId())).isFalse();
+    }
+
+    @ParameterizedTest
     @CsvSource({"TRIAL,TRIAL", "PAID,SUBSCRIBE", "PAID,TRIAL_CONVERT"})
     @DisplayName("체험·구독·체험 전환의 해지 예약은 자동갱신만 끄고 기존 기간·동의·혜택을 유지한다")
     void reservesWithoutEndingBenefits(MembershipType type, MembershipSource source) throws Exception {
