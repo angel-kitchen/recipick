@@ -42,9 +42,11 @@ export async function openPostcode(onSelect) {
 
 // 주소가 정해지면 로그인 없이 배송 가능 여부를 확인한다(저장하지 않는다).
 // 확인 중이면 { area: null, failed: false }, 조회가 실패하면 { area: null, failed: true }.
-// 실패해도 주소 입력은 계속할 수 있어서 호출한 쪽이 안내만 바꾼다
+// 실패해도 주소 입력은 계속할 수 있어서 호출한 쪽이 안내만 바꾸고, retry()로 같은 주소를 다시 조회한다
 export function useServiceArea(legalDongCode) {
   const [result, setResult] = useState({ area: null, failed: false });
+  // 법정동 코드가 그대로여도 효과가 다시 돌게 하려고 시도 횟수를 의존성에 둔다
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setResult({ area: null, failed: false });
@@ -57,7 +59,7 @@ export function useServiceArea(legalDongCode) {
     return () => {
       ignore = true;
     };
-  }, [legalDongCode]);
+  }, [legalDongCode, attempt]);
 
-  return result;
+  return { ...result, retry: () => setAttempt((n) => n + 1) };
 }

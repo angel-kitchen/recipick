@@ -24,7 +24,7 @@ export default function Start() {
   // 로그인 직후 보관한 주소를 저장하지 못해서 돌아온 경우 그 이유를 먼저 보여 준다
   const [error, setError] = useState(() => (location.state?.notice ? new Error(location.state.notice) : null));
   const [submitting, setSubmitting] = useState(false);
-  const { area, failed } = useServiceArea(place?.legalDongCode);
+  const { area, failed, retry } = useServiceArea(place?.legalDongCode);
 
   if (loading) return <p className="state-message">불러오는 중입니다.</p>;
   if (member?.currentAddress) return <Navigate to={next} replace />;
@@ -157,7 +157,12 @@ export default function Start() {
           )}
           {place && !area && !failed && <p className="field__hint">배송 가능 여부를 확인하고 있어요.</p>}
           {place && failed && (
-            <p className="error-text">배송 가능 여부를 확인하지 못했어요. 주소를 다시 선택해 주세요.</p>
+            <div className="notice notice--info notice--action">
+              <span>배송 가능 여부를 확인하지 못했어요.</span>
+              <button type="button" className="btn btn--muted" onClick={retry}>
+                다시 확인
+              </button>
+            </div>
           )}
 
           <label className="field">
