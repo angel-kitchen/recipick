@@ -59,7 +59,7 @@
   justify-content: center;
   border: 3px solid transparent;
   border-radius: var(--radius-tesla);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.33s, color 0.33s, border-color 0.33s;
@@ -107,7 +107,7 @@
   max-width: 560px;
   text-align: center;
   color: #5c5e62;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .steps {
@@ -126,7 +126,7 @@
 .steps__number {
   display: block;
   margin-bottom: var(--space-3);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--green-accent);
   font-weight: 500;
 }
@@ -140,7 +140,7 @@
 .steps__text {
   margin-top: var(--space-2);
   color: #5c5e62;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .korea-map {
@@ -157,7 +157,7 @@
   justify-content: center;
   align-items: center;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: 16px;
   color: #5c5e62;
 }
 

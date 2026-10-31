@@ -103,6 +103,22 @@ export default function AutoCartReview({ preview, disabled = false }) {
   return (
     <div>
       <ErrorNotice error={error} />
+      <div className="review-summary">
+        <div className="summary__row">
+          <span>담을 상품</span>
+          <span>{picked.length}개</span>
+        </div>
+        {(skipped > 0 || unavailable.length > 0) && (
+          <div className="summary__row">
+            <span>담지 않는 재료</span>
+            <span>{skipped + unavailable.length}개</span>
+          </div>
+        )}
+        <div className="summary__row summary__total">
+          <span>예상 금액</span>
+          <span>{formatWon(total)}</span>
+        </div>
+      </div>
       <div className="review">
         {preview.items.map((item) => {
           const productId = item.purchasable ? chosenProductId(item) : null;
@@ -153,21 +169,6 @@ export default function AutoCartReview({ preview, disabled = false }) {
         })}
       </div>
 
-      <div className="summary__row">
-        <span>담을 상품</span>
-        <span>{picked.length}개</span>
-      </div>
-      {(skipped > 0 || unavailable.length > 0) && (
-        <div className="summary__row">
-          <span>담지 않는 재료</span>
-          <span>{skipped + unavailable.length}개</span>
-        </div>
-      )}
-      <div className="summary__row summary__total">
-        <span>예상 금액</span>
-        <span>{formatWon(total)}</span>
-      </div>
-      <p className="field__hint">미리보기는 저장되지 않아요. 담을 때 가격과 재고를 다시 확인해요.</p>
       <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || submitting || picked.length === 0} onClick={() => guard(doAdd)}>
         {submitting ? '담는 중...' : `${picked.length}개 장바구니에 담기`}
       </button>
@@ -175,7 +176,10 @@ export default function AutoCartReview({ preview, disabled = false }) {
       {modal}
       {added && (
         <div className="modal" role="dialog" aria-modal="true" aria-label="장바구니에 담겼습니다">
-          <div className="modal__box card">
+          <div className="modal__box card modal__box--center">
+            <button type="button" className="modal__close" aria-label="닫기" onClick={() => setAdded(null)}>
+              ×
+            </button>
             <h2 className="tile__title">장바구니에 담겼습니다</h2>
             <p className="field__hint">
               {menuLabels.join(', ')} 재료 {added.lines.length}개
@@ -196,7 +200,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
               ))}
             </ul>
             <ErrorNotice error={error} />
-            <div className="row-actions">
+            <div className="row-actions row-actions--center">
               <button type="button" className="btn btn--large" onClick={orderNow}>
                 바로 주문하기
               </button>
@@ -204,9 +208,6 @@ export default function AutoCartReview({ preview, disabled = false }) {
                 장바구니로 가기
               </Link>
             </div>
-            <button type="button" className="header__link-button" style={{ marginTop: 12 }} onClick={() => setAdded(null)}>
-              닫기
-            </button>
           </div>
         </div>
       )}
