@@ -1,5 +1,6 @@
 package com.recipick.domain.product.service;
 
+import com.recipick.domain.product.dto.MartMapResponse;
 import com.recipick.domain.product.dto.OpenMartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
@@ -72,5 +73,32 @@ public class MartServiceOpenMartsTest {
             .willReturn(List.of());
 
         assertThat(martService.findOpenMarts(99L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("지도용: 위도나 경도가 없는 마트는 제외하고 ID 순서를 유지한다")
+    void findOpenMartsForMap_excludesMartWithoutCoordinates(){
+        Mart noLatitude = Mart.builder()
+            .regionId(33L)
+            .name("위도 없는 마트")
+            .longitude(new BigDecimal("127.1080000"))
+            .serviceRadiusM(2000)
+            .build();
+        ReflectionTestUtils.setField(noLatitude, "id", 2L);
+
+        Mart noLongitude = Mart.builder()
+            .regionId(34L)
+            .name("경도 없는 마트")
+            .latitude(new BigDecimal("37.3670000"))
+            .serviceRadiusM(2000)
+            .build();
+        ReflectionTestUtils.setField(noLongitude, "id", 3L);
+
+        given(martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN))
+            .willReturn(List.of(mart(1L, 31L, "삼청동 마트"), noLatitude, noLongitude, mart(4L, 35L, "혜화동 마트")));
+
+        List<MartMapResponse> result = martService.findOpenMartsForMap();
+
+        assertThat(result).extracting(MartMapResponse::martId).containsExactly(1L, 4L);
     }
 }
