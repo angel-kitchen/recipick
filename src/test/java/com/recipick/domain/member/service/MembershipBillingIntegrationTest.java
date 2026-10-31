@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.IllegalTransactionStateException;
@@ -53,6 +55,48 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
                 .source(MembershipSource.TRIAL).startAt(end.minusDays(7)).activatedAt(end.minusDays(7)).endAt(end)
                 .autoRenew(true).consentedAmount(CONSENT.consentedAmount()).consentTextVersion(CONSENT.consentTextVersion())
                 .autopayConsentedAt(CONSENT.autopayConsentedAt()).build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ACTIVE", "EXPIRED", "TERMINATED", "WITHDRAWN"})
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("회원 매핑은 쓰기 트랜잭션 없이 읽으며 만료·종료·탈퇴 이력도 포함한다")
+    void readsOwnerWithoutWriteTransactionOrLifecycleFilter(String state) {
+        // given
+        Member member = member();
+        Membership value = Membership.builder().member(member).type(MembershipType.PAID)
+                .source(MembershipSource.SUBSCRIBE).startAt(NOW.minusMonths(1)).activatedAt(NOW.minusMonths(1))
+                .endAt(state.equals("EXPIRED") ? NOW.minusDays(1) : NOW.plusMonths(1)).build();
+        if (state.equals("TERMINATED")) {
+            value.terminateAfterRefund(NOW);
+        }
+        memberships.saveAndFlush(value);
+        try {
+            if (state.equals("WITHDRAWN")) {
+                jdbc.update("UPDATE member SET withdrawn_at = ? WHERE id = ?", NOW, member.getId());
+            }
+            // when
+            Long ownerId = billing.findMemberIdOfMembership(value.getId());
+            TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
+            readOnly.setReadOnly(true);
+            Long ownerInReadOnly = readOnly.execute(status -> billing.findMemberIdOfMembership(value.getId()));
+            // then
+            assertThat(ownerId).isEqualTo(member.getId());
+            assertThat(ownerInReadOnly).isEqualTo(member.getId());
+        } finally {
+            memberships.deleteById(value.getId());
+            members.deleteById(member.getId());
+        }
+    }
+
+    @Test
+    @Transactional(readOnly = true)
+    @DisplayName("없는 이용권의 회원 매핑은 MEMBERSHIP-006으로 거절한다")
+    void rejectsMissingMembershipOwner() {
+        // given, when, then
+        assertThatThrownBy(() -> billing.findMemberIdOfMembership(-1L))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
     }
 
     @Test
