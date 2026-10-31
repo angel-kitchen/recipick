@@ -1,5 +1,7 @@
 package com.recipick.domain.member.entity;
 
+import com.recipick.domain.member.dto.MembershipBillingResult;
+import com.recipick.domain.member.dto.MembershipConsent;
 import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.domain.member.entity.enums.MembershipStatus;
 import com.recipick.domain.member.entity.enums.MembershipType;
@@ -110,6 +112,113 @@ public class Membership extends BaseTimeEntity {
         this.consentedAmount = consentedAmount;
         this.consentTextVersion = consentTextVersion;
         this.autopayConsentedAt = autopayConsentedAt;
+    }
+
+    public static Membership pendingPaid(Member member, MembershipSource source,
+            LocalDateTime provisionalStartAt, LocalDateTime provisionalEndAt, MembershipConsent consent) {
+        if (member == null || (source != MembershipSource.SUBSCRIBE && source != MembershipSource.TRIAL_CONVERT)) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        if (consent == null || consent.consentedAmount() == null || consent.consentedAmount() <= 0
+                || consent.consentTextVersion() == null || consent.consentTextVersion().isBlank()
+                || consent.consentTextVersion().length() > 20 || consent.autopayConsentedAt() == null) {
+            throw new BusinessException(MemberErrorCode.AUTOPAY_CONSENT_REQUIRED);
+        }
+        if (provisionalStartAt == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        return Membership.builder().member(member).type(MembershipType.PAID).source(source)
+                .startAt(provisionalStartAt).endAt(provisionalEndAt).autoRenew(true)
+                .billingAnchorDate(provisionalStartAt.toLocalDate()).consentedAmount(consent.consentedAmount())
+                .consentTextVersion(consent.consentTextVersion()).autopayConsentedAt(consent.autopayConsentedAt()).build();
+    }
+
+    public MembershipBillingResult activateAfterFirstPayment(LocalDateTime pgPaidAt,
+            LocalDateTime newEndAt, LocalDateTime newGraceEndAt) {
+        if (type != MembershipType.PAID || terminatedAt != null) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        if (activatedAt != null) {
+            return MembershipBillingResult.ALREADY_APPLIED;
+        }
+        if (!isPaymentPending()) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        validatePeriod(pgPaidAt, newEndAt, newGraceEndAt);
+        startAt = pgPaidAt;
+        activatedAt = pgPaidAt;
+        billingAnchorDate = pgPaidAt.toLocalDate();
+        endAt = newEndAt;
+        graceEndAt = cancelReservedAt == null ? newGraceEndAt : null;
+        return MembershipBillingResult.ACTIVATED;
+    }
+
+    public MembershipBillingResult closeUnpaid(LocalDateTime at) {
+        if (type != MembershipType.PAID || activatedAt != null) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        if (terminatedAt != null) {
+            return MembershipBillingResult.ALREADY_APPLIED;
+        }
+        if (at == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        terminatedAt = at;
+        autoRenew = false;
+        return MembershipBillingResult.CLOSED_UNPAID;
+    }
+
+    public MembershipBillingResult extendAfterRenewal(LocalDateTime newEndAt, LocalDateTime newGraceEndAt) {
+        if (type != MembershipType.PAID || activatedAt == null || terminatedAt != null) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        if (newEndAt == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        if (!endAt.isBefore(newEndAt)) {
+            return MembershipBillingResult.ALREADY_APPLIED;
+        }
+        validatePeriod(startAt, newEndAt, newGraceEndAt);
+        endAt = newEndAt;
+        graceEndAt = cancelReservedAt == null ? newGraceEndAt : null;
+        return MembershipBillingResult.EXTENDED;
+    }
+
+    public MembershipBillingResult stopRenewal() {
+        if (type != MembershipType.PAID || activatedAt == null) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        if (!autoRenew) {
+            return MembershipBillingResult.ALREADY_APPLIED;
+        }
+        autoRenew = false;
+        return MembershipBillingResult.RENEWAL_STOPPED;
+    }
+
+    public MembershipBillingResult handOverConversion(LocalDateTime now) {
+        if (now == null || !isConversionPending(now)) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        autoRenew = false;
+        return MembershipBillingResult.CONVERSION_CLOSED;
+    }
+
+    public MembershipBillingResult closeConversion(LocalDateTime now) {
+        if (now == null || type != MembershipType.TRIAL || terminatedAt != null || now.isBefore(endAt)) {
+            return MembershipBillingResult.CONFLICT;
+        }
+        if (!autoRenew) {
+            return MembershipBillingResult.ALREADY_APPLIED;
+        }
+        autoRenew = false;
+        return MembershipBillingResult.CONVERSION_CLOSED;
+    }
+
+    private static void validatePeriod(LocalDateTime start, LocalDateTime end, LocalDateTime graceEnd) {
+        if (start == null || end == null || !start.isBefore(end)
+                || (graceEnd != null && graceEnd.isBefore(end))) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
     }
 
     public boolean isActive(LocalDateTime now) {

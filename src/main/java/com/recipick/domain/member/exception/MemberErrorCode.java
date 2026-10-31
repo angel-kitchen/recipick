@@ -33,7 +33,9 @@ public enum MemberErrorCode implements ErrorCode {
     PAYMENT_METHOD_REQUIRED(HttpStatus.CONFLICT, "MEMBERSHIP-005", "등록된 결제 카드가 없습니다."),
     ACTIVE_MEMBERSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBERSHIP-006", "이용 중인 멤버십이 없습니다."),
     NOT_CANCELABLE(HttpStatus.CONFLICT, "MEMBERSHIP-007", "자동갱신을 해지할 수 없는 멤버십입니다."),
-    NOT_TERMINABLE(HttpStatus.CONFLICT, "MEMBERSHIP-008", "즉시 해지할 수 없는 멤버십입니다.");
+    NOT_TERMINABLE(HttpStatus.CONFLICT, "MEMBERSHIP-008", "즉시 해지할 수 없는 멤버십입니다."),
+    MEMBERSHIP_PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "MEMBERSHIP-009", "결제 확인 중인 멤버십이 있습니다."),
+    CANCEL_PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "MEMBERSHIP-010", "결제를 확인하고 있어 지금은 해지할 수 없습니다. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus status;
     private final String code;
