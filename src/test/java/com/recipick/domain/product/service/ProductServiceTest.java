@@ -93,6 +93,7 @@ public class ProductServiceTest {
             .mart(mart)
             .category(category)
             .name("애호박")
+            .description("신선한 애호박")
             .price(1500L)
             .totalQuantity(5)
             .build();
@@ -124,6 +125,22 @@ public class ProductServiceTest {
         assertThat(result.content().get(0).categoryName()).isEqualTo("채소");
         assertThat(result.totalElements()).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("관리자 상품 목록 응답에 상품 설명이 포함된다")
+    void adminProductsIncludeDescription(){
+        // given
+        given(productRepository.searchAdminProducts(any(), any()))
+            .willReturn(new PageImpl<>(List.of(product(1L, 1L)), pageable, 1));
+
+        // when
+        PageResponse<AdminProductResponse> result =
+            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, conditionOf(null), pageable);
+
+        // then
+        assertThat(result.content().get(0).description()).isEqualTo("신선한 애호박");
+    }
+
     @Test
     @DisplayName("마트 관리자가 다른 마트를 지정하면 접근이 거부된다")
     void martAdminOtherMartDenied() {
