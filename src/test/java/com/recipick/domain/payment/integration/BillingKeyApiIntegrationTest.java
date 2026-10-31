@@ -15,6 +15,7 @@ import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.payment.entity.BillingKey;
 import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
+import com.recipick.domain.payment.repository.BillingKeyIssueRequestRepository;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
 import com.recipick.global.security.JwtTokenProvider;
 import java.time.Clock;
@@ -48,6 +49,9 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     BillingKeyRepository billingKeys;
+
+    @Autowired
+    BillingKeyIssueRequestRepository issueRequests;
 
     @Autowired
     JwtTokenProvider tokens;
@@ -107,10 +111,9 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
         assertThat(row.get("member_id")).isEqualTo(member.getId());
         assertThat(row.get("status")).isEqualTo("REQUESTED");
         assertThat(row.get("billing_key_id")).isNull();
-        // DATETIME은 드라이버 설정에 따라 Timestamp 또는 LocalDateTime으로 오므로 타입을 명시해 읽는다
-        LocalDateTime expiresAt = jdbc.queryForObject(
-            "SELECT expires_at FROM billing_key_issue_request WHERE issue_id = ?",
-            (rs, rowNum) -> rs.getObject("expires_at", LocalDateTime.class), issueId);
+        // 시각은 앱과 같은 경로(JPA)로 읽는다. 저장 시 hibernate.jdbc.time_zone(Asia/Seoul)으로 바꾼 값을 JDBC로 직접 읽으면
+        // JVM 기본 시간대가 UTC인 CI에서 9시간 어긋난다(로컬은 KST라 우연히 같다)
+        LocalDateTime expiresAt = issueRequests.findByIssueId(issueId).orElseThrow().getExpiresAt();
         LocalDateTime now = LocalDateTime.now(clock);
         assertThat(expiresAt).isBetween(now.plusMinutes(29), now.plusMinutes(31));
     }
