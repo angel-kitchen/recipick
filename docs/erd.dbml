@@ -78,6 +78,8 @@ Table MEMBERSHIP {
   source varchar(20)
   start_at datetime
   end_at datetime
+  activated_at datetime [null, note: '활성화 시각. 기존 행 백필 후 혜택 판정에 적용']
+  grace_end_at datetime [null, note: '유예 종료 시각. 이번 단계에서는 사용하지 않음']
   auto_renew boolean
   billing_anchor_date date
   consented_amount bigint
