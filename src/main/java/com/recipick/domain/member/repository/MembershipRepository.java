@@ -1,6 +1,7 @@
 package com.recipick.domain.member.repository;
 
 import com.recipick.domain.member.dto.MemberMembershipData;
+import com.recipick.domain.member.dto.MembershipBillingTarget;
 import com.recipick.domain.member.entity.Membership;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import java.time.LocalDateTime;
@@ -27,7 +28,7 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     List<Membership> findActiveMemberships(@Param("memberId") Long memberId,
             @Param("now") LocalDateTime now, Pageable pageable);
 
-    // 과거 시점의 혜택은 현재 종료 여부가 아니라 당시 종료 여부로 판정한다.
+    // 실제 종료 시각을 고려하되 지워진 과거 유예 이력은 재현하지 않는다. 주문 적립률은 생성 시 저장한다.
     @Query("""
             SELECT m FROM Membership m
             WHERE m.member.id = :memberId
@@ -88,4 +89,30 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             """)
     List<Membership> findPendingMemberships(@Param("memberId") Long memberId,
             @Param("now") LocalDateTime now, Pageable pageable);
+
+    @Query("SELECT m.id FROM Membership m WHERE m.member.id = :memberId ORDER BY m.id")
+    List<Long> findIdsByMemberId(@Param("memberId") Long memberId);
+
+    @Query("""
+            SELECT new com.recipick.domain.member.dto.MembershipBillingTarget(m.id, m.member.id)
+            FROM Membership m
+            WHERE m.type = com.recipick.domain.member.entity.enums.MembershipType.TRIAL
+              AND m.terminatedAt IS NULL AND m.autoRenew = true AND m.cancelReservedAt IS NULL
+              AND m.endAt <= :now AND m.id > :afterId
+            ORDER BY m.id
+            """)
+    List<MembershipBillingTarget> findTrialConversionTargets(@Param("now") LocalDateTime now,
+            @Param("afterId") Long afterId, Pageable pageable);
+
+    @Query("""
+            SELECT new com.recipick.domain.member.dto.MembershipBillingTarget(m.id, m.member.id)
+            FROM Membership m
+            WHERE m.type = com.recipick.domain.member.entity.enums.MembershipType.PAID
+              AND m.activatedAt IS NOT NULL AND m.terminatedAt IS NULL
+              AND m.autoRenew = true AND m.cancelReservedAt IS NULL
+              AND m.endAt <= :now AND :now < m.graceEndAt AND m.id > :afterId
+            ORDER BY m.id
+            """)
+    List<MembershipBillingTarget> findRenewalTargets(@Param("now") LocalDateTime now,
+            @Param("afterId") Long afterId, Pageable pageable);
 }
