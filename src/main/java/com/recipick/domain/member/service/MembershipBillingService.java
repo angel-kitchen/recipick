@@ -40,6 +40,13 @@ public class MembershipBillingService {
                 new MembershipConsent(value.getConsentedAmount(), value.getConsentTextVersion(), value.getAutopayConsentedAt()));
     }
 
+    // 웹훅·복구는 잠금 트랜잭션에 진입하기 전에 별도 읽기 조회로 회원 ID를 찾는다.
+    // 이후 회원부터 잠그고 getBillingMembershipForUpdate로 소유권과 상태를 다시 확인한다.
+    public Long findMemberIdOfMembership(Long membershipId) {
+        return memberships.findMemberIdOfMembership(membershipId)
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
+    }
+
     public List<Long> findMembershipIds(Long memberId) {
         return memberships.findIdsByMemberId(memberId);
     }

@@ -90,6 +90,9 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     List<Membership> findPendingMemberships(@Param("memberId") Long memberId,
             @Param("now") LocalDateTime now, Pageable pageable);
 
+    @Query("SELECT m.member.id FROM Membership m WHERE m.id = :membershipId")
+    Optional<Long> findMemberIdOfMembership(@Param("membershipId") Long membershipId);
+
     @Query("SELECT m.id FROM Membership m WHERE m.member.id = :memberId ORDER BY m.id")
     List<Long> findIdsByMemberId(@Param("memberId") Long memberId);
 
