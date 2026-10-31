@@ -193,7 +193,7 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | --- | --- |
 | 앱 로그 | `docker logs -f recipick-app` |
 | 현재 태그 | `grep ^IMAGE_TAG= /opt/recipick/.env` |
-| 모니터링 올리기 | `docker compose -f compose.monitoring.yml up -d`. 부하 테스트 중에도 켜 둔다(Before·After 같은 조건) |
+| 모니터링 올리기 | `docker compose -f compose.monitoring.yml up -d` |
 | Grafana 접속 | 로컬에서 `aws ssm start-session --target <INSTANCE_ID> --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host=<grafana 컨테이너 IP>,portNumber=3000,localPortNumber=3000` 후 `http://localhost:3000`. 컨테이너 IP는 `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' recipick-grafana` |
 | infra 설정 변경 적용 | `docker compose -f compose.infra.yml up -d`. 해당 서비스가 잠깐 재시작되므로 시연 시간을 피한다 |
 | 메모리·디스크 확인 | `docker stats --no-stream`, `df -h /`, `docker system df` |
