@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.order.dto.request.OrderPreviewRequest;
 import com.recipick.domain.order.dto.response.CartItemResponse;
@@ -64,6 +65,8 @@ class OrderQueryFacadeTest {
     @Mock
     private MemberService memberService;
     @Mock
+    private MembershipService membershipService;
+    @Mock
     private RegionService regionService;
     @Mock
     private MartService martService;
@@ -83,7 +86,7 @@ class OrderQueryFacadeTest {
 
     @BeforeEach
     void setUp() {
-        orderQueryFacade = new OrderQueryFacade(auditRecorder, memberService, regionService, martService, cartService,
+        orderQueryFacade = new OrderQueryFacade(auditRecorder, memberService, membershipService, regionService, martService, cartService,
                 productService, orderService, paymentService, Clock.fixed(NOW.atZone(SEOUL).toInstant(), SEOUL));
     }
 
@@ -128,6 +131,25 @@ class OrderQueryFacadeTest {
         assertThat(response.productAmount()).isEqualTo(40000L);
         assertThat(response.deliveryFee()).isZero();
         assertThat(response.payAmount()).isEqualTo(40000L);
+    }
+
+    @Test
+    @DisplayName("멤버십 회원은 상품금액 15,000원 이상이면 배송비가 없다")
+    void previewOrder_membershipFreeDelivery() {
+        // given
+        givenOpenMart();
+        givenRegion(REGION_ID);
+        givenCart(product(10L, MART_ID, ProductStatus.SELLING, 10, 7500L));
+        givenNoPendingOrder();
+        given(membershipService.isActive(MEMBER_ID)).willReturn(true);
+
+        // when
+        OrderPreviewResponse response = orderQueryFacade.previewOrder(MEMBER_ID, request(100L));
+
+        // then
+        assertThat(response.productAmount()).isEqualTo(15000L);
+        assertThat(response.deliveryFee()).isZero();
+        assertThat(response.payAmount()).isEqualTo(15000L);
     }
 
     @Test

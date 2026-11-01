@@ -11,11 +11,11 @@ public record CartResponse(
         DeliveryPolicy deliveryPolicy
 ) {
 
-    public static CartResponse of(List<CartItemResponse> items) {
+    public static CartResponse of(List<CartItemResponse> items, boolean membershipActive) {
         boolean hasPreviousMartItems = items.stream()
                 .anyMatch(item -> item.status() == CartItemStatus.PREVIOUS_MART);
         return new CartResponse(items, hasPreviousMartItems,
-                new DeliveryPolicy(OrderAmount.FREE_DELIVERY_THRESHOLD, OrderAmount.DELIVERY_FEE));
+                new DeliveryPolicy(OrderAmount.freeDeliveryThreshold(membershipActive), OrderAmount.DELIVERY_FEE));
     }
 
     public record DeliveryPolicy(long freeDeliveryThreshold, long deliveryFee) {

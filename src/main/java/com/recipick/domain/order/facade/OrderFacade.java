@@ -1,6 +1,7 @@
 package com.recipick.domain.order.facade;
 
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.order.dto.OrderCreateResult;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
@@ -48,6 +49,7 @@ public class OrderFacade {
     private final OrderService orderService;
     private final CartService cartService;
     private final MemberService memberService;
+    private final MembershipService membershipService;
     private final RegionService regionService;
     private final MartService martService;
     private final ProductService productService;
@@ -89,8 +91,10 @@ public class OrderFacade {
             .toList();
         validateSameMart(quantities, martId);
 
-        // 같은 키 재시도는 위에서 기존 주문으로 끝났으므로 새 주문에만 적립률을 정한다
+        // 같은 키 재시도는 위에서 기존 주문으로 끝났으므로 새 주문에만 적립률·배송비 기준을 정한다.
+        // 배송비는 주문에 저장되므로 이후 멤버십이 끝나도 이미 만든 주문의 금액은 바뀌지 않는다
         BigDecimal pointRate = pointPolicyService.resolveRate(memberId);
+        boolean membershipActive = membershipService.isActive(memberId);
         Order order = orderService.createPendingOrder(
             memberId, martId, regionId, normalizedKey, requestHash, pointRate, request);
         // 락 순서 MEMBER → ORDERS → MEMBER_POINT → POINT_EARNING → 재고라 포인트를 재고보다 먼저 예약한다.
@@ -98,7 +102,7 @@ public class OrderFacade {
         pointCommandService.reserveUsage(memberId, order.getId(), order.getUsedPoint());
         // 상품 판매 상태·재고 검증과 차감을 잠근 상태에서 한 번에 하고, 그때의 가격으로 금액을 계산한다
         List<ProductSummary> products = productStockService.decreaseStocks(martId, quantities);
-        List<OrderItem> items = orderService.completePendingOrder(order, products, quantities);
+        List<OrderItem> items = orderService.completePendingOrder(order, products, quantities, membershipActive);
         // 기존 자산 잠금 순서 POINT → STOCK은 그대로 지킨다. 적립 예정 건은 현재 가격으로 정한 상품금액이 있어야 만들 수 있어
         // 재고 잠금 뒤에 INSERT한다. 드문 gap-lock 경합은 DB가 한 트랜잭션을 롤백하고 COMMON-010 재시도로 처리된다
         pointCommandService.createPendingEarning(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.order.dto.OrderCreateResult;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
@@ -70,6 +71,9 @@ class OrderFacadeTest {
     private MemberService memberService;
 
     @Mock
+    private MembershipService membershipService;
+
+    @Mock
     private RegionService regionService;
 
     @Mock
@@ -109,7 +113,7 @@ class OrderFacadeTest {
         List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
         List<ProductSummary> products = List.of(product(2_500L));
         Order order = pendingOrder(5_000L, 3_000L, 3_000L, 5_000L);
-        givenOrderCreation(request, quantities, products, order);
+        givenOrderCreation(request, quantities, products, order, false);
         given(paymentCommandService.create(ORDER_ID, 5_000L)).willReturn(
             new PaymentCreated(30L, "pay_test", 5_000L, LocalDateTime.of(2026, 10, 29, 12, 5)));
 
@@ -127,7 +131,7 @@ class OrderFacadeTest {
             MEMBER_ID, MART_ID, REGION_ID, IDEMPOTENCY_KEY, requestHash, POINT_RATE, request);
         inOrder.verify(pointCommandService).reserveUsage(MEMBER_ID, ORDER_ID, 3_000L);
         inOrder.verify(productStockService).decreaseStocks(MART_ID, quantities);
-        inOrder.verify(orderService).completePendingOrder(order, products, quantities);
+        inOrder.verify(orderService).completePendingOrder(order, products, quantities, false);
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 5_000L, 3_000L, POINT_RATE);
         inOrder.verify(paymentCommandService).create(ORDER_ID, 5_000L);
         verify(pointsOnlyPaymentProcessor, never()).complete(any());
@@ -142,7 +146,7 @@ class OrderFacadeTest {
         List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
         List<ProductSummary> products = List.of(product(20_000L));
         Order order = pendingOrder(40_000L, 0L, 40_000L, 0L);
-        givenOrderCreation(request, quantities, products, order);
+        givenOrderCreation(request, quantities, products, order, false);
         given(pointsOnlyPaymentProcessor.complete(ORDER_ID)).willReturn(
             new PaymentCreated(30L, null, 0L, null, LocalDateTime.of(2026, 10, 29, 12, 0)));
 
@@ -160,6 +164,27 @@ class OrderFacadeTest {
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 40_000L, 40_000L, POINT_RATE);
         inOrder.verify(pointsOnlyPaymentProcessor).complete(ORDER_ID);
         verify(paymentCommandService, never()).create(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("멤버십 회원이면 금액 확정에 멤버십 배송비 기준을 쓰도록 활성 여부를 넘긴다")
+    void createOrder_membershipDeliveryFee() {
+        // given — 7,500원 상품 2개(상품 15,000원)는 멤버십 회원이면 무료배송이다
+        OrderCreateRequest request = new OrderCreateRequest(List.of(CART_ITEM_ID), "홍길동", "01012345678",
+            "서울 종로구 삼청로 1", "101호", LEGAL_DONG_CODE, 0L);
+        List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
+        List<ProductSummary> products = List.of(product(7_500L));
+        Order order = pendingOrder(15_000L, 0L, 0L, 15_000L);
+        givenOrderCreation(request, quantities, products, order, true);
+        given(paymentCommandService.create(ORDER_ID, 15_000L)).willReturn(
+            new PaymentCreated(30L, "pay_test", 15_000L, LocalDateTime.of(2026, 10, 29, 12, 5)));
+
+        // when
+        OrderCreateResult result = orderFacade.createOrder(MEMBER_ID, IDEMPOTENCY_KEY, request);
+
+        // then
+        assertThat(result.response().amount()).isEqualTo(15_000L);
+        verify(orderService).completePendingOrder(order, products, quantities, true);
     }
 
     @Test
@@ -233,7 +258,7 @@ class OrderFacadeTest {
 
     // 새 주문 생성이 결제 생성 직전까지 거치는 회원·마트·지역·장바구니·적립률·주문·재고·금액 확정 호출을 준비한다
     private void givenOrderCreation(OrderCreateRequest request, List<StockQuantity> quantities,
-                                    List<ProductSummary> products, Order order) {
+                                    List<ProductSummary> products, Order order, boolean membershipActive) {
         List<OrderItem> items = List.of(OrderItem.builder().productId(PRODUCT_ID).productName("애호박").quantity(2)
             .build());
         given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
@@ -247,7 +272,8 @@ class OrderFacadeTest {
         given(orderService.createPendingOrder(MEMBER_ID, MART_ID, REGION_ID, IDEMPOTENCY_KEY, request.requestHash(),
             POINT_RATE, request)).willReturn(order);
         given(productStockService.decreaseStocks(MART_ID, quantities)).willReturn(products);
-        given(orderService.completePendingOrder(order, products, quantities)).willReturn(items);
+        given(membershipService.isActive(MEMBER_ID)).willReturn(membershipActive);
+        given(orderService.completePendingOrder(order, products, quantities, membershipActive)).willReturn(items);
     }
 
     private static ProductSummary product(long price) {
