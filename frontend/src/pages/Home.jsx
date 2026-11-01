@@ -75,7 +75,7 @@ export default function Home() {
       <section className="section section--alt">
         <div className="container">
           <h2 className="section__title">우리 동네 가맹 마트</h2>
-          <p className="section__lead">빨간 점은 Recipick과 함께하는 마트, 연한 원은 배송 가능 지역입니다.</p>
+          <p className="section__lead">빨간 점은 Recipick과 함께하는 마트입니다.</p>
           <KoreaMap />
           <p className="map-legend">
             <i /> 가맹 마트

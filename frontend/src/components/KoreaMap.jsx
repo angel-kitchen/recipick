@@ -9,14 +9,8 @@ function toMapMarts(list) {
       ...mart,
       latitude: Number(mart.latitude),
       longitude: Number(mart.longitude),
-      serviceRadiusM: mart.serviceRadiusM == null ? null : Number(mart.serviceRadiusM),
     }))
-    .filter(
-      (mart) =>
-        Number.isFinite(mart.latitude) &&
-        Number.isFinite(mart.longitude) &&
-        (mart.serviceRadiusM === null || Number.isFinite(mart.serviceRadiusM)),
-    );
+    .filter((mart) => Number.isFinite(mart.latitude) && Number.isFinite(mart.longitude));
 }
 
 // 운영 중인 마트만 내려온다(GET /api/config/marts, 로그인 불필요)
@@ -58,10 +52,11 @@ export default function KoreaMap() {
         [32.5, 123.5],
         [39.5, 132.5],
       ],
-      scrollWheelZoom: false, // 페이지 스크롤이 지도에 걸리지 않게 한다
+      // 마우스 휠로 확대·축소한다. 지도 위에서는 휠이 페이지 스크롤 대신 지도 확대에 쓰인다
+      scrollWheelZoom: true,
     });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 18,
     }).addTo(map);
 
@@ -69,16 +64,6 @@ export default function KoreaMap() {
       const open = mart.status === 'OPEN';
       const color = open ? '#e31b23' : '#8e8e8e';
       const position = [mart.latitude, mart.longitude];
-      // 서비스 반경은 배송 가능 지역을 보여준다
-      if (mart.serviceRadiusM !== null) {
-        L.circle(position, {
-          radius: mart.serviceRadiusM,
-          color,
-          weight: 1,
-          fillColor: color,
-          fillOpacity: 0.12,
-        }).addTo(map);
-      }
       // 이름을 HTML 문자열로 넣지 않고 텍스트 노드로 넣어 마트 이름에 태그가 섞여도 실행되지 않게 한다
       const popup = document.createElement('strong');
       popup.textContent = mart.name;
@@ -86,6 +71,15 @@ export default function KoreaMap() {
         .bindPopup(popup)
         .addTo(map);
     });
+
+    // 처음부터 마트가 보이도록 마트 위치에 맞춘다. 마트가 가까우면 줌 10(전국에서 세 단계 확대)까지만 당기고,
+    // 멀리 흩어져 있으면 모두 보이는 만큼만 당긴다. 마트가 없으면 전국 화면 그대로 둔다
+    if (marts.length > 0) {
+      map.fitBounds(
+        marts.map((mart) => [mart.latitude, mart.longitude]),
+        { padding: [40, 40], maxZoom: 10 },
+      );
+    }
 
     return () => map.remove();
   }, [marts]);
