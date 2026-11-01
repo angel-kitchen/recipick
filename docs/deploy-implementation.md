@@ -232,12 +232,32 @@ CREATE TABLE billing_key_issue_request (
 
 | 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
 | --- | --- | --- | --- | --- |
-| A-2-1 | `ADD COLUMN` 2개 | | | `ALTER TABLE billing_key DROP COLUMN delete_requested_at, DROP COLUMN deleted_at;` |
-| A-2-2 | `ADD INDEX` | | | `ALTER TABLE billing_key DROP INDEX idx_billing_key_member_id_status;` |
-| A-2-3 | `RENAME INDEX` | | | `ALTER TABLE billing_key RENAME INDEX uk_billing_key_portone_billing_key TO <원래 이름>;` |
-| A-3 | `CREATE TABLE` | | | `DROP TABLE billing_key_issue_request;`(행이 있으면 보관 뒤) |
+| A-2-1 | `ADD COLUMN` 2개 | 2026-11-01 17:57:10 | OK (0.05s) | `ALTER TABLE billing_key DROP COLUMN delete_requested_at, DROP COLUMN deleted_at;` |
+| A-2-2 | `ADD INDEX` | 2026-11-01 17:57:10 | OK (0.02s) | `ALTER TABLE billing_key DROP INDEX idx_billing_key_member_id_status;` |
+| A-2-3 | `RENAME INDEX` | 2026-11-01 17:57:10 | OK (0.02s) | `ALTER TABLE billing_key RENAME INDEX uk_billing_key_portone_billing_key TO UKcwtq7gi4jlxbgbv2cx1agj5vj;` |
+| A-3 | `CREATE TABLE` | 2026-11-01 17:57:10 | OK (0.04s) | `DROP TABLE billing_key_issue_request;`(행이 있으면 보관 뒤) |
 
 적용 뒤 10-B의 스냅숏 쿼리를 앱 기동 전·후에 떠서 diff가 없어야 한다. 스모크: `GET /api/billing-keys/me`(200).
+
+**운영 실행 기록 (2026-11-01, 배포 담당).** 시각은 KST다(서버 출력은 UTC 08:57:10).
+
+- 사전: `backup.sh pre-deploy ddl-318`로 덤프. 적용 전 `billing_key`는 0행, UNIQUE는 Hibernate 생성 이름 `UKcwtq7gi4jlxbgbv2cx1agj5vj`
+  1개, 새 컬럼·테이블 없음.
+- 적용: 네 문장을 한 번에 실행했다(클라이언트는 첫 오류에서 멈추고 `-vvv`로 문장별 결과를 남긴다). 모두 성공.
+- 확인: 적용 직후 10-B 스냅숏 ①을 떴다. PR #318을 머지해 `279a7eb` 이미지가 자동 배포되어 `healthy`가 된 뒤 스냅숏 ②를 떴고,
+  ①과 diff가 없었다. `portone_billing_key`의 UNIQUE는 `uk_billing_key_portone_billing_key` 1개다.
+  스모크: `GET /api/billing-keys/me`가 토큰 없이 401, 회원 토큰으로 200(`registered: false`).
+- 사전 로컬 검증: 운영 스키마 덤프(`--no-data`)를 MySQL 8.4에 넣고 prod 프로필(`ddl-auto: update`, Hibernate 6.6.53)로
+  이전 앱(dev `cf8c340`)과 신버전(dev + #318)을 번갈아 기동해 기동 전후 스키마 덤프를 비교했다.
+  - 추가 DDL(A-2-1·A-2-2·A-3)만 적용 후 이전 앱 기동: 변화 없음.
+  - RENAME 후 신버전 기동(2회): 변화 없음, UNIQUE 1개.
+  - RENAME 후 이전 앱 기동(자동 복구·수동 롤백 상황): 변화 없음, UNIQUE 1개. 이전 엔티티의 이름 없는 `@Column(unique = true)`는
+    같은 컬럼의 UNIQUE를 다시 만들지 않았다. 그래서 롤백 때 A-2-3을 되돌릴 필요가 없다.
+  - DDL 없이 신버전만 기동: UNIQUE 2개(`uk_…` + `UK…`). A-2-3을 머지 전에 해야 하는 이유다.
+- 롤백 주의: 이전 이미지로 돌아가도 인덱스를 지우지 않는다. 이전 앱은 UNIQUE가 없어도 새로 만들지 않으므로(로컬 검증),
+  `uk_billing_key_portone_billing_key`를 지우면 이 컬럼의 UNIQUE가 사라진다.
+- 엔티티 이름을 운영 이름(`UK…`)에 맞추는 대안(PR #318 리뷰 스레드)은 위 결과로 채택하지 않았다. 앞으로 엔티티의 제약 이름을
+  바꾸면 운영에 UNIQUE가 하나 더 생긴다.
 
 ### 10-B. 스냅숏·확인 SQL (앱 기동 전 1회, 기동 뒤 1회 → diff 없음)
 
