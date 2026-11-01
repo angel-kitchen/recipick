@@ -423,8 +423,8 @@ ALTER TABLE membership_refund MODIFY membership_payment_attempt_id BIGINT NOT NU
 
 | 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
 | --- | --- | --- | --- | --- |
-| C-2 | `DROP FOREIGN KEY` | | | `ALTER TABLE membership_payment ADD CONSTRAINT fk_membership_payment_billing_key FOREIGN KEY (billing_key_id) REFERENCES billing_key (id);`(C-3 되돌린 뒤) |
-| C-3 | `DROP COLUMN` 4개 | | | 컬럼 재추가(`billing_key_id BIGINT NULL`, `portone_payment_id VARCHAR(255) NULL` + UNIQUE, `attempt_count INT NULL`, `last_attempt_at DATETIME(6) NULL`). 데이터는 돌아오지 않는다 — C-조건2(0건)가 전제인 이유 |
+| C-2 | `DROP FOREIGN KEY` | | | `ALTER TABLE membership_payment ADD CONSTRAINT FKbs1bco2goim5r57oh0dadmxkx FOREIGN KEY (billing_key_id) REFERENCES billing_key (id);`(C-3 되돌린 뒤. **운영의 원래 이름 그대로** — 다른 이름으로 만들면 이전 앱 기동 때 FK가 하나 더 생길 수 있다) |
+| C-3 | `DROP COLUMN` 4개 | | | 컬럼 재추가(`billing_key_id BIGINT NULL`, `portone_payment_id VARCHAR(255) NULL` + `UNIQUE KEY UK9ssqjft7pefm6m8uiec775bw8 (portone_payment_id)`, `attempt_count INT NULL`, `last_attempt_at DATETIME(6) NULL`). 제약 이름은 운영 원래 이름을 쓴다(2026-11-01 배포 담당 `SHOW CREATE TABLE` 기준). 데이터는 돌아오지 않는다 — C-조건2(0건)가 전제인 이유 |
 | C-4 | `MODIFY … NOT NULL` | | | `MODIFY … BIGINT NULL` |
 
 Contract 뒤 앱 롤백: 이전 앱(2b 이전)은 이 테이블을 읽거나 쓰는 코드가 없어 동작에 영향이 없다. 다만 이전 앱의 `ddl-auto: update`가
