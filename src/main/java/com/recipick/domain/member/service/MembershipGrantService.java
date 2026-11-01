@@ -7,7 +7,6 @@ import com.recipick.domain.member.entity.Membership;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.domain.member.entity.enums.MembershipType;
-import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
 import com.recipick.global.audit.AdminAuditRecorder;
@@ -18,11 +17,12 @@ import com.recipick.global.audit.AdminAuditField;
 import java.util.Map;
 import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
-import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -31,28 +31,24 @@ public class MembershipGrantService {
 
     private static final int GRANT_DAYS = 30;
 
-    private final MemberService memberService;
     private final AdminRepository adminRepository;
     private final MembershipRepository membershipRepository;
-    private final Clock clock;
     private final AdminAuditRecorder auditRecorder;
 
-    @Transactional
-    public MembershipGrantResponse grant(Long memberId, Long adminId) {
-        // 다른 조회보다 먼저 회원을 잠가 대기 중 생성된 이용권도 검사할 수 있게 한다.
-        Member member = memberService.getMemberForUpdate(memberId);
+    public Admin getGrantAdmin(Long adminId) {
         Admin admin = adminRepository.findById(adminId)
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.ACCESS_DENIED));
-        if (!admin.isActive()) {
-            throw new BusinessException(AuthErrorCode.INACTIVE_ADMIN);
+        validateAdmin(admin);
+        return admin;
+    }
+
+    // 호출자는 회원을 먼저 잠그고 지급 차단 조건을 확인한다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MembershipGrantResponse grant(Member member, Admin admin, LocalDateTime now) {
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("멤버십 지급은 쓰기 가능한 바깥 트랜잭션이 필요합니다.");
         }
-        if (admin.getRole() != AdminRole.SUPER_ADMIN) {
-            throw new BusinessException(AuthErrorCode.SUPER_ADMIN_ONLY);
-        }
-        LocalDateTime now = LocalDateTime.now(clock);
-        if (membershipRepository.existsBlocking(memberId, now)) {
-            throw new BusinessException(MemberErrorCode.MEMBERSHIP_ALREADY_ACTIVE);
-        }
+        validateAdmin(admin);
         Membership membership = membershipRepository.save(Membership.builder()
                 .member(member).grantedByAdmin(admin).type(MembershipType.PAID).source(MembershipSource.ADMIN_GRANT)
                 .startAt(now).activatedAt(now).endAt(now.plusDays(GRANT_DAYS)).autoRenew(false).build());
@@ -63,7 +59,16 @@ public class MembershipGrantService {
                         AdminAuditField.START_AT, new AdminAuditChange(null, membership.getStartAt()),
                         AdminAuditField.END_AT, new AdminAuditChange(null, membership.getEndAt()),
                         AdminAuditField.AUTO_RENEW, new AdminAuditChange(null, membership.isAutoRenew()))));
-        return new MembershipGrantResponse(membership.getId(), memberId, membership.getType().name(),
+        return new MembershipGrantResponse(membership.getId(), member.getId(), membership.getType().name(),
                 membership.getSource().name(), membership.getStartAt(), membership.getEndAt(), admin.getId());
+    }
+
+    private void validateAdmin(Admin admin) {
+        if (!admin.isActive()) {
+            throw new BusinessException(AuthErrorCode.INACTIVE_ADMIN);
+        }
+        if (admin.getRole() != AdminRole.SUPER_ADMIN) {
+            throw new BusinessException(AuthErrorCode.SUPER_ADMIN_ONLY);
+        }
     }
 }
