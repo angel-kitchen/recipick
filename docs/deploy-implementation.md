@@ -284,3 +284,148 @@ SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ
 -- 기대: 같은 컬럼 조합의 인덱스가 두 개인 테이블 없음(중복 UK 없음), 새 컬럼·FK·인덱스 이름이 설계와 같음,
 --       기동 로그에 alter table·create table 없음
 ```
+
+### 10-C. PR-2b Expand — membership_payment 확장, membership_payment_attempt 생성, membership_refund 확장 (기본 배포 절차, 지우는 문장 없음)
+
+기존 컬럼 `billing_key_id`·`portone_payment_id`·`attempt_count`·`last_attempt_at`는 새 엔티티가 매핑하지 않지만 **지우지 않는다**(10-D Contract).
+새 코드의 INSERT를 막는 것은 `attempt_count`(NOT NULL, DEFAULT 없음)뿐이라 NULL 허용으로 바꾼다 — 안 하면 새 회차 INSERT가
+"Field 'attempt_count' doesn't have a default value"로 실패한다. 나머지 세 컬럼은 NULL 허용이다(`SHOW CREATE TABLE`로 확인).
+
+```sql
+-- B-0 백업 (세 테이블 + 스키마 전체 DDL)
+--   mysqldump --single-transaction <db> membership_payment membership_refund billing_key > backup_membership_YYYYMMDD.sql
+--   mysqldump --no-data <db> > schema_before_YYYYMMDD.sql
+
+-- B-1 사전 확인 (멈춤 조건은 아래 표)
+SELECT (SELECT COUNT(*) FROM membership_payment) AS payments,
+       (SELECT COUNT(*) FROM membership_refund)  AS refunds;        -- 0건 기대
+SHOW CREATE TABLE membership_payment;                                -- attempt_count의 NOT NULL·DEFAULT, 기존 FK 이름
+SHOW CREATE TABLE membership_refund;
+SELECT TABLE_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME            -- 두 테이블을 참조하는 FK (기대: refund → payment 하나)
+  FROM information_schema.REFERENTIAL_CONSTRAINTS
+ WHERE CONSTRAINT_SCHEMA = DATABASE()
+   AND REFERENCED_TABLE_NAME IN ('membership_payment', 'membership_refund');
+
+-- B-2 membership_payment 확장
+ALTER TABLE membership_payment MODIFY attempt_count INT NULL;        -- B-2-1 신규 INSERT를 막는 NOT NULL 완화
+ALTER TABLE membership_payment                                       -- B-2-2
+  ADD COLUMN idempotency_key       VARCHAR(100) NULL,
+  ADD COLUMN request_hash          VARCHAR(64)  NULL,
+  ADD COLUMN grace_deadline_at     DATETIME(6)  NULL,
+  ADD COLUMN membership_applied_at DATETIME(6)  NULL;
+ALTER TABLE membership_payment                                       -- B-2-3
+  ADD UNIQUE KEY uk_membership_payment_idempotency_key (idempotency_key),
+  ADD INDEX idx_membership_payment_membership_id_status (membership_id, status);
+
+-- B-3 시도 테이블 (id·created_at·updated_at 정의는 SHOW CREATE TABLE에 맞춘다)
+CREATE TABLE membership_payment_attempt (
+  id                     BIGINT       NOT NULL AUTO_INCREMENT,
+  membership_payment_id  BIGINT       NOT NULL,
+  attempt_no             INT          NOT NULL,
+  billing_key_id         BIGINT       NOT NULL,
+  portone_payment_id     VARCHAR(255) NOT NULL,
+  status                 VARCHAR(20)  NOT NULL,
+  requested_at           DATETIME(6)  NOT NULL,
+  lease_expires_at       DATETIME(6)  NOT NULL,
+  dispatched_at          DATETIME(6)  NULL,
+  completed_at           DATETIME(6)  NULL,
+  pg_paid_at             DATETIME(6)  NULL,
+  failure_reason         VARCHAR(500) NULL,
+  ops_review_required_at DATETIME(6)  NULL,
+  ops_review_reason      VARCHAR(40)  NULL,
+  refund_required_at     DATETIME(6)  NULL,
+  created_at             DATETIME(6)  NULL,
+  updated_at             DATETIME(6)  NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_membership_payment_attempt_portone_payment_id (portone_payment_id),
+  UNIQUE KEY uk_membership_payment_attempt_payment_id_attempt_no (membership_payment_id, attempt_no),
+  INDEX idx_membership_payment_attempt_payment_id_status (membership_payment_id, status),
+  INDEX idx_membership_payment_attempt_billing_key_id_status (billing_key_id, status),
+  CONSTRAINT fk_membership_payment_attempt_payment
+    FOREIGN KEY (membership_payment_id) REFERENCES membership_payment (id),
+  CONSTRAINT fk_membership_payment_attempt_billing_key
+    FOREIGN KEY (billing_key_id) REFERENCES billing_key (id)
+) ENGINE = InnoDB;
+
+-- B-4 membership_refund 확장 (인덱스 먼저, FK는 그 인덱스를 쓴다)
+ALTER TABLE membership_refund                                        -- B-4-1
+  ADD COLUMN membership_payment_attempt_id BIGINT NOT NULL;          --   refunds = 0 일 때. 행이 있으면 NULL로 추가(아래 표)
+ALTER TABLE membership_refund                                        -- B-4-2
+  ADD INDEX idx_membership_refund_payment_id_status (membership_payment_id, status),
+  ADD INDEX idx_membership_refund_attempt_requester_status (membership_payment_attempt_id, requested_by, status);
+ALTER TABLE membership_refund                                        -- B-4-3
+  ADD CONSTRAINT fk_membership_refund_attempt
+    FOREIGN KEY (membership_payment_attempt_id) REFERENCES membership_payment_attempt (id);
+```
+
+| B-1 결과 | 조치 |
+| --- | --- |
+| `payments` > 0 | **중단.** 기존 회차를 새 시도 테이블로 옮기는 백필 절차가 없다 — 그대로 배포하면 기존 회차의 시도 단위 상태가 C-17 조회에서 빠지고, 새 enum에 없는 `status` 행은 새 엔티티가 읽지 못한다. 행이 있으면 백필·상태 검증 절차를 따로 설계·승인한 뒤에만 진행(2026-11-01 운영 실행 때는 0건) |
+| `refunds` > 0 | **멈춤.** 기존 환불 행을 연결할 시도가 없다. 신규 시도 FK의 연결 방법을 확정하기 전에는 배포하지 않는다. 확정되면 B-4-1을 `NULL` 허용으로 추가하고 NOT NULL 전환은 10-D로 넘긴다 |
+| `attempt_count`가 이미 NULL 허용 | B-2-1 생략 |
+| 참조 FK가 기대와 다름 | 멈춤, 참조처 확인 |
+
+실행 기록표(문장마다 즉시 커밋되므로 한 줄씩 적는다). 되돌릴 때는 역순(B-4-3 → B-4-2 → B-4-1 → B-3 → B-2-3 → B-2-2 → B-2-1).
+
+| 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
+| --- | --- | --- | --- | --- |
+| B-2-1 | `MODIFY attempt_count INT NULL` | | | `ALTER TABLE membership_payment MODIFY attempt_count INT NOT NULL;`(0건일 때만. 행이 있으면 그대로 둔다 — NULL 허용이 남아도 이전 앱에 해가 없다) |
+| B-2-2 | `ADD COLUMN` 4개 | | | `ALTER TABLE membership_payment DROP COLUMN idempotency_key, DROP COLUMN request_hash, DROP COLUMN grace_deadline_at, DROP COLUMN membership_applied_at;` |
+| B-2-3 | `ADD UNIQUE KEY`·`ADD INDEX` | | | `ALTER TABLE membership_payment DROP INDEX uk_membership_payment_idempotency_key, DROP INDEX idx_membership_payment_membership_id_status;` |
+| B-3 | `CREATE TABLE membership_payment_attempt` | | | `DROP TABLE membership_payment_attempt;`(0건 확인 뒤, B-4-3 FK를 먼저 지운다) |
+| B-4-1 | refund `ADD COLUMN` | | | `ALTER TABLE membership_refund DROP COLUMN membership_payment_attempt_id;`(B-4-3·B-4-2를 먼저 되돌린 뒤) |
+| B-4-2 | refund `ADD INDEX` 2개 | | | `ALTER TABLE membership_refund DROP INDEX idx_membership_refund_payment_id_status, DROP INDEX idx_membership_refund_attempt_requester_status;` |
+| B-4-3 | refund `ADD CONSTRAINT` FK | | | `ALTER TABLE membership_refund DROP FOREIGN KEY fk_membership_refund_attempt;` |
+
+적용 순서: B-0 → B-1 → B-2~B-4 한 문장씩(기록표) → 10-B 첫 스냅숏 → 2b 이미지 배포(기동 로그에 `alter table`·`create table` 없음) →
+10-B 둘째 스냅숏 diff 없음 → 스모크(`GET /api/billing-keys/me` 200, 기존 결제·탈퇴 API 1건씩). 10-B 기대에 "기존 컬럼 4개 그대로 있음,
+`attempt_count IS_NULLABLE = YES`"가 더해진다. 이 테이블을 읽는 운영 코드가 없으므로 DDL 동안 구 버전 앱이 떠 있어도 영향이 없다.
+
+| 롤백 상황 | 조치 |
+| --- | --- |
+| Expand 중 한 문장 실패 | 그 문장은 적용되지 않았다(문장 단위 원자성). 원인을 고쳐 그 문장부터 재개하거나 기록표의 성공한 문장을 역순으로 되돌린다 |
+| 2b 배포 뒤 앱 문제 | 이전 이미지 재배포. Expand가 지운 것이 없어 스키마는 그대로 둬도 된다. 스키마까지 되돌리려면 기록표 역순 |
+| 데이터 복구 | B-0 덤프 복원 |
+
+### 10-D. Contract — 기존 컬럼 4개 제거 (별도 승인 절차. 2b 배포 절차가 아니다)
+
+| 조건(모두 충족해야 실행) | 확인 |
+| --- | --- |
+| C-조건1 | 2b 배포 뒤 앱 정상 기동·스모크 통과·회귀 없음(기간은 배포 담당이 정함) |
+| C-조건2 | `membership_payment`·`membership_refund` **0건**. 행이 있으면 컬럼 삭제 금지 — 보관 테이블로 복사한 뒤 별도 결정 |
+| C-조건3 | 두 테이블을 참조하는 외부 FK가 기대(refund → payment)뿐 |
+| C-조건4 | B-0과 같은 방식의 새 백업 |
+| C-조건5 | 배포 담당 승인 기록 — "빈 테이블에 대한 승인된 스키마 정리"로 명시 |
+| C-조건6 | 실행 기록표(아래) 작성 |
+
+```sql
+-- C-1 제거할 FK 이름 조회 (Hibernate 생성 이름은 환경마다 다르다)
+SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME
+  FROM information_schema.KEY_COLUMN_USAGE
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'membership_payment'
+   AND REFERENCED_TABLE_NAME IS NOT NULL;                             -- billing_key_id의 FK 이름
+
+-- C-2 FK 제거 (컬럼을 지우기 전에)
+ALTER TABLE membership_payment DROP FOREIGN KEY <C-1에서 찾은 이름>;
+
+-- C-3 기존 컬럼 4개 제거 (컬럼만의 인덱스·UK는 함께 사라진다)
+ALTER TABLE membership_payment
+  DROP COLUMN billing_key_id,
+  DROP COLUMN portone_payment_id,
+  DROP COLUMN attempt_count,
+  DROP COLUMN last_attempt_at;
+
+-- C-4 (B-4-1을 NULL로 넣었던 경우에만) 기존 행 처리 결정 뒤
+ALTER TABLE membership_refund MODIFY membership_payment_attempt_id BIGINT NOT NULL;
+
+-- C-5 10-B 스냅숏 diff (제거 컬럼 4개 없음, 나머지 동일)
+```
+
+| 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
+| --- | --- | --- | --- | --- |
+| C-2 | `DROP FOREIGN KEY` | | | `ALTER TABLE membership_payment ADD CONSTRAINT FKbs1bco2goim5r57oh0dadmxkx FOREIGN KEY (billing_key_id) REFERENCES billing_key (id);`(C-3 되돌린 뒤. **운영의 원래 이름 그대로** — 다른 이름으로 만들면 이전 앱 기동 때 FK가 하나 더 생길 수 있다) |
+| C-3 | `DROP COLUMN` 4개 | | | 컬럼 재추가(`billing_key_id BIGINT NULL`, `portone_payment_id VARCHAR(255) NULL` + `UNIQUE KEY UK9ssqjft7pefm6m8uiec775bw8 (portone_payment_id)`, `attempt_count INT NULL`, `last_attempt_at DATETIME(6) NULL`). 제약 이름은 운영 원래 이름을 쓴다(2026-11-01 배포 담당 `SHOW CREATE TABLE` 기준). 데이터는 돌아오지 않는다 — C-조건2(0건)가 전제인 이유 |
+| C-4 | `MODIFY … NOT NULL` | | | `MODIFY … BIGINT NULL` |
+
+Contract 뒤 앱 롤백: 이전 앱(2b 이전)은 이 테이블을 읽거나 쓰는 코드가 없어 동작에 영향이 없다. 다만 이전 앱의 `ddl-auto: update`가
+지운 컬럼을 다시 추가할 수 있다 — 롤백 보장이 아니라 부작용으로 기록한다.
