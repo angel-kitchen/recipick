@@ -64,6 +64,10 @@ export default function LocationPickerModal({ onConfirm, onClose }) {
 
   // 사용자가 직접 정한 핀. 직접 정했으니 위치 오차 원은 지운다
   const placeByUser = (latLng) => {
+    // 진행 중인 위치 조회·주소 확인 결과가 직접 놓은 핀을 덮어쓰지 못하게 무효화한다
+    runRef.current += 1;
+    setFinding(false);
+    setConfirming(false);
     markerRef.current.setPosition(latLng);
     markerRef.current.setVisible(true);
     circleRef.current?.setMap(null);
@@ -159,9 +163,14 @@ export default function LocationPickerModal({ onConfirm, onClose }) {
     if (!pinRef.current) return;
     setError(null);
     setConfirming(true);
+    const run = runRef.current;
     try {
-      onConfirm(await findAddressByCoords(pinRef.current.lat, pinRef.current.lng));
+      const result = await findAddressByCoords(pinRef.current.lat, pinRef.current.lng);
+      // 조회 중에 모달을 닫았거나 핀을 옮겼으면 이 결과는 버린다
+      if (run !== runRef.current) return;
+      onConfirm(result);
     } catch (e) {
+      if (run !== runRef.current) return;
       setError(e);
       setConfirming(false);
     }
