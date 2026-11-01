@@ -8,6 +8,7 @@ import com.recipick.domain.member.service.MemberWithdrawalService;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.TrialBlockService;
 import com.recipick.domain.member.service.WithdrawalSettlementChecker;
+import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberWithdrawalProcessor {
     private final MemberService members;
     private final OrderService orders;
+    private final CartService carts;
     private final MembershipService memberships;
     private final TrialBlockService trialBlocks;
     private final MemberWithdrawalService withdrawal;
@@ -59,6 +61,8 @@ public class MemberWithdrawalProcessor {
             throw new BusinessException(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY);
         }
         checkers.forEach(checker -> checker.requireSettled(memberId, request.acknowledgedPointBalance()));
+        // 장바구니는 탈퇴를 막지 않고 지운다. 담기는 회원 행을 먼저 잠가서 이 삭제 뒤에 새 항목이 생기지 않는다
+        carts.deleteAllByMemberId(memberId);
         trialBlocks.recordWithdrawal(memberId, now);
         withdrawal.withdraw(member, now);
     }

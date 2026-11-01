@@ -12,6 +12,7 @@ import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.MemberWithdrawalService;
 import com.recipick.domain.member.service.TrialBlockService;
 import com.recipick.domain.member.service.WithdrawalSettlementChecker;
+import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
@@ -24,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class MemberWithdrawalProcessorTest {
     MemberService members = mock(MemberService.class);
     OrderService orders = mock(OrderService.class);
+    CartService carts = mock(CartService.class);
     MembershipService memberships = mock(MembershipService.class);
     TrialBlockService blocks = mock(TrialBlockService.class);
     MemberWithdrawalService withdrawal = mock(MemberWithdrawalService.class);
@@ -40,7 +42,7 @@ class MemberWithdrawalProcessorTest {
         for (int i = 0; i < checkers.length; i++) {
             factory.addBean("checker" + i, checkers[i]);
         }
-        return new MemberWithdrawalProcessor(members, orders, memberships, blocks, withdrawal,
+        return new MemberWithdrawalProcessor(members, orders, carts, memberships, blocks, withdrawal,
                 factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
     }
 
@@ -55,12 +57,13 @@ class MemberWithdrawalProcessorTest {
         // when
         processor().withdraw(1L, new MemberWithdrawRequest("password", 0L));
         // then
-        var order = inOrder(members, encoder, orders, memberships, checker, blocks, withdrawal);
+        var order = inOrder(members, encoder, orders, memberships, checker, carts, blocks, withdrawal);
         order.verify(members).getMemberForUpdate(1L);
         order.verify(encoder).matches("password", "encoded");
         order.verify(orders).existsInProgressOrder(1L);
         order.verify(memberships).existsBlocking(eq(1L), any(LocalDateTime.class));
         order.verify(checker).requireSettled(1L, 0L);
+        order.verify(carts).deleteAllByMemberId(1L);
         order.verify(blocks).recordWithdrawal(eq(1L), any(LocalDateTime.class));
         order.verify(withdrawal).withdraw(eq(member), any(LocalDateTime.class));
     }
@@ -78,7 +81,7 @@ class MemberWithdrawalProcessorTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
                                 .isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_ORDER));
-        verifyNoInteractions(memberships, checker, blocks, withdrawal);
+        verifyNoInteractions(memberships, checker, carts, blocks, withdrawal);
     }
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(WithdrawalSettlementChecker.Scope.class)
@@ -97,7 +100,7 @@ class MemberWithdrawalProcessorTest {
                         e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
                                 .isEqualTo(MemberErrorCode.WITHDRAW_SETTLEMENT_NOT_READY));
         verify(checker, never()).requireSettled(anyLong(), anyLong());
-        verifyNoInteractions(blocks, withdrawal);
+        verifyNoInteractions(carts, blocks, withdrawal);
     }
 
     @Test

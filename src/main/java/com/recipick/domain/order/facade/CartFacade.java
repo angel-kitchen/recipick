@@ -35,6 +35,8 @@ public class CartFacade {
 
     @Transactional
     public CartItemAddResponse addCartItem(Long memberId, CartItemAddRequest request) {
+        // 탈퇴와 겹쳐도 탈퇴 뒤에 장바구니 항목이 남지 않도록 첫 DB 작업으로 회원 행을 잠근다
+        memberService.lockActiveMember(memberId);
         Long martId = memberService.getMartId(memberId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.MART_NOT_SELECTED));
         ProductSummary product = productService.findProducts(List.of(request.productId())).stream()

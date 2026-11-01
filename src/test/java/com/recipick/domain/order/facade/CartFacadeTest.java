@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -83,6 +85,11 @@ class CartFacadeTest {
 
         // then
         assertThat(response).isEqualTo(expected);
+        // 탈퇴와 직렬화하려고 회원 잠금이 첫 DB 작업이어야 한다
+        InOrder inOrder = inOrder(memberService, productService, cartService);
+        inOrder.verify(memberService).lockActiveMember(MEMBER_ID);
+        inOrder.verify(memberService).getMartId(MEMBER_ID);
+        inOrder.verify(cartService).addCartItem(MEMBER_ID, PRODUCT_ID, 2, 30);
     }
 
     @Test

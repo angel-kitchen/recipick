@@ -81,7 +81,9 @@ public class AutoCartFacade {
 
     @Transactional
     public AutoCartConfirmResponse confirm(Long memberId, Long autoCartRequestId, AutoCartConfirmRequest body) {
+        // 탈퇴와 겹쳐도 탈퇴 뒤에 장바구니 항목이 남지 않도록 회원 행을 먼저 잠근다(MEMBER → AUTO_CART_REQUEST).
         // 연타·재전송으로 같은 요청이 동시에 들어와도 한 번만 합산되도록, 요청 행을 잠근 뒤 상태를 본다
+        memberService.lockActiveMember(memberId);
         AutoCartRequest request = autoCartService.getRequestForUpdate(memberId, autoCartRequestId);
         request.validateConfirmable();
         validateMembership(memberId);

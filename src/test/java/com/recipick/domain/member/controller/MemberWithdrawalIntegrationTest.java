@@ -24,10 +24,23 @@ import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.TrialBlockService;
 import com.recipick.domain.member.service.MemberWithdrawalService;
 import com.recipick.domain.member.service.WithdrawalSettlementChecker;
+import com.recipick.domain.order.dto.request.CartItemAddRequest;
+import com.recipick.domain.order.entity.CartAddHistory;
+import com.recipick.domain.order.entity.CartItem;
+import com.recipick.domain.order.entity.enums.CartAddSource;
+import com.recipick.domain.order.facade.CartFacade;
+import com.recipick.domain.order.repository.CartAddHistoryRepository;
+import com.recipick.domain.order.repository.CartItemRepository;
+import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
+import com.recipick.domain.product.entity.Product;
+import com.recipick.domain.product.repository.MartRepository;
+import com.recipick.domain.product.repository.ProductRepository;
+import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.infra.redis.RedisRefreshTokenStore;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -54,6 +67,12 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     @Autowired TrialPhoneHasher hasher;
     @Autowired MemberService memberService;
     @Autowired OrderService orders;
+    @Autowired CartService carts;
+    @Autowired CartFacade cartFacade;
+    @Autowired CartItemRepository cartItems;
+    @Autowired CartAddHistoryRepository cartHistories;
+    @Autowired MartRepository marts;
+    @Autowired ProductRepository products;
     @Autowired MembershipService memberships;
     @Autowired TrialBlockService trialBlocks;
     @Autowired MemberWithdrawalService withdrawal;
@@ -65,6 +84,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     @Autowired RedisRefreshTokenStore sessions;
     @Autowired JdbcTemplate jdbc;
     Member member;
+    Product product;
     String access;
     String hash;
     final String password = "Original1!";
@@ -85,7 +105,12 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         jdbc.update("DELETE FROM member_address WHERE member_id = ?", member.getId());
         jdbc.update("DELETE FROM membership WHERE member_id = ?", member.getId());
         jdbc.update("DELETE FROM trial_block WHERE phone_hash = ?", hash);
+        jdbc.update("DELETE FROM cart_item WHERE member_id = ?", member.getId());
+        jdbc.update("DELETE FROM cart_add_history WHERE member_id = ?", member.getId());
         members.deleteById(member.getId());
+        if (product != null) {
+            products.deleteById(product.getId());
+        }
     }
 
     private MemberWithdrawalProcessor processor(WithdrawalSettlementChecker checker) {
@@ -101,7 +126,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
                 checker.requireSettled(memberId, acknowledgedPointBalance);
             }
         });
-        return new MemberWithdrawalProcessor(memberService, orders, memberships, trialBlocks, withdrawal,
+        return new MemberWithdrawalProcessor(memberService, orders, carts, memberships, trialBlocks, withdrawal,
                 factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
     }
 
@@ -185,6 +210,82 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         assertThat(mvc.perform(get("/api/members/me").header("Authorization", "Bearer " + access))
                 .andReturn().getResponse().getStatus()).isEqualTo(401);
         assertThat(blocks.findAll()).noneMatch(block -> block.getPhoneHash().equals(hash));
+    }
+
+    @Test
+    @DisplayName("탈퇴하면 장바구니 항목을 모두 지우고 담기 이력은 남긴다")
+    void deletesCartItemsAndKeepsHistory() {
+        // given
+        givenCartItem();
+        // when
+        withdraw((id, balance) -> {});
+        // then
+        assertThat(cartItems.findAllByMemberIdOrderByIdAsc(member.getId())).isEmpty();
+        assertThat(cartHistories.findAll()).anyMatch(history -> history.getMemberId().equals(member.getId()));
+    }
+
+    @Test
+    @DisplayName("정산 확인 실패로 탈퇴가 거절되면 장바구니 항목도 그대로 남는다")
+    void keepsCartItemsWhenRefused() {
+        // given
+        givenCartItem();
+        // when, then
+        assertThatThrownBy(() -> withdraw((id, balance) -> { throw new IllegalStateException("정산 미완료"); }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(cartItems.findAllByMemberIdOrderByIdAsc(member.getId())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("탈퇴가 회원을 잠근 동안 들어온 담기는 기다렸다가 회원 조회에서 거절되어 장바구니 항목이 남지 않는다")
+    void rejectsCartAddDuringWithdrawal() throws Exception {
+        // given
+        jdbc.update("UPDATE member SET mart_id = 1 WHERE id = ?", member.getId());
+        product = product();
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var locked = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            // when
+            var withdrawing = executor.submit(() -> withdraw((id, balance) -> {
+                locked.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }));
+            assertThat(locked.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var adding = executor.submit(() ->
+                    cartFacade.addCartItem(member.getId(), new CartItemAddRequest(product.getId(), 1)));
+            // 담기가 회원 잠금에서 기다리는지 본다. 대기 시간 초과(5초)보다 짧게 둔다
+            Thread.sleep(500);
+            assertThat(adding.isDone()).isFalse();
+            release.countDown();
+            withdrawing.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            // then
+            assertThatThrownBy(() -> adding.get(15, java.util.concurrent.TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(BusinessException.class)
+                    .satisfies(error -> assertThat(((BusinessException) error.getCause()).getErrorCode())
+                            .isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
+            assertThat(cartItems.findAllByMemberIdOrderByIdAsc(member.getId())).isEmpty();
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private void givenCartItem() {
+        product = product();
+        cartItems.saveAndFlush(CartItem.builder().memberId(member.getId()).productId(product.getId()).quantity(1)
+                .build());
+        cartHistories.saveAndFlush(CartAddHistory.builder().memberId(member.getId()).productId(product.getId())
+                .source(CartAddSource.DIRECT).quantity(1).build());
+    }
+
+    private Product product() {
+        return products.saveAndFlush(Product.builder().mart(marts.findById(1L).orElseThrow()).name("탈퇴 테스트 상품")
+                .price(1000L).saleUnitAmount(BigDecimal.ONE).saleUnit(SaleUnit.EA).totalQuantity(10).build());
     }
 
     @Test
