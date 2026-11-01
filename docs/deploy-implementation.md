@@ -235,7 +235,7 @@ CREATE TABLE billing_key_issue_request (
 | A-2-1 | `ADD COLUMN` 2개 | 2026-11-01 17:57:10 | OK (0.05s) | `ALTER TABLE billing_key DROP COLUMN delete_requested_at, DROP COLUMN deleted_at;` |
 | A-2-2 | `ADD INDEX` | 2026-11-01 17:57:10 | OK (0.02s) | `ALTER TABLE billing_key DROP INDEX idx_billing_key_member_id_status;` |
 | A-2-3 | `RENAME INDEX` | 2026-11-01 17:57:10 | OK (0.02s) | `ALTER TABLE billing_key RENAME INDEX uk_billing_key_portone_billing_key TO UKcwtq7gi4jlxbgbv2cx1agj5vj;` |
-| A-3 | `CREATE TABLE` | 2026-11-01 17:57:10 | OK (0.04s) | `DROP TABLE billing_key_issue_request;`(행이 있으면 보관 뒤) |
+| A-3 | `CREATE TABLE` | 2026-11-01 17:57:10 | OK (0.04s) | `SELECT COUNT(*) FROM billing_key_issue_request;`가 0일 때만 `DROP TABLE billing_key_issue_request;`. 0이 아니면 사전 백업에 없는 행이므로 먼저 `mysqldump --single-transaction <db> billing_key_issue_request > billing_key_issue_request_YYYYMMDD.sql`로 보관한다(복원: `mysql <db> < billing_key_issue_request_YYYYMMDD.sql`) |
 
 적용 뒤 10-B의 스냅숏 쿼리를 앱 기동 전·후에 떠서 diff가 없어야 한다. 스모크: `GET /api/billing-keys/me`(200).
 
