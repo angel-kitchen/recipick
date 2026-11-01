@@ -53,6 +53,8 @@ services:
       PORTONE_STORE_ID: ${PORTONE_STORE_ID:-}
       PORTONE_CHANNEL_KEY: ${PORTONE_CHANNEL_KEY:-}
       PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET:-}
+      AI_CLIENT: ${AI_CLIENT:-fake}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:
       # 관리 포트가 UP이어도 앱 포트가 요청을 받는다는 보장은 없어(docs/monitoring.md) 둘을 함께 본다
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health && curl -fsS http://localhost:8080/api/categories"]
