@@ -62,11 +62,14 @@ public class PortOnePaymentClient {
                 log.warn("PortOne 결제 조회 timeout: paymentId={}", portonePaymentId);
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT, e);
             }
-            log.warn("PortOne 결제 조회 연결 실패: paymentId={}", portonePaymentId, e);
+            // 예외 객체는 남기지 않는다 — 원문(요청 URL·응답 일부)이 로그에 실릴 수 있다(3단계 김선생 코드 검수 ⑤)
+            log.warn("PortOne 결제 조회 연결 실패: paymentId={}, code={}, cause={}", portonePaymentId,
+                CommonErrorCode.EXTERNAL_SERVICE_ERROR.getCode(), e.getClass().getSimpleName());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR, e);
         } catch (RestClientException e) {
-            // 응답 본문을 DTO로 읽지 못한 경우 등
-            log.warn("PortOne 결제 조회 응답 처리 실패: paymentId={}", portonePaymentId, e);
+            // 응답 본문을 DTO로 읽지 못한 경우 등. 역직렬화 예외 메시지에는 응답 값 원문이 들어갈 수 있어 예외 객체를 남기지 않는다
+            log.warn("PortOne 결제 조회 응답 처리 실패: paymentId={}, code={}, cause={}", portonePaymentId,
+                CommonErrorCode.EXTERNAL_SERVICE_ERROR.getCode(), e.getClass().getSimpleName());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR, e);
         }
     }
