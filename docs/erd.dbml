@@ -450,9 +450,26 @@ Table CART_ADD_HISTORY {
 Table BILLING_KEY {
   id bigint [pk]
   member_id bigint
-  portone_billing_key varchar(255) [unique]
+  portone_billing_key varchar(255)
   status varchar(20)
   issued_at datetime
+  delete_requested_at datetime
+  deleted_at datetime
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (portone_billing_key) [unique, name: 'uk_billing_key_portone_billing_key']
+    (member_id, status) [name: 'idx_billing_key_member_id_status']
+  }
+}
+Table BILLING_KEY_ISSUE_REQUEST {
+  id bigint [pk, increment]
+  member_id bigint [not null]
+  issue_id varchar(64) [not null, unique]
+  status varchar(20) [not null]
+  expires_at datetime [not null]
+  used_at datetime
+  billing_key_id bigint
   created_at datetime
   updated_at datetime
 }
@@ -546,6 +563,8 @@ Ref: CART_ADD_HISTORY.member_id > MEMBER.id
 Ref: CART_ADD_HISTORY.product_id > PRODUCT.id
 Ref: CART_ADD_HISTORY.auto_cart_request_id > AUTO_CART_REQUEST.id
 Ref: BILLING_KEY.member_id > MEMBER.id
+Ref: BILLING_KEY_ISSUE_REQUEST.member_id > MEMBER.id
+Ref: BILLING_KEY_ISSUE_REQUEST.billing_key_id > BILLING_KEY.id
 Ref: MEMBERSHIP_PAYMENT.membership_id > MEMBERSHIP.id
 Ref: MEMBERSHIP_PAYMENT.billing_key_id > BILLING_KEY.id
 Ref: MEMBERSHIP_REFUND.membership_payment_id > MEMBERSHIP_PAYMENT.id
@@ -596,6 +615,7 @@ TableGroup auto_cart_ai {
 }
 TableGroup membership_billing {
   BILLING_KEY
+  BILLING_KEY_ISSUE_REQUEST
   MEMBERSHIP_PAYMENT
   MEMBERSHIP_REFUND
 }

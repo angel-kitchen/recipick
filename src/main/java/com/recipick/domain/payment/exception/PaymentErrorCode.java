@@ -26,7 +26,12 @@ public enum PaymentErrorCode implements ErrorCode {
     POINT_UNSETTLED_FOR_WITHDRAWAL(HttpStatus.CONFLICT, "POINT-003", "적립 예정이거나 사용 중인 포인트가 있어 탈퇴할 수 없습니다. 주문·배송이 끝난 뒤 다시 시도해 주세요."),
     INVALID_BILLING_KEY(HttpStatus.BAD_REQUEST, "BILLING-001", "유효하지 않은 자동결제 수단입니다."),
     BILLING_KEY_ALREADY_USED(HttpStatus.CONFLICT, "BILLING-002", "이미 사용 중인 빌링키입니다."),
-    MEMBERSHIP_PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "BILLING-003", "멤버십 결제 정보를 찾을 수 없습니다.");
+    MEMBERSHIP_PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "BILLING-003", "멤버십 결제 정보를 찾을 수 없습니다."),
+    BILLING_KEY_UNUSABLE(HttpStatus.CONFLICT, "BILLING-006", "사용할 수 없는 카드입니다. 새 카드를 등록해 주세요."),
+    BILLING_KEY_ISSUE_REQUEST_INVALID(HttpStatus.CONFLICT, "BILLING-007",
+        "카드 등록 요청이 유효하지 않습니다. 카드 등록을 다시 시작해 주세요."),
+    BILLING_KEY_REGISTRATION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "BILLING-008",
+        "카드 등록 기능이 아직 열리지 않았습니다.");
 
     private final HttpStatus status;
     private final String code;
