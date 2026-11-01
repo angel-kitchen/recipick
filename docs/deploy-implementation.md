@@ -360,7 +360,7 @@ ALTER TABLE membership_refund                                        -- B-4-3
 
 | B-1 결과 | 조치 |
 | --- | --- |
-| `payments` > 0 | 진행 가능(컬럼을 지우지 않는다). 단 `status` 값이 새 enum(PENDING·RETRY_WAITING·PAYMENT_METHOD_REQUIRED·UNKNOWN·MANUAL_REVIEW·PAID·FAILED)에 없는 행이 있으면 **중단** — 새 엔티티가 그 행을 읽지 못한다 |
+| `payments` > 0 | **중단.** 기존 회차를 새 시도 테이블로 옮기는 백필 절차가 없다 — 그대로 배포하면 기존 회차의 시도 단위 상태가 C-17 조회에서 빠지고, 새 enum에 없는 `status` 행은 새 엔티티가 읽지 못한다. 행이 있으면 백필·상태 검증 절차를 따로 설계·승인한 뒤에만 진행(2026-11-01 운영 실행 때는 0건) |
 | `refunds` > 0 | **멈춤.** 기존 환불 행을 연결할 시도가 없다. 신규 시도 FK의 연결 방법을 확정하기 전에는 배포하지 않는다. 확정되면 B-4-1을 `NULL` 허용으로 추가하고 NOT NULL 전환은 10-D로 넘긴다 |
 | `attempt_count`가 이미 NULL 허용 | B-2-1 생략 |
 | 참조 FK가 기대와 다름 | 멈춤, 참조처 확인 |
