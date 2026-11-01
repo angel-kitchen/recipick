@@ -19,4 +19,7 @@ public interface MembershipRefundRepository extends JpaRepository<MembershipRefu
         """)
     boolean existsByMembershipPaymentMembershipIdInAndStatus(@Param("membershipIds") Collection<Long> membershipIds,
                                                              @Param("status") MembershipRefundStatus status);
+
+    // TX2(3단계). 같은 시도에 SYSTEM 환불 REQUESTED가 이미 있으면 두 번째를 만들지 않는다. 시도 PK 잠금 아래에서 본다
+    boolean existsByMembershipPaymentAttemptIdAndStatus(Long membershipPaymentAttemptId, MembershipRefundStatus status);
 }
