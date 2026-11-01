@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | `PAID` | 첫 결제 확정, 이용권 활성 | 구독 완료 |
 | `IN_PROGRESS` | 접수됨·처리 중(READY·DISPATCHING, 플래그 OFF로 미발송 포함) | 결제 확인 중, 같은 키로 다시 조회 |
-| `FAILED` | 확정 실패 또는 반영 불가(환불 요청). 같은 키로 재청구하지 않음 | 결제 실패, 새 구독은 새 키로 |
+| `FAILED` | 확정 실패 또는 반영 불가(결제는 됐지만 이용권에 반영하지 않고 SYSTEM 환불 요청). 같은 키로 재청구하지 않음 | 결제 실패, 새 구독은 새 키로. 반영 불가로 환불이 요청된 경우 환불이 진행되며, 환불 완료 전에는 새 키로도 재구독할 수 없음(C-17 미정산) |
 | `UNKNOWN` | 결과 불명·운영 확인(자동 정합화 중단 포함) | 결제 확인 중, 고객센터 안내 |
 
 ## 오류 코드
@@ -91,7 +91,7 @@ TX2     MEMBER → MEMBERSHIP(C-7) → MEMBERSHIP_PAYMENT → ATTEMPT 잠금 →
 ## 첫 결제 기간 (`MembershipBillingPeriods`)
 
 - 이용 시작은 서버 확인 시각이 아니라 **PG `paidAt`(KST 변환값)**입니다. `start_at = activated_at = paidAt`, 기준일 = `paidAt` 날짜.
-- `end_at(1) = anchorDate(2) + paidAt의 시·분·초`, `grace_end_at = end_at + 3일`(해지 예약이 있으면 C-3a가 null로 반영).
+- `end_at(1) = anchorDate(1) + paidAt의 시·분·초`, `grace_end_at = end_at + 3일`(해지 예약이 있으면 C-3a가 null로 반영).
 - 기준일은 항상 원래 기준일에서 계산합니다(1/31 → 2/28 → 3/31). JVM 기본 시간대가 UTC여도 결과가 같습니다.
 
 ## READY 만료 (공통 규칙, 4단계 재사용)
@@ -131,12 +131,13 @@ READY 만료 → CANCELED (실패하면 최신 상태별 결과: IN_PROGRESS / U
 | READY 시도의 PG POST | 차단(POST 직전 재확인) |
 | DISPATCHING·UNKNOWN 재조회, 확인된 결과의 TX2, 환불 REQUESTED 저장 | 허용 |
 
-## 운영 활성화 게이트 (모두 충족 + 검수 GO 전에는 플래그를 켜지 않음)
+## 운영 활성화 게이트 (모두 충족 전에는 플래그를 켜지 않음)
 
 1. PortOne 실험 E-3(빌링키 결제 응답·`paidAt`·`mpay_` ID 규칙), E-4(거절 시 결제 레코드 존재·404 의미), E-6(같은 ID 재시도 안전성)
 2. 4단계: 웹훅 라우팅(`mpay_`), 전체 복구 Sweep, UNKNOWN W 초과 처리, 탈퇴 MEMBERSHIP_PAYMENT Checker
 3. 5단계: SYSTEM 환불 PG 실행·정합화
 4. 회원 도메인 구독 API 연결, 2a 운영 인덱스·보안 게이트
+5. 배포 Compose `app.environment`에 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달 추가(배포 담당과 함께). 지금은 전달하지 않으므로 운영 `.env`만 바꿔서는 켜지지 않는다
 
 ## 자동 테스트로 재현하지 못한 것(미검증 🟣)
 

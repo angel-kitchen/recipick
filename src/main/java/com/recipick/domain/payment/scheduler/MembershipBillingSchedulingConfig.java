@@ -9,7 +9,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 // 멤버십 자동결제 작업(체험 전환·첫 결제 복구) 전용 스케줄러. PG 호출이 섞여 한 번에 수십 초가 걸릴 수 있어 기본 스케줄러
 // (결제 지연 큐 1초 폴링)와 포인트 만료 스케줄러의 스레드를 막지 않도록 따로 둔다.
 // 기본 taskScheduler·pointExpirationTaskScheduler·applicationTaskExecutor는 PointSchedulingConfig가 이미 만들므로 여기서는
-// 전용 빈 하나만 추가하고 기존 설정은 손대지 않는다(큰 설계 9). 테스트는 이 설정을 만들지 않는다(Facade를 직접 부른다)
+// 전용 빈 하나만 추가하고 기존 설정은 손대지 않는다. 테스트는 이 설정을 만들지 않는다(Facade를 직접 부른다)
 @Configuration(proxyBeanMethods = false)
 @Profile("!test")
 public class MembershipBillingSchedulingConfig {

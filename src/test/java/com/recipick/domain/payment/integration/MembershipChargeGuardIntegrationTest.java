@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.IllegalTransactionStateException;
 
-// 호출 경계와 정보 보호(김선생 코드 검수 ③·⑤). 실제 Spring 빈(프록시)을 쓴다.
+// 호출 경계와 정보 보호. 실제 Spring 빈(프록시)을 쓴다.
 // ③ C-11·실행기는 바깥 트랜잭션 안에서 부르면 접수 행·PG 호출 전에 거절된다(Propagation.NEVER).
 // ⑤ 재사용하는 결제 단건 조회(GET)가 성공 응답을 읽지 못해도(날짜 자리에 민감정보 모양의 문자열) 하위 클라이언트부터 실행기까지
 //   어떤 로그 메시지·예외 출력에도 그 원문이 남지 않는다

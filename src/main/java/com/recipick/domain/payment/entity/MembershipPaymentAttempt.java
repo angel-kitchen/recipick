@@ -229,7 +229,7 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
     }
 
     // 재조회로 확정된 실패(2단계 4-3: 재조회 FAILED로만). reason은 고정 코드
-    // 검증(상태·코드·시각)을 모두 끝낸 뒤에만 필드를 바꾼다 — 잘못된 호출을 거절할 때 객체가 반쯤 바뀐 채 남지 않게(김선생 코드 검수 ①)
+    // 검증(상태·코드·시각)을 모두 끝낸 뒤에만 필드를 바꾼다 — 잘못된 호출을 거절할 때 객체가 반쯤 바뀐 채 남지 않게
     public void markFailed(String reason, LocalDateTime now) {
         requireResolvable("FAILED 확정");
         String validatedReason = requireCode(reason);
@@ -265,7 +265,7 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
         this.failureReason = validatedCode;
     }
 
-    // 정합성 예외(TX2 0b·사유 없는 C-3 충돌) 뒤 운영 표시만(v4 최종 ①). 상태·pgPaidAt·refundRequiredAt은 바꾸지 않는다 — 미해결
+    // 정합성 예외(TX2 0b·사유 없는 C-3 충돌) 뒤 운영 표시만. 상태·pgPaidAt·refundRequiredAt은 바꾸지 않는다 — 미해결
     // 그대로 C-17이 막는다. 이 코드 + 운영 표시가 함께 있을 때만 자동 정합화가 멈춘다(isAutoReconcileHalted). 표시를 지우는 것만으로
     // 해결되지 않는다 — 원인 확인·데이터 정합성 확인·조치 기록 뒤 재처리하고, 표시 해제가 C-17 정산 완료를 뜻하지도 않는다
     public void markAppliedStateInconsistent(LocalDateTime now) {
@@ -279,7 +279,7 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
         flagOpsReview(now, MembershipOpsReviewReason.PAID_CONFLICT);
     }
 
-    // 자동 정합화 중단 판정(김선생 코드 검수 ④). 정합성 오류 코드와 운영 표시가 함께 있어야 한다 — 다른 사유의 운영 표시(늦은 확인·
+    // 자동 정합화 중단 판정. 정합성 오류 코드와 운영 표시가 함께 있어야 한다 — 다른 사유의 운영 표시(늦은 확인·
     // 환불 실패 등)만으로는 자동 처리를 멈추지 않는다. 복구 조회·reconcile·TX2 진입이 모두 이 판정을 쓴다
     public boolean isAutoReconcileHalted() {
         return isAutoReconcileHalted(failureReason, opsReviewRequiredAt);

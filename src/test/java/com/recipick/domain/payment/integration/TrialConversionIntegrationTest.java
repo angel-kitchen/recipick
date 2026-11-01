@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.IllegalTransactionStateException;
 
-// C-1·C-2·C-4·C-5(상세 설계 10-2). 체험 종료 → 전환 접수(TX1) → 실행 → PAID면 TRIAL_CONVERT 유료 이용권 활성화(startAt = pgPaidAt).
+// C-1·C-2·C-4·C-5. 체험 종료 → 전환 접수(TX1) → 실행 → PAID면 TRIAL_CONVERT 유료 이용권 활성화(startAt = pgPaidAt).
 // 전환 대상 조회는 회원 도메인 쿼리(findTrialConversionTargets)를 그대로 쓴다
 class TrialConversionIntegrationTest extends MembershipChargeFlowSupport {
 

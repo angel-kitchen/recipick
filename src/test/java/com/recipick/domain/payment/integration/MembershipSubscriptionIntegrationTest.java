@@ -531,7 +531,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         assertThat(existsUnresolved()).isTrue();
     }
 
-    // ---------- R-6: READY 임대 만료 분기(5-4, 김선생 v4 검수 ②) ----------
+    // ---------- R-6: READY 임대 만료 분기 ----------
 
     @Test
     @DisplayName("R-6 임대가 안 끝난 READY·다른 Worker가 선점한 DISPATCHING은 만료 처리하지 않고 상태별 결과만 돌려준다")

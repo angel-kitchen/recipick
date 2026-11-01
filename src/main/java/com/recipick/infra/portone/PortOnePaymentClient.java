@@ -62,7 +62,7 @@ public class PortOnePaymentClient {
                 log.warn("PortOne 결제 조회 timeout: paymentId={}", portonePaymentId);
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT, e);
             }
-            // 예외 객체는 남기지 않는다 — 원문(요청 URL·응답 일부)이 로그에 실릴 수 있다(3단계 김선생 코드 검수 ⑤)
+            // 예외 객체는 남기지 않는다 — 원문(요청 URL·응답 일부)이 로그에 실릴 수 있다
             log.warn("PortOne 결제 조회 연결 실패: paymentId={}, code={}, cause={}", portonePaymentId,
                 CommonErrorCode.EXTERNAL_SERVICE_ERROR.getCode(), e.getClass().getSimpleName());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR, e);

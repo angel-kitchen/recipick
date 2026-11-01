@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 // 변경은 언제나 Processor 안에서 MEMBER부터 다시 잠그고 C-7로 소유권을 재검증한다(LC 5-1 "ID 선조회 → MEMBER부터 잠금").
 // 이용권이 없다는 MEMBERSHIP-006(정상 흐름에서 불가 — 결제는 C-12로 만든 이용권만 참조)은 그 건만 건너뛰고 ERROR(ID만),
 // 시도 상태는 바꾸지 않고 임의 회원을 고르지 않는다. 명시적 정합성 오류(MembershipSettlementInvariantException)만 별도 TX로 원인을
-// 재검증한 뒤 자동 정합화를 멈추는 운영 표시를 남긴다(김선생 코드 검수 ④). 그 밖의 예외는 건별 격리 WARN — 다음 주기에 다시 본다.
+// 재검증한 뒤 자동 정합화를 멈추는 운영 표시를 남긴다. 그 밖의 예외는 건별 격리 WARN — 다음 주기에 다시 본다.
 // 비트랜잭션 진입점(Propagation.NEVER). 4단계 전체 Sweep이 이 Facade를 확장한다
 @Slf4j
 @Component
@@ -81,7 +81,7 @@ public class MembershipChargeRecoveryFacade {
                             e.getErrorCode().getCode());
                     }
                 } catch (MembershipSettlementInvariantException e) {
-                    // 명시적 정합성 오류(TX2 롤백, 상태 변경 없음). 별도 TX로 원인을 재검증하고 그대로면 자동 정합화를 멈춘다(v4 최종 ①).
+                    // 명시적 정합성 오류(TX2 롤백, 상태 변경 없음). 별도 TX로 원인을 재검증하고 그대로면 자동 정합화를 멈춘다.
                     // 표시 TX까지 실패하면 다음 주기에 한 번 더 같은 길을 간다
                     log.error("복구 중 정합성 오류(롤백, 운영 정합화 대상): attemptId={}, membershipPaymentId={}, membershipId={}, "
                         + "kind={}", ref.attemptId(), ref.membershipPaymentId(), ref.membershipId(), e.getKind());

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-// F-4(회차). 상세 설계 5-3 표: 허용 전이·거절·멱등. 확정 회차는 어떤 메서드도 바꾸지 않는다(I-16)
+// F-4(회차). 허용 전이·거절·멱등. 확정 회차는 어떤 메서드도 바꾸지 않는다(I-16)
 class MembershipPaymentTransitionTest {
 
     private static final LocalDate START = LocalDate.of(2026, 11, 6);

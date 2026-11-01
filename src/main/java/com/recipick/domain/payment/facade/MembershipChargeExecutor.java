@@ -67,7 +67,7 @@ public class MembershipChargeExecutor {
         LocalDateTime now = LocalDateTime.now(clock);
         if (!gate.newChargeEnabled()) {
             // 선점과 POST 사이에 플래그가 꺼짐. POST를 보내지 않았으므로 READY로 되돌린다.
-            // 되돌리지 못하면(다른 선점·상태 변경) 강제하지 않고 IN_PROGRESS — 기존 ID 정합화 경로가 맡는다(v4 MUST 4)
+            // 되돌리지 못하면(다른 선점·상태 변경) 강제하지 않고 IN_PROGRESS — 기존 ID 정합화 경로가 맡는다
             return dispatchProcessor.releaseUnsent(ticket)
                 ? MembershipChargeOutcome.NOT_DISPATCHED
                 : MembershipChargeOutcome.IN_PROGRESS;
@@ -113,7 +113,7 @@ public class MembershipChargeExecutor {
         };
     }
 
-    // 선점 실패 뒤 — 잠금 아래에서 본 상태로 정한다(v4 BLOCKER 3). 다른 Worker가 임대 안에서 PG 호출 중이면 기다린다(GET 없음).
+    // 선점 실패 뒤 — 잠금 아래에서 본 상태로 정한다. 다른 Worker가 임대 안에서 PG 호출 중이면 기다린다(GET 없음).
     // 오래된 DISPATCHING·UNKNOWN만 재조회한다
     private MembershipChargeOutcome afterFailedClaim(Long memberId, Long attemptId, MembershipChargeClaim claim) {
         if (claim.observedStatus() == null) {

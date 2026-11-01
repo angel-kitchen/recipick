@@ -70,7 +70,7 @@ class MembershipBillingPeriodsTest {
             .isInstanceOf(IllegalArgumentException.class);
     }
 
-    // ---------- 첫 결제 접수 유효 창(확정점 ①, v4 최종 ③) ----------
+    // ---------- 첫 결제 접수 유효 창 ----------
 
     @Test
     @DisplayName("acceptUntil = 첫 시도 requestedAt + 30분. 경계(정확히 30분)는 닫힌 창이다(now.isBefore 기준)")

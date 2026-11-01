@@ -192,7 +192,7 @@ public class MembershipPayment extends BaseTimeEntity {
         this.status = MembershipPaymentStatus.UNKNOWN;
     }
 
-    // PENDING·UNKNOWN → MANUAL_REVIEW. 신뢰할 수 없는 PG 결과(상세 설계 5-1 9번). 미해결 상태라 C-17이 계속 막는다
+    // PENDING·UNKNOWN → MANUAL_REVIEW. 신뢰할 수 없는 PG 결과. 미해결 상태라 C-17이 계속 막는다
     public void markManualReview() {
         if (status == MembershipPaymentStatus.MANUAL_REVIEW) {
             return;
