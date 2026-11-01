@@ -41,7 +41,7 @@ function foundNotice(accuracy) {
 }
 
 // 현재 위치에서 지도를 열고, 핀을 끌거나 지도를 눌러 위치를 정한 뒤 "이 위치로 확인"을 누르면 주소와 법정동 코드를 돌려준다.
-// 위치는 주소를 찾는 데만 쓰고 저장하지 않는다. 배송지로 저장하는 건 호출한 화면에서 사용자가 상세 주소를 입력하고 확정할 때다
+// 위치 좌표는 주소를 찾으려고 카카오 SDK에 전달하고, 우리 서버에는 보내거나 저장하지 않는다. 배송지로 저장하는 건 호출한 화면에서 사용자가 상세 주소를 입력하고 확정할 때다
 export default function LocationPickerModal({ onConfirm, onClose }) {
   const containerRef = useRef(null);
   // 모달이 열린 뒤 효과가 다시 실행되거나(개발 모드) 닫히면 값이 바뀐다. 오래된 비동기 작업이 이어서 지도를 만들지 않게 구분하는 데 쓴다
@@ -185,7 +185,7 @@ export default function LocationPickerModal({ onConfirm, onClose }) {
         <h2 className="tile__title">현재 위치로 찾기</h2>
         {notice && <p className="field__hint">{notice}</p>}
         <div ref={containerRef} className="location-map" />
-        <p className="field__hint">위치는 주소를 찾는 데만 쓰고 저장하지 않아요.</p>
+        <p className="field__hint">위치는 주소를 찾기 위해 카카오 지도로 전달되며, Recipick에는 저장하지 않아요.</p>
         <ErrorNotice error={error} />
         <div className="row-actions">
           <button type="button" className="btn btn--large" disabled={!pinned || confirming} onClick={confirm}>

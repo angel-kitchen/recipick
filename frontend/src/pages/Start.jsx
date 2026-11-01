@@ -104,12 +104,12 @@ export default function Start() {
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
               <strong>위치 정보 이용 동의 (필수)</strong>
             </label>
-            <p className="field__hint">현재 위치는 주소를 찾는 데만 쓰고 저장하지 않아요.</p>
+            <p className="field__hint">현재 위치는 주소를 찾기 위해 카카오 지도로 전달되며, Recipick에는 저장하지 않아요.</p>
             <details className="start__terms">
               <summary>내용 보기</summary>
               <ul className="list-plain">
                 <li>이용 목적: 배송 가능한 지역인지 판정하고 이용 마트를 정합니다.</li>
-                <li>이용 항목: 선택한 주소의 법정동</li>
+                <li>이용 항목: 선택한 주소의 법정동. '현재 위치로 찾기'를 쓰면 주소를 찾기 위해 좌표가 카카오 지도로 전달됩니다.</li>
                 <li>보관: 현재 위치 자체는 저장하지 않고, 동의한 시각과 확정한 배송지, 이용 마트만 저장합니다.</li>
               </ul>
             </details>
