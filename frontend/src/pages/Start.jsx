@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { kakaoAvailable } from '../address/kakao';
 import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode';
 import { useAuth } from '../auth/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
+import LocationPickerModal from '../components/LocationPickerModal';
 import { clearPendingAddress, readPendingAddress, registerAddress, savePendingAddress } from '../pendingAddress';
 
 // 배송받을 동네(법정동)를 먼저 정하고 서비스 지역인지 확인한다. 이용 마트는 이 동네로 정해진다.
@@ -24,6 +27,8 @@ export default function Start() {
   // 로그인 직후 보관한 주소를 저장하지 못해서 돌아온 경우 그 이유를 먼저 보여 준다
   const [error, setError] = useState(() => (location.state?.notice ? new Error(location.state.notice) : null));
   const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const { area, failed, retry } = useServiceArea(place?.legalDongCode);
 
   if (loading) return <p className="state-message">불러오는 중입니다.</p>;
@@ -99,20 +104,26 @@ export default function Start() {
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
               <strong>위치 정보 이용 동의 (필수)</strong>
             </label>
-            <p className="field__hint">현재 위치는 주소를 찾는 데만 쓰고 저장하지 않아요.</p>
+            <p className="field__hint">현재 위치는 주소를 찾기 위해 카카오 지도로 전달되며, Recipick에는 저장하지 않아요.</p>
             <details className="start__terms">
               <summary>내용 보기</summary>
               <ul className="list-plain">
                 <li>이용 목적: 배송 가능한 지역인지 판정하고 이용 마트를 정합니다.</li>
-                <li>이용 항목: 선택한 주소의 법정동</li>
+                <li>이용 항목: 선택한 주소의 법정동. '현재 위치로 찾기'를 쓰면 주소를 찾기 위해 좌표가 카카오 지도로 전달됩니다.</li>
                 <li>보관: 현재 위치 자체는 저장하지 않고, 동의한 시각과 확정한 배송지, 이용 마트만 저장합니다.</li>
               </ul>
             </details>
           </div>
 
           <div className="row-actions">
-            <button type="button" className="btn btn--large" disabled title="준비 중이에요">
-              현재 위치로 찾기 (준비 중)
+            <button
+              type="button"
+              className="btn btn--large"
+              disabled={!agreed || !kakaoAvailable}
+              title={kakaoAvailable ? undefined : '지금은 현재 위치 기능을 사용할 수 없어요'}
+              onClick={() => setLocating(true)}
+            >
+              현재 위치로 찾기
             </button>
             <button type="button" className="btn btn--large btn--outline" disabled={!agreed} onClick={search}>
               주소 직접 검색
@@ -181,7 +192,9 @@ export default function Start() {
           </button>
           {member ? (
             <p className="auth-card__footer">
-              <Link to="/recipes">나중에 할게요</Link>
+              <button type="button" onClick={() => setLeaving(true)}>
+                나중에 할게요
+              </button>
             </p>
           ) : (
             <p className="auth-card__footer">
@@ -190,6 +203,28 @@ export default function Start() {
           )}
         </form>
       </div>
+      {leaving && (
+        <ConfirmModal
+          title="배송지 등록을 나중에 하시겠어요?"
+          confirmLabel="지금 등록하기"
+          cancelLabel="나중에 할게요"
+          onConfirm={() => setLeaving(false)}
+          onCancel={() => navigate('/recipes')}
+          onClose={() => setLeaving(false)}
+        >
+          배송지를 등록하기 전에는 레시피 조회 이외의 기능은 이용할 수 없어요.
+          주소를 지정하고 장보기를 바로 시작하세요!
+        </ConfirmModal>
+      )}
+      {locating && (
+        <LocationPickerModal
+          onClose={() => setLocating(false)}
+          onConfirm={(selected) => {
+            setLocating(false);
+            pick(selected);
+          }}
+        />
+      )}
     </div>
   );
 }

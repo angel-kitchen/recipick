@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { notifyCartChanged, rememberSources } from '../cartSource';
 import { UNAVAILABLE_REASON, formatAmount, formatWon } from '../labels';
+import ConfirmModal from './ConfirmModal';
 import ErrorNotice from './ErrorNotice';
 import usePreviousMartGuard from './usePreviousMartGuard';
 
@@ -19,8 +20,13 @@ export default function AutoCartReview({ preview, disabled = false }) {
   // 재료별 선택. 값이 없거나 새 미리보기의 후보에 없으면 서버가 추천한 상품, NONE이면 담지 않음
   const [choices, setChoices] = useState({});
   const [added, setAdded] = useState(null);
+  // 담으려는 상품 중 이미 장바구니에 있는 것들. 있으면 담기 전에 한 번 더 묻는다
+  const [duplicates, setDuplicates] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // 장바구니를 읽는 중. 버튼을 연달아 눌러도 한 번만 시작하도록 ref로 먼저 막는다
+  const [checking, setChecking] = useState(false);
+  const busyRef = useRef(false);
 
   // 장바구니 묶음 이름. 같은 레시피라도 인분이 다르면 따로 보인다
   const menuLabels = preview.menus.map((menu) => `${menu.name} ${menu.servings}인분`);
@@ -60,12 +66,12 @@ export default function AutoCartReview({ preview, disabled = false }) {
       return next;
     });
 
-  const doAdd = async () => {
+  const doAdd = async (targets) => {
     setError(null);
     setSubmitting(true);
     const done = [];
     try {
-      for (const line of picked) {
+      for (const line of targets) {
         const res = await api.post('/api/cart-items', { productId: line.productId, quantity: line.quantity });
         // 서버는 같은 상품을 새 줄로 만들지 않고 수량을 더한다. 합친 총 수량을 받아 두었다가 알려 준다
         done.push({ ...line, total: res?.quantity ?? line.quantity });
@@ -82,8 +88,50 @@ export default function AutoCartReview({ preview, disabled = false }) {
       );
     } finally {
       setSubmitting(false);
+      busyRef.current = false;
     }
   };
+
+  // 서버는 같은 상품을 새 줄로 만들지 않고 수량을 더하므로, 담기 전에 이미 있는 상품을 알려 주고 확인받는다.
+  // 장바구니를 읽지 못하면 중복 여부를 모르므로 담지 않고 오류를 보여 준다(다시 누르면 재시도).
+  // 누른 시점의 목록(targets)을 고정해, 확인 팝업에 보인 상품만 담는다
+  const startAdd = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setChecking(true);
+    setError(null);
+    const targets = picked;
+    let found;
+    try {
+      const cart = await api.get('/api/cart-items');
+      found = targets.flatMap((line) => {
+        const inCart = cart.items.find((item) => item.productId === line.productId);
+        return inCart ? [{ ...line, current: inCart.quantity }] : [];
+      });
+    } catch (e) {
+      setError(e);
+      busyRef.current = false;
+      setChecking(false);
+      return;
+    }
+    setChecking(false);
+    if (found.length > 0) setDuplicates({ targets, found });
+    else await doAdd(targets);
+  };
+
+  const confirmDuplicates = () => {
+    const { targets } = duplicates;
+    setDuplicates(null);
+    doAdd(targets);
+  };
+
+  const cancelDuplicates = () => {
+    setDuplicates(null);
+    busyRef.current = false;
+  };
+
+  // 조회·확인·담기가 끝날 때까지 선택을 바꾸지 못하게 한다
+  const locked = checking || submitting || duplicates !== null;
 
   const orderNow = async () => {
     setError(null);
@@ -128,7 +176,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
               <input
                 type="checkbox"
                 aria-label={`${item.ingredientName} 담기`}
-                disabled={!item.purchasable}
+                disabled={!item.purchasable || locked}
                 checked={item.purchasable && !excluded}
                 onChange={() => toggle(item)}
               />
@@ -141,6 +189,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
                   <>
                     <select
                       className="field__input"
+                      disabled={locked}
                       value={productId}
                       onChange={(e) => setChoices((prev) => ({ ...prev, [item.ingredientId]: e.target.value }))}
                     >
@@ -169,11 +218,32 @@ export default function AutoCartReview({ preview, disabled = false }) {
         })}
       </div>
 
-      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || submitting || picked.length === 0} onClick={() => guard(doAdd)}>
-        {submitting ? '담는 중...' : `${picked.length}개 장바구니에 담기`}
+      <button type="button" className="btn btn--large btn--block" style={{ marginTop: 12 }} disabled={disabled || locked || picked.length === 0} onClick={() => guard(startAdd)}>
+        {submitting ? '담는 중...' : checking ? '장바구니 확인 중...' : `${picked.length}개 장바구니에 담기`}
       </button>
 
       {modal}
+      {duplicates && (
+        <ConfirmModal
+          title="이미 장바구니에 중복된 재료가 있어요"
+          confirmLabel="또 담기"
+          cancelLabel="취소"
+          onConfirm={confirmDuplicates}
+          onCancel={cancelDuplicates}
+        >
+          또 담으시겠어요? 같은 상품은 새로 담지 않고 수량이 합쳐져요.
+          <ul className="list-plain" style={{ margin: '12px 0 0' }}>
+            {duplicates.found.map((line) => (
+              <li key={line.productId}>
+                <span>{line.name}</span>
+                <span>
+                  {line.current}개 → {line.current + line.quantity}개
+                </span>
+              </li>
+            ))}
+          </ul>
+        </ConfirmModal>
+      )}
       {added && (
         <div className="modal" role="dialog" aria-modal="true" aria-label="장바구니에 담겼습니다">
           <div className="modal__box card modal__box--center">
