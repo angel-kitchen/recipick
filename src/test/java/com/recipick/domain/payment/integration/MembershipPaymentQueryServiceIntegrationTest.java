@@ -72,7 +72,9 @@ class MembershipPaymentQueryServiceIntegrationTest extends IntegrationTestSuppor
 
     @AfterEach
     void cleanUp() {
-        jdbc.update("DELETE r FROM membership_refund r JOIN membership_payment p ON r.membership_payment_id = p.id "
+        // 환불은 시도 FK로 찾는다 — 회차 직접 참조가 NULL인 환불도 지워야 시도를 지울 수 있다
+        jdbc.update("DELETE r FROM membership_refund r JOIN membership_payment_attempt a "
+            + "ON r.membership_payment_attempt_id = a.id JOIN membership_payment p ON a.membership_payment_id = p.id "
             + "WHERE p.membership_id BETWEEN 9810100 AND 9819999");
         jdbc.update("DELETE a FROM membership_payment_attempt a JOIN membership_payment p "
             + "ON a.membership_payment_id = p.id WHERE p.membership_id BETWEEN 9810100 AND 9819999");
@@ -171,6 +173,19 @@ class MembershipPaymentQueryServiceIntegrationTest extends IntegrationTestSuppor
         MembershipPayment payment = savePayment(membershipId, MembershipPaymentStatus.PAID);
         MembershipPaymentAttempt attempt = saveAttempt(payment, MembershipPaymentAttemptStatus.PAID, null);
         saveRefund(payment, attempt, RefundRequester.MEMBER, MembershipRefundStatus.REQUESTED);
+
+        // then
+        assertThat(existsUnresolved(List.of(membershipId))).isTrue();
+    }
+
+    @Test
+    @DisplayName("환불이 회차를 직접 가리키지 않아도(시도로만 연결) REQUESTED면 true다 — 판정은 필수 FK인 시도 경로로 본다")
+    void requestedRefundLinkedOnlyThroughAttempt() {
+        // given
+        long membershipId = MEMBERSHIP_SEQUENCE.incrementAndGet();
+        MembershipPayment payment = savePayment(membershipId, MembershipPaymentStatus.PAID);
+        MembershipPaymentAttempt attempt = saveAttempt(payment, MembershipPaymentAttemptStatus.PAID, null);
+        saveRefund(null, attempt, RefundRequester.MEMBER, MembershipRefundStatus.REQUESTED);
 
         // then
         assertThat(existsUnresolved(List.of(membershipId))).isTrue();
