@@ -1,6 +1,7 @@
 package com.recipick.domain.order.facade;
 
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.order.dto.request.CartItemAddRequest;
 import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CartFacade {
 
     private final MemberService memberService;
+    private final MembershipService membershipService;
     private final ProductService productService;
     private final CartService cartService;
 
@@ -73,7 +75,7 @@ public class CartFacade {
                 .collect(Collectors.toMap(ProductSummary::productId, Function.identity()));
         return CartResponse.of(cartItems.stream()
                 .map(cartItem -> CartItemResponse.of(cartItem, products.get(cartItem.getProductId()), martId))
-                .toList());
+                .toList(), membershipService.isActive(memberId));
     }
 
     private void validatePurchasable(ProductSummary product, Long martId) {

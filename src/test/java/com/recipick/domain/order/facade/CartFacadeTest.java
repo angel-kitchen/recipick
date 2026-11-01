@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.order.dto.request.CartItemAddRequest;
 import com.recipick.domain.order.dto.request.CartItemQuantityUpdateRequest;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
@@ -51,6 +52,9 @@ class CartFacadeTest {
 
     @Mock
     private MemberService memberService;
+
+    @Mock
+    private MembershipService membershipService;
 
     @Mock
     private ProductService productService;
@@ -322,6 +326,22 @@ class CartFacadeTest {
         assertThat(response.items()).isEmpty();
         assertThat(response.hasPreviousMartItems()).isFalse();
         assertThat(response.deliveryPolicy()).isEqualTo(new CartResponse.DeliveryPolicy(40_000L, 3_000L));
+    }
+
+    @Test
+    @DisplayName("장바구니 조회: 멤버십 회원에게는 무료배송 기준을 15,000원으로 돌려준다")
+    void getCart_membershipDeliveryPolicy() {
+        // given
+        given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
+        given(membershipService.isActive(MEMBER_ID)).willReturn(true);
+        given(cartService.findAllCartItems(MEMBER_ID)).willReturn(List.of());
+        given(productService.findProducts(List.of())).willReturn(List.of());
+
+        // when
+        CartResponse response = cartFacade.getCart(MEMBER_ID);
+
+        // then
+        assertThat(response.deliveryPolicy()).isEqualTo(new CartResponse.DeliveryPolicy(15_000L, 3_000L));
     }
 
     private CartItem cartItem(Long cartItemId, Long productId, int quantity) {

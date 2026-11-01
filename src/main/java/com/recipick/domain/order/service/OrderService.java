@@ -134,7 +134,7 @@ public class OrderService {
     // products는 quantities와 같은 순서로 차감된 상품이다
     @Transactional
     public List<OrderItem> completePendingOrder(
-        Order order, List<ProductSummary> products, List<StockQuantity> quantities) {
+        Order order, List<ProductSummary> products, List<StockQuantity> quantities, boolean membershipActive) {
         List<OrderItem> items = new ArrayList<>(products.size());
         for (int i = 0; i < products.size(); i++) {
             ProductSummary product = products.get(i);
@@ -152,7 +152,7 @@ public class OrderService {
         }
         long productAmount = items.stream().mapToLong(OrderItem::getLineAmount).sum();
         // 사용 포인트는 인자로 다시 받지 않고 주문에 저장한 값을 쓴다. 상품금액을 넘으면 여기서 ORDER-019가 난다
-        OrderAmount amount = OrderAmount.of(productAmount, order.getUsedPoint());
+        OrderAmount amount = OrderAmount.of(productAmount, order.getUsedPoint(), membershipActive);
         order.confirmAmounts(amount.productAmount(), amount.deliveryFee(), amount.payAmount());
         return orderItemRepository.saveAll(items);
     }

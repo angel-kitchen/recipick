@@ -8,6 +8,7 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.global.response.PageResponse;
 import com.recipick.domain.member.service.MemberService;
+import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.RegionService;
 import com.recipick.domain.order.dto.OrderNameFormatter;
 import com.recipick.domain.order.dto.request.OrderPreviewRequest;
@@ -57,6 +58,7 @@ public class OrderQueryFacade {
 
     private final AdminAuditRecorder auditRecorder;
     private final MemberService memberService;
+    private final MembershipService membershipService;
     private final RegionService regionService;
     private final MartService martService;
     private final CartService cartService;
@@ -120,7 +122,8 @@ public class OrderQueryFacade {
         // 살 수 있는 상품이 없으면 배송비도 붙지 않는다. 금액 계산은 주문 생성과 같은 OrderAmount를 쓴다
         OrderAmount amount = purchasable.isEmpty()
                 ? new OrderAmount(0L, 0L, 0L)
-                : OrderAmount.of(purchasable.stream().mapToLong(CartItemResponse::lineAmount).sum());
+                : OrderAmount.of(purchasable.stream().mapToLong(CartItemResponse::lineAmount).sum(),
+                        membershipService.isActive(memberId));
         return new OrderPreviewResponse(reasons.isEmpty(), List.copyOf(reasons), delivery, items,
                 amount.productAmount(), amount.deliveryFee(), amount.payAmount(), pendingOrder);
     }

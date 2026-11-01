@@ -7,7 +7,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.entity.Member;
+import com.recipick.domain.member.entity.Membership;
+import com.recipick.domain.member.entity.enums.MembershipSource;
+import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.repository.MemberRepository;
+import com.recipick.domain.member.repository.MembershipRepository;
 import com.recipick.domain.order.dto.request.OrderCreateRequest;
 import com.recipick.domain.order.dto.request.OrderPreviewRequest;
 import com.recipick.domain.order.entity.CartItem;
@@ -21,8 +25,10 @@ import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.global.common.SaleUnit;
+import com.recipick.global.common.TimeConstants;
 import com.recipick.global.security.JwtTokenProvider;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -55,6 +61,8 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
     private JwtTokenProvider tokens;
     @Autowired
     private MemberRepository memberRepository;
+    @Autowired
+    private MembershipRepository membershipRepository;
     @Autowired
     private MartRepository martRepository;
     @Autowired
@@ -100,6 +108,7 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
         }
         cartItemRepository.deleteAll(cartItems);
         productRepository.deleteAll(products);
+        jdbcTemplate.update("DELETE FROM membership WHERE member_id = ?", member.getId());
         memberRepository.delete(member);
     }
 
@@ -135,6 +144,25 @@ class OrderPreviewIntegrationTest extends IntegrationTestSupport {
         assertThat(data.path("deliveryFee").asLong()).isEqualTo(3000L);
         assertThat(data.path("payAmount").asLong()).isEqualTo(12000L);
         assertThat(data.path("pendingOrder").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("체험을 포함한 멤버십 회원은 상품금액 15,000원 이상이면 배송비가 없다")
+    void previewOrder_membershipFreeDelivery() throws Exception {
+        // given
+        LocalDateTime start = LocalDateTime.now(TimeConstants.ZONE_ID).minusDays(1);
+        membershipRepository.save(Membership.builder().member(member).type(MembershipType.TRIAL)
+            .source(MembershipSource.TRIAL).startAt(start).activatedAt(start).endAt(start.plusDays(7)).build());
+        CartItem cartItem = cartItem(product(MART_ID, "재래식 된장", 7500L, 10), 2);
+
+        // when
+        MockHttpServletResponse response = preview(List.of(cartItem.getId()), MART_LEGAL_DONG_CODE);
+
+        // then
+        JsonNode data = data(response);
+        assertThat(data.path("productAmount").asLong()).isEqualTo(15000L);
+        assertThat(data.path("deliveryFee").asLong()).isZero();
+        assertThat(data.path("payAmount").asLong()).isEqualTo(15000L);
     }
 
     @Test
