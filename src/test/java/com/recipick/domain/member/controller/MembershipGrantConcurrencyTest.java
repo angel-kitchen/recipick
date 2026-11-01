@@ -12,7 +12,7 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.member.repository.AdminRepository;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
-import com.recipick.domain.member.service.MembershipGrantService;
+import com.recipick.domain.member.facade.MembershipGrantFacade;
 import com.recipick.global.security.AuthPrincipal;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.global.security.SubjectType;
@@ -50,7 +50,7 @@ class MembershipGrantConcurrencyTest extends IntegrationTestSupport {
     @Autowired
     private MembershipRepository memberships;
     @Autowired
-    private MembershipGrantService service;
+    private MembershipGrantFacade service;
     @Autowired
     private JwtTokenProvider tokens;
     @Autowired

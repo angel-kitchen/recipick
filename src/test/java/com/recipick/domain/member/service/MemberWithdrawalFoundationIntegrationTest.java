@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import com.recipick.domain.member.facade.MembershipGrantFacade;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.dto.request.MemberLoginRequest;
 import com.recipick.domain.member.dto.request.MemberAdminSearchRequest;
@@ -38,7 +39,7 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private MemberAdminService adminService;
     @Autowired
-    private MembershipGrantService grant;
+    private MembershipGrantFacade grant;
     @Autowired
     private MembershipService memberships;
     @Autowired
