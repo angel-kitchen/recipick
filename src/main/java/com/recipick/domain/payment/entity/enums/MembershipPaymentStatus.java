@@ -1,6 +1,6 @@
 package com.recipick.domain.payment.entity.enums;
 
-// 멤버십 결제 회차의 상태. PAID·FAILED는 확정이라 바뀌지 않는다. 전이 메서드는 4단계
+// 멤버십 결제 회차의 상태. PAID·FAILED는 확정이라 바뀌지 않는다. 전이 메서드는 첫 결제·갱신
 public enum MembershipPaymentStatus {
     PENDING,                  // 접수됨. 시도가 진행 중이거나 곧 시작
     RETRY_WAITING,            // 갱신 실패 뒤 다음 시도 대기(3일 유예)

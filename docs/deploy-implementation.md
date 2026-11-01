@@ -429,3 +429,20 @@ ALTER TABLE membership_refund MODIFY membership_payment_attempt_id BIGINT NOT NU
 
 Contract 뒤 앱 롤백: 이전 앱(2b 이전)은 이 테이블을 읽거나 쓰는 코드가 없어 동작에 영향이 없다. 다만 이전 앱의 `ddl-auto: update`가
 지운 컬럼을 다시 추가할 수 있다 — 롤백 보장이 아니라 부작용으로 기록한다.
+
+
+
+### 10-E. 결제 3단계(#325) — DDL 없음, 신규 청구 플래그 확인
+
+3단계는 2b(10-C)의 테이블·컬럼만 쓰고 **새 DDL이 없다.** 배포 전 확인은 플래그 하나다.
+
+| 확인 | 기대 |
+| --- | --- |
+| 운영 `.env`의 `MEMBERSHIP_BILLING_ENABLED` | 없음 또는 `false`(기본 false) |
+| 기동 뒤 10-B 스냅숏 diff | 3단계로 인한 변경 없음 |
+| 기동 로그 | `membership_payment`·`membership_payment_attempt` 관련 `alter table`·`create table` 없음 |
+
+플래그를 켜는 조건은 `docs/api/membership-first-charge.md`의 운영 활성화 게이트를 따른다. 현재 `deploy/compose.yml`의
+`app.environment`는 `MEMBERSHIP_BILLING_ENABLED`를 전달하지 않아 운영 `.env`만 바꿔서는 켜지지 않는다(기본 false 유지).
+켤 때 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달을 함께 추가한다. 플래그가 꺼져 있어도 이미 생긴 결제의
+재조회·결과 반영·복구는 계속 돈다.

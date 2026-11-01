@@ -9,10 +9,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-// 카드 등록 설정 바인딩, 순수 검증기 빈, 빌링키 원문 로그 차단 필터 등록(실패 시 기동 실패).
+// 카드 등록·멤버십 자동결제 설정 바인딩, 순수 검증기 빈, 빌링키 원문 로그 차단 필터 등록(실패 시 기동 실패).
 // 검증기는 Spring을 모르는 클래스라 단위 테스트가 직접 만든다
 @Configuration
-@EnableConfigurationProperties(BillingKeyProperties.class)
+@EnableConfigurationProperties({BillingKeyProperties.class, MembershipBillingProperties.class})
 public class BillingKeyConfig {
 
     @Bean

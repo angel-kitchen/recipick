@@ -31,7 +31,9 @@ public enum PaymentErrorCode implements ErrorCode {
     BILLING_KEY_ISSUE_REQUEST_INVALID(HttpStatus.CONFLICT, "BILLING-007",
         "카드 등록 요청이 유효하지 않습니다. 카드 등록을 다시 시작해 주세요."),
     BILLING_KEY_REGISTRATION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "BILLING-008",
-        "카드 등록 기능이 아직 열리지 않았습니다.");
+        "카드 등록 기능이 아직 열리지 않았습니다."),
+    MEMBERSHIP_BILLING_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "BILLING-009",
+        "멤버십 자동결제가 아직 열리지 않았습니다.");
 
     private final HttpStatus status;
     private final String code;

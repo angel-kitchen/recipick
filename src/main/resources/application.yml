@@ -45,7 +45,7 @@ security:
     refresh-cookie-secure: true
 
 ai:
-  # API 키를 받기 전에는 가짜 응답(fake)으로 개발하고, 키를 넣은 환경에서만 claude로 바꾼다
+  # API 키를 받기 전에는 가짜 응답(fake)으로 개발
   client: ${AI_CLIENT:fake}
   claude:
     api-key: ${ANTHROPIC_API_KEY:}
@@ -77,6 +77,10 @@ recipick:
     # 카드 등록 API 스위치. 운영 기본 false — 테스트 채널 환경에서만 BILLING_KEY_REGISTRATION_ENABLED=true로 켠다.
     # 실채널 차단은 이 값과 무관하게 코드가 한다(docs/api/billing-key-registration.md)
     registration-enabled: ${BILLING_KEY_REGISTRATION_ENABLED:false}
+  membership-billing:
+    # 멤버십 자동결제 신규 청구 스위치. 운영 기본 false
+    # 꺼져 있어도 이미 생긴 결제의 재조회·결과 반영·복구는 계속 돈다(docs/api/membership-first-charge.md)
+    enabled: ${MEMBERSHIP_BILLING_ENABLED:false}
 ---
 spring:
   config:
