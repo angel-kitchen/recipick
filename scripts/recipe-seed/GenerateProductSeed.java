@@ -140,6 +140,12 @@ public class GenerateProductSeed {
         sb.append("UPDATE recipe SET auto_cart_enabled = TRUE, updated_at = NOW()\n")
                 .append("WHERE name IN (").append(String.join(", ", recipes)).append(");\n");
 
+        // 하안 마트 좌표를 하안동 안쪽으로 옮긴다. 예전 좌표일 때만 바꿔 직접 고친 값은 덮어쓰지 않는다.
+        sb.append("\n-- 하안 마트 좌표가 철산동 쪽에 있어 하안동 안에서 현재 위치를 찾아도 이용 가능 지역과 어긋났다. 하안동 안쪽으로 옮긴다.\n")
+                .append("-- data.sql의 INSERT는 이미 있는 행을 건너뛰므로 기존 로컬 DB에는 UPDATE로 반영한다. 예전 좌표일 때만 바꿔 직접 고친 값은 덮어쓰지 않는다.\n")
+                .append("UPDATE mart SET latitude = 37.4640000, longitude = 126.8760000, updated_at = NOW()\n")
+                .append("WHERE id = 2 AND region_id = 2 AND latitude = 37.4710000 AND longitude = 126.8760000;\n");
+
         Files.writeString(OUT, sb.toString(), StandardCharsets.UTF_8);
         System.out.printf("재료 %d개, 상품 %d종(마트 %d곳), 레시피 재료 %d행, 레시피 %d개 -> %s%n",
                 ingredients.size(), products.size(), MARTS.size(), recipeIngredients.size(), recipes.size(), OUT);
