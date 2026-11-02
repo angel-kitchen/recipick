@@ -19,6 +19,10 @@ export class ApiError extends Error {
   }
 }
 
+// 서버가 요청을 반영했는지 알 수 없는 실패. 응답을 못 받았거나(네트워크 오류·프록시 502 이상) 서버가 500을 돌려준 경우다.
+// 500은 저장 실패의 증거가 아니다(커밋 뒤 처리에서 예외가 날 수 있다). 이때만 같은 Idempotency-Key로 다시 보낸다
+export const isUnknownOutcome = (e) => !(e instanceof ApiError) || e.status >= 500;
+
 export function setAuthLostHandler(handler) {
   onAuthLost = handler;
 }

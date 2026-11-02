@@ -39,17 +39,18 @@ export default function PendingOrderNotice({ onChanged }) {
 
   return (
     <div className="notice notice--info">
-      <strong>결제 대기 중인 주문이 있어요.</strong> {order.orderName} · {formatWon(order.payAmount)}
+      <strong>결제를 마치지 않은 주문이 있어요.</strong> {order.orderName} · {formatWon(order.payAmount)}
       <br />
-      결제하지 않은 주문이 남아 있으면 새 주문을 만들 수 없어요. 취소하면 재고가 돌아가고 바로 새로 주문할 수 있어요.
+      이어서 결제하거나 취소하면 새로 주문할 수 있어요.
       <ErrorNotice error={error} />
+      {/* 이 안내를 보는 사람은 결제하다 떠난 경우가 많아 결제를 앞에 둔다. 결제는 주문 상세 한 곳에서만 처리한다 */}
       <div className="row-actions">
-        <button type="button" className="btn" disabled={cancelling} onClick={cancel}>
+        <Link to={`/orders/${order.orderId}`} className="btn">
+          결제하러 가기
+        </Link>
+        <button type="button" className="btn btn--outline" disabled={cancelling} onClick={cancel}>
           {cancelling ? '취소하는 중...' : '이 주문 취소하기'}
         </button>
-        <Link to={`/orders/${order.orderId}`} className="btn btn--outline">
-          주문 보기
-        </Link>
       </div>
     </div>
   );
