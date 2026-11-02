@@ -129,6 +129,9 @@ class PaymentReconciliationFacadeTest {
     @Mock
     private PaymentDelayQueue paymentDelayQueue;
 
+    @Mock
+    private MembershipWebhookReconciliationFacade membershipWebhookReconciliationFacade;
+
     private PaymentReconciliationFacade facade;
 
     private Payment payment;
@@ -139,7 +142,7 @@ class PaymentReconciliationFacadeTest {
         facade = new PaymentReconciliationFacade(webhookEventService, paymentService, portOnePaymentClient,
             new PortOneWebhookParser(), paymentConfirmProcessor, paymentCancelProcessor, systemRefundProcessor,
             systemRefundExecutionFacade, martRejectionProcessor, externalCancellationProcessor, paymentDelayQueue,
-            fixedClock);
+            membershipWebhookReconciliationFacade, fixedClock);
         // 회원 환불 행을 붙일 수 있는 상태(CANCEL_REQUESTED)로 하나만 만들어 공유한다.
         // 결제 상태가 판정에 쓰이는 테스트는 givenOurFailedPayment·givenOurPaymentIn으로 따로 만든다
         payment = payment(PAYMENT_ID, ORDER_ID);

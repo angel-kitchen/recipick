@@ -2,12 +2,14 @@ package com.recipick.domain.payment.facade;
 
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
 import com.recipick.domain.payment.dto.PaymentCancelResult;
+import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
+import com.recipick.domain.payment.service.MembershipWebhookResult;
 import com.recipick.domain.payment.service.ExternalCancellationResult;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
@@ -75,6 +77,7 @@ public class PaymentReconciliationFacade {
     private final MartRejectionProcessor martRejectionProcessor;
     private final ExternalCancellationProcessor externalCancellationProcessor;
     private final PaymentDelayQueue paymentDelayQueue;
+    private final MembershipWebhookReconciliationFacade membershipWebhookReconciliationFacade;
     private final Clock clock;
 
     public WebhookProcessOutcome processWebhook(Long webhookEventId) {
@@ -108,9 +111,13 @@ public class PaymentReconciliationFacade {
         if (type.isEmpty()) {
             return Decision.ignored("처리하지 않는 type: " + event.getType());
         }
-        // 레시픽 결제가 아니면 PortOne을 묻지 않는다. 다른 환경·상점의 결제 ID가 섞여 들어온 경우다.
-        // 멤버십 결제 웹훅도 지금은 여기서 IGNORED로 끝나고, 종료 상태라 나중에 다시 처리되지 않는다 — 멤버십 결제를
-        // 구현할 때 이 조회 앞에서 일반 결제·멤버십 결제를 나눠 보내야 한다
+        // 멤버십 결제 ID는 상품 결제 조회 전에 멤버십 분기로 보낸다(없는 시도도 IGNORED가 아니라 운영 확인으로 남긴다)
+        if (event.getPortonePaymentId() != null
+            && event.getPortonePaymentId().startsWith(MembershipPaymentAttempt.PAYMENT_ID_PREFIX)) {
+            MembershipWebhookResult result = membershipWebhookReconciliationFacade.reconcile(event, type.get());
+            return new Decision(result.outcome(), result.reason());
+        }
+        // 레시픽 결제가 아니면 PortOne을 묻지 않는다. 다른 환경·상점의 결제 ID가 섞여 들어온 경우다
         Optional<Payment> payment = paymentService.findByPortonePaymentId(event.getPortonePaymentId());
         if (payment.isEmpty()) {
             return Decision.ignored("우리 결제가 아님: portonePaymentId=" + event.getPortonePaymentId());

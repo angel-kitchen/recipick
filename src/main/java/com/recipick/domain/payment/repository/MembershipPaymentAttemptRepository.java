@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -153,6 +154,33 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
         """)
     List<BillingKeyRecheckRef> findBillingKeysToRecheck(@Param("since") LocalDateTime since,
                                                         @Param("afterId") Long afterId, Pageable pageable);
+
+    // 운영자 재조회 응답용 최신 상태. 재조회 진입점은 트랜잭션 밖이라 회차를 함께 읽는다
+    @Query("SELECT a FROM MembershipPaymentAttempt a JOIN FETCH a.membershipPayment WHERE a.id = :id")
+    Optional<MembershipPaymentAttempt> findWithPaymentById(@Param("id") Long id);
+
+    // 운영 목록(최신 시도부터). 조건이 없으면 전체. statuses는 비어 있으면 안 된다 — 호출자가 "전체"를 모든 값으로 넘긴다
+    @Query(value = """
+        SELECT a FROM MembershipPaymentAttempt a
+         WHERE a.status IN :statuses
+           AND (:membershipId IS NULL OR a.membershipPayment.membershipId = :membershipId)
+           AND (:opsReviewOnly = false OR a.opsReviewRequiredAt IS NOT NULL)
+           AND (:blockedOnly = false OR a.opsReviewReason IN :blocking)
+         ORDER BY a.id DESC
+        """, countQuery = """
+        SELECT COUNT(a) FROM MembershipPaymentAttempt a
+         WHERE a.status IN :statuses
+           AND (:membershipId IS NULL OR a.membershipPayment.membershipId = :membershipId)
+           AND (:opsReviewOnly = false OR a.opsReviewRequiredAt IS NOT NULL)
+           AND (:blockedOnly = false OR a.opsReviewReason IN :blocking)
+        """)
+    Page<MembershipPaymentAttempt> searchForAdmin(
+        @Param("statuses") Collection<MembershipPaymentAttemptStatus> statuses,
+        @Param("membershipId") Long membershipId,
+        @Param("opsReviewOnly") boolean opsReviewOnly,
+        @Param("blockedOnly") boolean blockedOnly,
+        @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
+        Pageable pageable);
 
     // 회차 단위 강한 차단 조회(일반 조회, 잠금 없음). 선점 TX·재조회 진입·POST 직전이 "이 회차에 차단 시도가 있나"를 본다.
     // 파생 쿼리: membershipPayment.id IN 조건
