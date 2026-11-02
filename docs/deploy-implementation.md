@@ -487,10 +487,11 @@ SHOW CREATE TABLE membership_payment;
 -- F-2 인덱스 추가 (INPLACE·LOCK=NONE: DML은 계속 가능. 메타데이터 잠금은 걸리므로 긴 트랜잭션이 없는 시간에 적용한다)
 CREATE INDEX idx_membership_payment_status_next_retry_id
     ON membership_payment (status, next_retry_at, id)
-    ALGORITHM=INPLACE, LOCK=NONE;
+    ALGORITHM=INPLACE LOCK=NONE;
+
 CREATE INDEX idx_membership_payment_status_grace_id
     ON membership_payment (status, grace_deadline_at, id)
-    ALGORITHM=INPLACE, LOCK=NONE;
+    ALGORITHM=INPLACE LOCK=NONE;
 
 -- F-3 확인: 이름·열 순서, 그리고 실제 조회의 실행 계획
 SHOW INDEX FROM membership_payment WHERE Key_name LIKE 'idx_membership_payment_status_%';

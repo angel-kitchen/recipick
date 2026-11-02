@@ -413,6 +413,7 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
 
     // ---------- 카드 대기·교체 ----------
 
+
     @Test
     @DisplayName("처음부터 카드가 없으면 카드 대기 회차(시도 0)가 되고, 등록 뒤 재개는 같은 회차에서 한 번만 청구한다")
     void noCardThenRegisterChargesOnce() {
@@ -420,7 +421,13 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
         Long membershipId = activeMembership();
         time.billingKeyStatus(cardA.getId(), BillingKeyStatus.REPLACED);
         renewalFacade.runOnce();
+
         MembershipPayment waiting = onlyRenewalPayment(membershipId);
+
+        // 카드 등록 전: 결제수단 대기 상태
+        assertThat(waiting.getStatus())
+            .isEqualTo(MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED);
+
         saveActiveKey(member.getId());
         PORTONE.defaultPaid(FEE, T);
 
@@ -429,11 +436,15 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
         renewalFacade.resumeForMember(member.getId());
 
         // then
-        assertThat(waiting.getStatus()).isEqualTo(MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED);
+        // 재개 후 DB에서 최신 회차 상태를 다시 조회
+        assertThat(onlyRenewalPayment(membershipId).getStatus())
+            .isEqualTo(MembershipPaymentStatus.PAID);
+
         assertThat(attemptsOf(waiting.getId())).hasSize(1);
         assertThat(PORTONE.totalPostCount()).isEqualTo(1);
         assertThat(membership(membershipId).getEndAt()).isEqualTo(E);
     }
+
 
     @Test
     @DisplayName("카드 등록 뒤 재개 신호가 없어도 다음 갱신 실행이 같은 카드 대기 회차를 재개한다")
