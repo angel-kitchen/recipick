@@ -22,7 +22,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 // 흐름 테스트용 PortOne V2 흉내(JDK HttpServer). 실제 RestClient·타임아웃·직렬화를 그대로 통과시키려는 것이지 PG를 검증하는 것이
 // 아니다 — 결제 ID별로 POST(빌링키 청구)·GET(단건 조회) 응답을 미리 정해 두고 호출 횟수만 센다(I-12 검증).
-// 요청 헤더·본문은 기록하지 않는다(빌링키·Authorization이 들어 있다). 정해 두지 않은 경로는 404 PAYMENT_NOT_FOUND.
+// 요청 헤더·본문은 기록하지 않는다(빌링키·Authorization이 들어 있다) — 멤버십 환불의 취소 POST만 본문과 멱등 키 헤더를 보관한다
+// (금액·reason·키가 매번 같은지 검증, 빌링키·Authorization 없음). 정해 두지 않은 경로는 404 PAYMENT_NOT_FOUND.
 // 동시성 테스트용으로 POST 응답을 래치로 붙잡아 둘 수 있다(holdPosts → postArrived 대기 → releasePosts). 붙잡힌 요청이 다른 요청을
 // 막지 않게 요청마다 별도 스레드에서 처리한다
 public final class PortOneStubServer {
@@ -37,8 +38,14 @@ public final class PortOneStubServer {
     private final Map<String, Stub> postStubs = new ConcurrentHashMap<>();
     private final Map<String, Stub> getStubs = new ConcurrentHashMap<>();
     private final Map<String, Stub> billingKeyStubs = new ConcurrentHashMap<>();
+    private final Map<String, Stub> cancelStubs = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> postCounts = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> getCounts = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> cancelCounts = new ConcurrentHashMap<>();
+    // 취소 POST 본문(결제 ID별, 도착 순). 멱등 키·금액·reason이 매번 같은지 검증하는 데 쓴다 — 빌링키·인증은 들어 있지 않다
+    private final Map<String, List<String>> cancelBodies = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> cancelIdempotencyKeys = new ConcurrentHashMap<>();
+    private final AtomicReference<Long> cancelDelayMillis = new AtomicReference<>();
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final ExecutorService handlers = Executors.newCachedThreadPool();
     private final AtomicReference<CountDownLatch> postGate = new AtomicReference<>();
@@ -92,8 +99,13 @@ public final class PortOneStubServer {
         postStubs.clear();
         getStubs.clear();
         billingKeyStubs.clear();
+        cancelStubs.clear();
         postCounts.clear();
         getCounts.clear();
+        cancelCounts.clear();
+        cancelBodies.clear();
+        cancelIdempotencyKeys.clear();
+        cancelDelayMillis.set(null);
         requests.clear();
     }
 
@@ -162,6 +174,69 @@ public final class PortOneStubServer {
             "{\"summary\":\"declined\"}"));
     }
 
+    // 멤버십 환불 정합화용 PAID 응답 — 상점 ID·누적 취소액·취소 내역(id·status·totalAmount·reason·trigger)을 함께 준다.
+    // cancellationsJson은 "[{...},{...}]" 그대로(없으면 null → 배열 없음, cancelled 0)
+    public void getPaymentPaidWithCancellations(String paymentId, String storeId, long amount, LocalDateTime paidAtKst,
+                                                long cancelledAmount, String cancellationsJson) {
+        String status = cancelledAmount <= 0 ? "PAID" : (cancelledAmount >= amount ? "CANCELLED" : "PARTIAL_CANCELLED");
+        onGetPayment(paymentId, 200, "{\"id\":\"" + paymentId + "\",\"transactionId\":\"tx_" + paymentId
+            + "\",\"storeId\":\"" + storeId + "\",\"status\":\"" + status + "\",\"amount\":{\"total\":" + amount
+            + ",\"paid\":" + amount + ",\"cancelled\":" + cancelledAmount + "},\"currency\":\"KRW\",\"paidAt\":\""
+            + iso(paidAtKst) + "\"" + (cancellationsJson == null ? "" : ",\"cancellations\":" + cancellationsJson) + "}");
+    }
+
+    // 취소 내역 JSON 한 건. canceledAtKst가 null이면 cancelledAt 없이(SUCCEEDED여도 비어 있을 수 있다)
+    public static String cancellationJson(String id, String status, long totalAmount, String reason, String trigger,
+                                          LocalDateTime requestedAtKst, LocalDateTime canceledAtKst) {
+        return "{\"id\":\"" + id + "\",\"status\":\"" + status + "\",\"totalAmount\":" + totalAmount
+            + (reason == null ? "" : ",\"reason\":\"" + reason + "\"")
+            + ",\"trigger\":\"" + trigger + "\""
+            + (requestedAtKst == null ? "" : ",\"requestedAt\":\"" + iso(requestedAtKst) + "\"")
+            + (canceledAtKst == null ? "" : ",\"cancelledAt\":\"" + iso(canceledAtKst) + "\"") + "}";
+    }
+
+    // POST /payments/{id}/cancel 응답을 정한다(멤버십 환불 금액 지정 취소)
+    public void onCancel(String paymentId, int status, String body) {
+        cancelStubs.put(paymentId, new Stub(status, body));
+    }
+
+    public void cancelSucceeded(String paymentId, String cancellationId, long totalAmount, String reason,
+                                LocalDateTime canceledAtKst) {
+        onCancel(paymentId, 200, "{\"cancellation\":" + cancellationJson(cancellationId, "SUCCEEDED", totalAmount,
+            reason, "API", canceledAtKst, canceledAtKst) + "}");
+    }
+
+    public void cancelRequested(String paymentId, String cancellationId, long totalAmount, String reason,
+                                LocalDateTime requestedAtKst) {
+        onCancel(paymentId, 200, "{\"cancellation\":" + cancellationJson(cancellationId, "REQUESTED", totalAmount,
+            reason, "API", requestedAtKst, null) + "}");
+    }
+
+    public void cancelError(String paymentId, int status, String type) {
+        onCancel(paymentId, status, "{\"type\":\"" + type + "\",\"message\":\"stub\"}");
+    }
+
+    // 취소 POST 응답을 millis만큼 늦춘다(읽기 timeout 재현)
+    public void delayCancels(long millis) {
+        cancelDelayMillis.set(millis);
+    }
+
+    public int cancelCount(String paymentId) {
+        return cancelCounts.getOrDefault(paymentId, new AtomicInteger()).get();
+    }
+
+    public int totalCancelCount() {
+        return cancelCounts.values().stream().mapToInt(AtomicInteger::get).sum();
+    }
+
+    public List<String> cancelBodies(String paymentId) {
+        return List.copyOf(cancelBodies.getOrDefault(paymentId, List.of()));
+    }
+
+    public List<String> cancelIdempotencyKeys(String paymentId) {
+        return List.copyOf(cancelIdempotencyKeys.getOrDefault(paymentId, List.of()));
+    }
+
     // paidAt 자리에 날짜가 아닌 문자열을 넣은 성공 응답(역직렬화 실패 재현). value는 JSON 문자열로 그대로 들어간다
     public void getPaymentWithRawPaidAt(String paymentId, long amount, String rawPaidAt) {
         onGetPayment(paymentId, 200, paymentJson(paymentId, "PAID", amount, "KRW", rawPaidAt, null));
@@ -210,9 +285,26 @@ public final class PortOneStubServer {
         String path = exchange.getRequestURI().getPath();
         // 빌링키 조회 경로에는 키 원문이 들어 있어 경로를 기록하지 않는다
         requests.add(method + " " + (path.startsWith("/billing-keys/") ? "/billing-keys/[REDACTED]" : path));
-        exchange.getRequestBody().readAllBytes();
+        byte[] requestBody = exchange.getRequestBody().readAllBytes();
         Stub stub;
-        if ("POST".equals(method) && path.startsWith("/payments/") && path.endsWith("/billing-key")) {
+        if ("POST".equals(method) && path.startsWith("/payments/") && path.endsWith("/cancel")) {
+            String id = path.substring("/payments/".length(), path.length() - "/cancel".length());
+            cancelCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
+            cancelBodies.computeIfAbsent(id, k -> new CopyOnWriteArrayList<>())
+                .add(new String(requestBody, StandardCharsets.UTF_8));
+            cancelIdempotencyKeys.computeIfAbsent(id, k -> new CopyOnWriteArrayList<>())
+                .add(String.valueOf(exchange.getRequestHeaders().getFirst("Idempotency-Key")));
+            stub = cancelStubs.getOrDefault(id, new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}"));
+            awaitPostGate();
+            Long delay = cancelDelayMillis.get();
+            if (delay != null) {
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        } else if ("POST".equals(method) && path.startsWith("/payments/") && path.endsWith("/billing-key")) {
             String id = path.substring("/payments/".length(), path.length() - "/billing-key".length());
             postCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
             stub = postStubs.getOrDefault(id, defaultPost(id));

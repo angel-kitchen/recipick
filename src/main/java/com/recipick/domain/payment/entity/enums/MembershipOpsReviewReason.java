@@ -16,19 +16,21 @@ public enum MembershipOpsReviewReason {
     RENEWAL_LONG_DELAY,
     SYSTEM_REFUND_FAILED,
     PAID_AMOUNT_MISMATCH,
-    LATE_PAID_AFTER_FAILED,               // 환불 필요 ㅡ 발송된 FAILED 시도에 늦게 확인된 수납(상태를 PAID로 정정하고 돌려준다)
-    PAID_AFTER_WITHDRAWAL,                // 환불 필요 ㅡ 탈퇴한 회원의 갱신 수납
-    CONFLICTING_MEMBERSHIP,               // 환불 필요 ㅡ 다른 이용권과 충돌하는 갱신 수납
-    UNKNOWN_WINDOW_EXPIRED,               // 결과 확인 대기 ㅡ 결과 불명 창(W)이 끝나 자동 반복 조회를 멈춤. 차단은 아님
-    APPLIED_STATE_INCONSISTENT,           // 강한 차단 ㅡ 이용권 반영 상태와 결제 기록이 맞지 않음
-    UNDISPATCHED_PAID,                    // 강한 차단 ㅡ PG에 보낸 적 없는 시도의 결제 ID로 PG에 수납이 있음
-    UNDISPATCHED_PG_ACTIVITY,             // 강한 차단 ㅡ PG에 보낸 적 없는 시도의 결제 ID로 수납 아닌 거래 기록이 있음
-    PAID_EVIDENCE_CONFLICT,               // 강한 차단 ㅡ 저장된 수납 근거와 PG재조회 결과가 다름
-    PAID_AT_INVALID;                      // 강한 차단 ㅡ 실패로 확정한 시도에 늦게 확인된 수납의 결제 시각이 회차 기간 전이거나 미래
+    LATE_PAID_AFTER_FAILED,                 // 환불 필요 — 발송된 FAILED 시도에 늦게 확인된 수납(상태를 PAID로 정정하고 돌려준다)
+    PAID_AFTER_WITHDRAWAL,                  // 환불 필요 — 탈퇴한 회원의 갱신 수납(혜택을 만들지 않는다)
+    CONFLICTING_MEMBERSHIP,                 // 환불 필요 — 다른 이용권과 충돌하는 갱신 수납
+    UNKNOWN_WINDOW_EXPIRED,                 // 결과 확인 대기 — 결과 불명 창(W)이 끝나 자동 반복 조회를 멈춤. 차단은 아니다
+    APPLIED_STATE_INCONSISTENT,              // 강한 차단 — 이용권 반영 상태와 결제 기록이 맞지 않음
+    UNDISPATCHED_PAID,                       // 강한 차단 — PG에 보낸 적 없는 시도의 결제 ID로 PG에 수납이 있음
+    UNDISPATCHED_PG_ACTIVITY,                // 강한 차단 — PG에 보낸 적 없는 시도의 결제 ID로 PG에 수납 아닌 거래 기록(실패·진행 중·취소·신뢰 불가)이 있음
+    PAID_EVIDENCE_CONFLICT,                  // 강한 차단 — 저장된 수납 근거(시각·금액)와 PG 재조회 결과가 다름
+    PAID_AT_INVALID,                          // 강한 차단 — 실패로 확정한 시도에 늦게 확인된 수납의 결제 시각이 회차 기간 전이거나 미래
+    REFUND_EVIDENCE_CONFLICT,                 // 강한 차단 — 이 시도의 환불 근거(취소 ID·금액·reason·귀속)와 PG 취소 내역이 모순
+    REFUND_TARGET_PERIOD_MISMATCH;            // 강한 차단 — 환불 대상으로 고른 회차·시도가 이용권의 현재 기간과 맞지 않음
 
     public static final Set<MembershipOpsReviewReason> BLOCKING = Set.of(
         APPLIED_STATE_INCONSISTENT, UNDISPATCHED_PAID, UNDISPATCHED_PG_ACTIVITY, PAID_EVIDENCE_CONFLICT,
-        PAID_AT_INVALID);
+        PAID_AT_INVALID, REFUND_EVIDENCE_CONFLICT, REFUND_TARGET_PERIOD_MISMATCH);
 
     public boolean isBlocking() {
         return BLOCKING.contains(this);

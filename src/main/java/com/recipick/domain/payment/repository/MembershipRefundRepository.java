@@ -3,9 +3,15 @@ package com.recipick.domain.payment.repository;
 import com.recipick.domain.payment.entity.MembershipRefund;
 import com.recipick.domain.payment.entity.enums.MembershipRefundStatus;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
+import com.recipick.domain.payment.service.MembershipRefundRef;
+import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +32,47 @@ public interface MembershipRefundRepository extends JpaRepository<MembershipRefu
     // 새 요청을 또 만든다. 시도 PK 잠금 아래에서 본다(환불 생성은 모두 같은 잠금 순서 아래)
     List<MembershipRefund> findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc(Long membershipPaymentAttemptId,
                                                                                       RefundRequester requestedBy);
+
+    // 환불 행 PK 잠금. 범위 FOR UPDATE는 쓰지 않는다 — ID를 일반 조회로 읽은 뒤 한 행씩 잠근다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM MembershipRefund r WHERE r.id = :id")
+    Optional<MembershipRefund> findByIdForUpdate(@Param("id") Long id);
+
+    // 한 시도의 환불 행 ID 전부(PK 오름차순, 잠금 없음). 호출자가 이 순서로 한 행씩 잠근다
+    @Query("SELECT r.id FROM MembershipRefund r WHERE r.membershipPaymentAttempt.id = :attemptId ORDER BY r.id ASC")
+    List<Long> findIdsByMembershipPaymentAttemptIdOrderByIdAsc(@Param("attemptId") Long attemptId);
+
+    Optional<MembershipRefund> findByIdempotencyKey(String idempotencyKey);
+
+    // 잠금 전 투영 조회. 회원 ID는 들어 있지 않다(이용권 ID로 회원 도메인에 묻는다)
+    @Query("""
+        SELECT new com.recipick.domain.payment.service.MembershipRefundRef(
+            r.id, a.id, p.id, p.membershipId, a.portonePaymentId, r.status, r.requestedBy, r.amount,
+            r.portoneCancellationId, r.pgRequestReason, r.leaseExpiresAt, r.nextCheckAt, r.opsReviewReason,
+            r.retryOfRefundId)
+          FROM MembershipRefund r
+          JOIN r.membershipPaymentAttempt a
+          JOIN a.membershipPayment p
+         WHERE r.id = :id
+        """)
+    Optional<MembershipRefundRef> findRef(@Param("id") Long id);
+
+    // 복구 스캔 대상(잠금 없음): REQUESTED이고 다음 확인 시각이 없거나 지났고 임대가 없거나 끝났고 운영 확인 표시가 없는 행.
+    // 스캔 시작 시점의 최대 ID까지만 본다(스캔 중 새로 생긴 행은 다음 스캔)
+    @Query("""
+        SELECT r.id
+          FROM MembershipRefund r
+         WHERE r.status = com.recipick.domain.payment.entity.enums.MembershipRefundStatus.REQUESTED
+           AND (r.nextCheckAt IS NULL OR r.nextCheckAt <= :now)
+           AND (r.leaseExpiresAt IS NULL OR r.leaseExpiresAt <= :now)
+           AND r.opsReviewRequiredAt IS NULL
+           AND r.id > :afterId
+           AND r.id <= :upperId
+         ORDER BY r.id ASC
+        """)
+    List<Long> findRequestedForRecovery(@Param("now") LocalDateTime now, @Param("afterId") Long afterId,
+                                        @Param("upperId") Long upperId, Pageable pageable);
+
+    @Query("SELECT COALESCE(MAX(r.id), 0) FROM MembershipRefund r")
+    long findMaxId();
 }
