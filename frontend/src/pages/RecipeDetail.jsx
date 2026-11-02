@@ -188,7 +188,7 @@ function RecipeDetailView({ recipeId }) {
     return (
       <div className="container page">
         <ErrorNotice error={error} />
-        {!error && <p className="state-message">불러오는 중입니다.</p>}
+        {!error && <ListSkeleton rows={5} />}
       </div>
     );
   }
@@ -285,7 +285,7 @@ function RecipeDetailView({ recipeId }) {
                 </li>
               ))}
             </ul>
-            {recipe.ingredients.length === 0 && <p className="field__hint">등록된 재료가 없습니다.</p>}
+            {recipe.ingredients.length === 0 && <p className="field__hint">등록된 재료가 없어요.</p>}
           </section>
 
         </div>

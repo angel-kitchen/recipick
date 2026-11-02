@@ -36,12 +36,12 @@ export const UNAVAILABLE_REASON = {
 };
 
 export const UNORDERABLE_REASON = {
-  MART_NOT_SELECTED: '이용 마트가 정해지지 않았습니다.',
+  MART_NOT_SELECTED: '이용 마트가 아직 정해지지 않았어요.',
   MART_NOT_OPEN: '마트가 현재 운영 중이 아닙니다.',
-  DELIVERY_UNAVAILABLE: '이 주소로는 배송할 수 없습니다.',
-  HAS_PREVIOUS_MART_ITEMS: '이전 마트 상품이 담겨 있습니다. 삭제 후 다시 시도해 주세요.',
-  NO_PURCHASABLE_ITEMS: '주문할 수 있는 상품이 없습니다.',
-  PENDING_ORDER_EXISTS: '결제 대기 중인 주문이 있습니다.',
+  DELIVERY_UNAVAILABLE: '이 주소로는 배송할 수 없어요.',
+  HAS_PREVIOUS_MART_ITEMS: '이전 마트 상품이 담겨 있어요. 삭제한 뒤에 다시 시도해 주세요.',
+  NO_PURCHASABLE_ITEMS: '주문할 수 있는 상품이 없어요.',
+  PENDING_ORDER_EXISTS: '결제 대기 중인 주문이 있어요.',
 };
 
 export const ORDER_STATUS = {

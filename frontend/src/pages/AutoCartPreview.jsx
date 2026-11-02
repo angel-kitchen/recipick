@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import AutoCartReview from '../components/AutoCartReview';
 import ErrorNotice from '../components/ErrorNotice';
+import { ListSkeleton } from '../components/Skeleton';
 
 // AI 입력에서 넘어오는 미리보기. 레시피 상세 화면의 자동 장바구니 패널과 같은 확인 부품을 쓴다
 export default function AutoCartPreview() {
@@ -21,7 +22,7 @@ export default function AutoCartPreview() {
     return (
       <div className="container page">
         <ErrorNotice error={error} />
-        {!error && <p className="state-message">불러오는 중입니다.</p>}
+        {!error && <ListSkeleton rows={4} />}
       </div>
     );
   }

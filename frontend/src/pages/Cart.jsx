@@ -179,7 +179,7 @@ export default function Cart() {
       <ErrorNotice error={error} />
       <PendingOrderNotice onChanged={load} />
       {cart.hasPreviousMartItems && (
-        <div className="notice">이전 마트 상품이 담겨 있습니다. 삭제한 뒤 주문할 수 있습니다.</div>
+        <div className="notice">이전 마트 상품이 담겨 있어요. 삭제한 뒤에 주문할 수 있어요.</div>
       )}
 
       {cart.items.length === 0 ? (
@@ -236,7 +236,7 @@ export default function Cart() {
               <span>합계</span>
               <span>{formatWon(productAmount + fee)}</span>
             </div>
-            <p className="field__hint">{formatWon(freeDeliveryThreshold)} 이상 주문하면 배송비가 무료입니다. 최종 금액은 주문 단계에서 다시 계산됩니다.</p>
+            <p className="field__hint">{formatWon(freeDeliveryThreshold)} 이상 주문하면 배송비가 무료예요. 최종 금액은 주문 단계에서 다시 계산돼요.</p>
             <button
               type="button"
               className="btn btn--large btn--block"

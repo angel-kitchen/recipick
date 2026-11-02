@@ -50,7 +50,7 @@ export default function Login() {
     // 배송지가 생기면 원래 가려던 곳으로 간다
     if (member.currentAddress) return <Navigate to={destination} replace />;
     if (saveState === 'saving' || (saveState === 'idle' && readPendingAddress())) {
-      return <p className="state-message">배송지를 저장하는 중입니다.</p>;
+      return <p className="state-message">배송지를 저장하고 있어요.</p>;
     }
     // 배송지가 없으면 동네부터 정하게 한다(실패했다면 보관한 주소를 채워 다시 시도할 수 있다)
     return <Navigate to="/start" replace state={{ next: destination, notice: error?.message }} />;

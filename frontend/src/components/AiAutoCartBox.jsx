@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { CUISINE, DISH_TYPE, spicyText } from '../labels';
 import ErrorNotice from './ErrorNotice';
+import ImagePlaceholder from './ImagePlaceholder';
 
 // 한 입력창으로 두 가지를 처리한다.
 // ① "김치찌개 2인분이랑 계란말이"처럼 메뉴 이름이 있으면 서버가 레시피를 찾아 자동 장바구니 미리보기를 만든다.
@@ -100,7 +101,7 @@ export default function AiAutoCartBox() {
       </form>
       {!isMembership && (
         <p className="field__hint" style={{ marginTop: 8 }}>
-          멤버십 회원만 이용할 수 있습니다.
+          AI 검색은 멤버십 회원만 쓸 수 있어요. <Link to="/membership">멤버십 알아보기</Link>
         </p>
       )}
       <div style={{ marginTop: 12 }}>
@@ -113,11 +114,11 @@ export default function AiAutoCartBox() {
         )}
         {result?.source === 'recommend' && <Recommendations result={result} />}
         {result?.source !== 'recommend' && result?.status === 'NO_MATCH' && (
-          <p className="field__hint">맞는 레시피를 찾지 못했습니다. 다른 표현으로 다시 입력해 주세요.</p>
+          <p className="field__hint">맞는 레시피를 찾지 못했어요. 다른 표현으로 다시 입력해 주세요.</p>
         )}
         {result?.source !== 'recommend' && result?.status === 'FALLBACK' && (
           <>
-            <p className="field__hint">지금은 문장을 이해하지 못해 대신 레시피를 골라 볼 수 있게 보여드립니다.</p>
+            <p className="field__hint">잘 알아듣지 못했어요. 대신 이런 레시피는 어때요?</p>
             <div className="chips">
               {result.recipes.map((recipe) => (
                 <Link key={recipe.recipeId} to={`/recipes/${recipe.recipeId}`} className="chip">
@@ -137,7 +138,7 @@ export default function AiAutoCartBox() {
                   {menu.servings ? ` (${menu.servings}인분)` : ''}
                 </span>
                 {menu.candidates.length === 0 ? (
-                  <span className="error-text">맞는 레시피가 없습니다.</span>
+                  <span className="error-text">맞는 레시피가 없어요.</span>
                 ) : (
                   <select
                     className="field__input"
@@ -168,16 +169,16 @@ export default function AiAutoCartBox() {
 // 조건 추천 결과. reason은 AI가 쓴 이유라 AI 없이 후보만 보여 준 FALLBACK에서는 없다
 function Recommendations({ result }) {
   if (result.status === 'NO_MATCH') {
-    return <p className="field__hint">조건에 맞는 레시피를 찾지 못했습니다. 조건을 줄여서 다시 입력해 주세요.</p>;
+    return <p className="field__hint">조건에 맞는 레시피를 찾지 못했어요. 조건을 줄여서 다시 입력해 주세요.</p>;
   }
   if (result.status === 'FALLBACK' && result.recipes.length === 0) {
-    return <p className="field__hint">지금은 문장을 이해하지 못했습니다. 아래 목록의 필터로 직접 찾아 주세요.</p>;
+    return <p className="field__hint">잘 알아듣지 못했어요. 아래 필터로 직접 찾아볼까요?</p>;
   }
   return (
     <>
       <p className="field__hint">
         {result.status === 'FALLBACK'
-          ? '지금은 AI가 고르지 못해 조건에 맞는 레시피를 순서대로 보여드립니다.'
+          ? 'AI가 고르지 못해서 조건에 맞는 레시피를 순서대로 보여 드려요.'
           : '말씀하신 조건으로 골라 봤어요.'}
       </p>
       <div className="grid" style={{ marginTop: 12 }}>
@@ -186,7 +187,7 @@ function Recommendations({ result }) {
             {recipe.thumbnailUrl ? (
               <img className="tile__image" src={recipe.thumbnailUrl} alt="" loading="lazy" />
             ) : (
-              <div className="tile__image">이미지 준비 중</div>
+              <ImagePlaceholder />
             )}
             <div className="tile__body">
               <span className="tile__title">{recipe.name}</span>

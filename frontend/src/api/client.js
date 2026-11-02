@@ -12,7 +12,7 @@ const isAdminPath = (path) => path.startsWith('/api/admin/');
 
 export class ApiError extends Error {
   constructor(status, body) {
-    super(body?.message || '요청을 처리하지 못했습니다.');
+    super(body?.message || '요청을 처리하지 못했어요.');
     this.status = status;
     this.code = body?.code;
     this.errors = body?.errors ?? [];
@@ -92,7 +92,7 @@ async function parse(res) {
   }
   // 백엔드가 꺼져 있으면 프록시가 본문 없는 502를 돌려준다
   if (!json && res.status >= 502) {
-    throw new ApiError(res.status, { message: '서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인해 주세요.' });
+    throw new ApiError(res.status, { message: '서버에 연결하지 못했어요. 잠시 뒤에 화면을 새로고침해서 방금 한 일이 반영됐는지 확인해 주세요.' });
   }
   if (!res.ok || json?.success === false) throw new ApiError(res.status, json);
   return json?.data ?? null;
@@ -177,7 +177,7 @@ async function request(method, path, options) {
     } else {
       accessToken = null;
       onAuthLost();
-      throw new ApiError(401, { message: '로그인이 필요합니다. 다시 로그인해 주세요.' });
+      throw new ApiError(401, { message: '로그인이 필요해요. 다시 로그인해 주세요.' });
     }
   }
   return parse(res);

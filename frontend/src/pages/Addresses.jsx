@@ -4,6 +4,7 @@ import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode'
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
+import { ListSkeleton } from '../components/Skeleton';
 import LocationPickerModal from '../components/LocationPickerModal';
 
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
@@ -95,8 +96,8 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
         {area && (
           <span className={area.available ? 'field__hint' : 'error-text'}>
             {area.available
-              ? `배송 가능 지역입니다. 이용 마트: ${area.martName}`
-              : '아직 서비스 지역이 아닙니다. 저장은 할 수 있지만 지금은 재료 담기와 주문을 이용할 수 없어요.'}
+              ? `배송 가능한 지역이에요. 이용 마트: ${area.martName}`
+              : '아직 서비스 지역이 아니에요. 저장은 할 수 있지만 지금은 재료 담기와 주문을 이용할 수 없어요.'}
           </span>
         )}
       </div>
@@ -179,7 +180,7 @@ export default function Addresses() {
       const result = await action();
       await refresh();
       if (result?.martChanged) {
-        setMessage(`이용 마트가 ${result.mart?.name}(으)로 바뀌었습니다. 이전 마트 상품은 장바구니에서 삭제해야 합니다.`);
+        setMessage(`이용 마트가 ${result.mart?.name}(으)로 바뀌었어요. 이전 마트 상품은 장바구니에서 삭제해야 해요.`);
       } else if (successMessage) {
         setMessage(successMessage);
       }
@@ -194,8 +195,8 @@ export default function Addresses() {
     setAdding(false);
     setMessage(
       result.martChanged
-        ? `이용 마트가 ${result.mart?.name}(으)로 바뀌었습니다.`
-        : '배송지를 등록했습니다.',
+        ? `이용 마트가 ${result.mart?.name}(으)로 바뀌었어요.`
+        : '배송지를 등록했어요.',
     );
   };
 
@@ -203,23 +204,23 @@ export default function Addresses() {
     await api.patch(`/api/members/me/addresses/${addressId}`, form);
     await refresh();
     setEditingId(null);
-    setMessage('배송지를 수정했습니다.');
+    setMessage('배송지를 수정했어요.');
   };
 
   return (
     <div className="container page">
       <h1 className="page__title">배송지</h1>
       <p className="page__sub">
-        {member.mart ? `이용 마트: ${member.mart.name}` : '선택된 배송지가 없어 이용 마트가 정해지지 않았습니다.'}
+        {member.mart ? `이용 마트: ${member.mart.name}` : '선택된 배송지가 없어서 이용 마트가 아직 정해지지 않았어요.'}
       </p>
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
-      {!data && !error && <p className="state-message">불러오는 중입니다.</p>}
+      {!data && !error && <ListSkeleton rows={3} />}
 
       {data && (
         <>
           <div className="stack">
-            {data.addresses.length === 0 && <p className="state-message">등록된 배송지가 없습니다.</p>}
+            {data.addresses.length === 0 && <p className="state-message">등록된 배송지가 없어요.</p>}
             {data.addresses.map((address) => (
               <section key={address.addressId} className="card">
                 {editingId === address.addressId ? (
@@ -265,7 +266,7 @@ export default function Addresses() {
                             type="button"
                             className="btn"
                             onClick={() =>
-                              act(() => api.delete(`/api/members/me/addresses/${address.addressId}`), '배송지를 삭제했습니다.')
+                              act(() => api.delete(`/api/members/me/addresses/${address.addressId}`), '배송지를 삭제했어요.')
                             }
                           >
                             정말 삭제

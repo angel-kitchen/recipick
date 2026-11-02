@@ -7,6 +7,7 @@ import AutoCartReview from '../components/AutoCartReview';
 import BookmarkButton from '../components/BookmarkButton';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
+import ImagePlaceholder from '../components/ImagePlaceholder';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
 import { CardSkeletons, ListSkeleton } from '../components/Skeleton';
@@ -267,7 +268,7 @@ export default function Recipes() {
             {recipe.thumbnailUrl ? (
               <img className="tile__image" src={recipe.thumbnailUrl} alt="" loading="lazy" />
             ) : (
-              <div className="tile__image">이미지 준비 중</div>
+              <ImagePlaceholder />
             )}
             <div className="tile__body">
               <span className="tile__title">{recipe.name}</span>

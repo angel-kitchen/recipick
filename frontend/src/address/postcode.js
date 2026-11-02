@@ -18,7 +18,7 @@ function loadPostcode() {
       script.onload = resolve;
       script.onerror = () => {
         postcodeLoading = null;
-        reject(new Error('주소 검색을 불러오지 못했습니다. 네트워크를 확인해 주세요.'));
+        reject(new Error('주소 검색을 불러오지 못했어요. 네트워크를 확인해 주세요.'));
       };
       document.head.appendChild(script);
     });
