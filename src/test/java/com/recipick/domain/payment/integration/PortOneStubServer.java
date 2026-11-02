@@ -133,6 +133,21 @@ public final class PortOneStubServer {
             + "\",\"issuedAt\":\"" + iso(issuedAtKst) + "\"}"));
     }
 
+    // GET /billing-keys/{billingKey} 응답을 직접 정한다(정합화 조회의 404 유형·권한 오류·장애 재현)
+    public void onBillingKeyLookup(String billingKey, int status, String body) {
+        billingKeyStubs.put(billingKey, new Stub(status, body));
+    }
+
+    // PortOne이 삭제됐다고 답하는 키
+    public void billingKeyDeleted(String billingKey) {
+        onBillingKeyLookup(billingKey, 200, "{\"status\":\"DELETED\",\"billingKey\":\"" + billingKey
+            + "\",\"deletedAt\":\"2027-02-27T00:00:00Z\"}");
+    }
+
+    public int billingKeyLookupCount() {
+        return (int) requests.stream().filter("GET /billing-keys/[REDACTED]"::equals).count();
+    }
+
     // GET /payments/{id}
     public void onGetPayment(String paymentId, int status, String body) {
         getStubs.put(paymentId, new Stub(status, body));
@@ -150,6 +165,16 @@ public final class PortOneStubServer {
     // paidAt 자리에 날짜가 아닌 문자열을 넣은 성공 응답(역직렬화 실패 재현). value는 JSON 문자열로 그대로 들어간다
     public void getPaymentWithRawPaidAt(String paymentId, long amount, String rawPaidAt) {
         onGetPayment(paymentId, 200, paymentJson(paymentId, "PAID", amount, "KRW", rawPaidAt, null));
+    }
+
+    // 거래는 있지만 아직 끝나지 않은 상태(PENDING·READY 등). paidAt 없음
+    public void getPaymentInStatus(String paymentId, String status, long amount) {
+        onGetPayment(paymentId, 200, paymentJson(paymentId, status, amount, "KRW", null, null));
+    }
+
+    // 조회 장애(5xx) — 거래의 존재도 부재도 알 수 없다
+    public void getPaymentServerError(String paymentId) {
+        onGetPayment(paymentId, 500, "{\"type\":\"INTERNAL_SERVER_ERROR\"}");
     }
 
     public void getPaymentNotFound(String paymentId) {

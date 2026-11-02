@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.facade;
 
 import com.recipick.domain.member.dto.BillingMembershipData;
+import com.recipick.domain.member.dto.MemberSettlementLock;
 import com.recipick.domain.member.dto.MembershipBillingResult;
 import com.recipick.domain.member.entity.enums.MembershipSource;
 import com.recipick.domain.member.entity.enums.MembershipType;
@@ -17,6 +18,7 @@ import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
 import com.recipick.domain.payment.entity.enums.MembershipRefundStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.exception.MembershipSettlementInvariantException;
 import com.recipick.domain.payment.exception.MembershipSettlementInvariantException.Kind;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
@@ -30,12 +32,15 @@ import com.recipick.domain.payment.service.MembershipBillingPeriods.RenewalPerio
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
+import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRenewalDecision;
 import com.recipick.global.common.PolicyConstants;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -48,9 +53,11 @@ import org.springframework.transaction.annotation.Transactional;
 // 첫 결제 갱신 공용 진입점이다. 회차 종류는 회차 자체(graceDeadlineAt null = 첫 결제)로 가린다 — 이용권의 activatedAt으로
 // 가리지 않는다: 첫 결제 회차의 PAID는 반드시 활성화·환불 요청·정합성 예외 중 하나로 끝나야 하고 조용히 건너뛰면 안 된다.
 // 명시적으로 판정한 정합성 오류(0b·I-22 위반·사유 없는 CONFLICT)는 MembershipSettlementInvariantException으로 전체 롤백 + ERROR
-// (ID·코드만). 복구는 이 예외만 잡아 flagInconsistent로 원인을 재검증한 뒤 운영 표시를 남긴다.
+// (ID·코드만). 실행기가 이 예외만 잡아 flagInconsistent로 원인을 재검증한 뒤 강한 차단 표시를 남긴다.
 // 그 밖의 IllegalStateException(연결 불일치·허용되지 않는 전이)은 자동 정합화 중단 대상이 아니다.
-// 갱신 회차는 회차 PK 뒤에 그 회차의 시도 전부를 PK 오름차순으로 잠그고(대상 시도를 먼저 잠그지 않는다) 잠근 목록으로 판정한다.
+// 두 회차 종류 모두 회차 PK 뒤에 그 회차의 시도 전부를 PK 오름차순으로 잠그고(대상 시도를 먼저 잠그지 않는다) 잠근 목록으로 판정한다.
+// 회차에 강한 정합성 차단 시도가 하나라도 있으면 어떤 결과도 반영하지 않는다. PG에 보낸 적 없는 시도에 PG 거래가 관측되면 그 시도를
+// 강하게 차단하고, PG에 보낸 확정 시도의 재전송은 저장된 근거와 대조해 멱등·수납 정정·차단 중 하나로 끝낸다.
 // 판정 시각은 잠금을 모두 잡은 뒤 읽는다 — 잠금을 기다리는 사이 마감·기간 종료를 넘겼으면 그 시각으로 본다.
 // 로그에는 ID·상태·고정 코드·금액 숫자만 남긴다
 @Slf4j
@@ -61,6 +68,7 @@ public class MembershipChargeResultProcessor {
     private static final String REASON_NOT_DISPATCHED = "NOT_DISPATCHED";
     private static final String CODE_PAID_AT_BEFORE_PERIOD = "PAID_AT_BEFORE_PERIOD";
     private static final String CODE_PAID_AT_IN_FUTURE = "PAID_AT_IN_FUTURE";
+    private static final String CODE_UNKNOWN_WINDOW_EXPIRED = "UNKNOWN_WINDOW_EXPIRED";
     private static final int FIRST_SYSTEM_REFUND_SEQUENCE = 1;
 
     private final MemberService memberService;
@@ -74,30 +82,38 @@ public class MembershipChargeResultProcessor {
     private final MembershipRenewalRules rules;
     private final Clock clock;
 
+    // 판정 순서: ① 잠금(회차의 시도 전부) ② 잠금 뒤 시각 ③ 회차 전체 강한 차단 ④ 오래된 관측 ⑤ 미발송 시도의 PG 거래 관측
+    // ⑥ 확정 시도의 재전송·늦은 수납 ⑦ 미해결 시도의 정상 판정(확정 회차에 도착한 다른 시도의 수납 포함).
+    // observedDispatchedAt은 호출자가 GET 전에 본 선점 시각이다 — 그 사이 다른 선점으로 바뀌었으면 이 관측으로 미확정 결과를 적지 않는다
     @Transactional
-    public MembershipChargeOutcome apply(Long memberId, Long attemptId, MembershipPgVerdict verdict) {
+    public MembershipChargeOutcome apply(Long memberId, Long attemptId, LocalDateTime observedDispatchedAt,
+                                         MembershipPgVerdict verdict, MembershipReconciliationTrigger trigger) {
         Locked locked = lock(memberId, attemptId);
         LocalDateTime now = LocalDateTime.now(clock);
         MembershipPayment payment = locked.payment();
         MembershipPaymentAttempt attempt = locked.attempt();
-        if (attempt.isFinal()) {
-            return finalAttemptOutcome(attempt, verdict);
-        }
-        if (attempt.isAutoReconcileHalted()) {
-            // 정합성 오류로 운영 확인 대상이 된 시도. 표시 이전에 조회해 둔 작업(웹훅·복구·재요청)이 여기서 자동 반영하지 않게 막는다
-            log.warn("자동 정합화가 멈춘 시도의 결과 반영 요청을 건너뜀(운영 확인 대상): attemptId={}", attemptId);
+        if (locked.attempts().stream().anyMatch(MembershipPaymentAttempt::isSettlementBlocked)) {
+            // 이 시도든 같은 회차의 다른 시도든 강한 차단이면 결과를 반영하지 않는다 — 다른 시도로 차단을 우회하지 않게
+            log.warn("강한 정합성 차단 회차의 결과 반영 요청을 건너뜀(운영 확인 대상): attemptId={}, membershipPaymentId={}",
+                attemptId, payment.getId());
             return MembershipChargeOutcome.RECONCILE_HALTED;
         }
-        if (attempt.getStatus() == MembershipPaymentAttemptStatus.READY) {
-            // PG에 간 적 없는 시도의 결과는 판정하지 않는다(임대 만료 규칙이 처리)
-            return MembershipChargeOutcome.NOT_DISPATCHED;
+        if (isStaleObservation(attempt, observedDispatchedAt) && !verdict.isTrustedPaid()) {
+            // GET 전에 본 선점과 지금의 선점이 다르다 — 다른 선점자의 결과를 이 관측으로 덮지 않는다
+            return MembershipChargeOutcome.IN_PROGRESS;
+        }
+        if (!attempt.isDispatched()) {
+            return undispatchedOutcome(attempt, verdict, now);
+        }
+        if (attempt.isFinal()) {
+            return finalAttemptOutcome(locked, verdict, now);
         }
         if (payment.isRenewal()) {
             return switch (verdict.kind()) {
                 case PAID -> applyRenewalPaid(locked, verdict, now, false);
                 case PAID_AMOUNT_MISMATCH -> applyRenewalPaid(locked, verdict, now, true);
                 case FAILED -> applyRenewalFailed(locked, verdict, now);
-                case UNRESOLVED, NOT_FOUND -> keepUnknown(locked, verdict);
+                case UNRESOLVED, NOT_FOUND -> keepUnknown(locked, verdict, now, trigger);
                 case UNTRUSTED -> manualReview(locked, verdict, now);
             };
         }
@@ -105,29 +121,198 @@ public class MembershipChargeResultProcessor {
             case PAID -> applyPaid(locked, verdict, now);
             case PAID_AMOUNT_MISMATCH -> applyAmountMismatch(locked, verdict, now);
             case FAILED -> applyFailed(locked, verdict, now);
-            case UNRESOLVED, NOT_FOUND -> keepUnknown(locked, verdict);
+            case UNRESOLVED, NOT_FOUND -> keepUnknown(locked, verdict, now, trigger);
             case UNTRUSTED -> manualReview(locked, verdict, now);
         };
     }
 
-    // 확정 시도에 결과가 다시 온 경우. 같은 PAID 시도의 PAID는 정상 재전송(멱등). FAILED·CANCELED 시도에 신뢰 가능한 PAID가 오면
-    // 상태를 바꾸지도 추정 환불을 만들지도 않고 멈춘다(확정 시도의 수납 정정은 이 Processor 범위가 아니다 — 운영 확인)
-    private static MembershipChargeOutcome finalAttemptOutcome(MembershipPaymentAttempt attempt,
-                                                               MembershipPgVerdict verdict) {
-        boolean paidVerdict = verdict.kind() == MembershipPgVerdict.Kind.PAID
-            || verdict.kind() == MembershipPgVerdict.Kind.PAID_AMOUNT_MISMATCH;
-        if (paidVerdict && attempt.getStatus() != MembershipPaymentAttemptStatus.PAID) {
-            log.error("확정 시도에 모순된 PAID 결과 → 반영하지 않음(운영 확인): attemptId={}, status={}", attempt.getId(),
-                attempt.getStatus());
+    // 미해결 발송 상태(DISPATCHING·UNKNOWN)인데 GET 전에 본 선점 시각과 지금 저장된 선점 시각이 다르다(µs 비교)
+    private static boolean isStaleObservation(MembershipPaymentAttempt attempt, LocalDateTime observedDispatchedAt) {
+        if (attempt.getStatus() != MembershipPaymentAttemptStatus.DISPATCHING
+            && attempt.getStatus() != MembershipPaymentAttemptStatus.UNKNOWN) {
+            return false;
+        }
+        if (observedDispatchedAt == null || attempt.getDispatchedAt() == null) {
+            return observedDispatchedAt != attempt.getDispatchedAt();
+        }
+        return !observedDispatchedAt.truncatedTo(ChronoUnit.MICROS)
+            .equals(attempt.getDispatchedAt().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    // PG에 보낸 적 없는 시도(dispatchedAt 없음 — READY·미발송 CANCELED, 비정상 데이터의 FAILED·PAID 포함).
+    // PG가 이 결제 ID의 거래 객체를 돌려줬다면 미발송 보장과 충돌한다 — 수납이면 UNDISPATCHED_PAID, 수납이 아닌 거래(실패·진행 중·취소·
+    // 신뢰 불가 응답)면 UNDISPATCHED_PG_ACTIVITY로 강하게 차단한다. 자동 환불·이용권 반영은 하지 않고 수납 금액도 추정하지 않는다.
+    // 404면 PG에 거래가 없음이 확인된 것이라 미발송과 일치한다. 조회 장애·timeout은 거래의 존재도 부재도 증명하지 못해 아무것도 바꾸지 않고
+    // 재시도 가능한 결과를 돌려준다(웹훅은 다시 조회한다)
+    private MembershipChargeOutcome undispatchedOutcome(MembershipPaymentAttempt attempt, MembershipPgVerdict verdict,
+                                                        LocalDateTime now) {
+        if (verdict.isTrustedPaid()) {
+            attempt.blockSettlement(now, MembershipOpsReviewReason.UNDISPATCHED_PAID);
+            log.error("PG에 보낸 적 없는 시도의 결제 ID로 수납이 있음 → 강한 차단(운영 확인): attemptId={}, status={}",
+                attempt.getId(), attempt.getStatus());
+            return MembershipChargeOutcome.RECONCILE_HALTED;
+        }
+        if (verdict.pgRecordObserved()) {
+            attempt.blockSettlement(now, MembershipOpsReviewReason.UNDISPATCHED_PG_ACTIVITY);
+            log.error("PG에 보낸 적 없는 시도의 결제 ID로 PG 거래 기록이 있음 → 강한 차단(운영 확인): attemptId={}, status={}, "
+                + "verdict={}, code={}", attempt.getId(), attempt.getStatus(), verdict.kind(), verdict.code());
+            return MembershipChargeOutcome.RECONCILE_HALTED;
+        }
+        if (!verdict.confirmsNoPgRecord()) {
+            return MembershipChargeOutcome.STILL_UNKNOWN;
+        }
+        return switch (attempt.getStatus()) {
+            case READY -> MembershipChargeOutcome.NOT_DISPATCHED;
+            case CANCELED, FAILED -> MembershipChargeOutcome.ALREADY_APPLIED;
+            case PAID -> {
+                // 발송 근거도 PG 거래도 없는데 DB에는 수납으로 남아 있다
+                attempt.blockSettlement(now, MembershipOpsReviewReason.APPLIED_STATE_INCONSISTENT);
+                log.error("발송 근거 없는 PAID 시도이고 PG에도 거래가 없음 → 강한 차단(운영 확인): attemptId={}", attempt.getId());
+                yield MembershipChargeOutcome.RECONCILE_HALTED;
+            }
+            default -> throw new IllegalStateException("발송 시각 없는 발송 상태 시도: " + attempt);
+        };
+    }
+
+    // PG에 보낸 확정 시도(PAID·FAILED)에 결과가 다시 온 경우.
+    // PAID: 정상 반영 PAID의 같은 근거 재전송은 회차의 반영 근거(회차 PAID·반영 시각·결제 시각)까지 맞을 때만 멱등이다 — 맞지 않으면
+    // APPLIED_STATE_INCONSISTENT 차단(다시 반영하거나 환불을 새로 만들지 않는다). 환불 필요 PAID의 같은 근거 재전송은 SYSTEM 환불 행을
+    // 확인·보충만 한다. 근거(시각·금액)가 다르거나 PG가 FAILED라고 하면 PAID_EVIDENCE_CONFLICT 차단(PAID를 내리지 않는다).
+    // FAILED: 신뢰 가능한 PAID가 늦게 오면 수납 정정 — 상태 PAID·환불 필요·실제 수납액 SYSTEM 환불(이용권 반영 없음).
+    // 404·조회 장애는 아무것도 증명하지 못해 재시도 결과를, 신뢰 불가·취소 상태는 운영 확인을 돌려준다 — 상태·이력은 바꾸지 않는다
+    private MembershipChargeOutcome finalAttemptOutcome(Locked locked, MembershipPgVerdict verdict,
+                                                        LocalDateTime now) {
+        MembershipPaymentAttempt attempt = locked.attempt();
+        if (verdict.kind() == MembershipPgVerdict.Kind.UNRESOLVED
+            || verdict.kind() == MembershipPgVerdict.Kind.NOT_FOUND) {
+            // 끝난 사실을 재확인한 것이 아니다. 상태·이력을 바꾸지 않고 재시도 가능한 결과를 돌려준다(웹훅은 다시 조회한다)
+            return MembershipChargeOutcome.STILL_UNKNOWN;
+        }
+        if (verdict.kind() == MembershipPgVerdict.Kind.UNTRUSTED) {
+            log.warn("확정 시도 재조회 결과를 신뢰할 수 없음: attemptId={}, code={}", attempt.getId(), verdict.code());
+            return MembershipChargeOutcome.MANUAL_REVIEW;
+        }
+        if (attempt.getStatus() == MembershipPaymentAttemptStatus.FAILED) {
+            if (!verdict.isTrustedPaid()) {
+                return MembershipChargeOutcome.ALREADY_APPLIED;
+            }
+            if (locked.payment().isRenewal()) {
+                // 회차 기간 전·미래 시각의 수납은 정정하지 않는다 — 어느 기간의 돈인지 알 수 없어 자동 환불도 만들지 않는다
+                RenewalPeriod period = MembershipRenewalRules.storedPeriod(locked.payment());
+                String invalidTimeCode = null;
+                if (verdict.pgPaidAt().isBefore(period.previousEndAt())) {
+                    invalidTimeCode = CODE_PAID_AT_BEFORE_PERIOD;
+                } else if (verdict.pgPaidAt().isAfter(now)) {
+                    invalidTimeCode = CODE_PAID_AT_IN_FUTURE;
+                }
+                if (invalidTimeCode != null) {
+                    attempt.blockSettlement(now, MembershipOpsReviewReason.PAID_AT_INVALID);
+                    log.error("늦은 수납의 결제 시각이 유효하지 않음: attemptId={}, code={}", attempt.getId(), invalidTimeCode);
+                    return MembershipChargeOutcome.RECONCILE_HALTED;
+                }
+            }
+            attempt.recordUnexpectedPaidForRefund(verdict.pgPaidAt(), now);
+            SystemRefundEnsureResult refundResult = ensureSystemRefundRequested(attempt, verdict.paidAmount(),
+                MembershipOpsReviewReason.LATE_PAID_AFTER_FAILED, now);
+            if (refundResult == SystemRefundEnsureResult.BLOCKED) {
+                return MembershipChargeOutcome.RECONCILE_HALTED;
+            }
+            log.error("실패로 확정한 시도에 늦은 수납 → 수납 정정·SYSTEM 환불 요청: attemptId={}, membershipPaymentId={}, amount={}",
+                attempt.getId(), locked.payment().getId(), verdict.paidAmount());
+            if (locked.payment().isRenewal() && locked.payment().isUnresolved()) {
+                // 환불 대상 수납만 남은 회차는 재청구하지 않고 닫는다. 다른 시도가 살아 있으면 그대로 둔다
+                MembershipRenewalDecision decision = rules.continueExisting(locked.memberId(), locked.membership(),
+                    locked.payment(), locked.attempts(), now, Mode.SETTLE);
+                if (decision.kind() == MembershipRenewalDecision.Kind.HALTED) {
+                    return MembershipChargeOutcome.RECONCILE_HALTED;
+                }
+            }
+            return MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED;
+        }
+        if (attempt.getStatus() != MembershipPaymentAttemptStatus.PAID) {
+            return MembershipChargeOutcome.ALREADY_APPLIED;
+        }
+        if (verdict.kind() == MembershipPgVerdict.Kind.FAILED) {
+            return blockEvidenceConflict(attempt, verdict, now);
+        }
+        if (!verdict.isTrustedPaid()) {
+            return MembershipChargeOutcome.ALREADY_APPLIED;
+        }
+        if (!sameEvidence(attempt, verdict, locked.payment())) {
+            return blockEvidenceConflict(attempt, verdict, now);
+        }
+        if (attempt.getRefundRequiredAt() != null) {
+            SystemRefundEnsureResult refundResult = ensureSystemRefundRequested(attempt, verdict.paidAmount(),
+                refundReasonOf(attempt), now);
+            if (refundResult == SystemRefundEnsureResult.BLOCKED) {
+                return MembershipChargeOutcome.RECONCILE_HALTED;
+            }
+            return MembershipChargeOutcome.ALREADY_APPLIED;
+        }
+        if (!appliedBy(locked.payment(), attempt)) {
+            attempt.blockSettlement(now, MembershipOpsReviewReason.APPLIED_STATE_INCONSISTENT);
+            log.error("반영된 수납으로 남은 시도인데 회차 반영 근거가 맞지 않음 → 강한 차단(운영 확인): attemptId={}, "
+                    + "membershipPaymentId={}, paymentStatus={}", attempt.getId(), locked.payment().getId(),
+                locked.payment().getStatus());
             return MembershipChargeOutcome.RECONCILE_HALTED;
         }
         return MembershipChargeOutcome.ALREADY_APPLIED;
+    }
+
+    private static MembershipChargeOutcome blockEvidenceConflict(MembershipPaymentAttempt attempt,
+                                                                 MembershipPgVerdict verdict, LocalDateTime now) {
+        attempt.blockSettlement(now, MembershipOpsReviewReason.PAID_EVIDENCE_CONFLICT);
+        log.error("저장된 수납 근거와 PG 재조회가 다름 → 강한 차단(운영 확인): attemptId={}, verdict={}", attempt.getId(),
+            verdict.kind());
+        return MembershipChargeOutcome.RECONCILE_HALTED;
+    }
+
+    // 같은 수납인지: 결제 시각(µs)과 금액. 금액 기준은 반영된 수납이면 회차 금액, 환불 필요 수납이면 그 시도의 SYSTEM 환불 금액
+    // (환불 행이 없으면 — 원자성이 깨진 데이터 — 회차 금액)
+    private boolean sameEvidence(MembershipPaymentAttempt attempt, MembershipPgVerdict verdict,
+                                 MembershipPayment payment) {
+        if (attempt.getPgPaidAt() == null || !attempt.getPgPaidAt().truncatedTo(ChronoUnit.MICROS)
+            .equals(verdict.pgPaidAt().truncatedTo(ChronoUnit.MICROS))) {
+            return false;
+        }
+        if (attempt.getRefundRequiredAt() == null) {
+            return verdict.paidAmount().equals(payment.getAmount());
+        }
+        List<MembershipRefund> rows = systemRefundsOf(attempt);
+        if (rows.isEmpty()) {
+            return verdict.paidAmount().equals(payment.getAmount());
+        }
+        return rows.stream().allMatch(r -> r.getAmount().equals(verdict.paidAmount()));
+    }
+
+    private List<MembershipRefund> systemRefundsOf(MembershipPaymentAttempt attempt) {
+        return refunds.findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc(attempt.getId(),
+            RefundRequester.SYSTEM);
+    }
+
+    // 정상 반영 PAID의 근거: 회차가 PAID이고 이용권 반영 시각이 있고 회차의 결제 시각이 이 시도의 결제 시각과 같다
+    private static boolean appliedBy(MembershipPayment payment, MembershipPaymentAttempt attempt) {
+        return payment.getStatus() == MembershipPaymentStatus.PAID && payment.isApplied()
+            && payment.getPaidAt() != null
+            && payment.getPaidAt().truncatedTo(ChronoUnit.MICROS)
+            .equals(attempt.getPgPaidAt().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    // 환불 행이 빠져 다시 만들 때의 사유: 시도에 남은 환불 필요 사유. 없거나 다른 종류면 확정 회차 수납으로 본다
+    private static MembershipOpsReviewReason refundReasonOf(MembershipPaymentAttempt attempt) {
+        MembershipOpsReviewReason reason = attempt.getOpsReviewReason();
+        return reason == null || reason.isBlocking() ? MembershipOpsReviewReason.PAID_ON_CLOSED_PAYMENT : reason;
     }
 
     // READY 임대 만료. 같은 잠금 순서. 첫 결제는 넘겨받은 시각으로 판정하고(기존 계약), 갱신은 잠금 뒤 시각으로 판정한다
     @Transactional
     public ExpiredReadyResult handleExpiredReady(Long memberId, Long attemptId, LocalDateTime now) {
         Locked locked = lock(memberId, attemptId);
+        if (locked.attempts().stream().anyMatch(MembershipPaymentAttempt::isSettlementBlocked)) {
+            // 조회 뒤 차단이 확정된 회차. 미발송 보장에 반하는 증거가 있으므로 READY를 CANCELED로 접지도 새 시도를 만들지도 않는다
+            log.warn("강한 정합성 차단 회차의 READY 만료 처리를 건너뜀(운영 확인 대상): attemptId={}", attemptId);
+            return new ExpiredReadyResult(MembershipChargeOutcome.RECONCILE_HALTED, null);
+        }
         if (locked.payment().isRenewal()) {
             return handleExpiredRenewalReady(locked, LocalDateTime.now(clock));
         }
@@ -140,7 +325,8 @@ public class MembershipChargeResultProcessor {
             // ⑦ 확정 회차. 다른 READY가 남아 있어도(비정상) 실행 대상으로 돌려주지 않는다 — claim()은 회차 상태를 보지 않으므로 여기서 막는다
             return new ExpiredReadyResult(MembershipChargeOutcome.ALREADY_APPLIED, null);
         }
-        List<MembershipPaymentAttempt> all = attempts.findByMembershipPaymentIdOrderByAttemptNoAsc(payment.getId());
+        List<MembershipPaymentAttempt> all = locked.attempts().stream()
+            .sorted(Comparator.comparingInt(MembershipPaymentAttempt::getAttemptNo)).toList();
         // ⑧-0: PG에 갔을 수 있는 시도가 남아 있으면 새 ID를 만들지 않고 회차도 닫지 않는다(재조회·운영 확인 대기)
         boolean pgMayHaveSeen = all.stream().anyMatch(a -> a.getStatus() == MembershipPaymentAttemptStatus.DISPATCHING
             || a.getStatus() == MembershipPaymentAttemptStatus.UNKNOWN
@@ -154,11 +340,16 @@ public class MembershipChargeResultProcessor {
             .filter(a -> a.getStatus() == MembershipPaymentAttemptStatus.READY && now.isBefore(a.getLeaseExpiresAt()))
             .findFirst();
         if (otherReady.isPresent()) {
+            if (locked.withdrawn()) {
+                // 탈퇴 회원의 유효 READY는 실행 대상으로 돌려주지 않는다 — 임대 만료 정리에 맡긴다
+                return new ExpiredReadyResult(MembershipChargeOutcome.IN_PROGRESS, null);
+            }
             return new ExpiredReadyResult(MembershipChargeOutcome.RETRY_READY, otherReady.get().getId());
         }
         BillingMembershipData membership = locked.membership();
         Optional<Long> activeKeyId = billingKeys.findIdByMemberIdAndStatus(memberId, BillingKeyStatus.ACTIVE);
-        boolean allowed = gate.newChargeEnabled()
+        boolean allowed = !locked.withdrawn()
+            && gate.newChargeEnabled()
             && membership.type() == MembershipType.PAID && membership.activatedAt() == null
             && membership.terminatedAt() == null
             && membership.consent() != null && membership.consent().consentedAmount() != null
@@ -207,8 +398,9 @@ public class MembershipChargeResultProcessor {
         if (!attempt.cancelNotDispatched(now)) {
             return new ExpiredReadyResult(outcomeOfUncancelable(attempt, now), attempt.getId());
         }
+        // 탈퇴 회원의 회차는 정리만 하고 새 시도를 만들지 않는다
         MembershipRenewalDecision decision = rules.continueExisting(locked.memberId(), locked.membership(),
-            locked.payment(), locked.attempts(), now, Mode.CHARGE);
+            locked.payment(), locked.attempts(), now, locked.withdrawn() ? Mode.SETTLE : Mode.CHARGE);
         return switch (decision.kind()) {
             case CHARGE_READY -> new ExpiredReadyResult(MembershipChargeOutcome.RETRY_READY, decision.attemptId());
             case PG_PENDING -> new ExpiredReadyResult(MembershipChargeOutcome.STILL_UNKNOWN, null);
@@ -223,9 +415,9 @@ public class MembershipChargeResultProcessor {
         };
     }
 
-    // 정합성 예외로 TX2가 롤백된 뒤 복구가 여는 별도의 짧은 TX. MEMBER부터 같은 잠금 순서로 다시
+    // 정합성 예외로 TX2가 롤백된 뒤 실행기가 여는 별도의 짧은 TX. MEMBER부터 같은 잠금 순서로 다시
     // 잠그고 최신 상태로 원인을 재검증한다 — 그 사이 다른 처리(웹훅·운영 조치)로 해결됐으면 아무것도 남기지 않는다.
-    // 원인이 그대로면 상태·회차·이용권·환불은 바꾸지 않고 시도에 정합성 코드 + 운영 표시만 남겨 자동 정합화를 멈춘다(isAutoReconcileHalted)
+    // 원인이 그대로면 상태·회차·이용권·환불은 바꾸지 않고 시도에 정합성 코드 + 강한 차단 표시만 남겨 자동 정합화를 멈춘다
     @Transactional
     public boolean flagInconsistent(Long memberId, Long attemptId, Kind kind, LocalDateTime now) {
         Locked locked = lock(memberId, attemptId);
@@ -235,7 +427,7 @@ public class MembershipChargeResultProcessor {
             && attempt.getStatus() != MembershipPaymentAttemptStatus.UNKNOWN) {
             return false;
         }
-        if (attempt.isAutoReconcileHalted() || !payment.isUnresolved() || payment.isApplied()
+        if (attempt.isSettlementBlocked() || !payment.isUnresolved() || payment.isApplied()
             || payment.isRenewal() != isRenewalKind(kind) || !invariantStillBroken(locked, kind)) {
             log.info("정합성 예외의 원인이 더 이상 없어 운영 표시를 남기지 않음: attemptId={}, kind={}", attemptId, kind);
             return false;
@@ -270,37 +462,29 @@ public class MembershipChargeResultProcessor {
 
     // ---------- 잠금 ----------
 
-    // attempts: 갱신 회차면 그 회차의 시도 전부(PK 오름차순으로 잠금), 첫 결제면 대상 시도 하나
-    private record Locked(Long memberId, BillingMembershipData membership, MembershipPayment payment,
+    // attempts: 회차의 시도 전부(PK 오름차순으로 잠금). 첫 결제·갱신 공통 — 같은 회차의 다른 시도를 보는 판정(차단·확정 회차)이 있다
+    // withdrawn: 정산 잠금이 본 탈퇴 여부. 탈퇴 회원의 기존 거래도 결과 확인·환불 요청은 진행하고 새 혜택·새 시도만 만들지 않는다
+    private record Locked(Long memberId, boolean withdrawn, BillingMembershipData membership, MembershipPayment payment,
                           MembershipPaymentAttempt attempt, List<MembershipPaymentAttempt> attempts) {
     }
 
-    // ① MEMBER → ② ID만 일반 조회 → ③ 이용권 PK(C-7, 소유 재검증) → ④ 회차 PK → ⑤ 시도 PK → ⑥ 연결 검증.
-    // 갱신 회차는 ⑤에서 대상 시도만 먼저 잠그지 않고 회차의 시도 전부를 PK 오름차순으로 잠근 뒤 그 목록에서 대상을 고른다
+    // ① MEMBER(정산 잠금 — 탈퇴 회원 포함) → ② ID만 일반 조회 → ③ 이용권 PK(C-7, 소유 재검증) → ④ 회차 PK → ⑤ 회차의 시도 전부 PK 오름차순 → ⑥ 연결 검증.
+    // 대상 시도만 먼저 잠그지 않는다 — 잠근 목록에서 대상을 고른다
     private Locked lock(Long memberId, Long attemptId) {
-        memberService.lockActiveMember(memberId);
+        MemberSettlementLock member = memberService.lockMemberForSettlement(memberId);
         MembershipPaymentAttemptRef ref = attempts.findRef(attemptId)
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.MEMBERSHIP_PAYMENT_NOT_FOUND));
         BillingMembershipData membership =
             membershipBillingService.getBillingMembershipForUpdate(memberId, ref.membershipId());
         MembershipPayment payment = payments.findByIdForUpdate(ref.membershipPaymentId())
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.MEMBERSHIP_PAYMENT_NOT_FOUND));
-        if (payment.isRenewal()) {
-            List<MembershipPaymentAttempt> all = rules.lockAttempts(payment);
-            MembershipPaymentAttempt target = all.stream().filter(a -> a.getId().equals(attemptId)).findFirst()
-                .orElseThrow(() -> new IllegalStateException("시도·회차 연결이 맞지 않음: attemptId=" + attemptId));
-            if (!payment.getMembershipId().equals(membership.membershipId())) {
-                throw new IllegalStateException("시도·회차·이용권 연결이 맞지 않음: attemptId=" + attemptId);
-            }
-            return new Locked(memberId, membership, payment, target, all);
-        }
-        MembershipPaymentAttempt attempt = attempts.findByIdForUpdate(attemptId)
-            .orElseThrow(() -> new BusinessException(PaymentErrorCode.MEMBERSHIP_PAYMENT_NOT_FOUND));
-        if (!attempt.getMembershipPayment().getId().equals(payment.getId())
-            || !payment.getMembershipId().equals(membership.membershipId())) {
+        List<MembershipPaymentAttempt> all = rules.lockAttempts(payment);
+        MembershipPaymentAttempt target = all.stream().filter(a -> a.getId().equals(attemptId)).findFirst()
+            .orElseThrow(() -> new IllegalStateException("시도·회차 연결이 맞지 않음: attemptId=" + attemptId));
+        if (!payment.getMembershipId().equals(membership.membershipId())) {
             throw new IllegalStateException("시도·회차·이용권 연결이 맞지 않음: attemptId=" + attemptId);
         }
-        return new Locked(memberId, membership, payment, attempt, List.of(attempt));
+        return new Locked(memberId, member.withdrawn(), membership, payment, target, all);
     }
 
     // ---------- 판정 분기(5-1) ----------
@@ -315,6 +499,17 @@ public class MembershipChargeResultProcessor {
         Optional<MembershipChargeOutcome> appliedState = checkAppliedState(locked, verdict, now);
         if (appliedState.isPresent()) {
             return appliedState.get();
+        }
+        if (locked.withdrawn()) {
+            // 탈퇴 회원의 미반영 첫 결제는 활성화하지 않고 돌려준다. 정상적인 대기 이용권만 닫는다
+            BillingMembershipData membership = locked.membership();
+            boolean closePendingMembership = membership.type() == MembershipType.PAID
+                && membership.activatedAt() == null
+                && membership.terminatedAt() == null
+                && (membership.source() == MembershipSource.SUBSCRIBE
+                || membership.source() == MembershipSource.TRIAL_CONVERT);
+            return closeUnappliedPaid(locked, verdict, now, MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL,
+                MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL.name(), closePendingMembership);
         }
         MembershipBillingPeriods.FirstPeriod period = MembershipBillingPeriods.firstPeriod(verdict.pgPaidAt());
         if (!now.isBefore(period.endAt())) {
@@ -369,6 +564,17 @@ public class MembershipChargeResultProcessor {
         if (appliedState.isPresent()) {
             return appliedState.get();
         }
+        if (locked.withdrawn()) {
+            // 탈퇴 회원의 미반영 첫 결제는 활성화하지 않고 돌려준다. 정상적인 대기 이용권만 닫는다
+            BillingMembershipData membership = locked.membership();
+            boolean closePendingMembership = membership.type() == MembershipType.PAID
+                && membership.activatedAt() == null
+                && membership.terminatedAt() == null
+                && (membership.source() == MembershipSource.SUBSCRIBE
+                || membership.source() == MembershipSource.TRIAL_CONVERT);
+            return closeUnappliedPaid(locked, verdict, now, MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL,
+                MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL.name(), closePendingMembership);
+        }
         return closeUnappliedPaid(locked, verdict, now, MembershipOpsReviewReason.PAID_AMOUNT_MISMATCH,
             MembershipPgVerdict.CODE_AMOUNT_MISMATCH, true);
     }
@@ -418,11 +624,31 @@ public class MembershipChargeResultProcessor {
         return MembershipChargeOutcome.CLOSED_UNPAID;
     }
 
-    // 결과 불명·404·조회 장애. 상태만 UNKNOWN으로 두고 복구가 같은 ID로 재조회한다. MANUAL_REVIEW 시도는 그대로 둔다
-    private MembershipChargeOutcome keepUnknown(Locked locked, MembershipPgVerdict verdict) {
+    // 결과 불명·404·조회 장애. 위에서부터 처음 맞는 행:
+    // MANUAL_REVIEW 시도 → 그대로 / 신선한 DISPATCHING(다른 Worker가 PG 호출 중)인데 웹훅·운영자 재조회 → 변경 없음(웹훅은 다시 조회) /
+    // 발송 뒤 결과 불명 창 W가 지남 → 이번 GET이 마지막 자동 조회. 시도·회차 MANUAL_REVIEW + 결과 확인 대기 표시(차단 아님 — 웹훅·운영자
+    // 재조회는 계속 받는다) / 그 외 UNKNOWN 유지(같은 ID 재조회). W 기준은 dispatchedAt 하나다 — 마지막 조회·갱신 시각으로 늘리지 않는다
+    private MembershipChargeOutcome keepUnknown(Locked locked, MembershipPgVerdict verdict, LocalDateTime now,
+                                                MembershipReconciliationTrigger trigger) {
         MembershipPaymentAttempt attempt = locked.attempt();
         MembershipPayment payment = locked.payment();
         if (attempt.getStatus() == MembershipPaymentAttemptStatus.MANUAL_REVIEW) {
+            return MembershipChargeOutcome.MANUAL_REVIEW;
+        }
+        if (attempt.getStatus() == MembershipPaymentAttemptStatus.DISPATCHING
+            && trigger != MembershipReconciliationTrigger.SCHEDULED
+            && now.isBefore(attempt.getDispatchedAt().plus(properties.lease()).plus(properties.dispatchMargin()))) {
+            return MembershipChargeOutcome.IN_PROGRESS;
+        }
+        if (!now.isBefore(attempt.getDispatchedAt().plus(properties.unknownWindow()))) {
+            attempt.markManualReview(CODE_UNKNOWN_WINDOW_EXPIRED, now);
+            if (payment.getStatus() == MembershipPaymentStatus.PENDING
+                || payment.getStatus() == MembershipPaymentStatus.UNKNOWN) {
+                payment.markManualReview();
+            }
+            attempt.flagOpsReview(now, MembershipOpsReviewReason.UNKNOWN_WINDOW_EXPIRED);
+            log.warn("결과 불명 창이 끝나 자동 재조회를 멈춤(운영 확인): attemptId={}, dispatchedAt={}, code={}", attempt.getId(),
+                attempt.getDispatchedAt(), verdict.code());
             return MembershipChargeOutcome.MANUAL_REVIEW;
         }
         attempt.markUnknown(verdict.code());
@@ -470,7 +696,10 @@ public class MembershipChargeResultProcessor {
                     + payment.getId());
             }
         }
-        requestSystemRefund(attempt, verdict.paidAmount(), reason, now);
+        if (ensureSystemRefundRequested(attempt, verdict.paidAmount(), reason, now)
+            == SystemRefundEnsureResult.BLOCKED) {
+            return MembershipChargeOutcome.RECONCILE_HALTED;
+        }
         log.warn("첫 결제 PAID를 반영하지 않음 → SYSTEM 환불 요청: membershipPaymentId={}, reason={}, amount={}",
             payment.getId(), reason, verdict.paidAmount());
         return MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED;
@@ -482,32 +711,50 @@ public class MembershipChargeResultProcessor {
         MembershipPaymentAttempt attempt = locked.attempt();
         attempt.markPaid(verdict.pgPaidAt(), now);
         attempt.requireRefund(now, MembershipOpsReviewReason.PAID_ON_CLOSED_PAYMENT);
-        requestSystemRefund(attempt, verdict.paidAmount(), MembershipOpsReviewReason.PAID_ON_CLOSED_PAYMENT, now);
+        if (ensureSystemRefundRequested(attempt, verdict.paidAmount(), MembershipOpsReviewReason.PAID_ON_CLOSED_PAYMENT,
+            now) == SystemRefundEnsureResult.BLOCKED) {
+            return MembershipChargeOutcome.RECONCILE_HALTED;
+        }
         log.error("확정된 회차에 늦은 PAID → SYSTEM 환불 요청: membershipPaymentId={}, attemptId={}, amount={}",
             locked.payment().getId(), attempt.getId(), verdict.paidAmount());
         return MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED;
     }
 
-    // 같은 시도에 두 번째 REQUESTED를 만들지 않는다(시도 PK 잠금 아래). 금액은 항상 실제 수납액
-    private void requestSystemRefund(MembershipPaymentAttempt attempt, Long actualAmount,
-                                     MembershipOpsReviewReason reason, LocalDateTime now) {
-        if (refunds.existsByMembershipPaymentAttemptIdAndStatus(attempt.getId(), MembershipRefundStatus.REQUESTED)) {
-            return;
-        }
+    private enum SystemRefundEnsureResult { CREATED, EXISTING, BLOCKED }
+
+    // SYSTEM 환불 멱등(시도 PK 잠금 아래). 같은 시도의 SYSTEM 환불 행을 상태와 무관하게 본다 — 0건이면 실제 수납액으로 순번 1을 만들고,
+    // 금액이 모두 같고 FAILED가 아닌 행이 1건 이하면 그대로 둔다(REQUESTED·FAILED·COMPLETED 어느 것이든 새 요청 없음 — FAILED 뒤 재집행은
+    // 환불 실행 단계가 맡는다). 금액이 다르거나 진행·완료 행이 둘 이상이면 자동으로 고치지 않고 강한 차단만 남긴다(TX는 롤백하지 않는다)
+    private SystemRefundEnsureResult ensureSystemRefundRequested(MembershipPaymentAttempt attempt, Long actualAmount,
+                                                                 MembershipOpsReviewReason reason, LocalDateTime now) {
         if (actualAmount == null) {
             throw new IllegalStateException("실제 수납액 없이 SYSTEM 환불을 요청할 수 없음: attemptId=" + attempt.getId());
         }
-        refunds.save(MembershipRefund.systemRefundRequested(attempt, actualAmount, reason.name(),
-            FIRST_SYSTEM_REFUND_SEQUENCE, now));
+        List<MembershipRefund> rows = systemRefundsOf(attempt);
+        if (rows.isEmpty()) {
+            refunds.save(MembershipRefund.systemRefundRequested(attempt, actualAmount, reason.name(),
+                FIRST_SYSTEM_REFUND_SEQUENCE, now));
+            return SystemRefundEnsureResult.CREATED;
+        }
+        boolean sameAmount = rows.stream().allMatch(r -> r.getAmount().equals(actualAmount));
+        long notFailed = rows.stream().filter(r -> r.getStatus() != MembershipRefundStatus.FAILED).count();
+        if (sameAmount && notFailed <= 1) {
+            return SystemRefundEnsureResult.EXISTING;
+        }
+        attempt.blockSettlement(now, MembershipOpsReviewReason.PAID_EVIDENCE_CONFLICT);
+        log.error("SYSTEM 환불 기록이 수납과 맞지 않음 → 강한 차단(운영 확인): attemptId={}, rows={}, amount={}", attempt.getId(),
+            rows.size(), actualAmount);
+        return SystemRefundEnsureResult.BLOCKED;
     }
 
     // ---------- 갱신 결과 ----------
 
     // 갱신 PAID(금액 불일치 포함). 위에서부터 처음 맞는 행으로 끝난다.
     // 확정 회차 → 그 시도의 수납만 환불(회차·이용권 불변, C-4b 없음) / PG 결제 시각이 회차 T보다 이르거나 지금보다 늦음 → 운영 확인
-    // (자동 연장·추정 환불·시각 보정 없음) / 반영할 수 없는 이용권 → 미반영 환불(C-4b는 끌 수 있는 이용권일 때만) /
-    // 이용권 기간이 회차 T와 다름 → 정합성 예외·롤백 / 금액 불일치 → 실제 수납액 환불 / pgPaidAt ≥ G → 마감 뒤 수납 환불 /
-    // now ≥ E → 기간 종료 환불 / 그 외 C-4a(E, E + 3일) EXTENDED만 첫 성공으로 인정
+    // (자동 연장·추정 환불·시각 보정 없음) / 탈퇴 회원 → 미반영 환불 / 반영할 수 없는 이용권 → 미반영 환불(C-4b는 끌 수 있는
+    // 이용권일 때만) / 다른 이용권과 충돌 → 미반영 환불(C-4b) / 이용권 기간이 회차 T와 다름 → 정합성 예외·롤백 /
+    // 금액 불일치 → 실제 수납액 환불 / pgPaidAt ≥ G → 마감 뒤 수납 환불 / now ≥ E → 기간 종료 환불 /
+    // 그 외 C-4a(E, E + 3일) EXTENDED만 첫 성공으로 인정
     private MembershipChargeOutcome applyRenewalPaid(Locked locked, MembershipPgVerdict verdict, LocalDateTime now,
                                                      boolean amountMismatch) {
         MembershipPayment payment = locked.payment();
@@ -524,9 +771,20 @@ public class MembershipChargeResultProcessor {
         if (pgPaidAt.isAfter(now)) {
             return manualReview(locked, CODE_PAID_AT_IN_FUTURE, now);
         }
+        if (locked.withdrawn()) {
+            // 탈퇴 회원에게 새 혜택(연장)을 만들지 않고 실제 수납액을 돌려준다
+            return closeUnappliedRenewal(locked, verdict, now, MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL,
+                MembershipOpsReviewReason.PAID_AFTER_WITHDRAWAL.name(), MembershipRenewalRules.stoppable(membership));
+        }
         if (!MembershipRenewalRules.renewable(membership)) {
             return closeUnappliedRenewal(locked, verdict, now, MembershipOpsReviewReason.PAID_CONFLICT,
                 MembershipOpsReviewReason.PAID_CONFLICT.name(), MembershipRenewalRules.stoppable(membership));
+        }
+        if (membershipBillingService.existsConflictingMembershipForBilling(locked.memberId(),
+            membership.membershipId(), now)) {
+            // 다른 이용권(관리자 지급·새 구독 등)과 겹친다 — 자동 연장하지 않고 돌려준다
+            return closeUnappliedRenewal(locked, verdict, now, MembershipOpsReviewReason.CONFLICTING_MEMBERSHIP,
+                MembershipOpsReviewReason.CONFLICTING_MEMBERSHIP.name(), true);
         }
         if (!MembershipRenewalRules.matches(period, membership)) {
             log.error("갱신 회차의 직전 종료와 이용권 기간이 맞지 않음 → 롤백: membershipPaymentId={}, attemptId={}",
@@ -579,7 +837,7 @@ public class MembershipChargeResultProcessor {
 
     // 갱신 확정 실패. 이 시도를 FAILED로 적고(확정 시각 = now) 회차는 공통 규칙으로 이어 간다 — 다른 시도가 살아 있으면 그대로,
     // 해지·종료·마감·발송 한도면 회차 FAILED + C-4b, 아니면 이 실패 + 24시간에 재시도 대기(마감 이상이면 예약 없음).
-    // 같은 실패의 재수신은 위의 isFinal에서 끝나므로 예약 시각·시도 수가 다시 계산되지 않는다
+    // 같은 실패의 재수신은 확정 시도 판정(finalAttemptOutcome)에서 끝나므로 예약 시각·시도 수가 다시 계산되지 않는다
     private MembershipChargeOutcome applyRenewalFailed(Locked locked, MembershipPgVerdict verdict, LocalDateTime now) {
         MembershipPayment payment = locked.payment();
         MembershipPaymentAttempt attempt = locked.attempt();
@@ -613,7 +871,10 @@ public class MembershipChargeResultProcessor {
         if (stopRenewal) {
             rules.stopRenewal(payment.getMembershipId());
         }
-        requestSystemRefund(attempt, verdict.paidAmount(), reason, now);
+        if (ensureSystemRefundRequested(attempt, verdict.paidAmount(), reason, now)
+            == SystemRefundEnsureResult.BLOCKED) {
+            return MembershipChargeOutcome.RECONCILE_HALTED;
+        }
         log.warn("갱신 PAID를 반영하지 않음 → SYSTEM 환불 요청: membershipPaymentId={}, reason={}, amount={}",
             payment.getId(), reason, verdict.paidAmount());
         return MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED;

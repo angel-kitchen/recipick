@@ -3,14 +3,16 @@ package com.recipick.domain.payment.facade;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MembershipBillingService;
 import com.recipick.domain.payment.config.MembershipBillingProperties;
-import com.recipick.domain.payment.exception.MembershipSettlementInvariantException;
+import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor.ExpiredReadyResult;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
+import com.recipick.domain.payment.service.BillingKeyRecheckRef;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -27,19 +29,22 @@ import org.springframework.transaction.annotation.Transactional;
 // 대상은 잠금 없이 ID만 keyset으로 읽고, 회원 ID는 역조회 계약(findMemberIdOfMembership, 잠금 없음)으로 얻는다.
 // 변경은 언제나 Processor 안에서 MEMBER부터 다시 잠그고 C-7로 소유권을 재검증한다(LC 5-1 "ID 선조회 → MEMBER부터 잠금").
 // 이용권이 없다는 MEMBERSHIP-006(정상 흐름에서 불가 — 결제는 C-12로 만든 이용권만 참조)은 그 건만 건너뛰고 ERROR(ID만),
-// 시도 상태는 바꾸지 않고 임의 회원을 고르지 않는다. 명시적 정합성 오류(MembershipSettlementInvariantException)만 별도 TX로 원인을
-// 재검증한 뒤 자동 정합화를 멈추는 운영 표시를 남긴다. 그 밖의 예외는 건별 격리 WARN — 다음 주기에 다시 본다.
+// 시도 상태는 바꾸지 않고 임의 회원을 고르지 않는다. 명시적 정합성 오류는 실행기가 잡아 강한 차단 표시를 남긴다.
+// 강한 차단 시도가 있는 회차는 세 조회에서 모두 빠진다. 그 밖의 예외는 건별 격리 WARN — 다음 주기에 다시 본다.
 // 비트랜잭션 진입점(Propagation.NEVER)
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MembershipChargeRecoveryFacade {
 
+    private static final Collection<MembershipOpsReviewReason> BLOCKING = MembershipOpsReviewReason.BLOCKING;
+
     private final MembershipBillingProperties properties;
     private final MembershipBillingService membershipBillingService;
     private final MembershipPaymentAttemptRepository attempts;
     private final MembershipChargeExecutor executor;
     private final MembershipChargeResultProcessor resultProcessor;
+    private final BillingKeyReconciliationFacade billingKeyReconciliation;
     private final Clock clock;
 
     // 처리한 시도 수
@@ -49,13 +54,40 @@ public class MembershipChargeRecoveryFacade {
         LocalDateTime staleBefore = now.minus(properties.lease()).minus(properties.dispatchMargin());
         LocalDateTime unknownBefore = now.minus(properties.dispatchMargin());
         int processed = 0;
-        processed += sweep(page -> attempts.findStaleDispatching(staleBefore, page.afterId(), page.pageable()),
+        processed += sweep(page -> attempts.findStaleDispatching(staleBefore, BLOCKING, page.afterId(),
+                page.pageable()),
             ref -> reconcile(ref));
-        processed += sweep(page -> attempts.findUnknownUpdatedBefore(unknownBefore, page.afterId(), page.pageable()),
+        processed += sweep(page -> attempts.findUnknownUpdatedBefore(unknownBefore, BLOCKING, page.afterId(),
+                page.pageable()),
             ref -> reconcile(ref));
-        processed += sweep(page -> attempts.findExpiredReady(now, page.afterId(), page.pageable()),
+        processed += sweep(page -> attempts.findExpiredReady(now, BLOCKING, page.afterId(), page.pageable()),
             ref -> expireReady(ref, now));
+        processed += recheckBillingKeys(now.minus(properties.unknownWindow()));
         return processed;
+    }
+
+    // 결과 불명 창 안의 404 UNKNOWN 시도에 묶인 키를 한 번씩 확인한다(키 없음·삭제로 결제가 만들어지지 않았을 수 있다).
+    // 키 상태만 바꾸고 결제 시도는 그대로 둔다(같은 결제 ID 재조회 계속). 건별 격리
+    private int recheckBillingKeys(LocalDateTime since) {
+        int processed = 0;
+        long afterId = 0;
+        Pageable pageable = PageRequest.of(0, properties.batchSize());
+        while (true) {
+            List<BillingKeyRecheckRef> refs = attempts.findBillingKeysToRecheck(since, afterId, pageable);
+            for (BillingKeyRecheckRef ref : refs) {
+                processed++;
+                try {
+                    billingKeyReconciliation.recheck(ref);
+                } catch (RuntimeException e) {
+                    log.warn("빌링키 재검사 실패(다음 실행에서 재시도): billingKeyId={}, cause={}", ref.billingKeyId(),
+                        e.getClass().getSimpleName());
+                }
+            }
+            if (refs.size() < properties.batchSize()) {
+                return processed;
+            }
+            afterId = refs.get(refs.size() - 1).billingKeyId();
+        }
     }
 
     private record Page(long afterId, Pageable pageable) {
@@ -81,12 +113,6 @@ public class MembershipChargeRecoveryFacade {
                         log.warn("복구 처리 실패(다음 실행에서 재시도): attemptId={}, code={}", ref.attemptId(),
                             e.getErrorCode().getCode());
                     }
-                } catch (MembershipSettlementInvariantException e) {
-                    // 명시적 정합성 오류(TX2 롤백, 상태 변경 없음). 별도 TX로 원인을 재검증하고 그대로면 자동 정합화를 멈춘다.
-                    // 표시 TX까지 실패하면 다음 주기에 한 번 더 같은 길을 간다
-                    log.error("복구 중 정합성 오류(롤백, 운영 정합화 대상): attemptId={}, membershipPaymentId={}, membershipId={}, "
-                        + "kind={}", ref.attemptId(), ref.membershipPaymentId(), ref.membershipId(), e.getKind());
-                    flagInconsistent(ref, e.getKind());
                 } catch (RuntimeException e) {
                     log.warn("복구 처리 실패(다음 실행에서 재시도): attemptId={}, cause={}", ref.attemptId(),
                         e.getClass().getSimpleName());
@@ -96,17 +122,6 @@ public class MembershipChargeRecoveryFacade {
                 return processed;
             }
             afterId = refs.get(refs.size() - 1).attemptId();
-        }
-    }
-
-    // 정합성 예외 뒤 운영 표시 TX(REQUIRES_NEW 아님 — 롤백된 TX2가 끝난 뒤 새로 연다). 실패는 WARN만
-    private void flagInconsistent(MembershipPaymentAttemptRef ref, MembershipSettlementInvariantException.Kind kind) {
-        try {
-            Long memberId = membershipBillingService.findMemberIdOfMembership(ref.membershipId());
-            resultProcessor.flagInconsistent(memberId, ref.attemptId(), kind, LocalDateTime.now(clock));
-        } catch (RuntimeException e) {
-            log.warn("정합성 예외 시도의 운영 표시 실패(다음 실행에서 재시도): attemptId={}, cause={}", ref.attemptId(),
-                e.getClass().getSimpleName());
         }
     }
 

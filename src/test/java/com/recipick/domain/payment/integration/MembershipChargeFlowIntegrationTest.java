@@ -12,6 +12,7 @@ import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
+import com.recipick.domain.payment.facade.BillingKeyReconciliationFacade;
 import com.recipick.domain.payment.facade.MembershipChargeDispatchProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
 import com.recipick.domain.payment.facade.MembershipChargeRecoveryFacade;
@@ -24,6 +25,7 @@ import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository
 import com.recipick.domain.payment.repository.MembershipPaymentRepository;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
+import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRequestHash;
 import com.recipick.domain.payment.service.MembershipSubscribeResult;
 import com.recipick.domain.payment.service.MembershipSubscribeStatus;
@@ -56,6 +58,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
     @Autowired MembershipRepository memberships;
     @Autowired MembershipBillingProperties properties;
     @Autowired PortOneBillingClient portOneBillingClient;
+    @Autowired BillingKeyReconciliationFacade billingKeyReconciliation;
     @Autowired PortOnePaymentClient portOnePaymentClient;
 
     private Member member;
@@ -161,7 +164,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         recovery.recoverOnce();
         recovery.recoverOnce();
         MembershipChargeOutcome reconciled = executor.reconcile(member.getId(), receipt.attemptId());
-        MembershipChargeOutcome applied = resultProcessor.apply(member.getId(), receipt.attemptId(),
+        MembershipChargeOutcome applied = applyResult(member.getId(), receipt.attemptId(),
             MembershipPgVerdict.unresolved("PG_TIMEOUT"));
 
         assertThat(reconciled).isEqualTo(MembershipChargeOutcome.RECONCILE_HALTED);
@@ -171,7 +174,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         MembershipPaymentAttempt flagged = attempts.findById(receipt.attemptId()).orElseThrow();
         assertThat(flagged.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
         assertThat(flagged.getFailureReason()).isEqualTo(MembershipPaymentAttempt.REASON_APPLIED_STATE_INCONSISTENT);
-        assertThat(flagged.isAutoReconcileHalted()).isTrue();
+        assertThat(flagged.isSettlementBlocked()).isTrue();
         assertThat(flagged.getRefundRequiredAt()).isNull();
         assertThat(payments.findById(paymentRowId()).orElseThrow().getStatus())
             .isEqualTo(MembershipPaymentStatus.PENDING);
@@ -286,7 +289,8 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         // 선점(실제 시각)은 성공하고 POST 직전 재확인(창 + 1분 뒤 시각)만 닫힌 창을 보게 한다
         Clock afterWindow = Clock.offset(clock, properties.firstChargeAcceptWindow().plus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
-            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient, afterWindow);
+            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
+            billingKeyReconciliation, afterWindow);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 
@@ -309,7 +313,8 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         PORTONE.getPaymentPaid(paymentId, FEE, "KRW", pgPaidAt);
         Clock nearEnd = Clock.offset(clock, properties.firstChargeAcceptWindow().minus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
-            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient, nearEnd);
+            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
+            billingKeyReconciliation, nearEnd);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 
@@ -368,5 +373,11 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
             }
         }
         return false;
+    }
+
+    // 결과 반영을 직접 부를 때 실행기와 같은 관측값(GET 전에 본 선점 시각)을 넘긴다
+    private MembershipChargeOutcome applyResult(Long memberId, Long attemptId, MembershipPgVerdict verdict) {
+        return resultProcessor.apply(memberId, attemptId, attempts.findById(attemptId).orElseThrow().getDispatchedAt(),
+            verdict, MembershipReconciliationTrigger.SCHEDULED);
     }
 }

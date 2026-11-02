@@ -26,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 // 월 갱신 스케줄러 본체. 모든 진입점은 비트랜잭션(Propagation.NEVER) — 접수·판정은 Processor의 짧은 TX가 커밋한 뒤에만 공용
 // 실행기가 PG를 부른다. 후보 조회 시각(scanNow)은 대상을 고르는 데만 쓰고 판정 시각은 Processor가 잠금 뒤 다시 읽는다.
 // runOnce: 신규 청구(플래그 ON에서만) — C-2 신규 후보 접수 → 재개할 기존 회차(재시도 시각 도달·카드 대기·PENDING 잔존).
-// settleOnce: 플래그 무관 — 마감 지난 회차와 해지·종료된 대기 회차의 안전 정리. PG 호출·새 시도 없음.
+// settleOnce: 플래그 무관 — 마감 지난 회차와 해지·종료된 대기 회차의 안전 정리, 그리고 회차 없이 마감이 지난 이용권 정리.
+//             PG 호출·새 시도 없음.
 // resumeForMember: 카드 등록이 커밋된 뒤 그 회원의 카드 대기 회차만 재개. 어떤 실패도 밖으로 던지지 않는다(등록 성공은 그대로).
 // 건별 예외 격리: 한 회원의 실패가 다른 대상을 막지 않고 다음 실행에서 다시 본다. 로그에는 ID·예외 클래스만 남긴다
 @Slf4j
@@ -116,9 +117,27 @@ public class MembershipRenewalFacade {
                 }
             }
             if (refs.size() < properties.batchSize()) {
-                return processed;
+                break;
             }
             afterId = refs.get(refs.size() - 1).paymentId();
+        }
+        afterId = 0;
+        while (true) {
+            List<MembershipBillingTarget> targets =
+                membershipBillingService.findOverdueRenewalTargets(scanNow, afterId, properties.batchSize());
+            for (MembershipBillingTarget target : targets) {
+                processed++;
+                try {
+                    CloseResult result = processor.settleOverdue(target.memberId(), target.membershipId());
+                    log.info("마감 누락 갱신 정리: membershipId={}, outcome={}", target.membershipId(), result.outcome());
+                } catch (RuntimeException e) {
+                    logFailure("마감 누락 갱신 정리", target.membershipId(), null, e);
+                }
+            }
+            if (targets.size() < properties.batchSize()) {
+                return processed;
+            }
+            afterId = targets.get(targets.size() - 1).membershipId();
         }
     }
 

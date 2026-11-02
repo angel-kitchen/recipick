@@ -9,7 +9,7 @@
   아래 전제(호출자 계약)와 동시성 테스트로 보장합니다.
 - 조회 예외는 성공으로 바꾸지 않고 전파합니다(호출 트랜잭션 롤백).
 
-## 미정산으로 보는 네 조건(하나라도 참이면 true)
+## 미정산으로 보는 다섯 조건(하나라도 참이면 true)
 
 | # | 조건 |
 | --- | --- |
@@ -17,6 +17,7 @@
 | ② | 시도 상태가 `READY`·`DISPATCHING`·`UNKNOWN`·`MANUAL_REVIEW` |
 | ③ | 환불 상태가 `REQUESTED` |
 | ④ | 시도가 `PAID`이고 `refund_required_at`이 있는데 **그 시도의 SYSTEM 환불 `COMPLETED`가 없음** (MEMBER 환불 COMPLETED는 해제하지 않음) |
+| ⑤ | 시도에 **강한 정합성 차단** 표시(`ops_review_reason` ∈ `APPLIED_STATE_INCONSISTENT`·`UNDISPATCHED_PAID`·`UNDISPATCHED_PG_ACTIVITY`·`PAID_EVIDENCE_CONFLICT`·`PAID_AT_INVALID`)가 있음 — 시도 상태가 `CANCELED`·`PAID`·`FAILED`여도 막는다(4-B) |
 
 ## 안전하게 호출하기 위한 전제
 
@@ -35,8 +36,10 @@
 | 바로 구독 접수 TX1(회차·시도 생성) | 4 | 필수 | **거절**(신규 거래) | |
 | 갱신 접수 TX1(스케줄러) | 4 | 필수(회원별) | **거절**(신규 거래) | |
 | 시도 선점 READY → DISPATCHING | 4 | 시도 행만 | — | 둘 다 미해결이라 판정 불변 |
-| 결과 반영 TX2(시도·회차 확정, `refund_required_at`) | 4 | 필수 | **진행**(이미 시작된 거래의 후속 정합화) | 웹훅 경로 포함 |
-| 복구 Sweep(UNKNOWN 재조회·MANUAL_REVIEW) | 4 | 필수 | **진행** | |
+| 결과 반영 TX2(시도·회차 확정, `refund_required_at`) | 4 | 필수(`lockMemberForSettlement`) | **진행**(이미 시작된 거래의 후속 정합화) | 웹훅 경로 포함 |
+| 복구 Sweep(UNKNOWN 재조회·MANUAL_REVIEW·READY 만료) | 4 | 필수(`lockMemberForSettlement`) | **진행**(새 시도는 만들지 않음) | |
+| 갱신 회차 정리·마감 누락 정리 | 4 | 필수(`lockMemberForSettlement`) | **진행** | |
+| 빌링키 폐기 반영 | 4 | 필수(`lockMemberForSettlement`) | **진행** | |
 | SYSTEM 환불 생성·완료 | 5 | 필수 | **진행**(돌려줄 돈은 탈퇴와 무관) | ④ 판정에 영향 |
 | MEMBER 환불 신규 접수(즉시 해지 요청) | 5 | 필수 | **거절**(신규 거래) | ③ 판정에 영향 |
 | 이미 접수된 MEMBER 환불의 PG 결과 확인·완료 반영 | 5 | 필수 | **진행**(이미 시작된 거래의 후속 정합화) | ③ 판정에 영향 |

@@ -98,6 +98,16 @@ public class BillingKey extends BaseTimeEntity {
         return true;
     }
 
+    // PortOne이 키 삭제·없음을 명확히 답했을 때. ACTIVE·REPLACED만 REVOKED로 바꾼다(true). 이미 REVOKED면 false(멱등).
+    // 삭제 요청·삭제 완료는 더 나중 상태라 되돌리지 않고 false. 호출자가 회원·키를 잠그고 소유를 먼저 확인한다
+    public boolean revoke() {
+        if (status != BillingKeyStatus.ACTIVE && status != BillingKeyStatus.REPLACED) {
+            return false;
+        }
+        status = BillingKeyStatus.REVOKED;
+        return true;
+    }
+
     // 키 원문을 뺀다. 예외 메시지·로그에 이 문자열이 섞인다
     @Override
     public String toString() {

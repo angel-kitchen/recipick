@@ -122,7 +122,8 @@ public class MembershipRefund extends BaseTimeEntity {
     // actualAmount = PG가 실제로 수납한 금액(재조회 totalAmount). 회차 금액(3,900)을 기본값으로 쓰지 않는다 — 금액 불일치
     // PAID는 실제 수납액을 돌려줘야 하고, 식별·금액이 불확실한 결과(UNTRUSTED)에서는 호출자가 아예 부르지 않는다.
     // 검증 실패는 IllegalArgumentException → TX2 전체 롤백(시도·회차 종료 기록까지 함께 되돌아간다).
-    // 같은 시도에 REQUESTED가 이미 있는지는 호출자가 시도 PK 잠금 아래에서 확인한다(existsByMembershipPaymentAttemptIdAndStatus).
+    // 같은 시도의 SYSTEM 환불 행(상태 무관)이 이미 있는지는 호출자가 시도 PK 잠금 아래에서 확인한다
+    // (findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc).
     public static MembershipRefund systemRefundRequested(MembershipPaymentAttempt attempt, long actualAmount,
                                                          String reason, int sequence, LocalDateTime now) {
         if (attempt == null || attempt.getId() == null) {

@@ -112,6 +112,6 @@ nextRetryAt 전·null → 대기 / 동의·금액 → 플래그 → 재시도 �
 
 ## 4-A에서 하지 않은 것
 
-- 회차 없이 마감을 놓친 이용권 탐색(`findOverdueRenewalTargets`), 다른 이용권 충돌 판정, 탈퇴 회원 후속 정산 — 회원 계약과 함께 4-B
-- 멤버십 웹훅 라우팅, UNKNOWN W(24시간) 초과 MANUAL_REVIEW 전이, 확정 FAILED·CANCELED 시도의 수납 정정, 빌링키 REVOKED — 4-B
+- 회차 없이 마감을 놓친 이용권 탐색, 다른 이용권 충돌 판정, 탈퇴 회원 후속 정산, 멤버십 웹훅 라우팅, 결과 불명 창(W) 전이, 확정 시도의
+  수납 정정, 빌링키 REVOKED — 4-B에서 반영(`docs/api/membership-reconciliation.md`)
 - SYSTEM 환불의 실제 PG 실행·완료 반영 — 5단계. 4-A가 만드는 환불 `REQUESTED`는 완료가 아니며 C-17이 계속 막는다

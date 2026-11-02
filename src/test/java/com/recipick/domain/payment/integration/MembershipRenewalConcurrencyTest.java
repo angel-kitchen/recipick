@@ -9,11 +9,18 @@ import ch.qos.logback.core.read.ListAppender;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.payment.entity.MembershipPayment;
 import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
+import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
+import com.recipick.domain.payment.facade.BillingKeyRegistrationProcessor;
+import com.recipick.domain.payment.facade.BillingKeyRevocationProcessor;
+import com.recipick.domain.payment.service.BillingKeyIssueRequestService;
+import com.recipick.domain.payment.service.BillingKeyRegistration;
+import com.recipick.domain.payment.service.BillingKeyRegistrationOutcome;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipRenewalDecision;
 import com.recipick.domain.payment.service.MembershipRenewalDecision.Kind;
+import com.recipick.infra.portone.dto.PortOneBillingKeyLookup;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -25,6 +32,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.CountDownLatch;
@@ -35,6 +43,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -52,6 +61,15 @@ class MembershipRenewalConcurrencyTest extends MembershipRenewalFlowSupport {
     private static final Pattern BOUND_VALUE = Pattern.compile("<-\\s*\\[(\\d+)]");
 
     @Autowired MemberService memberService;
+    @Autowired BillingKeyRevocationProcessor revocationProcessor;
+    @Autowired BillingKeyRegistrationProcessor registrationProcessor;
+    @Autowired BillingKeyIssueRequestService issueRequests;
+
+    // 카드 등록 요청 행은 빌링키를 참조하므로 공통 정리보다 먼저 지운다
+    @AfterEach
+    void cleanUpIssueRequests() {
+        jdbc.update("DELETE FROM billing_key_issue_request WHERE member_id = ?", member.getId());
+    }
 
     @RepeatedTest(3)
     @DisplayName("두 스케줄러가 같은 갱신 후보를 동시에 집어도 회차 1개·시도 1개·POST 1회·연장 1회다")
@@ -209,6 +227,79 @@ class MembershipRenewalConcurrencyTest extends MembershipRenewalFlowSupport {
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
         assertThat(attempt(attemptId).getOpsReviewReason()).isEqualTo(MembershipOpsReviewReason.RENEWAL_PERIOD_ENDED);
         assertThat(membership(membershipId).getEndAt()).isEqualTo(T);
+    }
+
+    @Test
+    @DisplayName("키 A 폐기 반영이 회원 잠금을 먼저 잡으면 카드 B 등록은 기다렸다가 새로 등록된다 — A REVOKED, B ACTIVE, 기존 시도의 키 연결 유지")
+    void revocationBeforeRegistration() throws Exception {
+        raceRevocationAndRegistration(true);
+    }
+
+    @Test
+    @DisplayName("카드 B 등록이 회원 잠금을 먼저 잡으면 키 A 폐기 반영은 기다렸다가 REPLACED를 REVOKED로 바꾼다 — 결과는 같다")
+    void registrationBeforeRevocation() throws Exception {
+        raceRevocationAndRegistration(false);
+    }
+
+    // 먼저 회원 잠금을 잡은 쪽이 release 뒤에 자기 작업을 같은 TX에서 끝내고, 다른 쪽은 잠금 대기 상태가 확인된 뒤에야 이어진다
+    private void raceRevocationAndRegistration(boolean revokeFirst) throws Exception {
+        // given
+        Long membershipId = activeMembership();
+        Long attemptId = renewalProcessor.accept(member.getId(), membershipId).attemptId();
+        Long issueRequestId = issueRequests.create(member.getId()).getId();
+        String cardB = "billing-key-test-b-" + UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now(clock);
+        Callable<Object> revoke = () -> revocationProcessor.revokeIfConfirmed(member.getId(), cardA.getId(),
+            PortOneBillingKeyLookup.notFound());
+        Callable<Object> register = () -> registrationProcessor.register(member.getId(), issueRequestId, cardB, now);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Callable<Object> first = () -> transactionTemplate.execute(s -> {
+            memberService.lockMemberForSettlement(member.getId());
+            locked.countDown();
+            try {
+                awaitLatch(release);
+                return (revokeFirst ? revoke : register).call();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Callable<Object> second = revokeFirst ? register : revoke;
+
+        // when
+        Object firstResult;
+        Object secondResult;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<Object> holder = pool.submit(first);
+            assertThat(locked.await(WAIT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            Future<Object> waiting = pool.submit(second);
+            awaitLockWait();
+            release.countDown();
+            firstResult = holder.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+            secondResult = waiting.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            finish(pool);
+        }
+
+        // then
+        Object revoked = revokeFirst ? firstResult : secondResult;
+        BillingKeyRegistration registration = (BillingKeyRegistration) (revokeFirst ? secondResult : firstResult);
+        assertThat(revoked).isEqualTo(true);
+        assertThat(registration.outcome()).isEqualTo(revokeFirst
+            ? BillingKeyRegistrationOutcome.REGISTERED
+            : BillingKeyRegistrationOutcome.REPLACED);
+        assertThat(billingKeys.findById(cardA.getId()).orElseThrow().getStatus()).isEqualTo(BillingKeyStatus.REVOKED);
+        assertThat(billingKeys.findById(registration.billingKeyId()).orElseThrow().getStatus())
+            .isEqualTo(BillingKeyStatus.ACTIVE);
+        assertThat(billingKeys.findIdByMemberIdAndStatus(member.getId(), BillingKeyStatus.ACTIVE))
+            .contains(registration.billingKeyId());
+        assertThat(billingKeyIdOf(attemptId)).isEqualTo(cardA.getId());
+        assertThat(attempt(attemptId).getStatus()).isEqualTo(MembershipPaymentAttemptStatus.READY);
     }
 
     @Test

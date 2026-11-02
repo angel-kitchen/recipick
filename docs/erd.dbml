@@ -516,11 +516,13 @@ Table MEMBERSHIP_PAYMENT {
   refund_required_at datetime
   created_at datetime
   updated_at datetime
-  indexes {
-    (membership_payment_id, attempt_no) [unique]
-    (membership_payment_id, status) [name: 'idx_membership_payment_attempt_payment_id_status']
-    (billing_key_id, status) [name: 'idx_membership_payment_attempt_billing_key_id_status']
-  }
+    indexes {
+      (membership_payment_id, attempt_no) [unique]
+      (membership_payment_id, status) [name: 'idx_membership_payment_attempt_payment_id_status']
+      (billing_key_id, status) [name: 'idx_membership_payment_attempt_billing_key_id_status']
+      (status, lease_expires_at, id) [name: 'idx_membership_payment_attempt_status_lease_id']
+      (status, dispatched_at, id) [name: 'idx_membership_payment_attempt_status_dispatch_id']
+    }
 }
 
 Table MEMBERSHIP_REFUND {

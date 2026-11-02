@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.entity;
 
+import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.global.entity.BaseTimeEntity;
@@ -49,7 +50,9 @@ import lombok.NoArgsConstructor;
     },
     indexes = {
         @Index(name = "idx_membership_payment_attempt_payment_id_status", columnList = "membership_payment_id, status"),
-        @Index(name = "idx_membership_payment_attempt_billing_key_id_status", columnList = "billing_key_id, status")
+        @Index(name = "idx_membership_payment_attempt_billing_key_id_status", columnList = "billing_key_id, status"),
+        @Index(name = "idx_membership_payment_attempt_status_lease_id", columnList = "status, lease_expires_at, id"),
+        @Index(name = "idx_membership_payment_attempt_status_dispatch_id", columnList = "status, dispatched_at, id")
     }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -181,9 +184,13 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
     }
 
     // 선점(선점 TX, 시도 PK만 잠금). READY이고 임대 안이면 DISPATCHING. 그 외는 false(예외 아님 — 다른 Worker가 먼저 집었거나 만료).
+    // 강한 차단 표시가 있는 READY는 미발송 보장에 반하는 증거가 있는 시도라 선점하지 않는다(상태 불변, 운영 확인 대상).
+    // 접수 때 고정한 키가 폐기·삭제 상태(REVOKED·DELETE_REQUESTED·DELETED)면 PG에 보내지 않는다 — READY로 남아 임대 만료로 접힌다.
+    // 교체된 키(REPLACED)는 이미 접수된 시도에 그대로 쓴다.
     // dispatchedAt은 DB(DATETIME(6))에 저장되는 정밀도로 맞춰 둔다 — releaseUnsent가 재조회한 값과 같은지 비교하기 때문
     public boolean claim(LocalDateTime now) {
-        if (status != MembershipPaymentAttemptStatus.READY || now == null || !now.isBefore(leaseExpiresAt)) {
+        if (status != MembershipPaymentAttemptStatus.READY || now == null || !now.isBefore(leaseExpiresAt)
+            || isSettlementBlocked() || !isChargeableKey(billingKey.getStatus())) {
             return false;
         }
         this.status = MembershipPaymentAttemptStatus.DISPATCHING;
@@ -215,6 +222,15 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
 
     public boolean isFinal() {
         return !isUnresolved();
+    }
+
+    private static boolean isChargeableKey(BillingKeyStatus keyStatus) {
+        return keyStatus == BillingKeyStatus.ACTIVE || keyStatus == BillingKeyStatus.REPLACED;
+    }
+
+    // PG에 보낸 적이 있는지. READY·미발송 CANCELED와 미발송으로 되돌린 시도는 dispatchedAt이 null이다 — 이 값 하나가 미발송 보장의 기준
+    public boolean isDispatched() {
+        return dispatchedAt != null;
     }
 
     // 재조회로 확정된 결제 성공. PG에 갔을 수 있는 상태(DISPATCHING·UNKNOWN·MANUAL_REVIEW)에서만
@@ -266,8 +282,8 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
     }
 
     // 정합성 예외(TX2 0b·사유 없는 C-3 충돌) 뒤 운영 표시만. 상태·pgPaidAt·refundRequiredAt은 바꾸지 않는다 — 미해결
-    // 그대로 C-17이 막는다. 이 코드 + 운영 표시가 함께 있을 때만 자동 정합화가 멈춘다(isAutoReconcileHalted). 표시를 지우는 것만으로
-    // 해결되지 않는다 — 원인 확인·데이터 정합성 확인·조치 기록 뒤 재처리하고, 표시 해제가 C-17 정산 완료를 뜻하지도 않는다
+    // 그대로 C-17이 막는다. 정합성 코드를 적고 강한 차단 표시를 남긴다. 표시를 지우는 것만으로 해결되지 않는다 —
+    // 원인 확인·데이터 정합성 확인·조치 기록 뒤 재처리하고, 표시 해제가 C-17 정산 완료를 뜻하지도 않는다
     public void markAppliedStateInconsistent(LocalDateTime now) {
         if (status != MembershipPaymentAttemptStatus.DISPATCHING && status != MembershipPaymentAttemptStatus.UNKNOWN) {
             throw new IllegalStateException("정합성 표시를 남길 수 없는 시도 상태입니다: " + this);
@@ -276,17 +292,47 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
             throw new IllegalArgumentException("운영 확인 시각과 사유가 필요합니다");
         }
         this.failureReason = REASON_APPLIED_STATE_INCONSISTENT;
-        flagOpsReview(now, MembershipOpsReviewReason.PAID_CONFLICT);
+        blockSettlement(now, MembershipOpsReviewReason.APPLIED_STATE_INCONSISTENT);
     }
 
-    // 자동 정합화 중단 판정. 정합성 오류 코드와 운영 표시가 함께 있어야 한다 — 다른 사유의 운영 표시(늦은 확인·
-    // 환불 실패 등)만으로는 자동 처리를 멈추지 않는다. 복구 조회·reconcile·TX2 진입이 모두 이 판정을 쓴다
-    public boolean isAutoReconcileHalted() {
-        return isAutoReconcileHalted(failureReason, opsReviewRequiredAt);
+    // 강한 정합성 차단. 모든 상태(READY·CANCELED·PAID·FAILED 포함)에서 남길 수 있고 상태·pgPaidAt·refundRequiredAt·failureReason은
+    // 바꾸지 않는다. 약한 표시(안내·환불 필요)가 먼저 있었으면 차단 사유와 시각으로 올려 쓴다 — 약한 표시가 차단을 가리면 안 된다.
+    // 이미 차단이면 첫 차단을 유지한다. 차단 뒤에는 자동 청구·자동 반영·정산 해제·선점이 모두 멈추고 운영이 PortOne과 대조한 뒤 조치한다
+    public void blockSettlement(LocalDateTime now, MembershipOpsReviewReason reason) {
+        if (now == null || reason == null || !reason.isBlocking()) {
+            throw new IllegalArgumentException("강한 차단에는 시각과 차단 사유가 필요합니다");
+        }
+        if (isSettlementBlocked()) {
+            return;
+        }
+        this.opsReviewRequiredAt = now;
+        this.opsReviewReason = reason;
     }
 
-    public static boolean isAutoReconcileHalted(String failureReason, LocalDateTime opsReviewRequiredAt) {
-        return REASON_APPLIED_STATE_INCONSISTENT.equals(failureReason) && opsReviewRequiredAt != null;
+    // 강한 정합성 차단 판정. 차단 사유 집합에 든 운영 표시가 있을 때만이다 — 다른 사유의 운영 표시(늦은 확인·환불 필요·
+    // 환불 실패 등)만으로는 자동 처리를 멈추지 않는다. 선점·복구 조회·reconcile·TX2 진입이 모두 이 판정을 쓴다
+    public boolean isSettlementBlocked() {
+        return isSettlementBlocked(opsReviewReason);
+    }
+
+    public static boolean isSettlementBlocked(MembershipOpsReviewReason opsReviewReason) {
+        return opsReviewReason != null && opsReviewReason.isBlocking();
+    }
+
+    // 발송된 FAILED 시도에 재조회로 늦게 확인된 수납. 상태만 PAID로 정정하고 환불 필요로 표시한다 — 이용권에 반영하지 않는다.
+    // 최초 실패의 사유(failureReason)·확정 시각(completedAt)은 이력으로 보존한다. markPaid의 허용 상태는 넓히지 않는다 —
+    // 미발송 시도(dispatchedAt 없음)의 수납은 정정이 아니라 차단(blockSettlement) 대상이다
+    public void recordUnexpectedPaidForRefund(LocalDateTime pgPaidAt, LocalDateTime now) {
+        if (status != MembershipPaymentAttemptStatus.FAILED || !isDispatched()) {
+            throw new IllegalStateException("늦은 수납 정정은 PG에 보낸 FAILED 시도에서만 가능합니다: " + this);
+        }
+        if (pgPaidAt == null || now == null) {
+            throw new IllegalArgumentException("결제 시각과 정정 시각이 필요합니다");
+        }
+        this.status = MembershipPaymentAttemptStatus.PAID;
+        this.pgPaidAt = pgPaidAt;
+        this.refundRequiredAt = now;
+        flagOpsReview(now, MembershipOpsReviewReason.LATE_PAID_AFTER_FAILED);
     }
 
     // READY인 채 임대가 끝난 시도를 접는다(PG 미발송 보장). 그 외는 false — 이미 선점됐거나 처리된 시도는 건드리지 않는다
@@ -314,10 +360,14 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
         flagOpsReview(now, reason);
     }
 
-    // 상태는 두고 운영 확인 표시만(I-16: 확정 상태는 바꾸지 않고 표시로 찾는다). 이미 표시돼 있으면 그대로
+    // 상태는 두고 운영 확인 표시만(I-16: 확정 상태는 바꾸지 않고 표시로 찾는다). 이미 표시돼 있으면 그대로(첫 표시 유지).
+    // 강한 차단 사유는 여기로 남기지 않는다 — 올려 쓰기 규칙이 다른 blockSettlement로만
     public void flagOpsReview(LocalDateTime now, MembershipOpsReviewReason reason) {
         if (now == null || reason == null) {
             throw new IllegalArgumentException("운영 확인 시각과 사유가 필요합니다");
+        }
+        if (reason.isBlocking()) {
+            throw new IllegalArgumentException("강한 차단 사유는 blockSettlement로만 남길 수 있습니다");
         }
         if (opsReviewRequiredAt == null) {
             this.opsReviewRequiredAt = now;

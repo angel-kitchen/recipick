@@ -4,6 +4,7 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.infra.portone.dto.PortOneBillingKeyInfo;
 import com.recipick.infra.portone.dto.PortOneBillingKeyInfoResponse;
+import com.recipick.infra.portone.dto.PortOneBillingKeyLookup;
 import com.recipick.infra.portone.dto.PortOneBillingKeyStatus;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentOutcome;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentRequest;
@@ -26,7 +27,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 // PortOne V2 빌링키 조회와 빌링키 청구. 외부 호출만 담당하고 등록·결제 가능 여부 같은 업무 판단은 domain이 한다.
-// DB 트랜잭션 밖에서 호출한다. 삭제(DELETE /billing-keys/{key})는 6단계에서 호출자와 함께 추가한다.
+// DB 트랜잭션 밖에서 호출한다. 삭제(DELETE /billing-keys/{key})는 원격 키 삭제 단계에서 호출자와 함께 추가한다.
 // 빌링키 원문은 조회의 요청 URL 경로와 청구의 요청 본문에 들어간다. 그래서 예외 객체(메시지에 URL·본문이 섞일 수 있다)를
 // 로그에 남기지 않고 BusinessException의 cause로도 넘기지 않는다. 로그에는 결제 ID·HTTP 상태와 허용 목록의 분류 코드만 남긴다
 @Slf4j
@@ -76,6 +77,63 @@ public class PortOneBillingClient {
             // 성공 응답 본문을 DTO로 읽지 못한 경우 등
             log.warn("PortOne 빌링키 조회 응답 처리 실패: {}", e.getClass().getSimpleName());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR);
+        }
+    }
+
+    // 정합화용 빌링키 조회. 예외를 던지지 않고 분류해 돌려준다 — 404는 오류 type까지 봐서 BILLING_KEY_NOT_FOUND일 때만 NOT_FOUND다
+    // (등록 경로의 getBillingKey는 바꾸지 않는다). 키 원문은 URL 경로에만 들어가고 로그·결과·cause에는 넣지 않는다
+    public PortOneBillingKeyLookup lookupForReconciliation(String billingKey) {
+        try {
+            return restClient.get()
+                .uri("/billing-keys/{billingKey}", billingKey)
+                .exchange((httpRequest, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        PortOneBillingKeyInfoResponse body = readBillingKeyBody(response);
+                        if (body == null || body.status() == null || body.status() == PortOneBillingKeyStatus.UNKNOWN) {
+                            log.warn("PortOne 빌링키 정합화 조회 응답을 해석할 수 없음");
+                            return PortOneBillingKeyLookup.unavailable("UNKNOWN_STATUS");
+                        }
+                        if (billingKey == null || !billingKey.equals(body.billingKey())) {
+                            // 다른 키의 응답으로 우리 키를 폐기하지 않는다
+                            log.warn("PortOne 빌링키 정합화 응답의 키가 요청과 일치하지 않음");
+                            return PortOneBillingKeyLookup.unavailable("BILLING_KEY_MISMATCH");
+                        }
+                        return PortOneBillingKeyLookup.found(PortOneBillingKeyInfo.from(body));
+                    }
+                    if (status == 404) {
+                        if (PortOneBillingKeyLookup.CODE_NOT_FOUND.equals(errorTypeOf(response))) {
+                            log.info("PortOne에 빌링키가 없음(정합화 조회)");
+                            return PortOneBillingKeyLookup.notFound();
+                        }
+                        log.warn("PortOne 빌링키 정합화 조회 404(오류 유형 불명)");
+                        return PortOneBillingKeyLookup.unavailable("HTTP_404_OTHER");
+                    }
+                    if (status == 401 || status == 403) {
+                        log.error("PortOne 빌링키 정합화 조회 인증·권한 오류: status={} — API Secret·상점 설정을 확인해야 한다", status);
+                        return PortOneBillingKeyLookup.unavailable(status == 401 ? "UNAUTHORIZED" : "FORBIDDEN");
+                    }
+                    log.warn("PortOne 빌링키 정합화 조회 오류 응답: status={}", status);
+                    return PortOneBillingKeyLookup.unavailable("HTTP_" + status);
+                });
+        } catch (ResourceAccessException e) {
+            if (isTimeout(e)) {
+                log.warn("PortOne 빌링키 정합화 조회 timeout");
+                return PortOneBillingKeyLookup.unavailable("TIMEOUT");
+            }
+            log.warn("PortOne 빌링키 정합화 조회 연결 실패: {}", e.getClass().getSimpleName());
+            return PortOneBillingKeyLookup.unavailable("CONNECTION");
+        } catch (RestClientException e) {
+            log.warn("PortOne 빌링키 정합화 조회 응답 처리 실패: {}", e.getClass().getSimpleName());
+            return PortOneBillingKeyLookup.unavailable("PARSE");
+        }
+    }
+
+    private static PortOneBillingKeyInfoResponse readBillingKeyBody(ConvertibleClientHttpResponse response) {
+        try {
+            return response.bodyTo(PortOneBillingKeyInfoResponse.class);
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

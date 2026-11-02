@@ -1,13 +1,16 @@
 package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
+import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
+import com.recipick.domain.payment.service.BillingKeyRecheckRef;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -51,7 +54,7 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
         SELECT new com.recipick.domain.payment.service.MembershipPaymentAttemptRef(
             a.id, a.membershipPayment.id, a.membershipPayment.membershipId, a.portonePaymentId,
             a.membershipPayment.amount, a.status, a.dispatchedAt, a.leaseExpiresAt, a.failureReason,
-            a.opsReviewRequiredAt)
+            a.opsReviewRequiredAt, a.opsReviewReason)
           FROM MembershipPaymentAttempt a
          WHERE a.id = :id
         """)
@@ -67,55 +70,138 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
     Optional<MembershipPaymentAttempt> findTopByMembershipPaymentIdOrderByAttemptNoAsc(Long membershipPaymentId);
 
     // 복구 대상 조회(keyset, 잠금 없음). 선점이 오래된 시도: dispatchedAt < now - (L + M).
-    // 자동 정합화가 멈춘 시도(정합성 코드 APPLIED_STATE_INCONSISTENT + 운영 표시 — MembershipPaymentAttempt.isAutoReconcileHalted와
-    // 같은 조건)만 뺀다. 다른 사유의 운영 표시가 있는 시도는 그대로 자동 재조회한다
+    // 강한 정합성 차단 표시가 있는 시도가 하나라도 있는 회차는 통째로 뺀다(차단은 회차 단위다 — 다른 시도의 결과를 반영해
+    // 차단을 우회하지 않는다). 다른 사유의 운영 표시가 있는 시도는 그대로 자동 재조회한다. blocking = MembershipOpsReviewReason.BLOCKING
     @Query("""
         SELECT new com.recipick.domain.payment.service.MembershipPaymentAttemptRef(
             a.id, a.membershipPayment.id, a.membershipPayment.membershipId, a.portonePaymentId,
             a.membershipPayment.amount, a.status, a.dispatchedAt, a.leaseExpiresAt, a.failureReason,
-            a.opsReviewRequiredAt)
+            a.opsReviewRequiredAt, a.opsReviewReason)
           FROM MembershipPaymentAttempt a
          WHERE a.status = com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus.DISPATCHING
            AND a.dispatchedAt < :before
-           AND (a.failureReason IS NULL OR a.failureReason <> 'APPLIED_STATE_INCONSISTENT'
-                OR a.opsReviewRequiredAt IS NULL)
+           AND NOT EXISTS (
+               SELECT b.id FROM MembershipPaymentAttempt b
+                WHERE b.membershipPayment.id = a.membershipPayment.id
+                  AND b.opsReviewReason IN :blocking)
            AND a.id > :afterId
          ORDER BY a.id
         """)
-    List<MembershipPaymentAttemptRef> findStaleDispatching(@Param("before") LocalDateTime before,
-                                                           @Param("afterId") Long afterId, Pageable pageable);
+    List<MembershipPaymentAttemptRef> findStaleDispatching(
+        @Param("before") LocalDateTime before,
+        @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
+        @Param("afterId") Long afterId,
+        Pageable pageable);
 
-    // 복구 대상 조회. 결과 불명 시도: 마지막 갱신 뒤 M이 지난 것(자동 정합화가 멈춘 시도 제외 — 위와 같음)
+    // 복구 대상 조회. 결과 불명 시도: 마지막 갱신 뒤 M이 지난 것(차단 회차 제외 — 위와 같음)
     @Query("""
         SELECT new com.recipick.domain.payment.service.MembershipPaymentAttemptRef(
             a.id, a.membershipPayment.id, a.membershipPayment.membershipId, a.portonePaymentId,
             a.membershipPayment.amount, a.status, a.dispatchedAt, a.leaseExpiresAt, a.failureReason,
-            a.opsReviewRequiredAt)
+            a.opsReviewRequiredAt, a.opsReviewReason)
           FROM MembershipPaymentAttempt a
          WHERE a.status = com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus.UNKNOWN
            AND a.updatedAt < :before
-           AND (a.failureReason IS NULL OR a.failureReason <> 'APPLIED_STATE_INCONSISTENT'
-                OR a.opsReviewRequiredAt IS NULL)
+           AND NOT EXISTS (
+               SELECT b.id FROM MembershipPaymentAttempt b
+                WHERE b.membershipPayment.id = a.membershipPayment.id
+                  AND b.opsReviewReason IN :blocking)
            AND a.id > :afterId
          ORDER BY a.id
         """)
-    List<MembershipPaymentAttemptRef> findUnknownUpdatedBefore(@Param("before") LocalDateTime before,
-                                                               @Param("afterId") Long afterId, Pageable pageable);
+    List<MembershipPaymentAttemptRef> findUnknownUpdatedBefore(
+        @Param("before") LocalDateTime before,
+        @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
+        @Param("afterId") Long afterId,
+        Pageable pageable);
 
-    // 복구 대상 조회. READY인 채 임대가 끝난 시도(PG 미발송 보장)
+    // 복구 대상 조회. READY인 채 임대가 끝난 시도(PG 미발송 보장). 차단 회차의 READY는 뺀다 — 미발송 보장에 반하는 증거가 있는
+    // 회차의 READY를 자동으로 CANCELED로 접거나 새 시도를 만들지 않고 운영 확인 대상으로 보존한다
     @Query("""
         SELECT new com.recipick.domain.payment.service.MembershipPaymentAttemptRef(
             a.id, a.membershipPayment.id, a.membershipPayment.membershipId, a.portonePaymentId,
             a.membershipPayment.amount, a.status, a.dispatchedAt, a.leaseExpiresAt, a.failureReason,
-            a.opsReviewRequiredAt)
+            a.opsReviewRequiredAt, a.opsReviewReason)
           FROM MembershipPaymentAttempt a
          WHERE a.status = com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus.READY
            AND a.leaseExpiresAt <= :now
+           AND NOT EXISTS (
+               SELECT b.id FROM MembershipPaymentAttempt b
+                WHERE b.membershipPayment.id = a.membershipPayment.id
+                  AND b.opsReviewReason IN :blocking)
            AND a.id > :afterId
          ORDER BY a.id
         """)
-    List<MembershipPaymentAttemptRef> findExpiredReady(@Param("now") LocalDateTime now,
-                                                       @Param("afterId") Long afterId, Pageable pageable);
+    List<MembershipPaymentAttemptRef> findExpiredReady(
+        @Param("now") LocalDateTime now,
+        @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
+        @Param("afterId") Long afterId,
+        Pageable pageable);
+
+    // 빌링키 재검사 후보: 결과 불명 창 안에서 404(PAYMENT_NOT_FOUND)로 남은 UNKNOWN 시도에 묶인 ACTIVE·REPLACED 키. 키 ID keyset.
+    // 키가 없거나 삭제돼 PortOne이 결제를 만들지 않았을 수 있는 시도만이다 — 전체 회원·전체 키를 조회하지 않는다
+    @Query("""
+        SELECT DISTINCT new com.recipick.domain.payment.service.BillingKeyRecheckRef(
+            a.billingKey.id, a.billingKey.memberId)
+          FROM MembershipPaymentAttempt a
+         WHERE a.status = com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus.UNKNOWN
+           AND a.failureReason = 'PAYMENT_NOT_FOUND'
+           AND a.dispatchedAt >= :since
+           AND a.billingKey.status IN (com.recipick.domain.payment.entity.enums.BillingKeyStatus.ACTIVE,
+                                       com.recipick.domain.payment.entity.enums.BillingKeyStatus.REPLACED)
+           AND a.billingKey.id > :afterId
+         ORDER BY a.billingKey.id
+        """)
+    List<BillingKeyRecheckRef> findBillingKeysToRecheck(@Param("since") LocalDateTime since,
+                                                        @Param("afterId") Long afterId, Pageable pageable);
+
+    // 운영자 재조회 응답용 최신 상태. 재조회 진입점은 트랜잭션 밖이라 회차를 함께 읽는다
+    @Query("SELECT a FROM MembershipPaymentAttempt a JOIN FETCH a.membershipPayment WHERE a.id = :id")
+    Optional<MembershipPaymentAttempt> findWithPaymentById(@Param("id") Long id);
+
+    // 운영 목록(최신 시도부터). 조건이 없으면 전체. statuses는 비어 있으면 안 된다 — 호출자가 "전체"를 모든 값으로 넘긴다
+    @Query(value = """
+        SELECT a FROM MembershipPaymentAttempt a
+          JOIN FETCH a.membershipPayment
+          WHERE a.status IN :statuses
+           AND (:membershipId IS NULL OR a.membershipPayment.membershipId = :membershipId)
+           AND (:opsReviewOnly = false OR a.opsReviewRequiredAt IS NOT NULL)
+           AND (:blockedOnly = false OR a.opsReviewReason IN :blocking)
+         ORDER BY a.id DESC
+        """, countQuery = """
+        SELECT COUNT(a) FROM MembershipPaymentAttempt a
+         WHERE a.status IN :statuses
+           AND (:membershipId IS NULL OR a.membershipPayment.membershipId = :membershipId)
+           AND (:opsReviewOnly = false OR a.opsReviewRequiredAt IS NOT NULL)
+           AND (:blockedOnly = false OR a.opsReviewReason IN :blocking)
+        """)
+    Page<MembershipPaymentAttempt> searchForAdmin(
+        @Param("statuses") Collection<MembershipPaymentAttemptStatus> statuses,
+        @Param("membershipId") Long membershipId,
+        @Param("opsReviewOnly") boolean opsReviewOnly,
+        @Param("blockedOnly") boolean blockedOnly,
+        @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
+        Pageable pageable);
+
+    // 회차 단위 강한 차단 조회(일반 조회, 잠금 없음). 선점 TX·재조회 진입·POST 직전이 "이 회차에 차단 시도가 있나"를 본다.
+    // 파생 쿼리: membershipPayment.id IN 조건
+    boolean existsByMembershipPaymentIdAndOpsReviewReasonIn(Long membershipPaymentId,
+                                                            Collection<MembershipOpsReviewReason> reasons);
+
+    // C-17 ⑤. 상태와 무관하게 강한 정합성 차단 표시가 있는 시도(CANCELED·PAID·FAILED여도 막는다)
+    boolean existsByMembershipPaymentMembershipIdInAndOpsReviewReasonIn(Collection<Long> membershipIds,
+                                                                        Collection<MembershipOpsReviewReason> reasons);
+
+    // 웹훅 라우팅 매핑(UNIQUE portone_payment_id). 접두어는 힌트일 뿐이고 매핑은 정확 일치다
+    @Query("""
+        SELECT new com.recipick.domain.payment.service.MembershipPaymentAttemptRef(
+            a.id, a.membershipPayment.id, a.membershipPayment.membershipId, a.portonePaymentId,
+            a.membershipPayment.amount, a.status, a.dispatchedAt, a.leaseExpiresAt, a.failureReason,
+            a.opsReviewRequiredAt, a.opsReviewReason)
+          FROM MembershipPaymentAttempt a
+         WHERE a.portonePaymentId = :portonePaymentId
+        """)
+    Optional<MembershipPaymentAttemptRef> findRefByPortonePaymentId(@Param("portonePaymentId") String portonePaymentId);
 
     // 갱신 회차의 시도들을 잠그기 전 ID만 읽는다. 호출자는 회차 PK를 잠근 뒤 이 순서(PK 오름차순)대로 findByIdForUpdate로
     // 한 행씩 잠근다 — 범위 조건의 FOR UPDATE로 여러 행을 한 번에 잠그지 않는다
