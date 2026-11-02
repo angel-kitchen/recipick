@@ -1,6 +1,6 @@
 # 요구사항 - payment (결제·환불·포인트)
 
-> 자동 생성 파일입니다. 직접 고치지 말고 docs\requirement.md를 고친 뒤 split_requirements.py를 실행하세요.
+> 자동 생성 파일입니다. 직접 고치지 말고 docs/requirement.md를 고친 뒤 split_requirements.py를 실행하세요.
 
 ## 1차
 
