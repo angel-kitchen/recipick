@@ -20,6 +20,7 @@ export default function AiAutoCartBox() {
   const [picked, setPicked] = useState({});
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [martMissing, setMartMissing] = useState(false);
 
   const run = async (action) => {
     setError(null);
@@ -37,6 +38,7 @@ export default function AiAutoCartBox() {
     event.preventDefault();
     // 새 검색이 실패해도 이전 검색의 선택 화면이 남아 있지 않게 먼저 비운다
     setResult(null);
+    setMartMissing(false);
     run(async () => {
       let data;
       try {
@@ -44,6 +46,7 @@ export default function AiAutoCartBox() {
       } catch (e) {
         // 이용 마트가 없으면 메뉴 장보기는 못 하지만 조건 추천은 마트 없이도 된다
         if (e.code !== 'ORDER-004') throw e;
+        setMartMissing(true);
         data = { status: 'NO_MATCH' };
       }
       if (data.status === 'PREVIEWED') {
@@ -102,6 +105,12 @@ export default function AiAutoCartBox() {
       )}
       <div style={{ marginTop: 12 }}>
         <ErrorNotice error={error} />
+        {martMissing && (
+          <p className="field__hint">
+            이용 마트가 없어 재료 담기 미리보기는 쓸 수 없어요. 조건에 맞는 레시피만 보여 드려요.{' '}
+            <Link to="/addresses">배송지 등록하기</Link>
+          </p>
+        )}
         {result?.source === 'recommend' && <Recommendations result={result} />}
         {result?.source !== 'recommend' && result?.status === 'NO_MATCH' && (
           <p className="field__hint">맞는 레시피를 찾지 못했습니다. 다른 표현으로 다시 입력해 주세요.</p>
