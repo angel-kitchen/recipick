@@ -154,7 +154,7 @@ class PointsOnlyPaymentIntegrationTest extends PaymentFlowIntegrationSupport {
     }
 
     @Test
-    @DisplayName("상품 40,000원을 40,000P로 사면 PG 없이 주문 생성 트랜잭션에서 결제·주문·포인트 사용까지 완료되고 만료 작업이 없다")
+    @DisplayName("상품 40,000원을 40,000P로 사면 PG 없이 주문 생성 트랜잭션에서 결제·주문·포인트 사용·장바구니 정리까지 완료되고 만료 작업이 없다")
     void createPointsOnlyOrder() throws Exception {
         // when
         MockHttpServletResponse response = createOrder();
@@ -199,6 +199,8 @@ class PointsOnlyPaymentIntegrationTest extends PaymentFlowIntegrationSupport {
         assertThat(historyCount(PointHistoryType.USE_CONFIRMED)).isEqualTo(1);
         assertThat(historyCount(PointHistoryType.EARN_PENDING)).isZero();
         assertThat(stock()).isEqualTo(STOCK - QUANTITY);
+        // 결제가 끝난 상품은 같은 트랜잭션에서 장바구니에서 빠진다
+        assertThat(cartItemRepository.findById(cartItems.get(0).getId())).isEmpty();
         verifyNoInteractions(portOnePaymentClient);
     }
 
