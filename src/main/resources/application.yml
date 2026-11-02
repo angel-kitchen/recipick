@@ -83,6 +83,16 @@ recipick:
     # docs/api/membership-renewal.md). 갱신 재시도 간격(retry-interval 24h)·회차당 PG 발송 한도(renewal-max-dispatches 3)는
     # 정책값이라 기본값 그대로 두며 다른 값을 넣으면 기동이 멈춘다
     enabled: ${MEMBERSHIP_BILLING_ENABLED:false}
+
+payment:
+  billing-key-deletion:
+    # 교체·폐기 빌링키의 PortOne 원격 정리(5분 스캔 접수·1분 복구 실행) 스위치. 운영 기본 false(docs/api/billing-key-cleanup.md)
+    enabled: ${BILLING_KEY_DELETION_ENABLED:false}
+    # 회원 탈퇴의 AUTO_BILLING 정산 영역 제공 + 탈퇴 준비(ACTIVE 키 정리 접수) 연결 스위치. enabled와 함께 true일 때만 켜진다.
+    # 회원 탈퇴 연동 검증이 끝나기 전에는 false — 꺼져 있으면 탈퇴는 기존대로 MEMBER-008로 닫혀 있다
+    withdrawal-enabled: ${BILLING_KEY_DELETION_WITHDRAWAL_ENABLED:false}
+    # 삭제 전용 HTTP 읽기 제한. 삭제 조회·DELETE는 지연 큐 밖(전용 스케줄러)에서만 돈다
+    read-timeout: 60s
 ---
 spring:
   config:
