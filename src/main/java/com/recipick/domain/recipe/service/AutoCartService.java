@@ -72,7 +72,7 @@ public class AutoCartService {
     // AI에게는 바로 미리보기를 만들 수 있는 레시피만 보여 줘, 고를 수 없는 레시피를 추천하지 않게 한다
     public List<AiRecipeOption> findAiRecipeOptions() {
         return recipeRepository.findAllByStatusAndAutoCartEnabledTrueOrderByIdAsc(RecipeStatus.ACTIVE).stream()
-            .map(recipe -> new AiRecipeOption(recipe.getId(), recipe.getName()))
+            .map(recipe -> new AiRecipeOption(recipe.getId(), recipe.getName(), recipe.getThumbnailUrl()))
             .toList();
     }
 
