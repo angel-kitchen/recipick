@@ -471,3 +471,53 @@ Contract 뒤 앱 롤백: 이전 앱(2b 이전)은 이 테이블을 읽거나 쓰
 `app.environment`는 `MEMBERSHIP_BILLING_ENABLED`를 전달하지 않아 운영 `.env`만 바꿔서는 켜지지 않는다(기본 false 유지).
 켤 때 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달을 함께 추가한다. 플래그가 꺼져 있어도 이미 생긴 결제의
 재조회·결과 반영·복구는 계속 돈다.
+
+
+### 10-F. 결제 4-A(#342) — membership_payment 조회 인덱스 2개 (테이블·컬럼 변경 없음)
+
+4-A(월 갱신·재시도·카드 대기)는 2b 스키마의 컬럼만 쓰고, 스케줄러가 회차를 keyset으로 고르는 조회 두 가지에 인덱스를 더한다.
+엔티티 `@Index`·`docs/erd.dbml`·아래 DDL의 이름과 열 순서가 같다(Hibernate 자동 이름 아님). 머지 전 운영 적용은 10-C와 같은 담당 절차를
+따르되, 성격은 다르다 — 컬럼·FK 확장이 아니라 보조 인덱스 추가라 앱 코드가 없어도 조회 결과가 바뀌지 않는다.
+
+```sql
+-- F-1 사전 확인: 같은 열 조합의 인덱스가 이미 없는지, 열 이름이 맞는지
+SHOW INDEX FROM membership_payment;
+SHOW CREATE TABLE membership_payment;
+
+-- F-2 인덱스 추가 (INPLACE·LOCK=NONE: DML은 계속 가능. 메타데이터 잠금은 걸리므로 긴 트랜잭션이 없는 시간에 적용한다)
+CREATE INDEX idx_membership_payment_status_next_retry_id
+    ON membership_payment (status, next_retry_at, id)
+    ALGORITHM=INPLACE LOCK=NONE;
+
+CREATE INDEX idx_membership_payment_status_grace_id
+    ON membership_payment (status, grace_deadline_at, id)
+    ALGORITHM=INPLACE LOCK=NONE;
+
+-- F-3 확인: 이름·열 순서, 그리고 실제 조회의 실행 계획
+SHOW INDEX FROM membership_payment WHERE Key_name LIKE 'idx_membership_payment_status_%';
+EXPLAIN SELECT id FROM membership_payment
+ WHERE grace_deadline_at IS NOT NULL AND grace_deadline_at > NOW(6) AND id > 0 AND id <= 1000000
+   AND ((status = 'RETRY_WAITING' AND next_retry_at IS NOT NULL AND next_retry_at <= NOW(6))
+        OR status = 'PAYMENT_METHOD_REQUIRED' OR status = 'PENDING')
+ ORDER BY id;
+EXPLAIN SELECT id FROM membership_payment
+ WHERE grace_deadline_at IS NOT NULL
+   AND status IN ('PENDING','RETRY_WAITING','PAYMENT_METHOD_REQUIRED','UNKNOWN','MANUAL_REVIEW')
+   AND (grace_deadline_at <= NOW(6) OR status IN ('PENDING','RETRY_WAITING','PAYMENT_METHOD_REQUIRED'))
+   AND id > 0 AND id <= 1000000
+ ORDER BY id;
+
+-- F-4 롤백 (앱은 인덱스가 없어도 동작한다. 이전 이미지로 돌려도 인덱스가 남아 있어 문제없다)
+DROP INDEX idx_membership_payment_status_next_retry_id ON membership_payment;
+DROP INDEX idx_membership_payment_status_grace_id ON membership_payment;
+```
+
+| 확인 | 기대 |
+| --- | --- |
+| F-3 `SHOW INDEX` | 두 이름, 열 순서 `status, next_retry_at, id` / `status, grace_deadline_at, id` |
+| F-3 `EXPLAIN` | `possible_keys`에 새 인덱스가 보인다(행이 적은 동안 `type=ALL`로 나올 수 있다 — 이름이 맞는 것만으로 검증 끝이 아니므로 결과를 기록한다) |
+| 기동 뒤 10-B 스냅숏 diff | 인덱스 2개 외 변경 없음 |
+| 기동 로그 | `membership_payment` 관련 `alter table`·`create index` 없음(`ddl-auto`는 운영에서 자동 변경하지 않는다) |
+| 운영 `.env`의 `MEMBERSHIP_BILLING_ENABLED` | 없음 또는 `false`. 4-A 머지는 운영 갱신 활성화가 아니다(`docs/api/membership-renewal.md` 운영 차단 절) |
+
+플래그가 꺼져 있어도 이미 생긴 갱신 회차의 정리(`settleRenewals`)와 시도 복구(`recoverCharges`)는 계속 돈다. 새 청구(접수·재시도·카드 대기 재개·PG POST)만 멈춘다.

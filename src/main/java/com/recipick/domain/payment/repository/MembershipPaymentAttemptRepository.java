@@ -116,4 +116,14 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
         """)
     List<MembershipPaymentAttemptRef> findExpiredReady(@Param("now") LocalDateTime now,
                                                        @Param("afterId") Long afterId, Pageable pageable);
+
+    // 갱신 회차의 시도들을 잠그기 전 ID만 읽는다. 호출자는 회차 PK를 잠근 뒤 이 순서(PK 오름차순)대로 findByIdForUpdate로
+    // 한 행씩 잠근다 — 범위 조건의 FOR UPDATE로 여러 행을 한 번에 잠그지 않는다
+    @Query("""
+        SELECT a.id
+          FROM MembershipPaymentAttempt a
+         WHERE a.membershipPayment.id = :paymentId
+         ORDER BY a.id
+        """)
+    List<Long> findIdsByMembershipPaymentIdOrderByIdAsc(@Param("paymentId") Long paymentId);
 }

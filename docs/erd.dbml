@@ -491,12 +491,14 @@ Table MEMBERSHIP_PAYMENT {
   membership_applied_at datetime
   created_at datetime
   updated_at datetime
-  indexes {
-    (membership_id, period_start_date) [unique]
-    (membership_id, status) [name: 'idx_membership_payment_membership_id_status']
+    indexes {
+      (membership_id, period_start_date) [unique]
+      (membership_id, status) [name: 'idx_membership_payment_membership_id_status']
+      (status, next_retry_at, id) [name: 'idx_membership_payment_status_next_retry_id']
+      (status, grace_deadline_at, id) [name: 'idx_membership_payment_status_grace_id']
+    }
   }
-}
-Table MEMBERSHIP_PAYMENT_ATTEMPT {
+  Table MEMBERSHIP_PAYMENT_ATTEMPT {
   id bigint [pk, increment]
   membership_payment_id bigint [not null]
   attempt_no int [not null]

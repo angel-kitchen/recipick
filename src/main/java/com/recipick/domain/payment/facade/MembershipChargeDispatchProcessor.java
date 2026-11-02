@@ -33,18 +33,29 @@ public class MembershipChargeDispatchProcessor {
         if (attempt == null) {
             return MembershipChargeClaim.missing();
         }
+        MembershipPayment payment = attempt.getMembershipPayment();
+        if (!payment.isUnresolved()) {
+            // 확정 회차(PAID·FAILED)에 남은 READY는 선점·PG 호출 대상이 아니다. 시도 PK만 잠그는 원칙은 그대로 두고 회차는 읽기만 한다
+            return MembershipChargeClaim.rejected(attempt.getStatus(), attempt.getDispatchedAt());
+        }
         if (!attempt.claim(LocalDateTime.now(clock))) {
             // 잠금 아래에서 본 최신 상태를 돌려준다 — 실행기가 신선한 DISPATCHING이면 GET 없이 기다리게
             return MembershipChargeClaim.rejected(attempt.getStatus(), attempt.getDispatchedAt());
         }
-        MembershipPayment payment = attempt.getMembershipPayment();
-        // 접수 유효 창의 끝은 회차 첫 시도의 requestedAt 기준이다(재발급 시도마다 다시 시작하지 않는다)
-        LocalDateTime firstRequestedAt = attempts.findTopByMembershipPaymentIdOrderByAttemptNoAsc(payment.getId())
-            .map(MembershipPaymentAttempt::getRequestedAt).orElse(attempt.getRequestedAt());
         return MembershipChargeClaim.claimed(new MembershipChargeTicket(attempt.getId(), payment.getId(),
             payment.getMembershipId(), attempt.getPortonePaymentId(), attempt.getBillingKey().getPortoneBillingKey(),
-            payment.getAmount(), attempt.getDispatchedAt(),
-            MembershipBillingPeriods.firstChargeAcceptUntil(firstRequestedAt, properties.firstChargeAcceptWindow())));
+            payment.getAmount(), attempt.getDispatchedAt(), acceptUntil(payment, attempt)));
+    }
+
+    // POST 직전에 다시 볼 마감. 첫 결제는 회차 첫 시도 requestedAt + 30분(재발급 시도마다 다시 시작하지 않는다),
+    // 갱신은 회차에 저장된 결제 마감 G. 실행기는 회차 종류를 모르고 이 값만 본다
+    private LocalDateTime acceptUntil(MembershipPayment payment, MembershipPaymentAttempt attempt) {
+        if (payment.isRenewal()) {
+            return payment.getGraceDeadlineAt();
+        }
+        LocalDateTime firstRequestedAt = attempts.findTopByMembershipPaymentIdOrderByAttemptNoAsc(payment.getId())
+            .map(MembershipPaymentAttempt::getRequestedAt).orElse(attempt.getRequestedAt());
+        return MembershipBillingPeriods.firstChargeAcceptUntil(firstRequestedAt, properties.firstChargeAcceptWindow());
     }
 
     // 선점은 했지만 PG POST를 보내지 않은 선점자(플래그가 POST 직전에 꺼짐)만 부른다. 잠근 뒤 DB에 저장된 dispatchedAt과

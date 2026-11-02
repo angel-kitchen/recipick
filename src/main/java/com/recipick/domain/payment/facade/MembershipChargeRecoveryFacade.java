@@ -22,13 +22,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 첫 결제 최소 복구. 플래그와 무관하게 돈다 — 이미 생긴 결제의 정합화는 멈추지 않는다(K-2).
+// 멤버십 결제 시도 복구(첫 결제·갱신 공통). 플래그와 무관하게 돈다 — 이미 생긴 결제의 정합화는 멈추지 않는다.
+// 세 조회는 회차 종류를 가리지 않는다. 갱신 시도의 READY 만료도 같은 handleExpiredReady가 갱신 규칙으로 처리한다.
 // 대상은 잠금 없이 ID만 keyset으로 읽고, 회원 ID는 역조회 계약(findMemberIdOfMembership, 잠금 없음)으로 얻는다.
 // 변경은 언제나 Processor 안에서 MEMBER부터 다시 잠그고 C-7로 소유권을 재검증한다(LC 5-1 "ID 선조회 → MEMBER부터 잠금").
 // 이용권이 없다는 MEMBERSHIP-006(정상 흐름에서 불가 — 결제는 C-12로 만든 이용권만 참조)은 그 건만 건너뛰고 ERROR(ID만),
 // 시도 상태는 바꾸지 않고 임의 회원을 고르지 않는다. 명시적 정합성 오류(MembershipSettlementInvariantException)만 별도 TX로 원인을
 // 재검증한 뒤 자동 정합화를 멈추는 운영 표시를 남긴다. 그 밖의 예외는 건별 격리 WARN — 다음 주기에 다시 본다.
-// 비트랜잭션 진입점(Propagation.NEVER). 4단계 전체 Sweep이 이 Facade를 확장한다
+// 비트랜잭션 진입점(Propagation.NEVER)
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -113,14 +114,14 @@ public class MembershipChargeRecoveryFacade {
     private void reconcile(MembershipPaymentAttemptRef ref) {
         Long memberId = membershipBillingService.findMemberIdOfMembership(ref.membershipId());
         MembershipChargeOutcome outcome = executor.reconcile(memberId, ref.attemptId());
-        log.info("첫 결제 복구 재조회: attemptId={}, outcome={}", ref.attemptId(), outcome);
+        log.info("멤버십 결제 복구 재조회: attemptId={}, outcome={}", ref.attemptId(), outcome);
     }
 
     // READY 임대 만료: CANCELED → 재검사 → 새 시도면 바로 실행, 아니면 회차 종료(Processor가 한다)
     private void expireReady(MembershipPaymentAttemptRef ref, LocalDateTime now) {
         Long memberId = membershipBillingService.findMemberIdOfMembership(ref.membershipId());
         ExpiredReadyResult result = resultProcessor.handleExpiredReady(memberId, ref.attemptId(), now);
-        log.info("첫 결제 READY 만료 처리: attemptId={}, outcome={}, nextAttemptId={}", ref.attemptId(), result.outcome(),
+        log.info("멤버십 결제 READY 만료 처리: attemptId={}, outcome={}, nextAttemptId={}", ref.attemptId(), result.outcome(),
             result.attemptId());
         if (result.outcome() == MembershipChargeOutcome.RETRY_READY && result.attemptId() != null) {
             executor.execute(memberId, result.attemptId());
