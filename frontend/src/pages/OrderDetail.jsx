@@ -128,8 +128,10 @@ export default function OrderDetail() {
       const result = await cancelPaidOrder(orderId, refundKey.current);
       refundKey.current = null;
       setRefundOpen(false);
-      // PortOne 결과를 바로 받지 못하면(202) 환불이 REQUESTED로 남고 서버가 이어서 확인한다
-      setRefundResult(result.refundStatus === 'COMPLETED' ? 'DONE' : 'PENDING');
+      // PortOne 결과를 바로 받지 못하면(202) 환불이 REQUESTED로 남고 서버가 이어서 확인한다.
+      // 0원(포인트 전액) 주문은 PG 환불 없이 즉시 끝나 refundStatus가 비어 있으므로 결제 상태로 판단한다
+      const done = result.refundStatus === 'COMPLETED' || result.paymentStatus === 'CANCELED';
+      setRefundResult(done ? 'DONE' : 'PENDING');
       load();
     } catch (e) {
       if (!isUnknownOutcome(e)) refundKey.current = null;
