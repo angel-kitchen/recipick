@@ -1,6 +1,8 @@
 package com.recipick.global.exception;
 
 import com.recipick.global.response.ErrorResponse;
+import com.recipick.domain.member.dto.request.MembershipTrialStartRequest;
+import com.recipick.domain.member.exception.MemberErrorCode;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,9 @@ public class GlobalExceptionHandler {
         List<ErrorResponse.FieldError> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> new ErrorResponse.FieldError(error.getField(), error.getDefaultMessage()))
                 .toList();
+        if (e.getBindingResult().getTarget() instanceof MembershipTrialStartRequest) {
+            return toResponse(MemberErrorCode.AUTOPAY_CONSENT_REQUIRED, errors);
+        }
         return toResponse(CommonErrorCode.INVALID_INPUT, errors);
     }
 

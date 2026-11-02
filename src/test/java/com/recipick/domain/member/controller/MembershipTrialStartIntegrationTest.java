@@ -123,6 +123,19 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"v 1", " v1", "v1 ", "v\t1", "v\u00a01", "v\u30001",
+            "123456789012345678901"})
+    @DisplayName("동의 문구 버전의 공백·길이 위반은 동일한 동의 오류로 거절한다")
+    void rejectsWhitespaceAndLongVersion(String version) throws Exception {
+        // given
+        card("ACTIVE");
+        String body = mapper.writeValueAsString(java.util.Map.of(
+                "autopayAgreed", true, "consentedAmount", 3900, "consentTextVersion", version));
+        // when, then
+        error(start(body), 400, "MEMBERSHIP-004");
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"UNKNOWN", "MANUAL_REVIEW", "PENDING"})
     @DisplayName("활성화 없이 종료된 과거 이용권의 미해결 결제도 체험을 차단한다")
     void rejectsUnresolvedPaymentOfOldUnactivatedMembership(String status) throws Exception {

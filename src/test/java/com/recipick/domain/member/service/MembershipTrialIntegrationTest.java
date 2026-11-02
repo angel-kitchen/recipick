@@ -142,7 +142,7 @@ class MembershipTrialIntegrationTest extends IntegrationTestSupport {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"NULL", "AMOUNT", "VERSION", "LONG_VERSION", "TIME", "OTHER_TIME"})
+    @ValueSource(strings = {"NULL", "AMOUNT", "VERSION", "LONG_VERSION", "TIME", "OTHER_TIME", "SPACE", "TAB", "UNICODE_SPACE"})
     @DisplayName("동의 누락·다른 금액·잘못된 버전·다른 동의 시각은 저장 전에 거절한다")
     void rejectsInvalidConsent(String kind) {
         // given
@@ -153,6 +153,9 @@ class MembershipTrialIntegrationTest extends IntegrationTestSupport {
             case "AMOUNT" -> new MembershipConsent(3901L, "v1", NOW);
             case "VERSION" -> new MembershipConsent(3900L, " ", NOW);
             case "LONG_VERSION" -> new MembershipConsent(3900L, "x".repeat(21), NOW);
+            case "SPACE" -> new MembershipConsent(3900L, "v 1", NOW);
+            case "TAB" -> new MembershipConsent(3900L, "v\t1", NOW);
+            case "UNICODE_SPACE" -> new MembershipConsent(3900L, "v\u00a01", NOW);
             case "TIME" -> new MembershipConsent(3900L, "v1", null);
             default -> new MembershipConsent(3900L, "v1", NOW.minusSeconds(1));
         };

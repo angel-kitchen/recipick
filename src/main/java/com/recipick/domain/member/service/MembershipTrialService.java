@@ -54,7 +54,10 @@ public class MembershipTrialService {
         }
         if (consent == null || !Long.valueOf(MONTHLY_AMOUNT).equals(consent.consentedAmount())
                 || consent.consentTextVersion() == null || consent.consentTextVersion().isBlank()
-                || consent.consentTextVersion().length() > 20 || consent.autopayConsentedAt() == null
+                || consent.consentTextVersion().length() > 20
+                || consent.consentTextVersion().codePoints()
+                        .anyMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))
+                || consent.autopayConsentedAt() == null
                 || !now.equals(consent.autopayConsentedAt())) {
             throw new BusinessException(MemberErrorCode.AUTOPAY_CONSENT_REQUIRED);
         }

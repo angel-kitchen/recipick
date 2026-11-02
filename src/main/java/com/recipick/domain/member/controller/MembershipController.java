@@ -9,6 +9,7 @@ import com.recipick.domain.member.service.MembershipCancelReservationService;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +32,7 @@ public class MembershipController {
 
     @PostMapping("/trial")
     public ResponseEntity<ApiResponse<MembershipTrialStartResponse>> startTrial(
-            @LoginMember Long memberId, @RequestBody MembershipTrialStartRequest request) {
+            @LoginMember Long memberId, @Valid @RequestBody MembershipTrialStartRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("무료체험이 시작되었습니다.", trialFacade.start(memberId, request)));
     }
