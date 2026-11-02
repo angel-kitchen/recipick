@@ -14,6 +14,6 @@ SELECT 1, 1, '삼청 마트', 37.5860000, 126.9820000, 2000, 'OPEN', NOW(), NOW(
 OR EXISTS (SELECT 1 FROM mart WHERE id = 1 AND region_id <> 1);
 
 INSERT INTO mart(id, region_id, name, latitude, longitude, service_radius_m, status, created_at, updated_at)
-SELECT 2, 2 , '하안 마트', 37.4710000, 126.8760000, 2000, 'OPEN', NOW(), NOW()
+SELECT 2, 2 , '하안 마트', 37.4640000, 126.8760000, 2000, 'OPEN', NOW(), NOW()
     WHERE NOT EXISTS (SELECT 1 FROM mart WHERE region_id = 2)
 OR EXISTS (SELECT 1 FROM mart WHERE id = 2 AND region_id <> 2);

@@ -7814,3 +7814,8 @@ WHERE name IN ('김치찌개', '된장찌개', '순두부찌개', '부대찌개'
 UPDATE recipe_ingredient ri JOIN ingredient i ON i.id = ri.ingredient_id
 SET ri.required = FALSE
 WHERE ri.required = TRUE AND i.name IN ('간장', '국간장', '식용유', '올리브유', '참기름', '들기름', '고추기름', '식초', '맛술', '물엿', '굴소스', '우스터소스', '액젓', '바닐라익스트랙', '고춧가루', '설탕', '소금', '후추', '통후추', '다진마늘', '들깻가루', '시나몬', '파프리카 가루', '페페론치노', '월계수잎', '슈가파우더', '케첩', '마요네즈', '머스터드', '겨자', '통깨', '고추장', '된장', '쌀');
+
+-- 하안 마트 좌표가 철산동 쪽에 있어 하안동 안에서 현재 위치를 찾아도 이용 가능 지역과 어긋났다. 하안동 안쪽으로 옮긴다.
+-- data.sql의 INSERT는 이미 있는 행을 건너뛰므로 기존 로컬 DB에는 UPDATE로 반영한다. 예전 좌표일 때만 바꿔 직접 고친 값은 덮어쓰지 않는다.
+UPDATE mart SET latitude = 37.4640000, longitude = 126.8760000, updated_at = NOW()
+WHERE id = 2 AND region_id = 2 AND latitude = 37.4710000 AND longitude = 126.8760000;
