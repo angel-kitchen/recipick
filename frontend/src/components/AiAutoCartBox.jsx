@@ -35,8 +35,17 @@ export default function AiAutoCartBox() {
 
   const submit = (event) => {
     event.preventDefault();
+    // 새 검색이 실패해도 이전 검색의 선택 화면이 남아 있지 않게 먼저 비운다
+    setResult(null);
     run(async () => {
-      const data = await api.post('/api/auto-carts/ai-preview', { text });
+      let data;
+      try {
+        data = await api.post('/api/auto-carts/ai-preview', { text });
+      } catch (e) {
+        // 이용 마트가 없으면 메뉴 장보기는 못 하지만 조건 추천은 마트 없이도 된다
+        if (e.code !== 'ORDER-004') throw e;
+        data = { status: 'NO_MATCH' };
+      }
       if (data.status === 'PREVIEWED') {
         navigate(`/auto-carts/${data.preview.autoCartRequestId}`);
         return;
