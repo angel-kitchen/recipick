@@ -36,12 +36,18 @@ public final class PortOneStubServer {
     private final HttpServer server;
     private final Map<String, Stub> postStubs = new ConcurrentHashMap<>();
     private final Map<String, Stub> getStubs = new ConcurrentHashMap<>();
+    private final Map<String, Stub> billingKeyStubs = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> postCounts = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> getCounts = new ConcurrentHashMap<>();
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final ExecutorService handlers = Executors.newCachedThreadPool();
     private final AtomicReference<CountDownLatch> postGate = new AtomicReference<>();
     private final AtomicReference<CountDownLatch> postArrival = new AtomicReference<>();
+    // 미리 정하지 않은 결제 ID에 줄 기본 결과. 스케줄러·카드 등록 재개처럼 실행 중에 새 결제 ID가 생겨 테스트가 ID를 미리 모를 때 쓴다
+    private final AtomicReference<DefaultResult> defaultResult = new AtomicReference<>();
+
+    private record DefaultResult(boolean paid, long amount, LocalDateTime paidAtKst) {
+    }
 
     public PortOneStubServer() {
         try {
@@ -82,8 +88,10 @@ public final class PortOneStubServer {
     public void reset() {
         releasePosts();
         postArrival.set(null);
+        defaultResult.set(null);
         postStubs.clear();
         getStubs.clear();
+        billingKeyStubs.clear();
         postCounts.clear();
         getCounts.clear();
         requests.clear();
@@ -97,6 +105,32 @@ public final class PortOneStubServer {
     public void billingKeyPaymentPaid(String paymentId, LocalDateTime paidAtKst) {
         onBillingKeyPayment(paymentId, 200, "{\"payment\":{\"pgTxId\":\"pgtx_" + paymentId + "\",\"paidAt\":\""
             + iso(paidAtKst) + "\"}}");
+    }
+
+    // 정하지 않은 결제 ID의 POST는 PAID 응답, GET은 같은 ID의 KRW PAID(paidAt 고정)
+    public void defaultPaid(long amount, LocalDateTime paidAtKst) {
+        defaultResult.set(new DefaultResult(true, amount, paidAtKst));
+    }
+
+    // 정하지 않은 결제 ID의 POST는 거절 응답, GET은 같은 ID의 FAILED
+    public void defaultFailed(long amount) {
+        defaultResult.set(new DefaultResult(false, amount, null));
+    }
+
+    // 기본 결과를 지운다. 이후 정하지 않은 결제 ID는 POST·GET 모두 404(결과 불명)
+    public void clearDefault() {
+        defaultResult.set(null);
+    }
+
+    // GET /billing-keys/{billingKey}. 카드 등록 API 흐름용 — 검증기가 통과하는 ISSUED 카드 응답(상점·채널·발급 요청·고객 ID 일치).
+    // 빌링키 원문은 응답 본문에만 들어가고 기록 목록에는 남지 않는다
+    public void billingKeyIssued(String billingKey, String storeId, String channelKey, String issueId, Long memberId,
+                                 LocalDateTime issuedAtKst) {
+        billingKeyStubs.put(billingKey, new Stub(200, "{\"status\":\"ISSUED\",\"billingKey\":\"" + billingKey
+            + "\",\"storeId\":\"" + storeId + "\",\"channels\":[{\"type\":\"TEST\",\"key\":\"" + channelKey
+            + "\"}],\"customer\":{\"id\":\"" + memberId + "\"},"
+            + "\"methods\":[{\"type\":\"BillingKeyPaymentMethodCard\"}],\"issueId\":\"" + issueId
+            + "\",\"issuedAt\":\"" + iso(issuedAtKst) + "\"}"));
     }
 
     // GET /payments/{id}
@@ -149,18 +183,22 @@ public final class PortOneStubServer {
     private void handle(HttpExchange exchange) throws IOException {
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
-        requests.add(method + " " + path);
+        // 빌링키 조회 경로에는 키 원문이 들어 있어 경로를 기록하지 않는다
+        requests.add(method + " " + (path.startsWith("/billing-keys/") ? "/billing-keys/[REDACTED]" : path));
         exchange.getRequestBody().readAllBytes();
         Stub stub;
         if ("POST".equals(method) && path.startsWith("/payments/") && path.endsWith("/billing-key")) {
             String id = path.substring("/payments/".length(), path.length() - "/billing-key".length());
             postCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
-            stub = postStubs.getOrDefault(id, new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}"));
+            stub = postStubs.getOrDefault(id, defaultPost(id));
             awaitPostGate();
         } else if ("GET".equals(method) && path.startsWith("/payments/")) {
             String id = path.substring("/payments/".length());
             getCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
-            stub = getStubs.getOrDefault(id, new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}"));
+            stub = getStubs.getOrDefault(id, defaultGet(id));
+        } else if ("GET".equals(method) && path.startsWith("/billing-keys/")) {
+            String key = path.substring("/billing-keys/".length());
+            stub = billingKeyStubs.getOrDefault(key, new Stub(404, "{\"type\":\"BILLING_KEY_NOT_FOUND\"}"));
         } else {
             stub = new Stub(404, "{\"type\":\"NOT_FOUND\"}");
         }
@@ -170,6 +208,30 @@ public final class PortOneStubServer {
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(bytes);
         }
+    }
+
+    private Stub defaultPost(String paymentId) {
+        DefaultResult result = defaultResult.get();
+        if (result == null) {
+            return new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}");
+        }
+        if (!result.paid()) {
+            return new Stub(400, "{\"type\":\"PG_PROVIDER\"}");
+        }
+        return new Stub(200, "{\"payment\":{\"pgTxId\":\"pgtx_" + paymentId + "\",\"paidAt\":\""
+            + iso(result.paidAtKst()) + "\"}}");
+    }
+
+    private Stub defaultGet(String paymentId) {
+        DefaultResult result = defaultResult.get();
+        if (result == null) {
+            return new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}");
+        }
+        if (!result.paid()) {
+            return new Stub(200, paymentJson(paymentId, "FAILED", result.amount(), "KRW", null,
+                "{\"summary\":\"declined\"}"));
+        }
+        return new Stub(200, paymentJson(paymentId, "PAID", result.amount(), "KRW", iso(result.paidAtKst()), null));
     }
 
     private void awaitPostGate() {

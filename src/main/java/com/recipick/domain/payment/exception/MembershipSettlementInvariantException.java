@@ -10,8 +10,16 @@ public class MembershipSettlementInvariantException extends RuntimeException {
         // 첫 결제 회차가 미반영인데 이용권은 이미 활성이고 근거가 된 반영 회차가 없다(I-22·J-1 위반 데이터).
         // C-3a ALREADY_APPLIED인데 회차가 미반영인 경우도 같은 종류다
         ACTIVATED_WITHOUT_APPLIED_PAYMENT,
+
         // C-3a CONFLICT인데 종료·상태·소유 중 어느 사유도 확인되지 않음
-        UNEXPLAINED_FIRST_PAYMENT_CONFLICT
+        UNEXPLAINED_FIRST_PAYMENT_CONFLICT,
+
+        // 갱신 회차가 미반영인데 이용권의 현재 종료 시각·기준일이 그 회차의 직전 종료(T)와 맞지 않는다 — 이 결제로 무엇을 연장할지
+        // 근거가 없다. C-4a ALREADY_APPLIED인데 회차가 미반영인 경우도 같은 종류다
+        RENEWAL_BASE_PERIOD_MISMATCH,
+
+        // C-4a CONFLICT인데 유료·활성화·종료 어느 사유도 확인되지 않음
+        UNEXPLAINED_RENEWAL_CONFLICT
     }
 
     private final Kind kind;

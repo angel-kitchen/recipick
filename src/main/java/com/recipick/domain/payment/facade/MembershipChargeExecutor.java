@@ -73,9 +73,9 @@ public class MembershipChargeExecutor {
                 : MembershipChargeOutcome.IN_PROGRESS;
         }
         if (!now.isBefore(ticket.acceptUntil())) {
-            // 접수 유효 창(첫 시도 requestedAt + 30분)이 POST 직전에 끝남. 보내지 않고 되돌린 뒤 임대 만료 규칙으로 회차를 정리한다
-            // (새 시도의 임대는 창의 끝을 넘지 않으므로 되돌린 READY는 이미 만료 상태다)
-            log.info("첫 결제 접수 유효 창이 끝나 청구하지 않음: attemptId={}, acceptUntil={}", attemptId, ticket.acceptUntil());
+            // 접수 마감(첫 결제는 첫 시도 requestedAt + 30분, 갱신은 결제 마감 G)이 POST 직전에 지남. 보내지 않고 되돌린 뒤 임대 만료
+            // 규칙으로 회차를 정리한다(새 시도의 임대는 마감을 넘지 않으므로 되돌린 READY는 이미 만료 상태다)
+            log.info("접수 마감이 지나 청구하지 않음: attemptId={}, acceptUntil={}", attemptId, ticket.acceptUntil());
             if (!dispatchProcessor.releaseUnsent(ticket)) {
                 return MembershipChargeOutcome.IN_PROGRESS;
             }

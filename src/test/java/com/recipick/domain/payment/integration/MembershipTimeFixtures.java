@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.integration;
 
 import com.recipick.domain.payment.entity.MembershipPayment;
+import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
 import jakarta.persistence.EntityManager;
@@ -78,6 +79,11 @@ final class MembershipTimeFixtures {
             .setParameter("id", membershipId).executeUpdate());
     }
 
+    // 이용권 종료 시각만 옮긴다(갱신 회차의 직전 종료 T와 어긋난 데이터 재현)
+    void membershipEndAt(Long membershipId, LocalDateTime endAt) {
+        update("UPDATE Membership m SET m.endAt = :t WHERE m.id = :id", endAt, membershipId);
+    }
+
     void membershipTerminated(Long membershipId, LocalDateTime terminatedAt) {
         update("UPDATE Membership m SET m.terminatedAt = :t WHERE m.id = :id", terminatedAt, membershipId);
     }
@@ -94,6 +100,12 @@ final class MembershipTimeFixtures {
             em.flush();
             return payment.getId();
         });
+    }
+
+    // 카드 교체 재현: 기존 키를 REPLACED로 돌린다(새 ACTIVE 키는 테스트가 저장한다)
+    void billingKeyStatus(Long billingKeyId, BillingKeyStatus status) {
+        tx.executeWithoutResult(s -> em.createQuery("UPDATE BillingKey b SET b.status = :s WHERE b.id = :id")
+            .setParameter("s", status).setParameter("id", billingKeyId).executeUpdate());
     }
 
     void deletePayment(Long membershipPaymentId) {
