@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { cancelPendingOrder } from '../api/orders';
+import { cancelPaidOrder, cancelPendingOrder } from '../api/orders';
 import { confirmClosedPayment, confirmPayment, customerOf, payOrder } from '../api/payments';
 import { useAuth } from '../auth/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
 import { ORDER_STATUS, formatDateTime, formatWon } from '../labels';
 
@@ -33,6 +34,11 @@ export default function OrderDetail() {
 
   const [cancelError, setCancelError] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  // 결제 완료 주문의 취소(환불)
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState(null);
+  const [refundResult, setRefundResult] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +118,22 @@ export default function OrderDetail() {
     }
   };
 
+  const refund = async () => {
+    setRefundError(null);
+    setRefunding(true);
+    try {
+      const result = await cancelPaidOrder(orderId);
+      setRefundOpen(false);
+      // PortOne 결과를 바로 받지 못하면(202) 환불이 REQUESTED로 남고 서버가 이어서 확인한다
+      setRefundResult(result.refundStatus === 'COMPLETED' ? 'DONE' : 'PENDING');
+      load();
+    } catch (e) {
+      setRefundError(e);
+    } finally {
+      setRefunding(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="container page">
@@ -133,6 +155,13 @@ export default function OrderDetail() {
           {notice.text}
           {paymentResult.message && <br />}
           {paymentResult.message}
+        </div>
+      )}
+      {refundResult && (
+        <div className="notice notice--info" role="status">
+          {refundResult === 'DONE'
+            ? '주문을 취소하고 환불했어요.'
+            : '환불을 처리하고 있어요. 잠시 후 다시 확인해 주세요.'}
         </div>
       )}
       {order.status === 'PENDING_PAYMENT' && (
@@ -183,7 +212,40 @@ export default function OrderDetail() {
           <br />
           {order.address} {order.detailAddress}
         </p>
+        {order.status === 'PAID' && order.cancelable && (
+          <>
+            <p className="field__hint" style={{ marginTop: 16 }}>
+              마트가 주문을 접수하기 전까지 취소할 수 있어요.
+            </p>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="btn btn--outline"
+                onClick={() => {
+                  setRefundError(null);
+                  setRefundOpen(true);
+                }}
+              >
+                주문 취소하기
+              </button>
+            </div>
+          </>
+        )}
       </section>
+      {refundOpen && (
+        <ConfirmModal
+          title="주문을 취소할까요?"
+          confirmLabel="취소하고 환불받기"
+          cancelLabel="닫기"
+          busy={refunding}
+          error={refundError}
+          onConfirm={refund}
+          onCancel={() => setRefundOpen(false)}
+        >
+          {order.payAmount > 0 && `결제한 ${formatWon(order.payAmount)}이 환불돼요. `}
+          {order.usedPoint > 0 && `사용한 포인트 ${order.usedPoint.toLocaleString()}P도 돌려드려요.`}
+        </ConfirmModal>
+      )}
       <p style={{ marginTop: 24 }}>
         <Link to="/recipes" className="btn btn--outline">
           레시피 더 보기

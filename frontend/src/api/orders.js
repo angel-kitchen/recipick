@@ -10,6 +10,11 @@ export async function cancelPendingOrder(orderId) {
   );
 }
 
+// 결제 후 취소(환불)도 같은 결제 취소 API다. 서버가 마트 접수 전(RECEIVED)까지만 받아 주고 PortOne 환불까지 처리한다
+export function cancelPaidOrder(orderId) {
+  return cancelPendingOrder(orderId);
+}
+
 // 회원당 결제 대기 주문은 최대 한 건이다
 export async function findPendingOrder() {
   const page = await api.get('/api/orders', { statusGroup: 'ONGOING', size: 20 });
