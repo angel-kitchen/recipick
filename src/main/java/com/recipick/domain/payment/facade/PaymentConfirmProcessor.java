@@ -45,6 +45,8 @@ public class PaymentConfirmProcessor {
                 orderService.markPaid(orderId, portOnePayment.paidAt());
                 // 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT. 적립 예정은 배송완료까지 PENDING으로 둔다
                 pointCommandService.confirmUsage(orderId);
+                // 장바구니 정리는 잠금 순서의 맨 끝(CART_ITEM)이라 포인트 확정 뒤에 둔다
+                orderFacade.removePaidItemsFromCart(orderId);
             }
             case PG_FAILED -> {
                 payment.fail(PaymentFailureReason.PG_FAILED, portOnePayment.transactionId());
