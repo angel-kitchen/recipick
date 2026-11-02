@@ -517,7 +517,20 @@ DROP INDEX idx_membership_payment_status_grace_id ON membership_payment;
 | F-3 `SHOW INDEX` | 두 이름, 열 순서 `status, next_retry_at, id` / `status, grace_deadline_at, id` |
 | F-3 `EXPLAIN` | `possible_keys`에 새 인덱스가 보인다(행이 적은 동안 `type=ALL`로 나올 수 있다 — 이름이 맞는 것만으로 검증 끝이 아니므로 결과를 기록한다) |
 | 기동 뒤 10-B 스냅숏 diff | 인덱스 2개 외 변경 없음 |
-| 기동 로그 | `membership_payment` 관련 `alter table`·`create index` 없음(`ddl-auto`는 운영에서 자동 변경하지 않는다) |
+| 기동 로그 | `membership_payment` 관련 `alter table`·`create index` 없음(운영은 `ddl-auto: update`라 인덱스가 없으면 Hibernate가 기동 때 만든다. 선적용했으면 같은 이름이 있어 만들지 않는다) |
 | 운영 `.env`의 `MEMBERSHIP_BILLING_ENABLED` | 없음 또는 `false`. 4-A 머지는 운영 갱신 활성화가 아니다(`docs/api/membership-renewal.md` 운영 차단 절) |
 
 플래그가 꺼져 있어도 이미 생긴 갱신 회차의 정리(`settleRenewals`)와 시도 복구(`recoverCharges`)는 계속 돈다. 새 청구(접수·재시도·카드 대기 재개·PG POST)만 멈춘다.
+
+**운영 실행 기록 (2026-11-02, 배포 담당).** 시각은 KST다(서버 출력은 UTC 05:25~05:38).
+
+- 사전: 운영 `.env`에 `MEMBERSHIP_BILLING_ENABLED`·`SPRING_JPA_HIBERNATE_DDL_AUTO` 없음(갱신 꺼짐, `ddl-auto: update` 그대로).
+  `backup.sh pre-deploy ddl-342`로 덤프(`pre-deploy-20261102-052509-ddl-342.sql.gz`, 8.0K).
+- F-1: `SHOW CREATE TABLE` 대신 `information_schema.STATISTICS`·`COLUMNS`로 확인했다. 기존 인덱스 6개 중 새 이름·같은 열 조합 없음,
+  `id`·`status`·`next_retry_at`·`grace_deadline_at` 있음, `membership_payment` 0행.
+- F-2: 두 `CREATE INDEX`를 한 줄로 실행해 각각 `Query OK`(0.02s, 0.03s), Warnings 0. 14:25 덤프 직후, #360 머지(14:31) 전이다.
+- F-3: 두 이름과 열 순서가 기대와 같다. `EXPLAIN` 두 조회 모두 `possible_keys`에 `PRIMARY`와 새 인덱스 2개, 선택은 `key=PRIMARY`
+  (각각 `type=range`·`type=index`, 0행이라 옵티마이저가 PK를 고름). 경고 1건은 EXPLAIN의 재작성 쿼리 메모다.
+- 확인: #360 머지 뒤 `051debb` 이미지가 `healthy`(14:38 기동). 최근 30분 앱 로그에 `create index`·`alter table`·`create table`·SQL 오류
+  없음. 기동 뒤 `membership_payment` 인덱스는 8개(기존 6 + 새 2)이고 같은 열 조합이 둘인 인덱스가 없다. 10-B 전체 스냅숏 diff는
+  뜨지 않았고 이 테이블 인덱스 목록 비교로 대신했다.
