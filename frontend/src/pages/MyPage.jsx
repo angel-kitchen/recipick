@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
-import { MEMBERSHIP_TYPE, formatDateTime } from '../labels';
+import { MEMBERSHIP_TYPE, formatDateTime, formatPoint } from '../labels';
 
 function PasswordForm({ onDone }) {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '' });
@@ -48,7 +48,8 @@ function PasswordForm({ onDone }) {
   );
 }
 
-function WithdrawForm({ onDone }) {
+// 탈퇴는 안내한 잔액과 실제 잔액이 같아야 진행된다. 잔액을 모르면 탈퇴 버튼을 막는다
+function WithdrawForm({ pointBalance, onPointChanged, onDone }) {
   const [password, setPassword] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(null);
@@ -59,10 +60,11 @@ function WithdrawForm({ onDone }) {
     setError(null);
     setSubmitting(true);
     try {
-      // 포인트 기능이 아직 없어 잔액은 0으로 확인한다
-      await api.post('/api/members/me/withdraw', { password, acknowledgedPointBalance: 0 });
+      await api.post('/api/members/me/withdraw', { password, acknowledgedPointBalance: pointBalance });
       onDone();
     } catch (e) {
+      // 안내 뒤 잔액이 바뀌었다. 최신 잔액을 다시 보여 주고 다시 확인받는다
+      if (e.code === 'POINT-002') onPointChanged();
       setError(e);
       setSubmitting(false);
     }
@@ -82,13 +84,14 @@ function WithdrawForm({ onDone }) {
         <input className="field__input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={20} required />
       </label>
       <div className="row-actions">
-        <button type="submit" className="btn btn--outline" disabled={submitting}>
+        <button type="submit" className="btn btn--outline" disabled={submitting || pointBalance === null}>
           회원 탈퇴
         </button>
       </div>
       {confirming && (
         <ConfirmModal title="정말 탈퇴할까요?" confirmLabel="탈퇴" cancelLabel="취소" onConfirm={withdraw} onCancel={() => setConfirming(false)}>
           탈퇴하면 이 계정으로 더 이상 로그인할 수 없어요.
+          {pointBalance > 0 && ` 남은 포인트 ${formatPoint(pointBalance)}는 모두 소멸돼요.`}
         </ConfirmModal>
       )}
     </form>
@@ -98,6 +101,22 @@ function WithdrawForm({ onDone }) {
 export default function MyPage() {
   const { member, logout } = useAuth();
   const navigate = useNavigate();
+  const [point, setPoint] = useState(null);
+  const [pointError, setPointError] = useState(null);
+
+  const loadPoint = useCallback(async () => {
+    setPointError(null);
+    try {
+      setPoint(await api.get('/api/points'));
+    } catch (e) {
+      setPoint(null);
+      setPointError(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPoint();
+  }, [loadPoint]);
 
   // 서버가 비밀번호 변경·탈퇴 때 리프레시 쿠키를 지우므로 화면의 로그인 상태도 함께 정리한다
   const leave = async () => {
@@ -155,6 +174,23 @@ export default function MyPage() {
         </section>
 
         <section className="card">
+          <h2 className="tile__title">포인트</h2>
+          <ErrorNotice error={pointError} />
+          {point && (
+            <dl className="info-list">
+              <dt>사용 가능</dt>
+              <dd>{formatPoint(point.availableBalance)}</dd>
+              <dt>소멸 예정</dt>
+              <dd>
+                {point.nearestExpiringAmount > 0
+                  ? `${formatPoint(point.nearestExpiringAmount)} · ${point.nearestExpiresOn}까지 사용 가능`
+                  : '없어요'}
+              </dd>
+            </dl>
+          )}
+        </section>
+
+        <section className="card">
           <h2 className="tile__title">비밀번호 변경</h2>
           <PasswordForm onDone={leave} />
         </section>
@@ -162,7 +198,7 @@ export default function MyPage() {
         <section className="card">
           <h2 className="tile__title">회원 탈퇴</h2>
           <p className="field__hint">진행 중인 주문이나 결제가 있으면 탈퇴할 수 없어요.</p>
-          <WithdrawForm onDone={leave} />
+          <WithdrawForm pointBalance={point?.availableBalance ?? null} onPointChanged={loadPoint} onDone={leave} />
         </section>
       </div>
     </div>
