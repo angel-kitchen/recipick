@@ -5,6 +5,10 @@ import { useAuth } from '../auth/AuthContext';
 import { CUISINE, DISH_TYPE, spicyText } from '../labels';
 import ErrorNotice from './ErrorNotice';
 import ImagePlaceholder from './ImagePlaceholder';
+import MembershipInfoModal from './MembershipInfoModal';
+
+// 쓰는 법이 입력칸의 흐린 글씨만으로는 안 보여서, 누르면 입력칸에 채워지는 예시를 보여 준다
+const EXAMPLES = ['김치찌개 2인분', '김치찌개 2인분이랑 계란말이', '매운 음식 30분 이내'];
 
 // 한 입력창으로 두 가지를 처리한다.
 // ① "김치찌개 2인분이랑 계란말이"처럼 메뉴 이름이 있으면 서버가 레시피를 찾아 자동 장바구니 미리보기를 만든다.
@@ -22,6 +26,7 @@ export default function AiAutoCartBox() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [martMissing, setMartMissing] = useState(false);
+  const [membershipInfo, setMembershipInfo] = useState(false);
 
   const run = async (action) => {
     setError(null);
@@ -99,11 +104,22 @@ export default function AiAutoCartBox() {
           {loading ? '찾는 중...' : '찾아보기'}
         </button>
       </form>
+      <div className="chips" style={{ marginTop: 12 }}>
+        {EXAMPLES.map((example) => (
+          <button key={example} type="button" className="chip" onClick={() => setText(example)}>
+            {example}
+          </button>
+        ))}
+      </div>
       {!isMembership && (
-        <p className="field__hint" style={{ marginTop: 8 }}>
-          AI 검색은 멤버십 회원만 쓸 수 있어요. <Link to="/membership">멤버십 알아보기</Link>
+        <p className="field__hint auth-card__footer" style={{ marginTop: 8, textAlign: 'left' }}>
+          AI 검색은 멤버십 회원만 쓸 수 있어요.{' '}
+          <button type="button" onClick={() => setMembershipInfo(true)}>
+            멤버십 알아보기
+          </button>
         </p>
       )}
+      {membershipInfo && <MembershipInfoModal onClose={() => setMembershipInfo(false)} />}
       <div style={{ marginTop: 12 }}>
         <ErrorNotice error={error} />
         {martMissing && (
