@@ -171,6 +171,9 @@ export default function AutoCartReview({ preview, disabled = false }) {
         {preview.items.map((item) => {
           const productId = item.purchasable ? chosenProductId(item) : null;
           const excluded = productId === NONE;
+          // 드롭다운에서 고른 상품의 사진. 후보에 없으면(선택 안 함 등) 기본 상품 사진을 쓴다
+          const chosen = item.candidates.find((c) => String(c.productId) === String(productId));
+          const imageUrl = chosen?.imageUrl ?? item.product?.imageUrl;
           return (
             <div key={item.ingredientId} className={`review__row ${excluded || !item.purchasable ? 'is-off' : ''}`}>
               <input
@@ -180,6 +183,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
                 checked={item.purchasable && !excluded}
                 onChange={() => toggle(item)}
               />
+              {imageUrl ? <img className="cart-row__image" src={imageUrl} alt="" /> : <div className="cart-row__image" />}
               <div>
                 <div className="cart-row__name">{item.ingredientName}</div>
                 <div className="tile__meta">필요량 {formatAmount(item.totalRequiredAmount, item.unit)}</div>

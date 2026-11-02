@@ -449,7 +449,7 @@
 /* 자동 장바구니 확인: 재료마다 체크, 상품 선택, 금액 */
 .review__row {
   display: grid;
-  grid-template-columns: auto 1fr 1.6fr auto;
+  grid-template-columns: auto 72px 1fr 1.6fr auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3) 0;
@@ -457,6 +457,7 @@
 }
 
 .review__row.is-off .cart-row__name,
+.review__row.is-off .cart-row__image,
 .review__row.is-off .tile__price {
   opacity: 0.45;
 }
@@ -466,8 +467,8 @@
     grid-template-columns: auto 1fr;
   }
 
-  .review__row > :nth-child(3),
-  .review__row > :nth-child(4) {
+  .review__row > :nth-child(4),
+  .review__row > :nth-child(5) {
     grid-column: 2;
   }
 }
