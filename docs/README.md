@@ -52,7 +52,7 @@
 | 항목 | 현재 상태·다음 반영 |
 | --- | --- |
 | 비밀번호 변경 | 인증 근거·API 참고 계약 반영, 전체 리프레시 무효화·기존 액세스 유지·경합·롤백 검증 기록 |
-| 회원 탈퇴·체험 차단 | API·상태 차단·개인정보 정리·체험 차단 기반 및 PRODUCT_PAYMENT·POINTS·MEMBERSHIP_PAYMENT 실제 Checker 연결. AUTO_BILLING 미연결로 탈퇴 성공 차단. 장바구니 삭제·담기 이력 유지는 연결됐고 찜 정리는 최종 연결 확인 대상 |
+| 회원 탈퇴·체험 차단 | API·상태 차단·개인정보 정리·체험 차단 기반 및 PRODUCT_PAYMENT·POINTS·MEMBERSHIP_PAYMENT 실제 Checker 연결. AUTO_BILLING·카드 정리 준비 계약을 [회원 탈퇴 API](api/member-withdrawal.md)에 연결. 기존 기본 OFF 스위치로 탈퇴 성공 차단 유지. 장바구니 삭제·담기 이력 유지는 연결됐고 찜은 탈퇴 제한 조건이 아니며 삭제는 이번 범위에서 제외 |
 | 관리자 감사 기록 | 기록·조회·만료 정리와 기존 상품·레시피·주문 API 호출 연결. 결제의 MartRejectionProcessor에도 ORDER_REJECT 호출이 있으며 멤버십 결제 목록·상세·재조회 감사 호출도 #380에서 연결. 환불 관련 추가 기록은 구현 시 연결 |
 | 3차 멤버십 | 해지 예약·관리자 이력 API, 활성화·유예 판정, 결제 반영·소유 회원 매핑 계약, [체험 시작 API](api/membership-trial-start.md)와 활성 카드·C-17 검사, 관리자 지급 C-17 연결 반영. [유료 구독 API](api/membership-subscribe.md) 연결 반영. 즉시 해지 API 및 탈퇴 최종 연결은 남음 |
 | API 명세·SA·AI 활용 기록 | 팀 노션에서 갱신. 저장소 문서 수정만으로 노션 반영 완료 처리하지 않음 |
