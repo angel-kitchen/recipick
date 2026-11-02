@@ -121,7 +121,7 @@ public class CartService {
         cartItemRepository.deleteByMemberIdAndIdIn(memberId, cartItemIds);
     }
 
-    // 결제 성공 트랜잭션 안에서 부른다. 장바구니에 없는 상품은 건너뛰고, 담기 이력은 남긴다
+    // 결제 완료가 커밋된 뒤 리스너가 새 트랜잭션으로 부른다. 장바구니에 없는 상품은 건너뛰고, 담기 이력은 남긴다
     @Transactional
     public void deleteByProductIds(Long memberId, Collection<Long> productIds) {
         cartItemRepository.deleteByMemberIdAndProductIdIn(memberId, productIds);

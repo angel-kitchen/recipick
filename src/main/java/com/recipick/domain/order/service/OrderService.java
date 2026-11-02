@@ -25,6 +25,7 @@ import com.recipick.domain.order.entity.enums.OrderStatusType;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.OrderItemRepository;
 import com.recipick.domain.order.repository.OrderMemberId;
+import com.recipick.domain.order.event.OrderPaidEvent;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.repository.OrderStatusHistoryRepository;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -45,6 +46,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -72,6 +74,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderNumberGenerator orderNumberGenerator;
+    private final ApplicationEventPublisher eventPublisher;
 
     public Optional<Order> findByIdempotencyKey(Long memberId, String idempotencyKey) {
         return orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
@@ -296,6 +299,11 @@ public class OrderService {
             systemHistory(order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), null),
             systemHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(), null)
         ));
+        // 결제한 상품의 장바구니 정리는 커밋 뒤 리스너가 한다. 반복 전달은 위에서 끝나 그 사이 다시 담은 상품을 지우지 않는다
+        List<Long> productIds = orderItemRepository.findAllByOrderIdOrderByIdAsc(orderId).stream()
+            .map(OrderItem::getProductId)
+            .toList();
+        eventPublisher.publishEvent(new OrderPaidEvent(orderId, order.getMemberId(), productIds));
     }
 
     // 재고 복구는 호출한 Facade가 하므로, 이번 호출로 종료된 경우에만 주문 상품을 돌려준다

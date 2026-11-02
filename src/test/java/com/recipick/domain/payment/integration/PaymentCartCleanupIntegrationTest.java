@@ -1,10 +1,15 @@
 package com.recipick.domain.payment.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.repository.CartItemRepository;
+import com.recipick.domain.order.service.CartService;
+import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.facade.PaymentConfirmProcessor;
 import com.recipick.domain.payment.facade.PaymentExpirationProcessor;
 import com.recipick.domain.payment.service.PaymentApprovalOutcome;
@@ -18,9 +23,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 // 카드 결제 결과에 따라 결제한 상품만 장바구니에서 빠지는지 실제 MySQL 위에서 본다.
-// 결제에 실패하거나 만료된 주문은 회원이 다시 담지 않아도 되게 장바구니를 그대로 둔다
+// 결제에 실패하거나 만료된 주문은 회원이 다시 담지 않아도 되게 장바구니를 그대로 둔다.
+// 정리는 결제 확정이 커밋된 뒤 따로 하므로, 정리가 실패해도 결제 확정은 그대로 남아야 한다
 class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
 
     // 주문에 없는 상품. cart_item은 상품을 외래키로 잡지 않아 실제 상품 행 없이 ID만 쓴다
@@ -28,6 +36,9 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
 
     @Autowired
     CartItemRepository cartItemRepository;
+
+    @MockitoSpyBean
+    CartService cartService;
 
     @Autowired
     PaymentConfirmProcessor paymentConfirmProcessor;
@@ -51,19 +62,34 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
         CartItem paid = cartItem(flow, flow.productId());
         CartItem other = cartItem(flow, OTHER_PRODUCT_OFFSET + flow.orderId());
 
-        // 재고 픽스처는 결제 시각을 두지 않아 승인 응답의 완료 시각을 직접 넣는다
-        PortOnePayment paidResult = new PortOnePayment(flow.portonePaymentId(), "tx_flow_" + flow.orderId(),
-            PortOnePaymentStatus.PAID, AMOUNT, "KRW", LocalDateTime.now(clock).withNano(0).minusSeconds(10),
-            flow.orderId(), null);
-
         // when
-        PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult);
+        PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult(flow));
 
         // then
         assertThat(outcome).isEqualTo(PaymentApprovalOutcome.APPROVED);
         assertThat(orderRepository.findById(flow.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(cartItemRepository.findById(paid.getId())).isEmpty();
         assertThat(cartItemRepository.findById(other.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("장바구니 정리가 잠금 대기 초과로 실패해도 결제 확정은 커밋된 채 승인으로 끝나고 장바구니만 남는다")
+    void cleanupFailureKeepsPayment() {
+        // given
+        Flow flow = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
+        CartItem cartItem = cartItem(flow, flow.productId());
+        doThrow(new CannotAcquireLockException("lock wait timeout"))
+            .when(cartService).deleteByProductIds(eq(flow.memberId()), any());
+
+        // when
+        PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult(flow));
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.APPROVED);
+        assertThat(orderRepository.findById(flow.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(paymentRepository.findById(flow.paymentId()).orElseThrow().getStatus())
+            .isEqualTo(PaymentStatus.PAID);
+        assertThat(cartItemRepository.findById(cartItem.getId())).isPresent();
     }
 
     @Test
@@ -100,6 +126,12 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
         assertThat(orderRepository.findById(flow.orderId()).orElseThrow().getStatus())
             .isEqualTo(OrderStatus.CANCELED);
         assertThat(cartItemRepository.findById(cartItem.getId())).isPresent();
+    }
+
+    // 재고 픽스처는 결제 시각을 두지 않아 승인 응답의 완료 시각을 직접 넣는다
+    private PortOnePayment paidResult(Flow flow) {
+        return new PortOnePayment(flow.portonePaymentId(), "tx_flow_" + flow.orderId(), PortOnePaymentStatus.PAID,
+            AMOUNT, "KRW", LocalDateTime.now(clock).withNano(0).minusSeconds(10), flow.orderId(), null);
     }
 
     private CartItem cartItem(Flow flow, Long productId) {
