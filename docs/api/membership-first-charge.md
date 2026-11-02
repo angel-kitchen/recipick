@@ -94,9 +94,11 @@ TX2     MEMBER → MEMBERSHIP(C-7) → MEMBERSHIP_PAYMENT → ATTEMPT 잠금 →
 - `end_at(1) = anchorDate(1) + paidAt의 시·분·초`, `grace_end_at = end_at + 3일`(해지 예약이 있으면 C-3a가 null로 반영).
 - 기준일은 항상 원래 기준일에서 계산합니다(1/31 → 2/28 → 3/31). JVM 기본 시간대가 UTC여도 결과가 같습니다.
 
-## READY 만료 (공통 규칙, 4단계 재사용)
+## READY 만료 (공통 규칙 — 갱신 회차의 분기는 `docs/api/membership-renewal.md`)
 
 첫 접수 유효기간은 **첫 시도 `requestedAt` + 30분**이고 재발급해도 다시 시작하지 않습니다. 회차당 시도는 CANCELED 포함 **최대 3개**입니다.
+아래 규칙은 첫 결제 회차의 것입니다. 갱신 회차(`graceDeadlineAt` 있음)는 같은 진입점에서 취소까지만 공통이고, 그 뒤는 갱신 규칙
+(결제 마감 G·PG 발송 3회·해지·재시도 시각)을 따릅니다. 확정 회차(PAID·FAILED)에 남은 READY는 선점 단계에서 거절돼 PG에 가지 않습니다.
 
 ```text
 READY 만료 → CANCELED (실패하면 최신 상태별 결과: IN_PROGRESS / UNKNOWN·MANUAL_REVIEW / 이미 확정)
@@ -108,7 +110,7 @@ READY 만료 → CANCELED (실패하면 최신 상태별 결과: IN_PROGRESS / U
         └─ 불가 → 회차 FAILED + C-3b(대기 이용권 종료). 재구독은 새 동의·새 접수로
 ```
 
-## 최소 복구 (`MembershipChargeRecoveryFacade`, 5분 간격)
+## 시도 복구 (`MembershipChargeRecoveryFacade`, 5분 간격 — 첫 결제·갱신 공통)
 
 | 대상 | 처리 |
 | --- | --- |
@@ -127,14 +129,14 @@ READY 만료 → CANCELED (실패하면 최신 상태별 결과: IN_PROGRESS / U
 | --- | --- |
 | 바로 구독 새 접수 | 차단(`BILLING-009`) |
 | 같은 키 기존 결과 조회 | 허용 |
-| 체험 전환 새 접수, READY 재발급 | 차단 |
+| 체험 전환 새 접수, 갱신 접수·재시도·카드 대기 재개, READY 재발급 | 차단 |
 | READY 시도의 PG POST | 차단(POST 직전 재확인) |
-| DISPATCHING·UNKNOWN 재조회, 확인된 결과의 TX2, 환불 REQUESTED 저장 | 허용 |
+| DISPATCHING·UNKNOWN 재조회, 확인된 결과의 TX2, 환불 REQUESTED 저장, 갱신 회차 정리(마감·해지) | 허용 |
 
 ## 운영 활성화 게이트 (모두 충족 전에는 플래그를 켜지 않음)
 
 1. PortOne 실험 E-3(빌링키 결제 응답·`paidAt`·`mpay_` ID 규칙), E-4(거절 시 결제 레코드 존재·404 의미), E-6(같은 ID 재시도 안전성)
-2. 4단계: 웹훅 라우팅(`mpay_`), 전체 복구 Sweep, UNKNOWN W 초과 처리, 탈퇴 MEMBERSHIP_PAYMENT Checker
+2. 4-B: 웹훅 라우팅(`mpay_`), 전체 복구 Sweep·마감 놓친 이용권 탐색, UNKNOWN W 초과 처리, 확정 시도의 예상 밖 수납 정정, 빌링키 REVOKED, 탈퇴 MEMBERSHIP_PAYMENT Checker (4-A 월 갱신은 `docs/api/membership-renewal.md`)
 3. 5단계: SYSTEM 환불 PG 실행·정합화
 4. 회원 도메인 구독 API 연결, 2a 운영 인덱스·보안 게이트
 5. 배포 Compose `app.environment`에 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달 추가(배포 담당과 함께). 지금은 전달하지 않으므로 운영 `.env`만 바꿔서는 켜지지 않는다

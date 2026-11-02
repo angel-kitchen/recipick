@@ -25,10 +25,13 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 // 카드 등록 흐름. 이 클래스에는 트랜잭션이 없다 — PortOne 조회·검증은 회원 행을 잠그지 않은 채 끝내고,
-// DB 변경은 Processor의 회원 잠금 트랜잭션에서만 한다. 로그에는 회원 ID·사유 코드만 남기고 키·토큰 원문은 남기지 않는다
+// DB 변경은 Processor의 회원 잠금 트랜잭션에서만 한다. 등록은 바깥 트랜잭션 안에서 부를 수 없다(NEVER) — 등록 TX가 독립적으로
+// 커밋된 뒤에만 카드 대기 중인 갱신 회차를 재개하고, 그 재개가 실패해도 이미 커밋된 등록 결과는 그대로 성공으로 돌려준다. 로그에는 회원 ID·사유 코드만 남기고 키·토큰 원문은 남기지 않는다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -50,6 +53,7 @@ public class BillingKeyRegistrationFacade {
     private final PortOneBillingClient portOneBillingClient;
     private final BillingKeyIssuanceVerifier verifier;
     private final BillingKeyRegistrationProcessor processor;
+    private final MembershipRenewalFacade membershipRenewalFacade;
     private final Clock clock;
 
     // POST /api/billing-keys/issue-requests. 회원 존재·탈퇴는 기존 조회로 확인한다(MEMBER-001)
@@ -71,6 +75,8 @@ public class BillingKeyRegistrationFacade {
     }
 
     // POST /api/billing-keys. ① 플래그 → ③ 발급 요청 1차 확인 → ④ 설정 → ⑤ PortOne 조회 → ⑥ 검증 → ⑦ 회원 잠금 TX
+    // → ⑧ 커밋 뒤 카드 대기 갱신 회차 재개(실패 격리). ⑦까지의 실패는 그대로 등록 실패다
+    @Transactional(propagation = Propagation.NEVER)
     public BillingKeyRegisterResponse register(Long memberId, BillingKeyRegisterRequest request) {
         requireRegistrationEnabled();
         LocalDateTime now = LocalDateTime.now(clock);
@@ -95,8 +101,16 @@ public class BillingKeyRegistrationFacade {
             });
         BillingKeyRegistration registration =
             processor.register(memberId, issueRequest.getId(), request.billingKey(), info.issuedAt());
-        return new BillingKeyRegisterResponse(registration.billingKeyId(), BillingKeyStatus.ACTIVE,
-            registration.outcome());
+        BillingKeyRegisterResponse response = new BillingKeyRegisterResponse(registration.billingKeyId(),
+            BillingKeyStatus.ACTIVE, registration.outcome());
+        try {
+            membershipRenewalFacade.resumeForMember(memberId);
+        } catch (RuntimeException e) {
+            // 등록 TX는 이미 커밋됐다. 재개 실패만 격리하고 카드 대기 회차는 갱신 스케줄러가 다시 본다
+            log.warn("카드 등록 뒤 갱신 재개 실패(등록은 완료): memberId={}, cause={}", memberId,
+                e.getClass().getSimpleName());
+        }
+        return response;
     }
 
     // GET /api/billing-keys/me. 플래그와 무관하다

@@ -79,7 +79,9 @@ recipick:
     registration-enabled: ${BILLING_KEY_REGISTRATION_ENABLED:false}
   membership-billing:
     # 멤버십 자동결제 신규 청구 스위치. 운영 기본 false
-    # 꺼져 있어도 이미 생긴 결제의 재조회·결과 반영·복구는 계속 돈다(docs/api/membership-first-charge.md)
+    # 꺼져 있어도 이미 생긴 결제의 재조회·결과 반영·복구·갱신 회차 정리는 계속 돈다(docs/api/membership-first-charge.md,
+    # docs/api/membership-renewal.md). 갱신 재시도 간격(retry-interval 24h)·회차당 PG 발송 한도(renewal-max-dispatches 3)는
+    # 정책값이라 기본값 그대로 두며 다른 값을 넣으면 기동이 멈춘다
     enabled: ${MEMBERSHIP_BILLING_ENABLED:false}
 ---
 spring:
