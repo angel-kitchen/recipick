@@ -143,7 +143,7 @@ export default function OrderDetail() {
           <ErrorNotice error={cancelError} />
           <div className="row-actions">
             <button type="button" className="btn" disabled={paying || cancelling || !payment} onClick={pay}>
-              {paying ? '결제 진행 중...' : '결제하기'}
+              {paying ? '결제 진행 중...' : '이어서 결제하기'}
             </button>
             <button type="button" className="btn btn--outline" disabled={paying || cancelling} onClick={cancel}>
               {cancelling ? '취소하는 중...' : '주문 취소하기'}
