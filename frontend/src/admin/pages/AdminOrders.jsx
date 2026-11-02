@@ -84,6 +84,30 @@ function OrderDetail({ orderId, onChanged }) {
             수락
           </button>
         )}
+        {order.martStatus === 'PREPARING' && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(() => api.patch(`/api/admin/orders/${orderId}/delivery-status`, { status: 'SHIPPING' }), '배송을 시작했습니다.')
+            }
+          >
+            배송 시작
+          </button>
+        )}
+        {order.martStatus === 'SHIPPING' && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(() => api.patch(`/api/admin/orders/${orderId}/delivery-status`, { status: 'DELIVERED' }), '배송을 완료했습니다.')
+            }
+          >
+            배송 완료
+          </button>
+        )}
         {['RECEIVED', 'PREPARING'].includes(order.martStatus) && !rejecting && (
           <button type="button" className="btn btn--outline" onClick={() => setRejecting(true)}>
             거절
