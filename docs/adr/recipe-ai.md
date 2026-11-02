@@ -99,7 +99,7 @@
 
   공통 추상화를 거치면 이 옵션들을 제공사별 설정으로 다시 다뤄야 해서 얻는 것이 적었다.
 - **제공사를 바꿀 가능성은 우리 인터페이스로 이미 막았다.** domain은 `infra/ai/AiClient`와 `AiResult`만 알고, 구현체는 `ai.client` 설정으로 바뀐다(`FakeAiClient`, `ClaudeAiClient`). Spring AI의 가장 큰 장점인 "제공사 교체"는 호출 3개 규모에서는 구현체 하나를 더 쓰는 것으로 충분하다.
-- **키 없이 개발하는 구조와 맞았다.** 키가 없을 때는 Claude 빈 자체를 만들지 않는다(`@ConditionalOnProperty(name = "ai.client", havingValue = "claude")`). 클라이언트 설정도 `ClaudeClientConfig` 한 곳(`timeout`, `maxRetries`)에 모였다.
+- **키 없이 개발하는 구조와 맞았다.** 기본값 `ai.client=fake`에서는 Claude 빈 자체를 만들지 않는다(`@ConditionalOnProperty(name = "ai.client", havingValue = "claude")`). 이 조건은 키가 있는지가 아니라 `ai.client` 값만 본다. `ai.client=claude`를 고르면 `ANTHROPIC_API_KEY`가 필요하고, 키가 비어 있으면 `ClaudeProperties.apiKey`의 `@NotBlank` 검증에서 앱이 뜨지 않는다. 클라이언트 설정도 `ClaudeClientConfig` 한 곳(`timeout`, `maxRetries`)에 모였다.
 - **의존성이 하나다.** `com.anthropic:anthropic-java` 하나만 추가했다. 스타터·BOM·자동 설정을 추가로 관리하지 않는다.
 
 추가로 정한 것:
@@ -154,7 +154,11 @@
 - 실제 호출 평가(`ClaudeAiEvaluationTest`)는 비용이 들어 `AI_EVAL=true`일 때만 돈다.
 
 ### D10. 관측
-- AI 호출까지 간 요청은 성공·실패 모두 `ai_request_log`에 남긴다. AI를 부르기 전에 거절한 요청(멤버십 없음, `AiRequestLimiter`의 회원별 한도 초과)은 남기지 않으며 지표에도 잡히지 않는다. 남기는 항목: 유형·원문·분석 결과·연결 레시피·결과 상태·모델·입력/출력/캐시 토큰·응답 시간·실패 사유. 조건 추천은 두 호출을 합산한다.
+- AI 응답(또는 실패)을 받아 결과 상태를 정한 요청은 성공·실패(`FALLBACK`) 모두 `ai_request_log`에 남긴다. 남기지 않는 경우는 두 가지다.
+  - AI를 부르기 전에 거절한 요청(멤버십 없음, `AiRequestLimiter`의 회원별 한도 초과)
+  - 자연어 장보기에서 미리보기 계산·저장 중 예외가 난 요청. 미리보기와 이력을 한 트랜잭션(`AiAutoCartProcessor.process`)으로 묶어서, 예외가 나면 AI 호출은 끝났어도 이력까지 함께 롤백된다. 미리보기 없이 `PREVIEWED` 이력만 남지 않게 하려는 의도다.
+  - 두 경우 모두 이력이 없으므로 지표에도 잡히지 않는다.
+- 남기는 항목: 유형·원문·분석 결과·연결 레시피·결과 상태·모델·입력/출력/캐시 토큰·응답 시간·실패 사유. 조건 추천은 두 호출을 합산한다.
 - 이력 저장이 커밋된 뒤 Micrometer 지표 3개(`recipick_ai_requests_total`, `recipick_ai_latency_seconds`, `recipick_ai_tokens_total`)를 기록하고 Prometheus·Grafana "Recipick 개요"에 AI 패널 5개를 둔다. 선택 근거는 [모니터링 4절](../monitoring.md)에 있다.
 - 지표 태그에는 enum과 모델명만 쓴다. 원문·회원 ID는 개인정보이고 태그 값이 끝없이 늘어난다.
 
@@ -187,7 +191,7 @@
 | 요청 한도 | `AiRequestLimiterTest`, 장보기 통합 테스트 | 6번째 요청은 AI 호출 없이 `AI-001` | 통과 |
 | 지표 | `AiRequestMetricsTest`, `AiRequestLogServiceMetricsTest` | 커밋 시 1회 기록, 롤백 시 미기록 | 통과 |
 | 전체 테스트 | `./gradlew test`(`7a7d5c0`) | 실패 0 | 2508개 중 실패 0, 건너뜀 2 |
-| 실제 Claude 정답률·지연·토큰 | `ClaudeAiEvaluationTest`(문장 50개) | [평가](../ai/evaluation.md) 5절 | 측정 예정(API 키 수령 후) |
+| 실제 Claude 정답률·지연·토큰 | `ClaudeAiEvaluationTest`(문장 50개). `extractMenus`·`extractConditions`만 평가하고, 조건 추천 ③ 후보 고르기(`recommendRecipes`)는 정답이 하나로 정해지지 않아 범위 밖 | [평가](../ai/evaluation.md) 5절 | 측정 예정(API 키 수령 후) |
 
 ## 7. AI 필수 항목 점검(2026-11-02)
 
