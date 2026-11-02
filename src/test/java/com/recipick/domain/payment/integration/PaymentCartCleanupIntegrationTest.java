@@ -5,8 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 
+import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
+import com.recipick.domain.order.entity.enums.CartAddSource;
 import com.recipick.domain.order.entity.enums.OrderStatus;
+import com.recipick.domain.order.repository.CartAddHistoryRepository;
 import com.recipick.domain.order.repository.CartItemRepository;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
@@ -37,6 +40,9 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
     @Autowired
     CartItemRepository cartItemRepository;
 
+    @Autowired
+    CartAddHistoryRepository cartAddHistoryRepository;
+
     @MockitoSpyBean
     CartService cartService;
 
@@ -50,17 +56,26 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
 
     @AfterEach
     void cleanUpCart() {
-        memberIds.forEach(memberId -> cartItemRepository.deleteAll(cartItemRepository.findAllByMemberIdOrderByIdAsc(memberId)));
+        memberIds.forEach(memberId -> {
+            cartItemRepository.deleteAll(cartItemRepository.findAllByMemberIdOrderByIdAsc(memberId));
+            jdbcTemplate.update("DELETE FROM cart_add_history WHERE member_id = ?", memberId);
+        });
         memberIds.clear();
     }
 
     @Test
-    @DisplayName("결제가 승인되면 주문한 상품만 장바구니에서 지우고 주문에 없는 상품은 남긴다")
+    @DisplayName("결제가 승인되면 주문한 상품만 장바구니에서 지우고 주문에 없는 상품과 담기 이력은 남긴다")
     void approvalRemovesPaidItems() {
         // given
         Flow flow = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
         CartItem paid = cartItem(flow, flow.productId());
         CartItem other = cartItem(flow, OTHER_PRODUCT_OFFSET + flow.orderId());
+        CartAddHistory history = cartAddHistoryRepository.save(CartAddHistory.builder()
+            .memberId(flow.memberId())
+            .productId(flow.productId())
+            .source(CartAddSource.DIRECT)
+            .quantity(ORDER_QUANTITY)
+            .build());
 
         // when
         PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult(flow));
@@ -70,6 +85,47 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
         assertThat(orderRepository.findById(flow.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(cartItemRepository.findById(paid.getId())).isEmpty();
         assertThat(cartItemRepository.findById(other.getId())).isPresent();
+        assertThat(cartAddHistoryRepository.findById(history.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("결제 완료 뒤 같은 상품을 다시 담고 같은 승인이 다시 전달되면 ALREADY_PAID로 끝나 다시 담은 항목을 지우지 않는다")
+    void replayedApprovalKeepsReAddedItem() {
+        // given
+        Flow flow = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
+        cartItem(flow, flow.productId());
+        PortOnePayment paidResult = paidResult(flow);
+        paymentConfirmProcessor.process(flow.orderId(), paidResult);
+        CartItem reAdded = cartItem(flow, flow.productId());
+
+        // when
+        PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult);
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.ALREADY_PAID);
+        assertThat(cartItemRepository.findById(reAdded.getId()).orElseThrow().getQuantity())
+            .isEqualTo(ORDER_QUANTITY);
+    }
+
+    @Test
+    @DisplayName("결제 확정이 이벤트 발행 뒤 롤백되면 커밋이 없어 장바구니를 정리하지 않는다")
+    void rolledBackApprovalKeepsCart() {
+        // given
+        Flow flow = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
+        CartItem cartItem = cartItem(flow, flow.productId());
+
+        // when — 바깥 트랜잭션에 참여시켜 승인·이벤트 발행까지 마친 뒤 롤백한다
+        PaymentApprovalOutcome outcome = transactionTemplate.execute(status -> {
+            PaymentApprovalOutcome result = paymentConfirmProcessor.process(flow.orderId(), paidResult(flow));
+            status.setRollbackOnly();
+            return result;
+        });
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.APPROVED);
+        assertThat(orderRepository.findById(flow.orderId()).orElseThrow().getStatus())
+            .isEqualTo(OrderStatus.PENDING_PAYMENT);
+        assertThat(cartItemRepository.findById(cartItem.getId())).isPresent();
     }
 
     @Test
