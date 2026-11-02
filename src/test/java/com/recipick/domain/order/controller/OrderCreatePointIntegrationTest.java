@@ -1,6 +1,7 @@
 package com.recipick.domain.order.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -170,6 +171,29 @@ class OrderCreatePointIntegrationTest extends IntegrationTestSupport {
         assertThat(historyCount(PointHistoryType.USE_RESERVED)).isEqualTo(1);
         assertThat(historyCount(PointHistoryType.EARN_PENDING)).isEqualTo(1);
         assertThat(stockOf(product)).isEqualTo(STOCK - ORDER_QUANTITY);
+    }
+
+    @Test
+    @DisplayName("포인트를 쓴 주문은 상세 조회에서도 사용 포인트를 돌려줘 상품 + 배송비 − 포인트 = 결제금액이 맞는다")
+    void getOrderShowsUsedPoint() throws Exception {
+        // given
+        givenHeldPoint();
+        CartItem cartItem = cartItem(product(UNIT_PRICE, STOCK), ORDER_QUANTITY);
+        long orderId = data(createOrder("key-detail", request(cartItem, 3_000L))).path("orderId").asLong();
+
+        // when
+        MockHttpServletResponse response = mockMvc.perform(get("/api/orders/" + orderId)
+                .header("Authorization", "Bearer " + token))
+            .andReturn().getResponse();
+        response.setCharacterEncoding("UTF-8");
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        JsonNode data = data(response);
+        assertThat(data.path("productAmount").asLong()).isEqualTo(5_000L);
+        assertThat(data.path("deliveryFee").asLong()).isEqualTo(3_000L);
+        assertThat(data.path("usedPoint").asLong()).isEqualTo(3_000L);
+        assertThat(data.path("payAmount").asLong()).isEqualTo(5_000L);
     }
 
     @Test
