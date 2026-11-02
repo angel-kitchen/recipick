@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ApiError, api } from '../api/client';
+import { api, isUnknownOutcome } from '../api/client';
 import { cancelPendingOrder, findPendingOrder } from '../api/orders';
 import { customerOf, payOrder } from '../api/payments';
 import { useAuth } from '../auth/AuthContext';
@@ -8,9 +8,6 @@ import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
 import PendingOrderNotice from '../components/PendingOrderNotice';
 import { CART_STATUS, UNORDERABLE_REASON, formatWon } from '../labels';
-
-// 응답을 받지 못해(네트워크 오류, 프록시 502 이상) 서버에서 주문이 생겼는지 알 수 없는 경우
-const isUnknownOutcome = (e) => !(e instanceof ApiError) || e.status >= 502;
 
 export default function Checkout() {
   const { member } = useAuth();
