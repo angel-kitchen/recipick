@@ -32,6 +32,11 @@ public enum AdminAuditAction {
     REFUND_RETRY(AdminAuditTarget.PAYMENT, false, true, false),
     PAYMENT_LIST_VIEW(AdminAuditTarget.PAYMENT, true, false, false),
     PAYMENT_DETAIL_VIEW(AdminAuditTarget.PAYMENT, false, true, false),
+    MEMBERSHIP_PAYMENT_LIST_VIEW(AdminAuditTarget.MEMBERSHIP_PAYMENT, true, false, false),
+    MEMBERSHIP_PAYMENT_DETAIL_VIEW(AdminAuditTarget.MEMBERSHIP_PAYMENT, false, false, false),
+    MEMBERSHIP_PAYMENT_RECHECK(AdminAuditTarget.MEMBERSHIP_PAYMENT, false, false, false),
+    MEMBERSHIP_REFUND_RECHECK(AdminAuditTarget.MEMBERSHIP_REFUND, false, false, false),
+    MEMBERSHIP_REFUND_RETRY(AdminAuditTarget.MEMBERSHIP_REFUND, false, false, false),
     POINT_BALANCE_VIEW(AdminAuditTarget.MEMBER, false, false, false),
     POINT_HISTORY_VIEW(AdminAuditTarget.MEMBER, false, false, false),
     AI_REQUEST_LIST_VIEW(AdminAuditTarget.AI_REQUEST, true, false, false);
