@@ -1,3 +1,4 @@
+
 package com.recipick.domain.payment.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -114,6 +115,49 @@ class MembershipRefundWebhookAdminIntegrationTest extends MembershipRefundFlowSu
         assertThat(lookupFailed).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
         assertThat(refund(requested.refundId()).getStatus()).isEqualTo(MembershipRefundStatus.REQUESTED);
         assertThat(PORTONE.cancelCount(paymentId)).isEqualTo(1);
+    }
+
+    // CodeRabbit #388 회귀 검증: 확정 환불의 취소 ID 누락·빈 문자열 관측
+    @Test
+    @DisplayName("확정 환불 재관측에서 취소 ID가 누락돼도 예외 없이 웹훅 재시도 대기로 보존한다")
+    void finalizedRefundWithMissingCancellationIdRetries() {
+        // given
+        Long membershipId = renewedMembership();
+        String paymentId = appliedPaymentId(membershipId);
+
+        clock.fixAt(DAY_10);
+        MembershipRefundResult completed = requestRefund(membershipId, newKey());
+
+        assertThat(completed.refundStatus()).isEqualTo(MembershipRefundStatus.COMPLETED);
+
+        MembershipRefund saved = refund(completed.refundId());
+        String reason = saved.getPgRequestReason();
+        long amount = saved.getAmount();
+        int postsBefore = PORTONE.cancelCount(paymentId);
+
+        // when: 취소 ID가 null인 경우와 빈 문자열인 경우를 각각 재현
+        for (String rawId : new String[] {"null", "\"\""}) {
+            String cancellationsJson = "[{\"id\":" + rawId
+                + ",\"status\":\"SUCCEEDED\",\"totalAmount\":" + amount
+                + ",\"reason\":\"" + reason + "\",\"trigger\":\"API\"}]";
+
+            PORTONE.getPaymentPaidWithCancellations(
+                paymentId, STORE_ID, FEE, RENEWAL_PAID_AT, amount, cancellationsJson);
+
+            WebhookEvent event = received("Transaction.PartialCancelled", paymentId);
+            WebhookProcessOutcome outcome = reconciliation.processWebhook(event.getId());
+
+            // then: 불신뢰 관측은 재시도 대상으로 보존
+            assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
+
+            // 이미 완료된 환불 및 이용권 종료 기록은 불변
+            assertThat(refund(completed.refundId()).getStatus())
+                .isEqualTo(MembershipRefundStatus.COMPLETED);
+            assertThat(membership(membershipId).getTerminatedAt()).isEqualTo(DAY_10);
+
+            // 웹훅 재조회 과정에서 PG 취소 POST가 다시 발생하지 않음
+            assertThat(PORTONE.cancelCount(paymentId)).isEqualTo(postsBefore);
+        }
     }
 
     @Test

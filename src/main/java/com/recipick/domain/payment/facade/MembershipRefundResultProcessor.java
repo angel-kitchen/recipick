@@ -39,6 +39,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Objects;
 
 // 환불 결과 반영 TX(TX2). 잠금 순서 MEMBER(정산 잠금 — 탈퇴 회원 포함) → 이용권 → 회차 PK → 시도 PK 오름차순 → 환불 PK 오름차순.
 // 회원 ID는 호출자가 트랜잭션 밖에서 역조회해 넘기고, 이 TX의 첫 DB 작업은 회원 잠금이다 — 잠금 전에 일반 조회가 있으면 그 스냅숏으로
@@ -236,39 +237,56 @@ public class MembershipRefundResultProcessor {
 
     // 확정 행(COMPLETED·FAILED)에 다시 온 관측. 같은 ID·같은 상태·같은 금액이면 멱등, 보이지 않으면 변경 없음,
     // 다른 상태·금액이나 같은 reason의 다른 취소는 증거 충돌 — FAILED의 모순 성공을 후속 행에 맞춰 해석하지 않는다
+
     private MembershipRefundApplyResult evaluateFinal(MembershipRefund refund, MembershipPaymentAttempt attempt,
                                                       PortOnePayment observed, LocalDateTime now) {
         MembershipRefundExecutionResult idempotent = refund.getStatus() == MembershipRefundStatus.COMPLETED
             ? MembershipRefundExecutionResult.COMPLETED : MembershipRefundExecutionResult.FAILED;
+
+        // 확정 환불도 취소 ID가 누락된 PG 관측값으로는 정합성을 판정하지 않는다.
+        if (observed.cancellations().stream()
+            .anyMatch(c -> c.id() == null || c.id().isBlank())) {
+            return MembershipRefundApplyResult.signal(Signal.UNTRUSTED_OBSERVATION);
+        }
+
         if (refund.getPgRequestReason() != null) {
             boolean otherWithSameReason = observed.cancellations().stream()
                 .filter(c -> c.trigger() == PortOneCancellationTrigger.API)
                 .filter(c -> refund.getPgRequestReason().equals(c.reason()))
                 .filter(c -> c.status() == PortOneCancellationStatus.SUCCEEDED
                     || c.status() == PortOneCancellationStatus.REQUESTED)
-                .anyMatch(c -> !c.id().equals(refund.getPortoneCancellationId()));
+                .anyMatch(c -> !Objects.equals(c.id(), refund.getPortoneCancellationId()));
+
             if (otherWithSameReason) {
                 return blockEvidenceConflict(refund, attempt, now, "DUPLICATE_REASON");
             }
         }
+
         if (refund.getPortoneCancellationId() == null) {
             return MembershipRefundApplyResult.of(idempotent);
         }
+
         PortOneCancellation seen = observed.cancellations().stream()
-            .filter(c -> refund.getPortoneCancellationId().equals(c.id())).findFirst().orElse(null);
+            .filter(c -> refund.getPortoneCancellationId().equals(c.id()))
+            .findFirst().orElse(null);
+
         if (seen == null) {
             return MembershipRefundApplyResult.of(idempotent);
         }
+
         boolean sameAmount = seen.totalAmount() != null && seen.totalAmount().equals(refund.getAmount());
+
         if (refund.getStatus() == MembershipRefundStatus.COMPLETED) {
             return seen.status() == PortOneCancellationStatus.SUCCEEDED && sameAmount
                 ? MembershipRefundApplyResult.of(idempotent)
                 : blockEvidenceConflict(refund, attempt, now, "COMPLETED_" + seen.status());
         }
+
         return seen.status() == PortOneCancellationStatus.FAILED
             ? MembershipRefundApplyResult.of(idempotent)
             : blockEvidenceConflict(refund, attempt, now, "FAILED_" + seen.status());
     }
+
 
     private static MembershipRefundApplyResult blockEvidenceConflict(MembershipRefund refund,
                                                                      MembershipPaymentAttempt attempt,
