@@ -174,7 +174,7 @@ class MembershipPaymentAttemptTransitionTest {
     }
 
     @Test
-    @DisplayName("정합성 표시(0b)는 DISPATCHING·UNKNOWN에서 상태를 바꾸지 않고 failureReason 코드와 운영 표시(PAID_CONFLICT)만 남긴다")
+    @DisplayName("정합성 표시(0b)는 DISPATCHING·UNKNOWN에서 상태를 바꾸지 않고 failureReason 코드와 강한 차단 표시만 남긴다")
     void markAppliedStateInconsistent() {
         MembershipPaymentAttempt attempt = dispatching();
 
@@ -182,7 +182,7 @@ class MembershipPaymentAttemptTransitionTest {
 
         assertThat(attempt.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
         assertThat(attempt.getFailureReason()).isEqualTo(MembershipPaymentAttempt.REASON_APPLIED_STATE_INCONSISTENT);
-        assertThat(attempt.getOpsReviewReason()).isEqualTo(MembershipOpsReviewReason.PAID_CONFLICT);
+        assertThat(attempt.getOpsReviewReason()).isEqualTo(MembershipOpsReviewReason.APPLIED_STATE_INCONSISTENT);
         assertThat(attempt.getOpsReviewRequiredAt()).isEqualTo(NOW.plusMinutes(5));
         assertThat(attempt.getPgPaidAt()).isNull();
         assertThat(attempt.getRefundRequiredAt()).isNull();
@@ -238,18 +238,20 @@ class MembershipPaymentAttemptTransitionTest {
     }
 
     @Test
-    @DisplayName("자동 정합화 중단은 정합성 코드와 운영 표시가 함께 있을 때만이다(다른 사유의 운영 표시는 중단 아님)")
-    void autoReconcileHaltNeedsCodeAndFlag() {
+    @DisplayName("강한 차단은 차단 사유의 운영 표시가 있을 때만이다(다른 사유의 운영 표시는 차단 아님)")
+    void settlementBlockNeedsBlockingReason() {
         MembershipPaymentAttempt other = dispatching();
         other.flagOpsReview(NOW, MembershipOpsReviewReason.FIRST_PAYMENT_LONG_DELAY);
         MembershipPaymentAttempt inconsistent = dispatching();
         inconsistent.markAppliedStateInconsistent(NOW);
 
-        assertThat(other.isAutoReconcileHalted()).isFalse();
-        assertThat(inconsistent.isAutoReconcileHalted()).isTrue();
+        assertThat(other.isSettlementBlocked()).isFalse();
+        assertThat(inconsistent.isSettlementBlocked()).isTrue();
+        assertThat(inconsistent.getOpsReviewReason()).isEqualTo(MembershipOpsReviewReason.APPLIED_STATE_INCONSISTENT);
+        assertThat(inconsistent.getFailureReason())
+            .isEqualTo(MembershipPaymentAttempt.REASON_APPLIED_STATE_INCONSISTENT);
         assertThat(inconsistent.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
-        assertThat(MembershipPaymentAttempt.isAutoReconcileHalted(
-            MembershipPaymentAttempt.REASON_APPLIED_STATE_INCONSISTENT, null)).isFalse();
+        assertThat(MembershipPaymentAttempt.isSettlementBlocked(null)).isFalse();
     }
 
     private static void assertUnchanged(MembershipPaymentAttempt attempt, MembershipPaymentAttemptStatus status,

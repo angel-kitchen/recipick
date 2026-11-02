@@ -44,6 +44,7 @@ import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipChargeTicket;
 import com.recipick.domain.payment.service.MembershipPaymentQueryService;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
+import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRequestHash;
 import com.recipick.domain.payment.service.MembershipSubscribeStatus;
 import com.recipick.global.exception.BusinessException;
@@ -297,8 +298,8 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).minusMinutes(1).withNano(0);
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
-        MembershipChargeOutcome again = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome again = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.ACTIVATED);
         assertThat(again).isEqualTo(MembershipChargeOutcome.ALREADY_APPLIED);
@@ -329,7 +330,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).withNano(0);
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.ACTIVATED);
         Membership membership = memberships.findById(first.membershipId()).orElseThrow();
@@ -346,7 +347,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).minusHours(25).withNano(0);
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.ACTIVATED);
         assertThat(memberships.findById(first.membershipId()).orElseThrow().getActivatedAt()).isEqualTo(pgPaidAt);
@@ -364,7 +365,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
 
         String paymentId = paymentIdOf(first.attemptId());
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(),
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(),
             MembershipPgVerdict.of(paymentId, FEE, new PortOnePayment(paymentId, "tx", PortOnePaymentStatus.FAILED, FEE,
                 "KRW", null, null, "declined")));
 
@@ -384,9 +385,9 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         SubscriptionReceipt first = accept();
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
 
-        assertThat(resultProcessor.apply(member.getId(), first.attemptId(),
+        assertThat(applyResult(member.getId(), first.attemptId(),
             MembershipPgVerdict.unresolved("COMMON-009"))).isEqualTo(MembershipChargeOutcome.STILL_UNKNOWN);
-        assertThat(resultProcessor.apply(member.getId(), first.attemptId(), MembershipPgVerdict.notFound()))
+        assertThat(applyResult(member.getId(), first.attemptId(), MembershipPgVerdict.notFound()))
             .isEqualTo(MembershipChargeOutcome.STILL_UNKNOWN);
 
         assertThat(attempts.findById(first.attemptId()).orElseThrow().getStatus())
@@ -406,7 +407,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).minusMonths(2).withNano(0);
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
         assertRefundRequested(first, FEE, MembershipOpsReviewReason.FIRST_PAYMENT_PERIOD_ENDED, true);
@@ -420,9 +421,9 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).withNano(0);
 
         MembershipChargeOutcome outcome =
-            resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, 3_800L));
+            applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, 3_800L));
         MembershipChargeOutcome again =
-            resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, 3_800L));
+            applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, 3_800L));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
         assertThat(again).isEqualTo(MembershipChargeOutcome.ALREADY_APPLIED);
@@ -439,13 +440,13 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         String paymentId = paymentIdOf(first.attemptId());
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).withNano(0);
 
-        MembershipChargeOutcome usd = resultProcessor.apply(member.getId(), first.attemptId(),
+        MembershipChargeOutcome usd = applyResult(member.getId(), first.attemptId(),
             MembershipPgVerdict.of(paymentId, FEE, new PortOnePayment(paymentId, "tx", PortOnePaymentStatus.PAID,
                 FEE, "USD", pgPaidAt, null, null)));
-        MembershipChargeOutcome wrongIdFailed = resultProcessor.apply(member.getId(), first.attemptId(),
+        MembershipChargeOutcome wrongIdFailed = applyResult(member.getId(), first.attemptId(),
             MembershipPgVerdict.of(paymentId, FEE, new PortOnePayment("mpay_other", "tx", PortOnePaymentStatus.FAILED,
                 FEE, "KRW", null, null, null)));
-        MembershipChargeOutcome noPaidAt = resultProcessor.apply(member.getId(), first.attemptId(),
+        MembershipChargeOutcome noPaidAt = applyResult(member.getId(), first.attemptId(),
             MembershipPgVerdict.of(paymentId, FEE, new PortOnePayment(paymentId, "tx", PortOnePaymentStatus.PAID,
                 FEE, "KRW", null, null, null)));
 
@@ -469,7 +470,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
         time.membershipTerminated(first.membershipId(), LocalDateTime.now(clock).withNano(0));
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(),
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(),
             paid(LocalDateTime.now(clock).withNano(0), FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
@@ -485,9 +486,9 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         LocalDateTime pgPaidAt = LocalDateTime.now(clock).withNano(0);
         time.membershipActivated(first.membershipId(), pgPaidAt);
 
-        Throwable thrown = catchThrowable(() -> resultProcessor.apply(member.getId(), first.attemptId(),
+        Throwable thrown = catchThrowable(() -> applyResult(member.getId(), first.attemptId(),
             paid(pgPaidAt, FEE)));
-        Throwable again = catchThrowable(() -> resultProcessor.apply(member.getId(), first.attemptId(),
+        Throwable again = catchThrowable(() -> applyResult(member.getId(), first.attemptId(),
             paid(pgPaidAt, 3_800L)));
 
         assertThat(thrown).isInstanceOf(MembershipSettlementInvariantException.class);
@@ -517,7 +518,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         time.otherPayment(first.membershipId(), FEE, MembershipPaymentStatus.PAID, activatedAt.toLocalDate(),
             activatedAt.plusMonths(1).plusDays(3), activatedAt, null);
 
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
         MembershipPaymentAttempt attempt = attempts.findById(first.attemptId()).orElseThrow();
@@ -680,7 +681,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         Long conflicting = time.otherPayment(first.membershipId(), FEE, MembershipPaymentStatus.FAILED,
             pgPaidAt.toLocalDate(), pgPaidAt.plusMonths(1).plusDays(3), null, "TEST_FIXTURE");
 
-        Throwable thrown = catchThrowable(() -> resultProcessor.apply(member.getId(), first.attemptId(),
+        Throwable thrown = catchThrowable(() -> applyResult(member.getId(), first.attemptId(),
             paid(pgPaidAt, FEE)));
 
         assertThat(hasConstraintViolation(thrown)).isTrue();
@@ -694,7 +695,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         assertThat(refundCount()).isZero();
 
         time.deletePayment(conflicting);
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE));
 
         assertThat(outcome).isEqualTo(MembershipChargeOutcome.ACTIVATED);
         assertThat(memberships.findById(first.membershipId()).orElseThrow().getActivatedAt()).isEqualTo(pgPaidAt);
@@ -727,12 +728,12 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         assertThat(flaggedAgain).isFalse();
         MembershipPaymentAttempt attempt = attempts.findById(first.attemptId()).orElseThrow();
         assertThat(attempt.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
-        assertThat(attempt.isAutoReconcileHalted()).isTrue();
+        assertThat(attempt.isSettlementBlocked()).isTrue();
         assertThat(attempt.getRefundRequiredAt()).isNull();
         assertThat(payments.findById(paymentId()).orElseThrow().getStatus()).isEqualTo(MembershipPaymentStatus.PENDING);
         assertThat(refundCount()).isZero();
         assertThat(existsUnresolved()).isTrue();
-        assertThat(resultProcessor.apply(member.getId(), first.attemptId(), paid(pgPaidAt, FEE)))
+        assertThat(applyResult(member.getId(), first.attemptId(), paid(pgPaidAt, FEE)))
             .isEqualTo(MembershipChargeOutcome.RECONCILE_HALTED);
     }
 
@@ -741,7 +742,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
     void unsettledUntilSystemRefundCompleted() {
         SubscriptionReceipt first = accept();
         dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
-        resultProcessor.apply(member.getId(), first.attemptId(), paid(LocalDateTime.now(clock).minusMonths(2), FEE));
+        applyResult(member.getId(), first.attemptId(), paid(LocalDateTime.now(clock).minusMonths(2), FEE));
         assertThat(existsUnresolved()).isTrue();
 
         jdbc.update("UPDATE membership_refund SET status = ? WHERE membership_payment_attempt_id = ?",
@@ -845,5 +846,11 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
     private static ErrorCode codeOf(Throwable thrown) {
         assertThat(thrown).isInstanceOf(BusinessException.class);
         return ((BusinessException) thrown).getErrorCode();
+    }
+
+    // 결과 반영을 직접 부를 때 실행기와 같은 관측값(GET 전에 본 선점 시각)을 넘긴다
+    private MembershipChargeOutcome applyResult(Long memberId, Long attemptId, MembershipPgVerdict verdict) {
+        return resultProcessor.apply(memberId, attemptId, attempts.findById(attemptId).orElseThrow().getDispatchedAt(),
+            verdict, MembershipReconciliationTrigger.SCHEDULED);
     }
 }

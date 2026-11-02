@@ -24,6 +24,7 @@ import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository
 import com.recipick.domain.payment.repository.MembershipPaymentRepository;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
+import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRequestHash;
 import com.recipick.domain.payment.service.MembershipSubscribeResult;
 import com.recipick.domain.payment.service.MembershipSubscribeStatus;
@@ -161,7 +162,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         recovery.recoverOnce();
         recovery.recoverOnce();
         MembershipChargeOutcome reconciled = executor.reconcile(member.getId(), receipt.attemptId());
-        MembershipChargeOutcome applied = resultProcessor.apply(member.getId(), receipt.attemptId(),
+        MembershipChargeOutcome applied = applyResult(member.getId(), receipt.attemptId(),
             MembershipPgVerdict.unresolved("PG_TIMEOUT"));
 
         assertThat(reconciled).isEqualTo(MembershipChargeOutcome.RECONCILE_HALTED);
@@ -171,7 +172,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         MembershipPaymentAttempt flagged = attempts.findById(receipt.attemptId()).orElseThrow();
         assertThat(flagged.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
         assertThat(flagged.getFailureReason()).isEqualTo(MembershipPaymentAttempt.REASON_APPLIED_STATE_INCONSISTENT);
-        assertThat(flagged.isAutoReconcileHalted()).isTrue();
+        assertThat(flagged.isSettlementBlocked()).isTrue();
         assertThat(flagged.getRefundRequiredAt()).isNull();
         assertThat(payments.findById(paymentRowId()).orElseThrow().getStatus())
             .isEqualTo(MembershipPaymentStatus.PENDING);
@@ -368,5 +369,11 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
             }
         }
         return false;
+    }
+
+    // 결과 반영을 직접 부를 때 실행기와 같은 관측값(GET 전에 본 선점 시각)을 넘긴다
+    private MembershipChargeOutcome applyResult(Long memberId, Long attemptId, MembershipPgVerdict verdict) {
+        return resultProcessor.apply(memberId, attemptId, attempts.findById(attemptId).orElseThrow().getDispatchedAt(),
+            verdict, MembershipReconciliationTrigger.SCHEDULED);
     }
 }

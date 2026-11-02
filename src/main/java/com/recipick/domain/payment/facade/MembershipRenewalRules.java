@@ -12,9 +12,11 @@ import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
 import com.recipick.domain.payment.repository.MembershipPaymentRepository;
+import com.recipick.domain.payment.repository.MembershipRefundRepository;
 import com.recipick.domain.payment.service.MembershipBillingPeriods;
 import com.recipick.domain.payment.service.MembershipBillingPeriods.RenewalPeriod;
 import com.recipick.domain.payment.service.MembershipPaymentQueryService;
@@ -48,11 +50,13 @@ public class MembershipRenewalRules {
     public static final String REASON_RENEWAL_CANCELED = "RENEWAL_CANCELED";
     public static final String REASON_MEMBERSHIP_TERMINATED = "MEMBERSHIP_TERMINATED";
     public static final String REASON_NOT_DISPATCHED = "NOT_DISPATCHED";
+    public static final String REASON_UNAPPLIED_PAID_ONLY = "UNAPPLIED_PAID_ONLY";
 
     private final MembershipBillingService membershipBillingService;
     private final MembershipPaymentQueryService membershipPaymentQueryService;
     private final MembershipPaymentRepository payments;
     private final MembershipPaymentAttemptRepository attempts;
+    private final MembershipRefundRepository refunds;
     private final BillingKeyRepository billingKeys;
     private final MembershipBillingGate gate;
     private final MembershipBillingProperties properties;
@@ -85,8 +89,8 @@ public class MembershipRenewalRules {
             return MembershipRenewalDecision.of(Kind.ALREADY_RESOLVED, paymentId);
         }
         RenewalPeriod period = storedPeriod(payment);
-        if (locked.stream().anyMatch(MembershipPaymentAttempt::isAutoReconcileHalted)) {
-            return halted(paymentId, "AUTO_RECONCILE_HALTED");
+        if (locked.stream().anyMatch(MembershipPaymentAttempt::isSettlementBlocked)) {
+            return halted(paymentId, "SETTLEMENT_BLOCKED");
         }
         cancelExpiredReady(locked, now);
         if (hasPgPending(locked)) {
@@ -100,12 +104,18 @@ public class MembershipRenewalRules {
         if (validReady.size() == 1) {
             return keepValidReady(membership, payment, period, validReady.get(0), mode);
         }
-        if (locked.stream().anyMatch(a -> a.getStatus() == MembershipPaymentAttemptStatus.PAID)) {
+        String unexplainedPaid = unexplainedPaid(locked);
+        if (unexplainedPaid != null) {
             // 미해결 회차에 수납된 시도가 있는데 반영·환불 관계가 설명되지 않는다. 재접수·FAILED 종료로 정산을 풀지 않는다
-            return halted(paymentId, "UNEXPLAINED_PAID_ATTEMPT");
+            return halted(paymentId, unexplainedPaid);
         }
         if (!stoppable(membership) || !matches(period, membership)) {
             return halted(paymentId, "MEMBERSHIP_PERIOD_MISMATCH");
+        }
+        if (locked.stream().anyMatch(this::explainedUnappliedPaid)) {
+            // 환불 대상 수납만 남은 회차. 돌려줄 돈이 있는 회차에 다시 청구하지 않고 닫는다
+            closeRenewal(payment, membership, REASON_UNAPPLIED_PAID_ONLY);
+            return MembershipRenewalDecision.of(Kind.CLOSED, paymentId);
         }
         if (!isWaitingStatus(payment.getStatus())) {
             return halted(paymentId, "NO_LIVE_ATTEMPT_ON_" + payment.getStatus().name());
@@ -139,11 +149,16 @@ public class MembershipRenewalRules {
             return MembershipRenewalDecision.of(Kind.IN_PROGRESS, paymentId);
         }
         RenewalPeriod period = storedPeriod(payment);
-        if (locked.stream().anyMatch(a -> a.getStatus() == MembershipPaymentAttemptStatus.PAID)) {
-            return halted(paymentId, "UNEXPLAINED_PAID_ATTEMPT");
+        String unexplainedPaid = unexplainedPaid(locked);
+        if (unexplainedPaid != null) {
+            return halted(paymentId, unexplainedPaid);
         }
         if (!stoppable(membership) || !matches(period, membership)) {
             return halted(paymentId, "MEMBERSHIP_PERIOD_MISMATCH");
+        }
+        if (locked.stream().anyMatch(this::explainedUnappliedPaid)) {
+            closeRenewal(payment, membership, REASON_UNAPPLIED_PAID_ONLY);
+            return MembershipRenewalDecision.of(Kind.CLOSED, paymentId);
         }
         String terminal = terminalReason(membership, period, locked, now);
         if (terminal != null) {
@@ -204,7 +219,7 @@ public class MembershipRenewalRules {
 
     // ---------- 내부 ----------
 
-    // 접수 때 유효했던 READY 하나. 해지 예약만으로 버리지 않는다(D-10). 이용권이 종료됐으면 지금 실행하지 않고 만료를 기다린다
+    // 접수 때 유효했던 READY 하나. 해지 예약만으로 버리지 않는다. 이용권이 종료됐으면 지금 실행하지 않고 만료를 기다린다
     private MembershipRenewalDecision keepValidReady(BillingMembershipData membership, MembershipPayment payment,
                                                      RenewalPeriod period, MembershipPaymentAttempt ready, Mode mode) {
         if (mode == Mode.SETTLE || membership.terminatedAt() != null) {
@@ -222,6 +237,30 @@ public class MembershipRenewalRules {
                 attempt.cancelNotDispatched(now);
             }
         }
+    }
+
+    // 미해결 회차의 PAID 시도 분류. 환불 필요 표시가 있고 그 시도의 SYSTEM 환불 행(상태 무관)이 있으면 설명 가능한 미반영 수납이다 —
+    // 살아 있는 시도도 정상 대금도 아니고 이후 판정에서 없는 시도처럼 지나간다(발송 수에는 들어간다). 환불 필요인데 환불 행이 없으면
+    // 원자성이 깨진 데이터, 환불 필요 표시 없는 PAID는 근거 없는 수납이다 — 둘 다 멈춘다. 설명되면 null
+    private String unexplainedPaid(List<MembershipPaymentAttempt> locked) {
+        for (MembershipPaymentAttempt attempt : locked) {
+            if (attempt.getStatus() != MembershipPaymentAttemptStatus.PAID) {
+                continue;
+            }
+            if (attempt.getRefundRequiredAt() == null) {
+                return "UNEXPLAINED_PAID_ATTEMPT";
+            }
+            if (!explainedUnappliedPaid(attempt)) {
+                return "REFUND_RECORD_MISSING";
+            }
+        }
+        return null;
+    }
+
+    private boolean explainedUnappliedPaid(MembershipPaymentAttempt attempt) {
+        return attempt.getStatus() == MembershipPaymentAttemptStatus.PAID && attempt.getRefundRequiredAt() != null
+            && !refunds.findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc(attempt.getId(),
+            RefundRequester.SYSTEM).isEmpty();
     }
 
     private static boolean hasPgPending(List<MembershipPaymentAttempt> locked) {
@@ -270,7 +309,7 @@ public class MembershipRenewalRules {
     }
 
     // PENDING인데 살아 있는 시도가 없는 잔존을 재시도 대기로 바로잡는다. 마지막 시도가 미발송 CANCELED이고 그 앞도 설명 가능한
-    // FAILED·미발송 CANCELED일 때만이다(시도 0건인 PENDING은 처음부터 결제해도 되는 상태로 보지 않는다).
+    // FAILED·미발송 CANCELED·설명 가능한 미반영 수납일 때만이다(시도 0건인 PENDING은 처음부터 결제해도 되는 상태로 보지 않는다).
     // 재시도 가능 시각: 앞선 FAILED가 없으면 지금, 있으면 가장 최근 FAILED 확정 + R. 취소 시각으로 다시 세지 않는다
     private boolean normalizeResidue(MembershipPayment payment, List<MembershipPaymentAttempt> locked,
                                      RenewalPeriod period, LocalDateTime now) {
@@ -283,7 +322,8 @@ public class MembershipRenewalRules {
             return false;
         }
         boolean explained = locked.stream().allMatch(a -> a.getStatus() == MembershipPaymentAttemptStatus.FAILED
-            || (a.getStatus() == MembershipPaymentAttemptStatus.CANCELED && a.getDispatchedAt() == null));
+            || (a.getStatus() == MembershipPaymentAttemptStatus.CANCELED && a.getDispatchedAt() == null)
+            || explainedUnappliedPaid(a));
         Optional<LocalDateTime> eligibleAt = retryEligibleAt(locked, now);
         if (!explained || eligibleAt.isEmpty()) {
             return false;

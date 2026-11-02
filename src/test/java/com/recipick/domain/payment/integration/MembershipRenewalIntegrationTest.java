@@ -11,11 +11,11 @@ import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
-import com.recipick.domain.payment.exception.MembershipSettlementInvariantException;
 import com.recipick.domain.payment.facade.MembershipRenewalProcessor.CloseResult;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipChargeTicket;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
+import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRenewalDecision;
 import com.recipick.domain.payment.service.MembershipRenewalDecision.Kind;
 import java.time.LocalDateTime;
@@ -167,8 +167,8 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
         // when
         clock.fixAt(T.plusHours(3));
         MembershipChargeOutcome reconciled = executor.reconcile(member.getId(), attemptId);
-        MembershipChargeOutcome applied = resultProcessor.apply(member.getId(), attemptId,
-            new MembershipPgVerdict(MembershipPgVerdict.Kind.FAILED, null, null, "PG_FAILED"));
+        MembershipChargeOutcome applied = applyResult(member.getId(), attemptId,
+            new MembershipPgVerdict(MembershipPgVerdict.Kind.FAILED, null, null, "PG_FAILED", true));
 
         // then
         assertThat(reconciled).isEqualTo(MembershipChargeOutcome.ALREADY_APPLIED);
@@ -731,8 +731,8 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
 
         // when
         MembershipChargeOutcome polled = executor.reconcile(member.getId(), attemptId);
-        MembershipChargeOutcome failed = resultProcessor.apply(member.getId(), attemptId,
-            new MembershipPgVerdict(MembershipPgVerdict.Kind.FAILED, null, null, "PG_FAILED"));
+        MembershipChargeOutcome failed = applyResult(member.getId(), attemptId,
+            new MembershipPgVerdict(MembershipPgVerdict.Kind.FAILED, null, null, "PG_FAILED", true));
 
         // then
         assertThat(polled).isEqualTo(MembershipChargeOutcome.MANUAL_REVIEW);
@@ -782,8 +782,8 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
 
         // when
         MembershipChargeOutcome first = executor.reconcile(member.getId(), stray.getId());
-        MembershipChargeOutcome replay = resultProcessor.apply(member.getId(), stray.getId(),
-            new MembershipPgVerdict(MembershipPgVerdict.Kind.PAID, T.plusMinutes(2), FEE, null));
+        MembershipChargeOutcome replay = applyResult(member.getId(), stray.getId(),
+            new MembershipPgVerdict(MembershipPgVerdict.Kind.PAID, T.plusMinutes(2), FEE, null, true));
 
         // then
         assertThat(first).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
@@ -797,8 +797,8 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
     }
 
     @Test
-    @DisplayName("FAILED로 확정된 시도에 신뢰 가능한 PAID가 오면 상태를 바꾸지도 환불을 만들지도 않고 멈춘다")
-    void contradictoryPaidOnFailedAttemptHalts() {
+    @DisplayName("발송된 FAILED 시도에 신뢰 가능한 PAID가 오면 연장하지 않고 수납을 정정해 실제 수납액을 돌려준다")
+    void latePaidOnFailedAttemptIsRefundedNotExtended() {
         // given
         Long membershipId = activeMembership();
         PORTONE.defaultFailed(FEE);
@@ -806,13 +806,14 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
         Long attemptId = attemptsOf(onlyRenewalPayment(membershipId).getId()).get(0).getId();
 
         // when
-        MembershipChargeOutcome outcome = resultProcessor.apply(member.getId(), attemptId,
-            new MembershipPgVerdict(MembershipPgVerdict.Kind.PAID, T, FEE, null));
+        MembershipChargeOutcome outcome = applyResult(member.getId(), attemptId,
+            new MembershipPgVerdict(MembershipPgVerdict.Kind.PAID, T, FEE, null, true));
 
         // then
-        assertThat(outcome).isEqualTo(MembershipChargeOutcome.RECONCILE_HALTED);
-        assertThat(attempt(attemptId).getStatus()).isEqualTo(MembershipPaymentAttemptStatus.FAILED);
-        assertThat(refundCountOfMember()).isZero();
+        assertThat(outcome).isEqualTo(MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED);
+        assertThat(attempt(attemptId).getStatus()).isEqualTo(MembershipPaymentAttemptStatus.PAID);
+        assertThat(systemRefundAmounts(attemptId)).containsExactly(FEE);
+        assertThat(membership(membershipId).getEndAt()).isEqualTo(T);
     }
 
     @Test
@@ -842,7 +843,7 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
     // ---------- 원자성·정합성 ----------
 
     @Test
-    @DisplayName("이용권 종료 시각이 회차 T와 다르면 C-4a 전에 거절·전체 롤백, 복구가 원인을 재검증해 자동 정합화를 멈춘다")
+    @DisplayName("이용권 종료 시각이 회차 T와 다르면 C-4a 전에 거절·전체 롤백, 실행기가 원인을 재검증해 강한 차단을 남긴다")
     void renewalBaseMismatchHaltsWithoutMutation() {
         // given
         Long membershipId = activeMembership();
@@ -853,16 +854,15 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
         clock.fixAt(T.plusHours(2));
 
         // when
-        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
-            () -> executor.reconcile(member.getId(), attemptId));
+        MembershipChargeOutcome first = executor.reconcile(member.getId(), attemptId);
         recovery.recoverOnce();
         MembershipChargeOutcome afterFlag = executor.reconcile(member.getId(), attemptId);
 
         // then
-        assertThat(thrown).isInstanceOf(MembershipSettlementInvariantException.class);
+        assertThat(first).isEqualTo(MembershipChargeOutcome.RECONCILE_HALTED);
         MembershipPaymentAttempt halted = attempt(attemptId);
         assertThat(halted.getStatus()).isEqualTo(MembershipPaymentAttemptStatus.DISPATCHING);
-        assertThat(halted.isAutoReconcileHalted()).isTrue();
+        assertThat(halted.isSettlementBlocked()).isTrue();
         assertThat(onlyRenewalPayment(membershipId).getStatus()).isEqualTo(MembershipPaymentStatus.PENDING);
         assertThat(membership(membershipId).getEndAt()).isEqualTo(T.plusHours(1));
         assertThat(refundCountOfMember()).isZero();
@@ -961,5 +961,11 @@ class MembershipRenewalIntegrationTest extends MembershipRenewalFlowSupport {
             cause = cause.getCause();
         }
         return messages.toString();
+    }
+
+    // 결과 반영을 직접 부를 때 실행기와 같은 관측값(GET 전에 본 선점 시각)을 넘긴다
+    private MembershipChargeOutcome applyResult(Long memberId, Long attemptId, MembershipPgVerdict verdict) {
+        return resultProcessor.apply(memberId, attemptId, attempts.findById(attemptId).orElseThrow().getDispatchedAt(),
+            verdict, MembershipReconciliationTrigger.SCHEDULED);
     }
 }

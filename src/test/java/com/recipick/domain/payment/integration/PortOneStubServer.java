@@ -152,6 +152,16 @@ public final class PortOneStubServer {
         onGetPayment(paymentId, 200, paymentJson(paymentId, "PAID", amount, "KRW", rawPaidAt, null));
     }
 
+    // 거래는 있지만 아직 끝나지 않은 상태(PENDING·READY 등). paidAt 없음
+    public void getPaymentInStatus(String paymentId, String status, long amount) {
+        onGetPayment(paymentId, 200, paymentJson(paymentId, status, amount, "KRW", null, null));
+    }
+
+    // 조회 장애(5xx) — 거래의 존재도 부재도 알 수 없다
+    public void getPaymentServerError(String paymentId) {
+        onGetPayment(paymentId, 500, "{\"type\":\"INTERNAL_SERVER_ERROR\"}");
+    }
+
     public void getPaymentNotFound(String paymentId) {
         onGetPayment(paymentId, 404, "{\"type\":\"PAYMENT_NOT_FOUND\"}");
     }

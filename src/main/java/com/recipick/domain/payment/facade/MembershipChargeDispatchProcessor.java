@@ -3,6 +3,7 @@ package com.recipick.domain.payment.facade;
 import com.recipick.domain.payment.config.MembershipBillingProperties;
 import com.recipick.domain.payment.entity.MembershipPayment;
 import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
+import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
 import com.recipick.domain.payment.service.MembershipBillingPeriods;
 import com.recipick.domain.payment.service.MembershipChargeClaim;
@@ -17,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 // 선점 TX. 시도 PK 한 행만 잠근다 — 회원·이용권·회차는 잠그지 않는다.
 // 이 TX는 READY → DISPATCHING만 바꾸고 C-17 판정은 "미해결 → 미해결"이라 불변이다. 여러 서버가 같은 READY를 집어도
 // 잠금 뒤 상태 검사로 하나만 성공한다. 성공하면 PG 호출에 필요한 값을 담아 돌려주고(빌링키 원문은 티켓 toString에서 가려진다),
-// 실패하면 잠근 행에서 본 상태를 돌려준다
+// 실패하면 잠근 행에서 본 상태를 돌려준다.
+// 회차에 강한 정합성 차단 시도가 하나라도 있으면(자기 시도 포함) 선점하지 않는다 — 다른 READY를 집어 차단을 우회하는 청구를 막는다.
+// 그 확인은 잠금 없는 일반 조회다. POST 직전과 TX2에서 다시 확인한다. MEMBER를 잠그거나 PG를 부르지 않는 선점 TX의 원칙은 그대로다
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -37,6 +40,12 @@ public class MembershipChargeDispatchProcessor {
         if (!payment.isUnresolved()) {
             // 확정 회차(PAID·FAILED)에 남은 READY는 선점·PG 호출 대상이 아니다. 시도 PK만 잠그는 원칙은 그대로 두고 회차는 읽기만 한다
             return MembershipChargeClaim.rejected(attempt.getStatus(), attempt.getDispatchedAt());
+        }
+        if (attempts.existsByMembershipPaymentIdAndOpsReviewReasonIn(payment.getId(),
+            MembershipOpsReviewReason.BLOCKING)) {
+            log.warn("강한 정합성 차단 회차의 시도는 선점하지 않음(운영 확인 대상): attemptId={}, membershipPaymentId={}", attemptId,
+                payment.getId());
+            return MembershipChargeClaim.blocked(attempt.getStatus(), attempt.getDispatchedAt());
         }
         if (!attempt.claim(LocalDateTime.now(clock))) {
             // 잠금 아래에서 본 최신 상태를 돌려준다 — 실행기가 신선한 DISPATCHING이면 GET 없이 기다리게

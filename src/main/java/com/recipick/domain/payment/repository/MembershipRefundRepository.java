@@ -2,7 +2,9 @@ package com.recipick.domain.payment.repository;
 
 import com.recipick.domain.payment.entity.MembershipRefund;
 import com.recipick.domain.payment.entity.enums.MembershipRefundStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
 import java.util.Collection;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +22,8 @@ public interface MembershipRefundRepository extends JpaRepository<MembershipRefu
     boolean existsByMembershipPaymentMembershipIdInAndStatus(@Param("membershipIds") Collection<Long> membershipIds,
                                                              @Param("status") MembershipRefundStatus status);
 
-    // TX2(3단계). 같은 시도에 SYSTEM 환불 REQUESTED가 이미 있으면 두 번째를 만들지 않는다. 시도 PK 잠금 아래에서 본다
-    boolean existsByMembershipPaymentAttemptIdAndStatus(Long membershipPaymentAttemptId, MembershipRefundStatus status);
+    // TX2의 SYSTEM 환불 멱등 판정. 같은 시도의 SYSTEM 환불 행을 상태와 무관하게 모두 본다 — REQUESTED만 보면 FAILED·COMPLETED 뒤에
+    // 새 요청을 또 만든다. 시도 PK 잠금 아래에서 본다(환불 생성은 모두 같은 잠금 순서 아래)
+    List<MembershipRefund> findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc(Long membershipPaymentAttemptId,
+                                                                                      RefundRequester requestedBy);
 }
