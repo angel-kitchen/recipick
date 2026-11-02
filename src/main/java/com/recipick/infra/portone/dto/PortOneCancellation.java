@@ -4,15 +4,30 @@ import com.recipick.global.common.TimeConstants;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
-// 결제 단건 조회 응답의 취소 내역(도메인용). 시각은 한국 시간 LocalDateTime으로 바꿔 둔다
+// 결제 단건 조회 응답의 취소 내역(도메인용). 시각은 한국 시간 LocalDateTime으로 바꿔 둔다.
+// reason은 취소 요청 때 보낸 사유 원문 — 멤버십 환불이 서버가 만든 식별값으로 자기 취소를 알아보는 데 쓴다(없으면 null)
 public record PortOneCancellation(
     String id,
     PortOneCancellationStatus status,
     Long totalAmount,
     LocalDateTime requestedAt,
     LocalDateTime canceledAt,
-    PortOneCancellationTrigger trigger
+    PortOneCancellationTrigger trigger,
+    String reason
 ) {
+
+    // 취소 사유가 필요 없는 상품 결제 정합화용(기존 생성자 호환)
+    public PortOneCancellation(
+        String id,
+        PortOneCancellationStatus status,
+        Long totalAmount,
+        LocalDateTime requestedAt,
+        LocalDateTime canceledAt,
+        PortOneCancellationTrigger trigger
+    ) {
+        this(id, status, totalAmount, requestedAt, canceledAt, trigger, null);
+    }
+
     public static PortOneCancellation from(PortOnePaymentResponse.Cancellation cancellation) {
         return new PortOneCancellation(
             cancellation.id(),
@@ -20,7 +35,8 @@ public record PortOneCancellation(
             cancellation.totalAmount(),
             toKst(cancellation.requestedAt()),
             toKst(cancellation.canceledAt()),
-            cancellation.trigger() == null ? PortOneCancellationTrigger.UNKNOWN : cancellation.trigger()
+            cancellation.trigger() == null ? PortOneCancellationTrigger.UNKNOWN : cancellation.trigger(),
+            cancellation.reason()
         );
     }
 

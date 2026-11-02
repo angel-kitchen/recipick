@@ -43,6 +43,11 @@ public record PaymentDelayTask(
         return new PaymentDelayTask(PaymentDelayTaskType.PAYMENT_EXPIRE, paymentId);
     }
 
+    // 멤버십 환불(MEMBERSHIP_REFUND.id). 상품 환불(REFUND.id) 작업과 같은 숫자여도 접두사가 달라 서로 다른 member다
+    public static PaymentDelayTask membershipRefundExecute(Long membershipRefundId) {
+        return new PaymentDelayTask(PaymentDelayTaskType.MEMBERSHIP_REFUND_EXECUTE, membershipRefundId);
+    }
+
     // Redis ZSET member. 예: WEBHOOK_PROCRESS:100
     public String member() {
         return type.name() + DELIMITER + id;

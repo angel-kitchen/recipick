@@ -48,6 +48,18 @@ public interface MembershipPaymentRepository extends JpaRepository<MembershipPay
     @Query("SELECT COALESCE(MAX(p.id), 0) FROM MembershipPayment p")
     long findMaxId();
 
+    // 즉시 해지 환불 대상 후보 — 정상 반영된(이용권 반영 시각 있음) PAID 회차 중 기간이 가장 늦은 것(잠금 없음, ID 1건).
+    // 회차 ID가 크다는 것만으로 현재 기간이라고 보지 않는다 — 호출자가 PK로 잠근 뒤 종료 시각을 이용권과 대조한다
+    @Query("""
+        SELECT p.id
+          FROM MembershipPayment p
+         WHERE p.membershipId = :membershipId
+           AND p.status = com.recipick.domain.payment.entity.enums.MembershipPaymentStatus.PAID
+           AND p.membershipAppliedAt IS NOT NULL
+         ORDER BY p.periodStartDate DESC, p.id DESC
+        """)
+    List<Long> findLatestAppliedPaidIds(@Param("membershipId") Long membershipId, Pageable pageable);
+
     // 재개할 수 있는 기존 갱신 회차(마감 전): 재시도 시각이 된 RETRY_WAITING, 카드 대기, 시도가 남았을 수 있는 PENDING.
     // 실제 진행 여부는 잠금 뒤 판정한다 — 이 조회가 결과 불명 시도의 새 청구를 허용하는 것이 아니다
     @Query("""

@@ -20,6 +20,10 @@
 
 1. 잠금: 회원(정산 잠금 — 탈퇴 회원 포함) → 이용권(C-7) → 회차 PK → 회차의 시도 전부 PK 오름차순(첫 결제·갱신 공통). 판정 시각은 잠금 뒤
 2. 회차에 강한 차단 시도가 하나라도 있음 → 반영 없음 `RECONCILE_HALTED`
+   2-1. 잠금 아래의 시도가 PAID이고 PG 응답이 취소 계열(CANCELLED·PARTIAL_CANCELLED) → 결제 상태를 바꾸지 않고 **환불 정합화로 위임**
+   (같은 응답을 환불 TX2에 전달. 추가 GET·POST 없음. GET 전 투영이 UNKNOWN이었어도 지금 PAID면 여기다 — 5단계, `docs/api/membership-refund.md`).
+   환불 쪽 결과를 그대로 결제 결과로 옮긴다: 완료·실패 `REFUND_RECONCILED` / 미확정 `REFUND_RECONCILIATION_PENDING` /
+   환불 행 없음(외부 취소)·운영 확인·차단 `REFUND_RECONCILIATION_REVIEW_REQUIRED`
 3. GET 전에 본 선점 시각과 지금 선점 시각이 다르고 관측이 신뢰 가능한 PAID가 아님 → `IN_PROGRESS`
 4. PG에 보낸 적 없는 시도(`dispatchedAt` 없음): 아래 미발송 표
 5. PG에 보낸 확정 시도(PAID·FAILED): 아래 확정 표
@@ -68,7 +72,8 @@ FAILED·COMPLETED 어느 것이든 새 요청 없음 — FAILED 뒤 재집행은
 
 ## 강한 정합성 차단
 
-`APPLIED_STATE_INCONSISTENT`·`UNDISPATCHED_PAID`·`UNDISPATCHED_PG_ACTIVITY`·`PAID_EVIDENCE_CONFLICT`·`PAID_AT_INVALID`. 차단은 회차 단위로 작동한다 — 회차의 어느
+`APPLIED_STATE_INCONSISTENT`·`UNDISPATCHED_PAID`·`UNDISPATCHED_PG_ACTIVITY`·`PAID_EVIDENCE_CONFLICT`·`PAID_AT_INVALID`·`REFUND_EVIDENCE_CONFLICT`·
+`REFUND_TARGET_PERIOD_MISMATCH`(뒤 둘은 5단계 환불 정합화가 남긴다). 차단은 회차 단위로 작동한다 — 회차의 어느
 시도든 차단이면: 선점 거절(다른 READY 포함), POST 직전 재확인으로 미발송 되돌림, READY 만료 처리 제외(자동 CANCELED·새 시도 없음),
 복구 조회 제외, TX2 반영 없음, C-17 ⑤로 탈퇴 거절. 약한 표시 뒤에 오면 올려 쓰고, 이미 차단이면 첫 차단을 유지한다. 운영 API에 표시 해제·
 강제 PAID는 없다(운영이 PortOne과 대조한 뒤 별도 조치).
@@ -112,10 +117,10 @@ PortOne이 `DELETED`로 답하거나 404 + `BILLING_KEY_NOT_FOUND`일 때만 REV
 | 상황 | Inbox 결과 |
 | --- | --- |
 | 시도 매핑 없음 | MANUAL_REVIEW(PG 조회 없음) |
-| 취소 계열(Cancelled·PartialCancelled·CancelPending) | MANUAL_REVIEW `MEMBERSHIP_REFUND_RECONCILIATION_PENDING` — 5단계가 이 사유로 다시 처리 |
-| Paid·Failed → 반영·멱등·환불 요청 | PROCESSED |
-| 미확정·신선한 선점·READY | RETRY_PENDING |
-| 신뢰 불가·차단 | MANUAL_REVIEW |
+| 취소 계열(Cancelled·PartialCancelled·CancelPending) | 환불 정합화(`docs/api/membership-refund.md` 7절): 환불 행 없음 → MANUAL_REVIEW `EXTERNAL_CANCELLATION_UNEXPLAINED`(GET 없음) / GET 1회 → 완료·실패·멱등 PROCESSED / 미확정·조회 실패 RETRY_PENDING / 운영 확인 MANUAL_REVIEW. 4-B가 `MEMBERSHIP_REFUND_RECONCILIATION_PENDING`으로 보존한 이벤트는 5분마다 RETRY_PENDING으로 되돌려 다시 처리한다 |
+| Paid·Failed → 반영·멱등·환불 요청·환불 정합화가 완료·실패로 확정(`REFUND_RECONCILED`) | PROCESSED |
+| 미확정·신선한 선점·READY·환불 정합화 미확정(`REFUND_RECONCILIATION_PENDING`) | RETRY_PENDING |
+| 신뢰 불가·차단·환불 행 없는 취소 관측·환불 운영 확인(`REFUND_RECONCILIATION_REVIEW_REQUIRED`) | MANUAL_REVIEW |
 
 ## 운영 API (SUPER_ADMIN)
 
@@ -138,7 +143,7 @@ PortOne이 `DELETED`로 답하거나 404 + `BILLING_KEY_NOT_FOUND`일 때만 REV
 
 | 단계 | 항목 |
 | --- | --- |
-| 5단계 | SYSTEM 환불 PG 실행·완료/실패 반영, FAILED 환불 재집행, 취소 계열 웹훅 반영, MEMBER 환불 |
+| 5단계(완료) | SYSTEM 환불 PG 실행·완료/실패 반영, FAILED 환불 재집행, 취소 계열 웹훅 반영, MEMBER 환불 — `docs/api/membership-refund.md` |
 | 6단계 | 원격 빌링키 삭제, `AUTO_BILLING` Checker, 탈퇴 개방 |
 
 ## 회원 계약(회원 도메인 제공)

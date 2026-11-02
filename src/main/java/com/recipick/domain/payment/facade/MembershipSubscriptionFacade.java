@@ -76,8 +76,9 @@ public class MembershipSubscriptionFacade {
             // 플래그 OFF·프로필 실패·다른 Worker가 처리 중·이미 확정(결과는 다음 조회로) — 모두 "처리 중"으로 안내
             case NOT_DISPATCHED, IN_PROGRESS, ALREADY_APPLIED, RETRY_READY ->
                 MembershipSubscribeStatus.IN_PROGRESS;
-            // 갱신 회차에서만 나오는 결과. 바로 구독 시도에서 오면 호출 순서 버그라 숨기지 않는다
-            case EXTENDED, RETRY_WAITING, RENEWAL_STOPPED, PAYMENT_METHOD_REQUIRED ->
+            // 갱신 회차·환불 정합화에서만 나오는 결과. 바로 구독 시도에서 오면 호출 순서 버그라 숨기지 않는다
+            case EXTENDED, RETRY_WAITING, RENEWAL_STOPPED, PAYMENT_METHOD_REQUIRED, REFUND_RECONCILED,
+                 REFUND_RECONCILIATION_PENDING, REFUND_RECONCILIATION_REVIEW_REQUIRED ->
                 throw new IllegalStateException("바로 구독에서 올 수 없는 결과: " + outcome);
         };
     }

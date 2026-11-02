@@ -35,6 +35,8 @@ import com.recipick.domain.payment.facade.MembershipChargeDispatchProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor.ExpiredReadyResult;
+import com.recipick.domain.payment.facade.MembershipRefundExecutionFacade;
+import com.recipick.domain.payment.facade.MembershipRefundRecoveryFacade;
 import com.recipick.domain.payment.facade.MembershipSubscriptionProcessor;
 import com.recipick.domain.payment.facade.MembershipSubscriptionProcessor.SubscriptionReceipt;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
@@ -86,6 +88,8 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
     @Autowired MembershipChargeResultProcessor resultProcessor;
     @Autowired MembershipChargeDispatchProcessor dispatchProcessor;
     @Autowired MembershipChargeExecutor executor;
+    @Autowired MembershipRefundExecutionFacade refundExecution;
+    @Autowired MembershipRefundRecoveryFacade refundRecovery;
     @Autowired MemberService memberService;
     @Autowired MembershipService membershipService;
     @Autowired MembershipBillingService billing;
@@ -250,7 +254,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
 
         MembershipChargeExecutor offExecutor = new MembershipChargeExecutor(() -> false, properties, memberService,
             dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
-            billingKeyReconciliation, clock);
+            billingKeyReconciliation, refundExecution, refundRecovery, clock);
         assertThat(offExecutor.execute(member.getId(), first.attemptId()))
             .isEqualTo(MembershipChargeOutcome.NOT_DISPATCHED);
         assertThat(attempts.findById(first.attemptId()).orElseThrow().getStatus())

@@ -146,6 +146,20 @@ public class WebhookEvent extends BaseTimeEntity {
         this.finishedAt = Objects.requireNonNull(now, "now는 필수입니다.");
     }
 
+    // 자동 처리 규칙이 없어 운영 확인으로 보존했던 이벤트를, 규칙이 생긴 뒤 재처리 대기로 되돌린다. 사유가 정확히 그 보존 사유일 때만이고
+    // 다른 운영 확인 이벤트는 건드리지 않는다. attemptCount는 유지한다(처리권 번호가 이어진다)
+    public boolean reopenForRetry(String preservedReason, LocalDateTime now) {
+        if (this.status != WebhookEventStatus.MANUAL_REVIEW || preservedReason == null
+            || !preservedReason.equals(this.failureReason)) {
+            return false;
+        }
+        Objects.requireNonNull(now, "now는 필수입니다.");
+        this.status = WebhookEventStatus.RETRY_PENDING;
+        this.failureReason = "REOPENED:" + preservedReason;
+        this.finishedAt = null;
+        return true;
+    }
+
     // updated_at은 Auditing이 채우므로 처리 중 마지막으로 상태를 바꾼 시각이다. 아직 한 번도 저장되지 않았으면 오래된 것으로 본다
     private boolean isStale(LocalDateTime now, Duration processingTimeout) {
         LocalDateTime updatedAt = getUpdatedAt();

@@ -10,7 +10,28 @@ import java.util.List;
 // @param customDataOrderId customData에서 읽은 주문 ID. 없거나 해석 불가면 null (잠정 구현)
 // @param failureSummary    PG 실패 사유 한 줄 요약. 실패 정보가 없으면 null
 // @param cancellations     취소 내역. 없으면 빈 목록 (null 아님)
+// @param storeId           PortOne 상점 ID. 응답에 없으면 null
+// @param cancelledAmount   누적 취소액(amount.cancelled). 응답에 없으면 null — 멤버십 환불 정합화는 null을 0으로 보지 않는다
 public record PortOnePayment(
+    String id,
+    String transactionId,
+    PortOnePaymentStatus status,
+    Long totalAmount,
+    String currency,
+    LocalDateTime paidAt,
+    Long customDataOrderId,
+    String failureSummary,
+    List<PortOneCancellation> cancellations,
+    String storeId,
+    Long cancelledAmount
+) {
+
+    public PortOnePayment {
+        cancellations = cancellations == null ? List.of() : List.copyOf(cancellations);
+    }
+
+    // 상점·누적 취소액이 필요 없는 상품 결제 경로용(기존 9인자 생성자 호환)
+    public PortOnePayment(
         String id,
         String transactionId,
         PortOnePaymentStatus status,
@@ -20,10 +41,9 @@ public record PortOnePayment(
         Long customDataOrderId,
         String failureSummary,
         List<PortOneCancellation> cancellations
-) {
-
-    public PortOnePayment {
-        cancellations = cancellations == null ? List.of() : List.copyOf(cancellations);
+    ) {
+        this(id, transactionId, status, totalAmount, currency, paidAt, customDataOrderId, failureSummary, cancellations,
+            null, null);
     }
 
     // 취소 내역이 필요 없는 결제 확정 경로용. 기존 승인 테스트들이 이 생성자로 만든다
@@ -54,7 +74,9 @@ public record PortOnePayment(
             response.failure() == null ? null : response.failure().summary(),
             response.cancellations() == null
                 ? List.of()
-                : response.cancellations().stream().map(PortOneCancellation::from).toList()
+                : response.cancellations().stream().map(PortOneCancellation::from).toList(),
+            response.storeId(),
+            response.amount() == null ? null : response.amount().cancelled()
         );
     }
 }

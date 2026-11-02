@@ -45,6 +45,8 @@ public abstract class MembershipChargeFlowSupport extends IntegrationTestSupport
     static void portOneStub(DynamicPropertyRegistry registry) {
         registry.add("portone.base-url", PORTONE::baseUrl);
         registry.add("portone.read-timeout", () -> "15s");
+        // 멤버십 환불 취소 POST의 읽기 한도. 운영 기본 60초를 기다리지 않고 timeout 경로를 재현하기 위한 테스트 전용 값
+        registry.add("portone.membership-refund-read-timeout", () -> "2s");
     }
 
     @TestConfiguration

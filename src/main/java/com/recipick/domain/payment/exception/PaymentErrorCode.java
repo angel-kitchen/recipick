@@ -35,7 +35,12 @@ public enum PaymentErrorCode implements ErrorCode {
     BILLING_KEY_REGISTRATION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "BILLING-008",
         "카드 등록 기능이 아직 열리지 않았습니다."),
     MEMBERSHIP_BILLING_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "BILLING-009",
-        "멤버십 자동결제가 아직 열리지 않았습니다.");
+        "멤버십 자동결제가 아직 열리지 않았습니다."),
+    MEMBERSHIP_REFUND_NOT_FOUND(HttpStatus.NOT_FOUND, "BILLING-020", "멤버십 환불 정보를 찾을 수 없습니다."),
+    MEMBERSHIP_REFUND_RETRY_NOT_ALLOWED(HttpStatus.CONFLICT, "BILLING-021",
+        "현재 상태에서는 환불을 다시 실행할 수 없습니다."),
+    MEMBERSHIP_REFUND_SETTLEMENT_BLOCKED(HttpStatus.CONFLICT, "BILLING-022",
+        "결제 내역 확인이 필요해 지금은 해지할 수 없습니다. 고객센터로 문의해 주세요.");
 
     private final HttpStatus status;
     private final String code;

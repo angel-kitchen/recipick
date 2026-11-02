@@ -13,7 +13,7 @@ import com.recipick.domain.payment.entity.WebhookEvent;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
-import com.recipick.domain.payment.facade.MembershipWebhookReconciliationFacade;
+import com.recipick.domain.payment.facade.MembershipRefundReconciliationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.repository.WebhookEventRepository;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
@@ -110,8 +110,8 @@ class MembershipWebhookAdminIntegrationTest extends MembershipRenewalFlowSupport
     }
 
     @Test
-    @DisplayName("멤버십 결제 취소 계열 웹훅은 환불 반영 단계용 사유로 보존하고 이용권·환불은 바꾸지 않는다")
-    void cancelEventsArePreservedForRefundStage() {
+    @DisplayName("환불 요청이 없는 시도의 취소 계열 웹훅은 외부 취소라 자동 귀속하지 않고 운영 확인으로 남기며 PG 조회·이용권 변경이 없다")
+    void cancelEventsWithoutRefundAreExternalCancellations() {
         // given
         Long membershipId = activeMembership();
         PORTONE.defaultPaid(FEE, T);
@@ -126,7 +126,7 @@ class MembershipWebhookAdminIntegrationTest extends MembershipRenewalFlowSupport
             WebhookEvent event = received(type, paymentId);
             outcomes.add(reconciliation.processWebhook(event.getId()));
             assertThat(webhookEvents.findById(event.getId()).orElseThrow().getFailureReason())
-                .contains(MembershipWebhookReconciliationFacade.REASON_REFUND_RECONCILIATION_PENDING);
+                .contains(MembershipRefundReconciliationFacade.REASON_EXTERNAL_CANCELLATION_UNEXPLAINED);
         }
 
         // then

@@ -8,6 +8,7 @@ import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.exception.MembershipSettlementInvariantException;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
+import com.recipick.domain.payment.service.MembershipChargeApplyDecision;
 import com.recipick.domain.payment.service.MembershipChargeClaim;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipChargeTicket;
@@ -15,12 +16,15 @@ import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
 import com.recipick.domain.payment.service.MembershipReconciliationResult;
 import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
+import com.recipick.domain.payment.service.MembershipRefundExecutionResult;
+import com.recipick.domain.payment.service.PgObservation;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.portone.PortOneBillingClient;
 import com.recipick.infra.portone.PortOnePaymentClient;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentOutcome;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentRequest;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentResult;
+import com.recipick.infra.portone.dto.PortOnePayment;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +46,9 @@ import org.springframework.util.StringUtils;
 // 어떤 경우에도 새 결제 ID로 다시 POST하지 않는다. 4단계 갱신·재시도도 같은 메서드를 쓴다.
 // TX2가 명시적 정합성 오류로 롤백되면 여기서 잡아 별도 TX로 원인을 재검증한 뒤 강한 차단 표시를 남기고 RECONCILE_HALTED를 돌려준다 —
 // 복구·웹훅·운영자 어느 진입점도 이 예외를 따로 다루지 않는다.
+// GET 결과는 판정과 PG 응답을 함께 보관한다(PgObservation). TX2가 "수납 PAID 시도 + 취소 계열 응답"으로 환불 위임을 결정하면 커밋 뒤
+// 같은 응답을 환불 정합화에 넘긴다(추가 GET·취소 POST 없음) — 자기 POST 뒤 GET과 재조회 두 경로가 같은 처리를 탄다.
+// TX2가 SYSTEM 환불을 요청(또는 그 존재를 재확인)하면 커밋 뒤 TX 밖에서 환불 실행을 큐에 예약한다(예약 실패는 로그만 — DB 복구가 받는다).
 // 로그에는 회원·시도 ID·오류 코드만. 프로필(이름·전화·이메일)·빌링키·PG 예외 객체는 넣지 않는다
 @Slf4j
 @Component
@@ -57,6 +64,8 @@ public class MembershipChargeExecutor {
     private final PortOneBillingClient portOneBillingClient;
     private final PortOnePaymentClient portOnePaymentClient;
     private final BillingKeyReconciliationFacade billingKeyReconciliation;
+    private final MembershipRefundExecutionFacade refundExecution;
+    private final MembershipRefundRecoveryFacade refundRecovery;
     private final Clock clock;
 
     // READY 시도에서 시작한다. 플래그 OFF면 POST 없이 READY 유지(임대 만료 규칙이 정리)
@@ -106,8 +115,8 @@ public class MembershipChargeExecutor {
         log.info("빌링키 청구 호출 완료(재조회로 확정): attemptId={}, outcome={}", attemptId, response.outcome());
         // 여기부터는 플래그가 꺼져도 멈추지 않는다 — PG에 도착했을 수 있다
         try {
-            MembershipPgVerdict verdict = recheck(ticket.portonePaymentId(), ticket.amount());
-            return apply(memberId, attemptId, ticket.dispatchedAt(), verdict,
+            PgObservation observation = recheck(ticket.portonePaymentId(), ticket.amount());
+            return apply(memberId, attemptId, ticket.dispatchedAt(), observation,
                 MembershipReconciliationTrigger.SCHEDULED);
         } finally {
             if (response.outcome() == PortOneBillingPaymentOutcome.BILLING_KEY_UNUSABLE) {
@@ -151,9 +160,9 @@ public class MembershipChargeExecutor {
                 return MembershipReconciliationResult.withoutLookup(MembershipChargeOutcome.RECONCILE_HALTED);
             }
             // 운영자는 PortOne 상태를 봐야 조치할 수 있다. 조회만 하고 반영은 하지 않는다
-            MembershipPgVerdict observed = recheck(ref.portonePaymentId(), ref.amount());
-            log.info("차단 회차의 운영자 재조회(반영 없음): attemptId={}, verdict={}", attemptId, observed.kind());
-            return new MembershipReconciliationResult(MembershipChargeOutcome.RECONCILE_HALTED, observed);
+            PgObservation observed = recheck(ref.portonePaymentId(), ref.amount());
+            log.info("차단 회차의 운영자 재조회(반영 없음): attemptId={}, verdict={}", attemptId, observed.verdict().kind());
+            return new MembershipReconciliationResult(MembershipChargeOutcome.RECONCILE_HALTED, observed.verdict());
         }
         if (trigger == MembershipReconciliationTrigger.SCHEDULED) {
             LocalDateTime now = LocalDateTime.now(clock);
@@ -168,17 +177,19 @@ public class MembershipChargeExecutor {
                 return MembershipReconciliationResult.withoutLookup(skipped);
             }
         }
-        MembershipPgVerdict verdict = recheck(ref.portonePaymentId(), ref.amount());
-        MembershipChargeOutcome outcome = apply(memberId, attemptId, ref.dispatchedAt(), verdict, trigger);
-        return new MembershipReconciliationResult(outcome, verdict);
+        PgObservation observation = recheck(ref.portonePaymentId(), ref.amount());
+        MembershipChargeOutcome outcome = apply(memberId, attemptId, ref.dispatchedAt(), observation, trigger);
+        return new MembershipReconciliationResult(outcome, observation.verdict());
     }
 
     // TX2 호출. 명시적 정합성 오류는 TX2가 롤백된 뒤 별도 TX로 원인을 재검증해 강한 차단 표시를 남긴다(실패해도 결과는 RECONCILE_HALTED —
-    // 다음 재조회가 같은 길을 한 번 더 간다)
+    // 다음 재조회가 같은 길을 한 번 더 간다). 환불 위임 결정이면 커밋 뒤 같은 PG 응답으로 환불 정합화를 부른다.
+    // SYSTEM 환불 요청(또는 재확인)이면 커밋 뒤 큐에 예약한다
     private MembershipChargeOutcome apply(Long memberId, Long attemptId, LocalDateTime observedDispatchedAt,
-                                          MembershipPgVerdict verdict, MembershipReconciliationTrigger trigger) {
+                                          PgObservation observation, MembershipReconciliationTrigger trigger) {
+        MembershipChargeApplyDecision decision;
         try {
-            return resultProcessor.apply(memberId, attemptId, observedDispatchedAt, verdict, trigger);
+            decision = resultProcessor.decide(memberId, attemptId, observedDispatchedAt, observation, trigger);
         } catch (MembershipSettlementInvariantException e) {
             log.error("결과 반영 중 정합성 오류(롤백, 운영 정합화 대상): attemptId={}, membershipPaymentId={}, kind={}", attemptId,
                 e.getMembershipPaymentId(), e.getKind());
@@ -190,6 +201,24 @@ public class MembershipChargeExecutor {
             }
             return MembershipChargeOutcome.RECONCILE_HALTED;
         }
+        if (decision.refundReconciliationRequired()) {
+            MembershipRefundExecutionResult refundResult = refundExecution.reconcileObserved(memberId, attemptId,
+                observation.payment());
+            log.info("수납 PAID 시도의 취소 관측을 환불 정합화로 처리: attemptId={}, refundResult={}", attemptId, refundResult);
+            // 환불 쪽 결과를 그대로 결제 결과로 옮긴다 — 미확정이면 웹훅·복구가 다시 보고, 환불 행 없는 취소·운영 확인·차단은
+            // 처리 완료로 기록하지 않는다. SKIPPED는 토큰 없는 TX2에서 나오지 않으므로 나오면 운영 확인으로 보낸다
+            return switch (refundResult) {
+                case COMPLETED, FAILED -> MembershipChargeOutcome.REFUND_RECONCILED;
+                case PENDING -> MembershipChargeOutcome.REFUND_RECONCILIATION_PENDING;
+                case REVIEW_REQUIRED, SKIPPED -> MembershipChargeOutcome.REFUND_RECONCILIATION_REVIEW_REQUIRED;
+            };
+        }
+        MembershipChargeOutcome outcome = decision.outcome();
+        if (outcome == MembershipChargeOutcome.UNAPPLIED_REFUND_REQUESTED
+            || outcome == MembershipChargeOutcome.ALREADY_APPLIED) {
+            refundRecovery.scheduleRequestedOf(attemptId);
+        }
+        return outcome;
     }
 
     // 선점 실패 뒤 — 잠금 아래에서 본 상태로 정한다. 차단으로 거절됐으면 임대 만료가 아니라 차단이다. 다른 Worker가 임대 안에서
@@ -243,15 +272,17 @@ public class MembershipChargeExecutor {
         return profile;
     }
 
-    // 같은 결제 ID 재조회. 404는 NOT_FOUND(UNKNOWN 유지), 그 밖의 조회 오류는 코드만 남긴 UNRESOLVED. 예외 객체는 넘기지 않는다
-    private MembershipPgVerdict recheck(String portonePaymentId, long amount) {
+    // 같은 결제 ID 재조회. 404는 NOT_FOUND(UNKNOWN 유지), 그 밖의 조회 오류는 코드만 남긴 UNRESOLVED. 예외 객체는 넘기지 않는다.
+    // 응답 객체는 판정과 함께 보관한다(TX2의 환불 위임 결정에 쓴다)
+    private PgObservation recheck(String portonePaymentId, long amount) {
         try {
-            return MembershipPgVerdict.of(portonePaymentId, amount, portOnePaymentClient.getPayment(portonePaymentId));
+            PortOnePayment payment = portOnePaymentClient.getPayment(portonePaymentId);
+            return new PgObservation(MembershipPgVerdict.of(portonePaymentId, amount, payment), payment);
         } catch (BusinessException e) {
             if (e.getErrorCode() == PaymentErrorCode.PAYMENT_NOT_FOUND) {
-                return MembershipPgVerdict.notFound();
+                return PgObservation.withoutPayment(MembershipPgVerdict.notFound());
             }
-            return MembershipPgVerdict.unresolved(e.getErrorCode().getCode());
+            return PgObservation.withoutPayment(MembershipPgVerdict.unresolved(e.getErrorCode().getCode()));
         }
     }
 }

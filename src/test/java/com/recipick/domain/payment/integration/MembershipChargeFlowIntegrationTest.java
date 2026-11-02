@@ -16,6 +16,8 @@ import com.recipick.domain.payment.facade.BillingKeyReconciliationFacade;
 import com.recipick.domain.payment.facade.MembershipChargeDispatchProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
 import com.recipick.domain.payment.facade.MembershipChargeRecoveryFacade;
+import com.recipick.domain.payment.facade.MembershipRefundExecutionFacade;
+import com.recipick.domain.payment.facade.MembershipRefundRecoveryFacade;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor.ExpiredReadyResult;
 import com.recipick.domain.payment.facade.MembershipSubscriptionFacade;
@@ -52,6 +54,8 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
     @Autowired MembershipChargeDispatchProcessor dispatchProcessor;
     @Autowired MembershipChargeResultProcessor resultProcessor;
     @Autowired MembershipChargeRecoveryFacade recovery;
+    @Autowired MembershipRefundExecutionFacade refundExecution;
+    @Autowired MembershipRefundRecoveryFacade refundRecovery;
     @Autowired MemberService memberService;
     @Autowired MembershipPaymentRepository payments;
     @Autowired MembershipPaymentAttemptRepository attempts;
@@ -290,7 +294,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         Clock afterWindow = Clock.offset(clock, properties.firstChargeAcceptWindow().plus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
             dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
-            billingKeyReconciliation, afterWindow);
+            billingKeyReconciliation, refundExecution, refundRecovery, afterWindow);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 
@@ -314,7 +318,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         Clock nearEnd = Clock.offset(clock, properties.firstChargeAcceptWindow().minus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
             dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
-            billingKeyReconciliation, nearEnd);
+            billingKeyReconciliation, refundExecution, refundRecovery, nearEnd);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 

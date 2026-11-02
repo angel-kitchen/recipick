@@ -576,3 +576,85 @@ DROP INDEX idx_membership_payment_attempt_status_dispatch_id ON membership_payme
 
 UNKNOWN 시도 조회(`status, updated_at`)는 행이 적어 인덱스를 만들지 않고 `EXPLAIN` 결과만 기록한다. 플래그와 무관하게 웹훅 멤버십 분기·복구·
 마감 누락 정리·빌링키 폐기 반영은 돈다(이미 생긴 결제의 정합화는 멈추지 않는다). 새 청구만 플래그가 막는다.
+
+
+### 10-H. 결제 5단계(#381) — membership_refund 컬럼 16개·인덱스 3개 (추가만, 지우는 문장 없음)
+
+5단계(즉시 해지 환불·SYSTEM 환불 실행·취소 웹훅·복구·운영 재조회)는 `membership_refund`에 컬럼 16개와 인덱스 3개를 더한다. 이름·열 순서는
+엔티티(`MembershipRefund`)·`docs/erd.dbml`과 같다. **5단계 자동 배포 전에 적용이 끝나 있어야 한다**(dev 머지가 배포를 시작하므로 적용 완료가
+머지 조건이다). `claim_token`만 NOT NULL DEFAULT 0이고 나머지는 NULL 허용이라 기존 행에 값을 채우는 UPDATE는 없다.
+
+`ALGORITHM`·`LOCK` 절은 MySQL 8.4 테스트 DB에서 실행해 확인한 뒤에 적는다 — 확인 전에는 적지 않는다(아래 문장은 절 없이 기본 동작).
+
+```sql
+-- H-1 사전 확인
+SHOW CREATE TABLE membership_refund;
+SELECT status, COUNT(*) FROM membership_refund GROUP BY status;
+
+-- H-2 컬럼 추가
+ALTER TABLE membership_refund
+    ADD COLUMN paid_amount_snapshot BIGINT NULL,
+    ADD COLUMN period_start_at DATETIME(6) NULL,
+    ADD COLUMN period_end_at DATETIME(6) NULL,
+    ADD COLUMN period_days INT NULL,
+    ADD COLUMN request_hash VARCHAR(64) NULL,
+    ADD COLUMN pg_idempotency_key VARCHAR(80) NULL,
+    ADD COLUMN pg_store_id VARCHAR(100) NULL,
+    ADD COLUMN pg_request_reason VARCHAR(160) NULL,
+    ADD COLUMN first_dispatched_at DATETIME(6) NULL,
+    ADD COLUMN claim_token BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN lease_expires_at DATETIME(6) NULL,
+    ADD COLUMN next_check_at DATETIME(6) NULL,
+    ADD COLUMN ops_review_required_at DATETIME(6) NULL,
+    ADD COLUMN ops_review_reason VARCHAR(64) NULL,
+    ADD COLUMN pg_cancelled_at DATETIME(6) NULL,
+    ADD COLUMN retry_of_refund_id BIGINT NULL;
+
+-- H-3 인덱스 추가
+CREATE UNIQUE INDEX uk_membership_refund_pg_idempotency_key
+    ON membership_refund (pg_idempotency_key);
+CREATE UNIQUE INDEX uk_membership_refund_retry_of
+    ON membership_refund (retry_of_refund_id);
+CREATE INDEX idx_membership_refund_status_next_check_id
+    ON membership_refund (status, next_check_at, id);
+
+-- H-4 확인
+SHOW INDEX FROM membership_refund WHERE Key_name LIKE 'uk_membership_refund_%' OR Key_name LIKE 'idx_membership_refund_status_%';
+EXPLAIN SELECT id FROM membership_refund
+ WHERE status = 'REQUESTED' AND (next_check_at IS NULL OR next_check_at <= NOW(6))
+   AND (lease_expires_at IS NULL OR lease_expires_at <= NOW(6)) AND ops_review_required_at IS NULL
+   AND id > 0 AND id <= 1000000 ORDER BY id;
+
+-- H-5 롤백 (앱은 5단계 코드가 배포되지 않았다면 새 컬럼이 없어도 동작한다)
+DROP INDEX idx_membership_refund_status_next_check_id ON membership_refund;
+DROP INDEX uk_membership_refund_retry_of ON membership_refund;
+DROP INDEX uk_membership_refund_pg_idempotency_key ON membership_refund;
+ALTER TABLE membership_refund
+    DROP COLUMN retry_of_refund_id, DROP COLUMN pg_cancelled_at, DROP COLUMN ops_review_reason,
+    DROP COLUMN ops_review_required_at, DROP COLUMN next_check_at, DROP COLUMN lease_expires_at, DROP COLUMN claim_token,
+    DROP COLUMN first_dispatched_at, DROP COLUMN pg_request_reason, DROP COLUMN pg_store_id, DROP COLUMN pg_idempotency_key,
+    DROP COLUMN request_hash, DROP COLUMN period_days, DROP COLUMN period_end_at, DROP COLUMN period_start_at,
+    DROP COLUMN paid_amount_snapshot;
+```
+
+| 확인 | 기대 |
+| --- | --- |
+| H-4 `SHOW INDEX` | 세 이름, UNIQUE 2개(`pg_idempotency_key`, `retry_of_refund_id`)·일반 1개(`status, next_check_at, id`) |
+| H-4 `EXPLAIN` | `possible_keys`에 `idx_membership_refund_status_next_check_id`(행이 적으면 `type=ALL`일 수 있다 — 결과를 기록한다) |
+| 기동 뒤 10-B 스냅숏 diff | 컬럼 16개·인덱스 3개 외 변경 없음 |
+
+#### 기존 REQUESTED SYSTEM 환불 행의 초기화 (5단계 실행기가 켜지기 전, 10-H 적용 절차 안에서)
+
+4-B가 만든 SYSTEM 환불 행은 `pg_idempotency_key`가 비어 있다. 5단계 실행기는 PG 키가 없는 행을 발송 이력 불명(`LEGACY_DISPATCH_UNPROVEN`)으로
+멈추고 자동 POST를 보내지 않는다. 운영이 **배포 이력과 기존 실행 기능 유무**로 "PG에 보낸 적이 없음"을 확인한 행만 ID 목록으로 확정해 키를 채운다.
+NULL 일괄 초기화로 과거 발송 가능성을 지우지 않는다. 확인하지 못한 행은 그대로 두고 운영 확인에 남긴다.
+
+```sql
+-- H-6 확인한 행만(ID 목록 명시). 취소 ID가 이미 있는 행은 제외 — 그 행은 GET 정합화부터 시작한다
+UPDATE membership_refund
+   SET pg_idempotency_key = CONCAT('mrf_v1_', UUID()),
+       paid_amount_snapshot = COALESCE(paid_amount_snapshot, amount)
+ WHERE id IN (/* 확인한 ID */)
+   AND status = 'REQUESTED' AND requested_by = 'SYSTEM'
+   AND pg_idempotency_key IS NULL AND portone_cancellation_id IS NULL;
+```

@@ -541,11 +541,28 @@ Table MEMBERSHIP_REFUND {
   failure_reason varchar(500)
   requested_at datetime
   completed_at datetime
+    paid_amount_snapshot bigint
+    period_start_at datetime
+    period_end_at datetime
+    period_days int
+    request_hash varchar(64)
+    pg_idempotency_key varchar(80) [unique]
+    pg_store_id varchar(100)
+    pg_request_reason varchar(160)
+    first_dispatched_at datetime
+    claim_token bigint [not null, default: 0]
+    lease_expires_at datetime
+    next_check_at datetime
+    ops_review_required_at datetime
+    ops_review_reason varchar(64)
+    pg_cancelled_at datetime
+    retry_of_refund_id bigint [unique]
   created_at datetime
   updated_at datetime
   indexes {
     (membership_payment_id, status) [name: 'idx_membership_refund_payment_id_status']
     (membership_payment_attempt_id, requested_by, status) [name: 'idx_membership_refund_attempt_requester_status']
+        (status, next_check_at, id) [name: 'idx_membership_refund_status_next_check_id']
   }
 }
 
