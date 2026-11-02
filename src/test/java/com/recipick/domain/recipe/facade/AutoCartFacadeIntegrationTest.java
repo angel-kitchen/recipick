@@ -134,6 +134,7 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .mart(mart)
             .ingredientId(tofu.getId())
             .name("국산콩 두부 300g")
+            .imageUrl("/images/products/tofu.jpg")
             .saleUnitAmount(new BigDecimal("300"))
             .saleUnit(SaleUnit.G)
             .price(2500L)
@@ -185,6 +186,11 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
                 tuple(pepper.getId(), 0, 0L, UnavailableReason.NOT_SOLD_IN_MART));
         assertThat(response.items().get(0).expectedRemainingAmount().toPlainString()).isEqualTo("100");
         assertThat(response.totalPrice()).isEqualTo(5000L);
+        // 이미지가 있는 상품은 선택 상품과 후보 모두에 경로가 내려간다
+        assertThat(response.items().get(0).product().imageUrl()).isEqualTo("/images/products/tofu.jpg");
+        assertThat(response.items().get(0).candidates())
+            .extracting(AutoCartPreviewResponse.Candidate::imageUrl)
+            .containsOnly("/images/products/tofu.jpg");
 
         AutoCartRequest saved = autoCartRequestRepository.findById(response.autoCartRequestId()).orElseThrow();
         assertThat(saved.getMemberId()).isEqualTo(MEMBER_ID);
@@ -307,6 +313,8 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .extracting(AutoCartPreviewResponse.Item::ingredientId, AutoCartPreviewResponse.Item::unavailableReason)
             .containsExactly(tuple(tofu.getId(), null), tuple(pepper.getId(), UnavailableReason.NOT_SOLD_IN_MART));
         assertThat(response.items().get(0).expectedRemainingAmount().toPlainString()).isEqualTo("100");
+        // 확정 뒤 기록은 상품 이미지를 저장하지 않아 null이다
+        assertThat(response.items().get(0).product().imageUrl()).isNull();
     }
 
     @Test
