@@ -369,13 +369,13 @@ ALTER TABLE membership_refund                                        -- B-4-3
 
 | 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
 | --- | --- | --- | --- | --- |
-| B-2-1 | `MODIFY attempt_count INT NULL` | | | `ALTER TABLE membership_payment MODIFY attempt_count INT NOT NULL;`(0건일 때만. 행이 있으면 그대로 둔다 — NULL 허용이 남아도 이전 앱에 해가 없다) |
-| B-2-2 | `ADD COLUMN` 4개 | | | `ALTER TABLE membership_payment DROP COLUMN idempotency_key, DROP COLUMN request_hash, DROP COLUMN grace_deadline_at, DROP COLUMN membership_applied_at;` |
-| B-2-3 | `ADD UNIQUE KEY`·`ADD INDEX` | | | `ALTER TABLE membership_payment DROP INDEX uk_membership_payment_idempotency_key, DROP INDEX idx_membership_payment_membership_id_status;` |
-| B-3 | `CREATE TABLE membership_payment_attempt` | | | `DROP TABLE membership_payment_attempt;`(0건 확인 뒤, B-4-3 FK를 먼저 지운다) |
-| B-4-1 | refund `ADD COLUMN` | | | `ALTER TABLE membership_refund DROP COLUMN membership_payment_attempt_id;`(B-4-3·B-4-2를 먼저 되돌린 뒤) |
-| B-4-2 | refund `ADD INDEX` 2개 | | | `ALTER TABLE membership_refund DROP INDEX idx_membership_refund_payment_id_status, DROP INDEX idx_membership_refund_attempt_requester_status;` |
-| B-4-3 | refund `ADD CONSTRAINT` FK | | | `ALTER TABLE membership_refund DROP FOREIGN KEY fk_membership_refund_attempt;` |
+| B-2-1 | `MODIFY attempt_count INT NULL` | 2026-11-02 00:19 | OK | `ALTER TABLE membership_payment MODIFY attempt_count INT NOT NULL;`(0건일 때만. 행이 있으면 그대로 둔다 — NULL 허용이 남아도 이전 앱에 해가 없다) |
+| B-2-2 | `ADD COLUMN` 4개 | 2026-11-02 00:19 | OK | `ALTER TABLE membership_payment DROP COLUMN idempotency_key, DROP COLUMN request_hash, DROP COLUMN grace_deadline_at, DROP COLUMN membership_applied_at;` |
+| B-2-3 | `ADD UNIQUE KEY`·`ADD INDEX` | 2026-11-02 00:19 | OK | `ALTER TABLE membership_payment DROP INDEX uk_membership_payment_idempotency_key, DROP INDEX idx_membership_payment_membership_id_status;` |
+| B-3 | `CREATE TABLE membership_payment_attempt` | 2026-11-02 00:19 | OK (0.05s) | `DROP TABLE membership_payment_attempt;`(0건 확인 뒤, B-4-3 FK를 먼저 지운다) |
+| B-4-1 | refund `ADD COLUMN` | 2026-11-02 00:19 | OK (0.07s) | `ALTER TABLE membership_refund DROP COLUMN membership_payment_attempt_id;`(B-4-3·B-4-2를 먼저 되돌린 뒤) |
+| B-4-2 | refund `ADD INDEX` 2개 | 2026-11-02 00:19 | OK (0.06s) | `ALTER TABLE membership_refund DROP INDEX idx_membership_refund_payment_id_status, DROP INDEX idx_membership_refund_attempt_requester_status;` |
+| B-4-3 | refund `ADD CONSTRAINT` FK | 2026-11-02 00:19 | OK (0.06s) | `ALTER TABLE membership_refund DROP FOREIGN KEY fk_membership_refund_attempt;` |
 
 적용 순서: B-0 → B-1 → B-2~B-4 한 문장씩(기록표) → 10-B 첫 스냅숏 → 2b 이미지 배포(기동 로그에 `alter table`·`create table` 없음) →
 10-B 둘째 스냅숏 diff 없음 → 스모크(`GET /api/billing-keys/me` 200, 기존 결제·탈퇴 API 1건씩). 10-B 기대에 "기존 컬럼 4개 그대로 있음,
@@ -386,6 +386,31 @@ ALTER TABLE membership_refund                                        -- B-4-3
 | Expand 중 한 문장 실패 | 그 문장은 적용되지 않았다(문장 단위 원자성). 원인을 고쳐 그 문장부터 재개하거나 기록표의 성공한 문장을 역순으로 되돌린다 |
 | 2b 배포 뒤 앱 문제 | 이전 이미지 재배포. Expand가 지운 것이 없어 스키마는 그대로 둬도 된다. 스키마까지 되돌리려면 기록표 역순 |
 | 데이터 복구 | B-0 덤프 복원 |
+
+**운영 실행 기록 (2026-11-02, 배포 담당).** 시각은 KST다(서버 출력은 UTC 2026-11-01 15:19).
+
+- 사전: `backup.sh pre-deploy ddl-337`로 덤프(`pre-deploy-20261101-151912-ddl-337.sql.gz`). B-1 결과 `payments` 0, `refunds` 0,
+  `membership_payment_attempt` 없음, `attempt_count` NOT NULL, 두 테이블을 참조하는 FK는 `FK9j8qq6ag089ni2ixnxo59pqoj`
+  (refund → payment) 하나.
+- 적용: 절차("한 문장씩")와 달리 B-2-1 → B-2-2 → B-2-3 → B-3 → B-4-1 → B-4-2 → B-4-3 일곱 문장을 이 순서로 한 번의
+  `mysql -vvv` 실행에 넣었다. 클라이언트는 첫 오류에서 멈추므로 `exit=0`은 일곱 문장이 순서대로 모두 실행됐다는 뜻이다.
+  - B-3·B-4-1~B-4-3은 문장별 `Query OK`와 소요 시간을 출력으로 확인했다.
+  - B-2-1~B-2-3은 출력을 보관하지 못했다. 성공은 `exit=0`과 스냅숏 ①로 판단했고, 소요 시간은 적지 않는다. 스냅숏 ①에서
+    `attempt_count IS_NULLABLE = YES`(B-2-1), B-2-2가 추가한 `idempotency_key` 위의 `uk_membership_payment_idempotency_key`와
+    `idx_membership_payment_membership_id_status`(B-2-3)를 확인했다. B-2-2는 컬럼 4개를 한 문장으로 추가하므로 함께 적용됐다.
+- 확인: 적용 직후 10-B 스냅숏 ①에서 제약·인덱스가 기대대로 하나씩만 있고 `attempt_count IS_NULLABLE = YES`. PR #337이 머지된 뒤
+  #341·#340까지 포함한 `c8ebda1` 이미지가 `healthy`(09:25 기동)가 된 다음 스냅숏 ②를 떴고 ①과 diff가 없었다. #341·#340은 엔티티
+  컬럼·제약을 바꾸지 않는다(10-E). 운영 `.env`에 `MEMBERSHIP_BILLING_ENABLED` 없음.
+  - 기동 뒤 앱 로그에 SQL 오류와 `alter table`·`create table`이 없다. 5분 주기 멤버십 결제 스케줄러가 새 테이블을 조회한 뒤다.
+  - 스모크: `GET /api/billing-keys/me`·`/api/memberships/me`·`/api/payments` 모두 토큰 없이 401, 회원 토큰으로 200. 탈퇴 API는
+    실제 계정이 탈퇴되므로 호출하지 않고 위 스케줄러 로그로 대신했다.
+- 사전 로컬 검증: 운영 스키마 덤프(`--no-data`)에 10-C를 적용하고 prod 프로필로 이전 앱(dev `33b8a3f`)과 #337(`a7b79ab`)을 번갈아
+  기동해 기동 전후 스키마 덤프를 비교했다.
+  - 10-C 적용 후 이전 앱 기동(선적용 뒤 머지 전 재시작 상황): 멤버십 테이블 변화 없음.
+  - #337 기동(2회), 그 뒤 이전 앱으로 롤백 기동: 변화 없음. 기존 자동 이름 제약 5개(`UK9ssq…`·`FKbs1…`·`UKki2…`·`UKk0ask…`·
+    `FK9j8q…`)와 새 이름 제약이 각각 하나씩만 있다.
+  - DDL 없이 #337만 기동: Hibernate가 시도 테이블과 FK는 만들지만 `attempt_count`는 NOT NULL로 남아 새 회차 INSERT가 실패한다.
+    10-C를 머지 전에 해야 하는 이유다.
 
 ### 10-D. Contract — 기존 컬럼 4개 제거 (별도 승인 절차. 2b 배포 절차가 아니다)
 
