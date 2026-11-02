@@ -1051,3 +1051,9 @@
   color: var(--text-soft);
   font-size: 16px;
 }
+
+/* 레시피 카드의 자동 담기 가능 표시 */
+.tile__badge {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+}
