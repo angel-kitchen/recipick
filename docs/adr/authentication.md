@@ -189,7 +189,8 @@ CORS는 지정한 Origin과 자격 증명을 허용합니다. 서로 다른 출�
 슈퍼 관리자 지급·이력 API는 Controller 권한과 서비스의 관리자 검증을 유지합니다.
 [MembershipGrantFacade](../../src/main/java/com/recipick/domain/member/facade/MembershipGrantFacade.java)가
 회원 잠금·관리자 확인·활성/대기 검사·지급을 조립하고, 생성과 감사 기록은 같은 쓰기 트랜잭션으로 커밋합니다.
-미해결 멤버십 결제 조회 C-17은 이 문서 기준 dev에 없어 지급 검사 최종 연결이 남아 있습니다.
+활성·결제 대기·전환 대기 이용권 차단은 이미 연결돼 있습니다. 별도의 미해결 멤버십 결제 조회 C-17은
+이 문서 기준 dev에 없어 해당 검사 연결과 실제 청구·관리자 지급 간 경합 검증이 남아 있습니다.
 
 [MembershipBillingService](../../src/main/java/com/recipick/domain/member/service/MembershipBillingService.java)는
 결제 도메인이 부르는 내부 계약이며 새 HTTP API가 아닙니다. 잠금·생성·결과 반영은 `MANDATORY`이며 읽기 전용 바깥 트랜잭션을 거절합니다.

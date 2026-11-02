@@ -78,7 +78,8 @@ MEMBER → BILLING_KEY → MEMBERSHIP → 멤버십 결제 회차 → 시도 →
 회원 잠금 후 관리자 권한과 활성·대기 이용권을 확인하고 지급 서비스를 호출합니다.
 [MembershipGrantService](../src/main/java/com/recipick/domain/member/service/MembershipGrantService.java)는
 `MANDATORY`와 읽기 전용 거절로 같은 바깥 트랜잭션에 합류하고 30일 이용권 생성·감사 기록을 처리합니다.
-미해결 멤버십 결제 조회 C-17은 이 코드 기준 dev에 아직 없어 최종 지급 검사 연결은 남아 있습니다.
+관리자 지급의 활성·결제 대기·전환 대기 이용권 차단은 `existsBlockingMembership`로 이미 연결돼 있습니다.
+C-17은 별도의 미해결 멤버십 결제 조회 계약으로, 이 코드 기준 dev에는 없어 해당 검사 연결과 실제 청구·관리자 지급 간 경합 검증은 남아 있습니다.
 
 ```text
 쓰기 트랜잭션 시작
