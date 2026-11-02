@@ -4,6 +4,7 @@ import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode'
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
+import { ListSkeleton } from '../components/Skeleton';
 import LocationPickerModal from '../components/LocationPickerModal';
 
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
@@ -214,7 +215,7 @@ export default function Addresses() {
       </p>
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error} />
-      {!data && !error && <p className="state-message">불러오는 중입니다.</p>}
+      {!data && !error && <ListSkeleton rows={3} />}
 
       {data && (
         <>

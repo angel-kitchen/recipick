@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { CUISINE, DISH_TYPE, spicyText } from '../labels';
 import ErrorNotice from './ErrorNotice';
+import ImagePlaceholder from './ImagePlaceholder';
 
 // 한 입력창으로 두 가지를 처리한다.
 // ① "김치찌개 2인분이랑 계란말이"처럼 메뉴 이름이 있으면 서버가 레시피를 찾아 자동 장바구니 미리보기를 만든다.
@@ -186,7 +187,7 @@ function Recommendations({ result }) {
             {recipe.thumbnailUrl ? (
               <img className="tile__image" src={recipe.thumbnailUrl} alt="" loading="lazy" />
             ) : (
-              <div className="tile__image">이미지 준비 중</div>
+              <ImagePlaceholder />
             )}
             <div className="tile__body">
               <span className="tile__title">{recipe.name}</span>

@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
+import ImagePlaceholder from '../components/ImagePlaceholder';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
 import { CardSkeletons } from '../components/Skeleton';
@@ -115,7 +116,7 @@ export default function Products() {
               {product.imageUrl ? (
                 <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
               ) : (
-                <div className="tile__image">이미지 준비 중</div>
+                <ImagePlaceholder />
               )}
             </Link>
             <div className="tile__body">

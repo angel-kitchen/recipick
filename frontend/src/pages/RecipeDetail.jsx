@@ -188,7 +188,7 @@ function RecipeDetailView({ recipeId }) {
     return (
       <div className="container page">
         <ErrorNotice error={error} />
-        {!error && <p className="state-message">불러오는 중입니다.</p>}
+        {!error && <ListSkeleton rows={5} />}
       </div>
     );
   }

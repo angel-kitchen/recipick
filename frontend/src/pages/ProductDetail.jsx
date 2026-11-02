@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
+import ImagePlaceholder from '../components/ImagePlaceholder';
+import { ListSkeleton } from '../components/Skeleton';
 import { notifyCartChanged } from '../cartSource';
 import { deliveryBlock } from '../delivery';
 import { useToast } from '../components/Toast';
@@ -65,7 +67,7 @@ export default function ProductDetail() {
     return (
       <div className="container page">
         <ErrorNotice error={error} />
-        {!error && <p className="state-message">불러오는 중입니다.</p>}
+        {!error && <ListSkeleton rows={4} />}
       </div>
     );
   }
@@ -82,7 +84,7 @@ export default function ProductDetail() {
           {product.imageUrl ? (
             <img src={product.imageUrl} alt="" style={{ width: '100%', borderRadius: 12 }} />
           ) : (
-            <div className="tile__image">이미지 준비 중</div>
+            <ImagePlaceholder />
           )}
         </section>
         <section className="card">

@@ -5,6 +5,7 @@ import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode'
 import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
+import { ListSkeleton } from '../components/Skeleton';
 import LocationPickerModal from '../components/LocationPickerModal';
 import { clearPendingAddress, readPendingAddress, registerAddress, savePendingAddress } from '../pendingAddress';
 
@@ -31,7 +32,13 @@ export default function Start() {
   const [leaving, setLeaving] = useState(false);
   const { area, failed, retry } = useServiceArea(place?.legalDongCode);
 
-  if (loading) return <p className="state-message">불러오는 중입니다.</p>;
+  if (loading) {
+    return (
+      <div className="container page">
+        <ListSkeleton rows={3} />
+      </div>
+    );
+  }
   if (member?.currentAddress) return <Navigate to={next} replace />;
 
   const pick = (selected) => {
