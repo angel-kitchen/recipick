@@ -392,8 +392,12 @@ ALTER TABLE membership_refund                                        -- B-4-3
 - 사전: `backup.sh pre-deploy ddl-337`로 덤프(`pre-deploy-20261101-151912-ddl-337.sql.gz`). B-1 결과 `payments` 0, `refunds` 0,
   `membership_payment_attempt` 없음, `attempt_count` NOT NULL, 두 테이블을 참조하는 FK는 `FK9j8qq6ag089ni2ixnxo59pqoj`
   (refund → payment) 하나.
-- 적용: B-2~B-4 열 문장을 한 번에 실행했다(`-vvv`, 첫 오류에서 멈춤). `exit=0`. B-2 문장의 소요 시간은 출력을 보관하지 못해 OK로만
-  적는다.
+- 적용: 절차("한 문장씩")와 달리 B-2-1 → B-2-2 → B-2-3 → B-3 → B-4-1 → B-4-2 → B-4-3 일곱 문장을 이 순서로 한 번의
+  `mysql -vvv` 실행에 넣었다. 클라이언트는 첫 오류에서 멈추므로 `exit=0`은 일곱 문장이 순서대로 모두 실행됐다는 뜻이다.
+  - B-3·B-4-1~B-4-3은 문장별 `Query OK`와 소요 시간을 출력으로 확인했다.
+  - B-2-1~B-2-3은 출력을 보관하지 못했다. 성공은 `exit=0`과 스냅숏 ①로 판단했고, 소요 시간은 적지 않는다. 스냅숏 ①에서
+    `attempt_count IS_NULLABLE = YES`(B-2-1), B-2-2가 추가한 `idempotency_key` 위의 `uk_membership_payment_idempotency_key`와
+    `idx_membership_payment_membership_id_status`(B-2-3)를 확인했다. B-2-2는 컬럼 4개를 한 문장으로 추가하므로 함께 적용됐다.
 - 확인: 적용 직후 10-B 스냅숏 ①에서 제약·인덱스가 기대대로 하나씩만 있고 `attempt_count IS_NULLABLE = YES`. PR #337이 머지된 뒤
   #341·#340까지 포함한 `c8ebda1` 이미지가 `healthy`(09:25 기동)가 된 다음 스냅숏 ②를 떴고 ①과 diff가 없었다. #341·#340은 엔티티
   컬럼·제약을 바꾸지 않는다(10-E). 운영 `.env`에 `MEMBERSHIP_BILLING_ENABLED` 없음.
