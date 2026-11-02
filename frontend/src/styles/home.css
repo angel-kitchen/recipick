@@ -110,6 +110,20 @@
   font-size: 16px;
 }
 
+/* 세 단계 소개: 연한 초록 바탕 위에 단계별 화면 그림, 번호, 설명 순서로 쌓는다 */
+.section--steps {
+  min-height: auto;
+  background: var(--green-wash);
+}
+
+.section--steps .section__title,
+.section--steps .section__lead,
+.steps__title,
+.steps__text,
+.steps__cta-text {
+  word-break: keep-all; /* 한글이 단어 중간에서 끊기지 않게 한다 */
+}
+
 .steps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -119,16 +133,39 @@
   margin: 0;
 }
 
-.steps li {
+.step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
 }
 
-.steps__number {
-  display: block;
-  margin-bottom: var(--space-3);
-  font-size: 16px;
+/* 단계 사이를 잇는 화살표. 카드 사이 빈 공간 가운데에 놓는다 */
+.step:not(:last-child)::after {
+  content: '›';
+  position: absolute;
+  top: 96px;
+  right: calc(-1 * var(--space-6) / 2 - 8px);
+  width: 16px;
+  text-align: center;
+  font-size: 28px;
+  line-height: 1;
   color: var(--green-accent);
-  font-weight: 500;
+}
+
+.steps__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: var(--space-4) 0 var(--space-2);
+  border-radius: 50%;
+  background: var(--green-accent);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .steps__title {
@@ -138,9 +175,182 @@
 }
 
 .steps__text {
+  max-width: 300px;
   margin-top: var(--space-2);
   color: #5c5e62;
   font-size: 16px;
+  line-height: 1.6;
+}
+
+.steps__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-9);
+}
+
+.steps__cta-text {
+  color: #393c41;
+  font-size: 18px;
+}
+
+/* 설명용으로 줄여 그린 화면. 누를 수 없고 그림으로만 보인다 */
+.mock {
+  width: 100%;
+  max-width: 300px;
+  height: 224px;
+  overflow: hidden;
+  background: var(--white);
+  border: 1px solid #dfe8e4;
+  border-radius: var(--radius-card);
+  text-align: left;
+  font-size: 13px;
+  color: #171a20;
+}
+
+.mock__bar {
+  display: flex;
+  gap: 5px;
+  padding: 9px 12px;
+  background: #f4f7f5;
+  border-bottom: 1px solid #e7efeb;
+}
+
+.mock__bar i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cfdcd6;
+}
+
+.mock__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.mock__recipe {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mock__recipe b {
+  display: block;
+  font-size: 16px;
+}
+
+.mock__recipe span {
+  color: #5c5e62;
+}
+
+.mock__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mock__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mock__stepper i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #cfdcd6;
+  border-radius: 50%;
+  font-style: normal;
+  color: var(--green-accent);
+}
+
+.mock__button {
+  margin-top: 2px;
+  padding: 9px 0;
+  border-radius: var(--radius-pill);
+  background: var(--green-accent);
+  color: var(--white);
+  font-weight: 600;
+  text-align: center;
+}
+
+.mock__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mock__item.is-off .pictogram,
+.mock__item.is-off .mock__name,
+.mock__item.is-off b {
+  opacity: 0.45;
+}
+
+.mock__name {
+  flex: 1;
+}
+
+.mock__check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #b8c7c0;
+  border-radius: 4px;
+}
+
+.mock__check.is-on {
+  position: relative;
+  background: var(--green-accent);
+  border-color: var(--green-accent);
+}
+
+.mock__check.is-on::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--white);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.mock__place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mock__chip {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--green-light);
+  color: var(--green-house);
+  font-weight: 600;
+}
+
+.mock__route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.mock__dots {
+  flex: 1;
+  border-top: 3px dotted var(--green-accent);
+  opacity: 0.55;
 }
 
 .korea-map {
@@ -180,7 +390,11 @@
 
   .steps {
     grid-template-columns: 1fr;
-    gap: var(--space-5);
+    gap: var(--space-7);
+  }
+
+  .step:not(:last-child)::after {
+    display: none;
   }
 
   .korea-map {
