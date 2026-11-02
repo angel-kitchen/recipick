@@ -59,6 +59,26 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     @Query("delete from CartItem c where c.memberId = :memberId and c.id in :ids")
     int deleteByMemberIdAndIdIn(@Param("memberId") Long memberId, @Param("ids") Collection<Long> ids);
 
+    // 결제한 수량 이하만 남은 항목은 지운다. 결제한 수량보다 많은 항목은 아래 decreaseQuantity가 뺀다
+    @Modifying
+    @Query("delete from CartItem c "
+            + "where c.memberId = :memberId and c.productId = :productId and c.quantity <= :quantity")
+    int deleteByMemberIdAndProductIdAndQuantityAtMost(
+            @Param("memberId") Long memberId,
+            @Param("productId") Long productId,
+            @Param("quantity") int quantity
+    );
+
+    @Modifying
+    @Query("update CartItem c set c.quantity = c.quantity - :quantity, c.updatedAt = :now "
+            + "where c.memberId = :memberId and c.productId = :productId and c.quantity > :quantity")
+    int decreaseQuantity(
+            @Param("memberId") Long memberId,
+            @Param("productId") Long productId,
+            @Param("quantity") int quantity,
+            @Param("now") LocalDateTime now
+    );
+
     @Modifying
     @Query("delete from CartItem c where c.memberId = :memberId")
     int deleteByMemberId(@Param("memberId") Long memberId);

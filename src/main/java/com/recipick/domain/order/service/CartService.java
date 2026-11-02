@@ -5,6 +5,7 @@ import com.recipick.domain.order.dto.response.CartItemQuantityUpdateResponse;
 import com.recipick.domain.order.entity.CartAddHistory;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.enums.CartAddSource;
+import com.recipick.domain.order.event.OrderPaidEvent;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.repository.CartAddHistoryRepository;
 import com.recipick.domain.order.repository.CartItemRepository;
@@ -119,6 +120,19 @@ public class CartService {
     @Transactional
     public void deleteCartItems(Long memberId, List<Long> cartItemIds) {
         cartItemRepository.deleteByMemberIdAndIdIn(memberId, cartItemIds);
+    }
+
+    // 결제 완료가 커밋된 뒤 리스너가 새 트랜잭션으로 부른다. 결제 대기 중 같은 상품을 더 담았으면 그만큼은 남기도록
+    // 결제한 수량만 빼고 0 이하가 되면 지운다. 삭제를 먼저 해야 뺀 결과가 다시 삭제 조건에 걸리지 않는다.
+    // 장바구니에 없는 상품은 건너뛰고, 담기 이력은 남긴다
+    @Transactional
+    public void deductPaidItems(Long memberId, List<OrderPaidEvent.PaidItem> items) {
+        LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
+        for (OrderPaidEvent.PaidItem item : items) {
+            cartItemRepository.deleteByMemberIdAndProductIdAndQuantityAtMost(
+                    memberId, item.productId(), item.quantity());
+            cartItemRepository.decreaseQuantity(memberId, item.productId(), item.quantity(), now);
+        }
     }
 
     // 탈퇴 트랜잭션 안에서 부른다. 담기 이력은 장바구니 삭제와 같이 남긴다
