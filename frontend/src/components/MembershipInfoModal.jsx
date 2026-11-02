@@ -33,7 +33,10 @@ export default function MembershipInfoModal({ onClose }) {
           <dt>요금</dt>
           <dd>월 3,900원</dd>
           <dt>무료 체험</dt>
-          <dd>처음 한 번, 7일 동안 써 볼 수 있어요. 체험을 시작할 때는 결제되지 않아요.</dd>
+          <dd>
+            처음 한 번, 7일 동안 써 볼 수 있어요. 체험을 시작할 때는 결제되지 않아요. 체험이 끝나기 전에 해지 예약을 하지
+            않으면 첫 결제가 진행되고, 결제가 되면 월 3,900원 멤버십으로 바뀌어요.
+          </dd>
         </dl>
         <div className="row-actions">
           <Link to="/membership" className="btn btn--large" onClick={onClose}>
