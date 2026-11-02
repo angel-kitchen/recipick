@@ -300,10 +300,10 @@ public class OrderService {
             systemHistory(order, OrderStatusType.MART, fromMartStatus.name(), order.getMartStatus().name(), null)
         ));
         // 결제한 상품의 장바구니 정리는 커밋 뒤 리스너가 한다. 반복 전달은 위에서 끝나 그 사이 다시 담은 상품을 지우지 않는다
-        List<Long> productIds = orderItemRepository.findAllByOrderIdOrderByIdAsc(orderId).stream()
-            .map(OrderItem::getProductId)
+        List<OrderPaidEvent.PaidItem> items = orderItemRepository.findAllByOrderIdOrderByIdAsc(orderId).stream()
+            .map(item -> new OrderPaidEvent.PaidItem(item.getProductId(), item.getQuantity()))
             .toList();
-        eventPublisher.publishEvent(new OrderPaidEvent(orderId, order.getMemberId(), productIds));
+        eventPublisher.publishEvent(new OrderPaidEvent(orderId, order.getMemberId(), items));
     }
 
     // 재고 복구는 호출한 Facade가 하므로, 이번 호출로 종료된 경우에만 주문 상품을 돌려준다

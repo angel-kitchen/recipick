@@ -257,7 +257,8 @@ class OrderServiceTest {
         Order order = pendingOrder();
         given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
         given(orderItemRepository.findAllByOrderIdOrderByIdAsc(1L)).willReturn(List.of(
-            OrderItem.builder().productId(10L).build(), OrderItem.builder().productId(20L).build()));
+            OrderItem.builder().productId(10L).quantity(2).build(),
+            OrderItem.builder().productId(20L).quantity(1).build()));
 
         // when
         orderService.markPaid(1L, PAID_AT);
@@ -270,8 +271,9 @@ class OrderServiceTest {
             .containsExactly(
                 tuple(OrderStatusType.ORDER, "PENDING_PAYMENT", "PAID", OrderStatusActor.SYSTEM),
                 tuple(OrderStatusType.MART, "NONE", "RECEIVED", OrderStatusActor.SYSTEM));
-        verify(eventPublisher).publishEvent(
-            new com.recipick.domain.order.event.OrderPaidEvent(1L, order.getMemberId(), List.of(10L, 20L)));
+        verify(eventPublisher).publishEvent(new com.recipick.domain.order.event.OrderPaidEvent(1L,
+            order.getMemberId(), List.of(new com.recipick.domain.order.event.OrderPaidEvent.PaidItem(10L, 2),
+                new com.recipick.domain.order.event.OrderPaidEvent.PaidItem(20L, 1))));
     }
 
     @Test

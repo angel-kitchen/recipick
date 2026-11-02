@@ -25,7 +25,7 @@ public class PaidCartCleanupListener {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void removePaidItems(OrderPaidEvent event) {
         try {
-            cartService.deleteByProductIds(event.memberId(), event.productIds());
+            cartService.deductPaidItems(event.memberId(), event.items());
         } catch (DataAccessException e) {
             log.warn("결제 완료 주문의 장바구니 정리 실패 — 장바구니에 상품이 남음: orderId={}, memberId={}",
                 event.orderId(), event.memberId(), e);

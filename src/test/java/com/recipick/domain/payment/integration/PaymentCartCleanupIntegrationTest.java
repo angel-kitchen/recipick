@@ -26,7 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
-// 카드 결제 결과에 따라 결제한 상품만 장바구니에서 빠지는지 실제 MySQL 위에서 본다.
+// 카드 결제 결과에 따라 결제한 상품·수량만 장바구니에서 빠지는지 실제 MySQL 위에서 본다.
 // 결제에 실패하거나 만료된 주문은 회원이 다시 담지 않아도 되게 장바구니를 그대로 둔다.
 // 정리는 결제 확정이 커밋된 뒤 따로 하므로, 정리가 실패해도 결제 확정은 그대로 남아야 한다
 class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
@@ -73,13 +73,32 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
     }
 
     @Test
+    @DisplayName("결제 대기 중 같은 상품을 더 담았으면 결제한 수량만 빼고 나머지는 남기며, 줄였으면 항목을 지운다")
+    void approvalDeductsPaidQuantity() {
+        // given — 두 주문 모두 2개를 주문했다. 하나는 결제 전 5개로 늘렸고, 하나는 1개로 줄였다
+        Flow increased = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
+        CartItem more = cartItem(increased, increased.productId(), ORDER_QUANTITY + 3);
+        Flow decreased = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
+        CartItem less = cartItem(decreased, decreased.productId(), ORDER_QUANTITY - 1);
+
+        // when
+        paymentConfirmProcessor.process(increased.orderId(), paidResult(increased));
+        paymentConfirmProcessor.process(decreased.orderId(), paidResult(decreased));
+
+        // then
+        CartItem left = cartItemRepository.findById(more.getId()).orElseThrow();
+        assertThat(left.getQuantity()).isEqualTo(3);
+        assertThat(cartItemRepository.findById(less.getId())).isEmpty();
+    }
+
+    @Test
     @DisplayName("장바구니 정리가 잠금 대기 초과로 실패해도 결제 확정은 커밋된 채 승인으로 끝나고 장바구니만 남는다")
     void cleanupFailureKeepsPayment() {
         // given
         Flow flow = pendingPaymentWithStock(LocalDateTime.now(clock).withNano(0).plusMinutes(5));
         CartItem cartItem = cartItem(flow, flow.productId());
         doThrow(new CannotAcquireLockException("lock wait timeout"))
-            .when(cartService).deleteByProductIds(eq(flow.memberId()), any());
+            .when(cartService).deductPaidItems(eq(flow.memberId()), any());
 
         // when
         PaymentApprovalOutcome outcome = paymentConfirmProcessor.process(flow.orderId(), paidResult(flow));
@@ -135,13 +154,17 @@ class PaymentCartCleanupIntegrationTest extends PaymentFlowIntegrationSupport {
     }
 
     private CartItem cartItem(Flow flow, Long productId) {
+        return cartItem(flow, productId, ORDER_QUANTITY);
+    }
+
+    private CartItem cartItem(Flow flow, Long productId, int quantity) {
         if (!memberIds.contains(flow.memberId())) {
             memberIds.add(flow.memberId());
         }
         return cartItemRepository.save(CartItem.builder()
             .memberId(flow.memberId())
             .productId(productId)
-            .quantity(ORDER_QUANTITY)
+            .quantity(quantity)
             .build());
     }
 }
