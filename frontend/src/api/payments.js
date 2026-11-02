@@ -46,7 +46,21 @@ export async function confirmClosedPayment(orderId, portonePaymentId, message) {
 // FAILED(결제창에서 취소·실패해 주문 종료), CLOSED(실패 기록 전이라 결제 대기 유지), REDIRECTED(모바일 페이지 이동)
 export async function payOrder({ orderId, portonePaymentId, amount, orderName, customer }) {
   const { storeId, channelKey } = await getConfig();
-  const response = await PortOne.requestPayment({
+  let response;
+  try {
+    response = await requestPayment({ storeId, channelKey, orderId, portonePaymentId, amount, orderName, customer });
+  } catch (e) {
+    // 이미 승인된 결제다(예: 모바일에서 돌아와 확정 요청이 실패한 뒤 이어서 결제). SDK가 결제창 전에 예외로 알리므로 확정으로 잇는다
+    if (e?.code === 'PaymentAlreadyPaid') return confirmPayment(orderId, portonePaymentId);
+    throw e;
+  }
+  if (!response) return { status: 'REDIRECTED' };
+  if (response.code) return confirmClosedPayment(orderId, portonePaymentId, response.message);
+  return confirmPayment(orderId, portonePaymentId);
+}
+
+function requestPayment({ storeId, channelKey, orderId, portonePaymentId, amount, orderName, customer }) {
+  return PortOne.requestPayment({
     storeId,
     channelKey,
     paymentId: portonePaymentId,
@@ -60,9 +74,6 @@ export async function payOrder({ orderId, portonePaymentId, amount, orderName, c
     // 모바일은 결제창이 페이지를 옮겨 가므로 끝나면 주문 상세로 돌아와 확정한다(OrderDetail이 쿼리를 읽는다)
     redirectUrl: `${window.location.origin}/orders/${orderId}`,
   });
-  if (!response) return { status: 'REDIRECTED' };
-  if (response.code) return confirmClosedPayment(orderId, portonePaymentId, response.message);
-  return confirmPayment(orderId, portonePaymentId);
 }
 
 export const customerOf = (member) => ({
