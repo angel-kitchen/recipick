@@ -2,6 +2,7 @@ package com.recipick.domain.member.service;
 
 import com.recipick.domain.member.dto.MemberAddressData;
 import com.recipick.domain.member.dto.MemberProfile;
+import com.recipick.domain.member.dto.MemberSettlementLock;
 import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.entity.MemberAddress;
 import com.recipick.domain.member.exception.MemberErrorCode;
@@ -60,5 +61,16 @@ public class MemberService {
             throw new IllegalStateException("회원 잠금은 쓰기 가능한 바깥 트랜잭션이 필요합니다.");
         }
         getMemberForUpdate(memberId);
+    }
+
+    // 이미 접수된 결제의 정산·복구 전용이다. 신규 거래에는 lockActiveMember를 사용한다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MemberSettlementLock lockMemberForSettlement(Long memberId) {
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("정산용 회원 잠금은 쓰기 가능한 바깥 트랜잭션이 필요합니다.");
+        }
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return new MemberSettlementLock(member.getId(), member.isWithdrawn());
     }
 }

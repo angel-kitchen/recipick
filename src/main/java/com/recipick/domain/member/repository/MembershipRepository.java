@@ -118,4 +118,34 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             """)
     List<MembershipBillingTarget> findRenewalTargets(@Param("now") LocalDateTime now,
             @Param("afterId") Long afterId, Pageable pageable);
+
+    @Query("""
+            SELECT new com.recipick.domain.member.dto.MembershipBillingTarget(m.id, m.member.id)
+            FROM Membership m
+            WHERE m.type = com.recipick.domain.member.entity.enums.MembershipType.PAID
+              AND m.source IN (com.recipick.domain.member.entity.enums.MembershipSource.SUBSCRIBE,
+                               com.recipick.domain.member.entity.enums.MembershipSource.TRIAL_CONVERT)
+              AND m.activatedAt IS NOT NULL AND m.terminatedAt IS NULL
+              AND m.autoRenew = true AND m.cancelReservedAt IS NULL
+              AND m.endAt <= :now AND m.graceEndAt <= :now AND m.id > :afterId
+            ORDER BY m.id
+            """)
+    List<MembershipBillingTarget> findOverdueRenewalTargets(@Param("now") LocalDateTime now,
+            @Param("afterId") Long afterId, Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(other) > 0 FROM Membership other, Membership target
+            WHERE target.id = :membershipId AND target.member.id = :memberId
+              AND other.member.id = :memberId AND other.id <> target.id AND other.terminatedAt IS NULL
+              AND ((other.activatedAt IS NOT NULL AND other.activatedAt <= :now
+                    AND other.startAt <= :now AND :now < COALESCE(other.graceEndAt, other.endAt))
+                OR (other.type = com.recipick.domain.member.entity.enums.MembershipType.PAID
+                    AND other.activatedAt IS NULL)
+                OR (other.type = com.recipick.domain.member.entity.enums.MembershipType.TRIAL
+                    AND other.autoRenew = true AND other.cancelReservedAt IS NULL AND other.endAt <= :now)
+                OR other.createdAt > target.createdAt
+                OR (other.createdAt = target.createdAt AND other.id > target.id))
+            """)
+    boolean existsConflictingForBilling(@Param("memberId") Long memberId,
+            @Param("membershipId") Long membershipId, @Param("now") LocalDateTime now);
 }
