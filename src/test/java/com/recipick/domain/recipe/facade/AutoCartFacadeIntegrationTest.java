@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.dto.response.MemberMeResponse.MembershipSummary;
+import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.order.entity.CartAddHistory;
@@ -264,6 +266,26 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .extracting(CartAddHistory::getSource, CartAddHistory::getAutoCartRequestId,
                 CartAddHistory::getQuantity)
             .containsExactly(tuple(CartAddSource.AUTO_CART, autoCartRequestId, 2));
+    }
+
+    @Test
+    @DisplayName("확정: 회원 잠금에서 탈퇴 회원으로 거절되면 장바구니에 담지 않고 요청도 확정하지 않는다")
+    void confirm_withdrawnMember() {
+        // given
+        Long autoCartRequestId = previewId();
+        willThrow(new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND))
+            .given(memberService).lockActiveMember(MEMBER_ID);
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, autoCartRequestId, null));
+
+        // then
+        assertThat(thrown).isInstanceOf(BusinessException.class)
+            .extracting("errorCode").isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
+        assertThat(cartItemRepository.findAllByMemberIdAndProductIdIn(MEMBER_ID, List.of(tofuProduct.getId())))
+            .isEmpty();
+        assertThat(autoCartRequestRepository.findById(autoCartRequestId).orElseThrow().getStatus())
+            .isEqualTo(AutoCartStatus.PREVIEWED);
     }
 
     @Test

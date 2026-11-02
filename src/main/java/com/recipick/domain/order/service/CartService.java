@@ -121,6 +121,12 @@ public class CartService {
         cartItemRepository.deleteByMemberIdAndIdIn(memberId, cartItemIds);
     }
 
+    // 탈퇴 트랜잭션 안에서 부른다. 담기 이력은 장바구니 삭제와 같이 남긴다
+    @Transactional
+    public void deleteAllByMemberId(Long memberId) {
+        cartItemRepository.deleteByMemberId(memberId);
+    }
+
     private CartItem increaseQuantity(CartItem existing, int quantity, int stock) {
         LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
         int maxQuantity = Math.min(MAX_QUANTITY, stock);
