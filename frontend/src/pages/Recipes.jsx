@@ -284,6 +284,7 @@ export default function Recipes() {
                   .filter(Boolean)
                   .join(' · ')}
               </span>
+              {recipe.autoCartAvailable && <span className="badge tile__badge">자동 담기 가능</span>}
             </div>
           </Link>
           <BookmarkButton

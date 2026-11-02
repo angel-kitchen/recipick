@@ -1029,3 +1029,75 @@
   color: var(--green-accent);
   cursor: pointer;
 }
+
+/* 멤버십 안내 창 */
+.benefit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-3);
+}
+
+.benefit-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.benefit-list span {
+  color: var(--text-soft);
+  font-size: 16px;
+}
+
+/* 레시피 카드의 자동 담기 가능 표시 */
+.tile__badge {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+}
+
+/* 자동 장바구니 화면 위의 레시피 */
+.menu-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.menu-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--white);
+  font-size: 16px;
+}
+
+.menu-chip__image {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--green-light);
+  object-fit: cover;
+}
+
+/* 담기 완료 창의 상품 한 줄 */
+.added__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.added__image {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--green-light);
+  object-fit: cover;
+}
