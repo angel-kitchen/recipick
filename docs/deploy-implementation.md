@@ -534,3 +534,45 @@ DROP INDEX idx_membership_payment_status_grace_id ON membership_payment;
 - 확인: #360 머지 뒤 `051debb` 이미지가 `healthy`(14:38 기동). 최근 30분 앱 로그에 `create index`·`alter table`·`create table`·SQL 오류
   없음. 기동 뒤 `membership_payment` 인덱스는 8개(기존 6 + 새 2)이고 같은 열 조합이 둘인 인덱스가 없다. 10-B 전체 스냅숏 diff는
   뜨지 않았고 이 테이블 인덱스 목록 비교로 대신했다.
+
+
+### 10-G. 결제 4-B(#343) — membership_payment_attempt 복구 조회 인덱스 2개 (테이블·컬럼 변경 없음)
+
+4-B(웹훅·정합화·복구)는 새 테이블·컬럼 없이, 복구 Sweep이 시도를 keyset으로 고르는 조회 두 가지(임대가 끝난 READY, 오래된 DISPATCHING과
+빌링키 재검사 후보)에 인덱스를 더한다. 이름·열 순서는 엔티티 `@Index`·`docs/erd.dbml`과 같다. **4-B 자동 배포 전에 적용이 끝나 있어야 한다**
+(dev 머지가 배포를 시작하므로 적용 완료가 머지 조건이다). 성격은 10-F와 같은 보조 인덱스 추가다.
+
+```sql
+-- G-1 사전 확인
+SHOW INDEX FROM membership_payment_attempt;
+SHOW CREATE TABLE membership_payment_attempt;
+
+-- G-2 인덱스 추가 (INPLACE·LOCK=NONE. 긴 트랜잭션이 없는 시간에 적용)
+CREATE INDEX idx_membership_payment_attempt_status_lease_id
+    ON membership_payment_attempt (status, lease_expires_at, id)
+    ALGORITHM=INPLACE LOCK=NONE;
+CREATE INDEX idx_membership_payment_attempt_status_dispatch_id
+    ON membership_payment_attempt (status, dispatched_at, id)
+    ALGORITHM=INPLACE LOCK=NONE;
+
+-- G-3 확인
+SHOW INDEX FROM membership_payment_attempt WHERE Key_name LIKE 'idx_membership_payment_attempt_status_%';
+EXPLAIN SELECT id FROM membership_payment_attempt
+ WHERE status = 'READY' AND lease_expires_at <= NOW(6) AND id > 0 ORDER BY id;
+EXPLAIN SELECT id FROM membership_payment_attempt
+ WHERE status = 'DISPATCHING' AND dispatched_at < NOW(6) AND id > 0 ORDER BY id;
+
+-- G-4 롤백 (앱은 인덱스가 없어도 동작한다)
+DROP INDEX idx_membership_payment_attempt_status_lease_id ON membership_payment_attempt;
+DROP INDEX idx_membership_payment_attempt_status_dispatch_id ON membership_payment_attempt;
+```
+
+| 확인 | 기대 |
+| --- | --- |
+| G-3 `SHOW INDEX` | 두 이름, 열 순서 `status, lease_expires_at, id` / `status, dispatched_at, id` |
+| G-3 `EXPLAIN` | `possible_keys`에 새 인덱스(행이 적으면 `type=ALL`일 수 있다 — 결과를 기록한다) |
+| 기동 뒤 10-B 스냅숏 diff | 인덱스 2개 외 변경 없음 |
+| 운영 `.env`의 `MEMBERSHIP_BILLING_ENABLED` | 없음 또는 `false`. 4-B 머지는 운영 자동청구 활성화가 아니다 |
+
+UNKNOWN 시도 조회(`status, updated_at`)는 행이 적어 인덱스를 만들지 않고 `EXPLAIN` 결과만 기록한다. 플래그와 무관하게 웹훅 멤버십 분기·복구·
+마감 누락 정리·빌링키 폐기 반영은 돈다(이미 생긴 결제의 정합화는 멈추지 않는다). 새 청구만 플래그가 막는다.

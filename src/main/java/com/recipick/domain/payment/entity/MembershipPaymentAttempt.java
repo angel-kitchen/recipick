@@ -50,7 +50,9 @@ import lombok.NoArgsConstructor;
     },
     indexes = {
         @Index(name = "idx_membership_payment_attempt_payment_id_status", columnList = "membership_payment_id, status"),
-        @Index(name = "idx_membership_payment_attempt_billing_key_id_status", columnList = "billing_key_id, status")
+        @Index(name = "idx_membership_payment_attempt_billing_key_id_status", columnList = "billing_key_id, status"),
+        @Index(name = "idx_membership_payment_attempt_status_lease_id", columnList = "status, lease_expires_at, id"),
+        @Index(name = "idx_membership_payment_attempt_status_dispatch_id", columnList = "status, dispatched_at, id")
     }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
