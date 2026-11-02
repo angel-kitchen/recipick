@@ -566,6 +566,30 @@ Table MEMBERSHIP_REFUND {
   }
 }
 
+Table BILLING_KEY_DELETION {
+  id bigint [pk, increment]
+  billing_key_id bigint [not null, unique]
+  status varchar(24) [not null]
+  reason varchar(24) [not null]
+  store_id varchar(100) [not null]
+  requested_at datetime [not null]
+  next_check_at datetime [not null]
+  claim_token bigint [not null, default: 0]
+  claim_count int [not null, default: 0]
+  lease_expires_at datetime
+  first_dispatched_at datetime
+  completed_at datetime
+  review_required_at datetime
+  identity_verified_at datetime
+  last_code varchar(40)
+  created_at datetime
+  updated_at datetime
+  indexes {
+    (billing_key_id) [unique, name: 'uk_billing_key_deletion_key']
+    (status, next_check_at, id) [name: 'idx_billing_key_deletion_due']
+  }
+}
+
 Ref: MEMBER.mart_id > MART.id
 Ref: MEMBER.selected_address_id > MEMBER_ADDRESS.id
 Ref: MEMBER_ADDRESS.member_id > MEMBER.id
@@ -621,6 +645,7 @@ Ref: MEMBERSHIP_PAYMENT_ATTEMPT.membership_payment_id > MEMBERSHIP_PAYMENT.id
 Ref: MEMBERSHIP_PAYMENT_ATTEMPT.billing_key_id > BILLING_KEY.id
 Ref: MEMBERSHIP_REFUND.membership_payment_id > MEMBERSHIP_PAYMENT.id
 Ref: MEMBERSHIP_REFUND.membership_payment_attempt_id > MEMBERSHIP_PAYMENT_ATTEMPT.id
+Ref: BILLING_KEY_DELETION.billing_key_id > BILLING_KEY.id
 
 TableGroup member_admin_membership {
   REGION
@@ -672,4 +697,5 @@ TableGroup membership_billing {
   MEMBERSHIP_PAYMENT
   MEMBERSHIP_PAYMENT_ATTEMPT
   MEMBERSHIP_REFUND
+  BILLING_KEY_DELETION
 }
