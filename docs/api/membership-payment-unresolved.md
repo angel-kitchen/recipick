@@ -17,7 +17,7 @@
 | ② | 시도 상태가 `READY`·`DISPATCHING`·`UNKNOWN`·`MANUAL_REVIEW` |
 | ③ | 환불 상태가 `REQUESTED` |
 | ④ | 시도가 `PAID`이고 `refund_required_at`이 있는데 **그 시도의 SYSTEM 환불 `COMPLETED`가 없음** (MEMBER 환불 COMPLETED는 해제하지 않음) |
-| ⑤ | 시도에 **강한 정합성 차단** 표시(`ops_review_reason` ∈ `APPLIED_STATE_INCONSISTENT`·`UNDISPATCHED_PAID`·`UNDISPATCHED_PG_ACTIVITY`·`PAID_EVIDENCE_CONFLICT`·`PAID_AT_INVALID`)가 있음 — 시도 상태가 `CANCELED`·`PAID`·`FAILED`여도 막는다(4-B) |
+| ⑤ | 시도에 **강한 정합성 차단** 표시(`ops_review_reason` ∈ `APPLIED_STATE_INCONSISTENT`·`UNDISPATCHED_PAID`·`UNDISPATCHED_PG_ACTIVITY`·`PAID_EVIDENCE_CONFLICT`·`PAID_AT_INVALID`·`REFUND_EVIDENCE_CONFLICT`·`REFUND_TARGET_PERIOD_MISMATCH`)가 있음 — 시도 상태가 `CANCELED`·`PAID`·`FAILED`여도 막는다(4-B·5단계) |
 
 ## 안전하게 호출하기 위한 전제
 
