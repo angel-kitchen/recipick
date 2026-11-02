@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.entity;
 
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
+import com.recipick.domain.payment.service.MembershipBillingPeriods.RenewalPeriod;
 import com.recipick.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,7 +39,12 @@ import lombok.NoArgsConstructor;
         ),
         @UniqueConstraint(name = "uk_membership_payment_idempotency_key", columnNames = "idempotency_key")
     },
-    indexes = @Index(name = "idx_membership_payment_membership_id_status", columnList = "membership_id, status")
+    indexes = {
+        @Index(name = "idx_membership_payment_membership_id_status", columnList = "membership_id, status"),
+        // 갱신 재시도 폴링(status·next_retry_at)과 마감·대기 회차 정리(status·grace_deadline_at)의 keyset 조회
+        @Index(name = "idx_membership_payment_status_next_retry_id", columnList = "status, next_retry_at, id"),
+        @Index(name = "idx_membership_payment_status_grace_id", columnList = "status, grace_deadline_at, id")
+    }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MembershipPayment extends BaseTimeEntity {
@@ -48,6 +55,16 @@ public class MembershipPayment extends BaseTimeEntity {
         MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED,
         MembershipPaymentStatus.UNKNOWN,
         MembershipPaymentStatus.MANUAL_REVIEW);
+    private static final Set<MembershipPaymentStatus> RETRY_WAITABLE = Set.of(
+        MembershipPaymentStatus.PENDING,
+        MembershipPaymentStatus.UNKNOWN,
+        MembershipPaymentStatus.RETRY_WAITING,
+        MembershipPaymentStatus.MANUAL_REVIEW);
+    private static final Set<MembershipPaymentStatus> PAYMENT_METHOD_WAITABLE = Set.of(
+        MembershipPaymentStatus.PENDING,
+        MembershipPaymentStatus.RETRY_WAITING,
+        MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED);
+    private static final Pattern CODE = Pattern.compile("^[A-Z0-9_-]{1,64}$");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -89,7 +106,7 @@ public class MembershipPayment extends BaseTimeEntity {
     // 멤버십 도메인에 결과를 반영한 시각(TX2)
     private LocalDateTime membershipAppliedAt;
 
-    // 테스트 픽스처용 생성자. 운영 코드는 pendingFirst(3단계)·4단계 갱신 팩토리로만 새 행을 만든다
+    // 테스트 픽스처용 생성자. 운영 코드는 pendingFirst·pendingRenewal로만 새 행을 만든다
     @Builder
     private MembershipPayment(
         Long membershipId,
@@ -133,6 +150,18 @@ public class MembershipPayment extends BaseTimeEntity {
             provisionalStart, provisionalStart, provisionalEnd, null, null, null, null, null);
     }
 
+    // 갱신 회차. 기간·결제 마감(G)은 여기서 한 번 정하고 바꾸지 않는다(I-14). 멱등 키·해시는 없다(회원 요청이 아니라 스케줄러 접수).
+    // 기간·마감은 낱값으로 받지 않고 관계(마감 = 직전 종료 + 유예, 시작일 = 직전 종료일, 종료일 = 다음 시작 전날)가 검증된
+    // RenewalPeriod만 받는다 — 호출자가 어긋난 마감값으로 회차를 만들 수 없게 한다
+    public static MembershipPayment pendingRenewal(Long membershipId, long amount, RenewalPeriod period) {
+        if (membershipId == null || amount <= 0 || period == null) {
+            throw new IllegalArgumentException("갱신 회차의 이용권·금액·기간이 올바르지 않습니다");
+        }
+        return new MembershipPayment(membershipId, null, null, amount, MembershipPaymentStatus.PENDING,
+            period.periodStart(), period.periodStart(), period.periodEnd(), period.graceDeadlineAt(), null, null, null,
+            null);
+    }
+
     public boolean isUnresolved() {
         return UNRESOLVED.contains(status);
     }
@@ -144,6 +173,47 @@ public class MembershipPayment extends BaseTimeEntity {
     // 첫 결제 회차인지(LC: 첫 결제만 유예 마감이 없다). 갱신 회차의 늦은 결과는 4단계가 다른 규칙으로 본다
     public boolean isFirstPayment() {
         return graceDeadlineAt == null;
+    }
+
+    public boolean isRenewal() {
+        return graceDeadlineAt != null;
+    }
+
+    // 갱신 회차 → RETRY_WAITING. nextRetryAt은 다음 청구가 허용되는 시각이고 G보다 앞이어야 한다.
+    // null은 "즉시 재시도"가 아니라 "더 청구할 일정이 없고 G에서 정리한다"는 뜻이다. MANUAL_REVIEW는 호출자가 같은 TX2에서
+    // 신뢰 가능한 FAILED를 확인했을 때만 이리로 온다. 검증을 모두 끝낸 뒤에만 필드를 바꾼다
+    public void waitForRetry(LocalDateTime nextRetryAt, String reason) {
+        requireRenewal("재시도 대기");
+        if (!RETRY_WAITABLE.contains(status)) {
+            throw new IllegalStateException("재시도 대기로 바꿀 수 없는 회차 상태입니다: " + this);
+        }
+        String validatedReason = requireCode(reason);
+        if (nextRetryAt != null && !nextRetryAt.isBefore(graceDeadlineAt)) {
+            throw new IllegalArgumentException("재시도 시각은 결제 마감보다 앞이어야 합니다");
+        }
+        this.status = MembershipPaymentStatus.RETRY_WAITING;
+        this.nextRetryAt = nextRetryAt;
+        this.failureReason = validatedReason;
+    }
+
+    // 갱신 회차 → PAYMENT_METHOD_REQUIRED. 앞선 실패로 잡힌 nextRetryAt은 지우지 않는다 — 카드를 다시 등록해도 24시간 간격을
+    // 앞당기지 않는다. 이미 카드 대기면 그대로(멱등)
+    public void waitForPaymentMethod() {
+        requireRenewal("카드 대기");
+        if (!PAYMENT_METHOD_WAITABLE.contains(status)) {
+            throw new IllegalStateException("카드 대기로 바꿀 수 없는 회차 상태입니다: " + this);
+        }
+        this.status = MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED;
+    }
+
+    // 같은 TX에서 새 READY 시도를 저장할 때. 예약(nextRetryAt)은 이 시도로 소비된다
+    public void resumePending() {
+        requireRenewal("청구 재개");
+        if (!PAYMENT_METHOD_WAITABLE.contains(status)) {
+            throw new IllegalStateException("청구를 재개할 수 없는 회차 상태입니다: " + this);
+        }
+        this.status = MembershipPaymentStatus.PENDING;
+        this.nextRetryAt = null;
     }
 
     // PG paidAt 기준 확정 기간으로 덧씌운다. 미해결일 때만 — 확정 회차의 기간은 바꾸지 않는다(I-16)
@@ -167,6 +237,7 @@ public class MembershipPayment extends BaseTimeEntity {
         this.paidAt = pgPaidAt;
         this.membershipAppliedAt = appliedAt;
         this.failureReason = null;
+        this.nextRetryAt = null;
     }
 
     // 미해결 → FAILED(조회로 확정된 실패, 또는 PG에 간 적 없이 접은 회차)
@@ -174,6 +245,7 @@ public class MembershipPayment extends BaseTimeEntity {
         requireUnresolved("FAILED 확정");
         this.status = MembershipPaymentStatus.FAILED;
         this.failureReason = reason;
+        this.nextRetryAt = null;
     }
 
     // 반영하지 않기로 한 PAID의 회차 닫기(LC 4-6·4-9). 시도는 PAID로 남고 SYSTEM 환불 요청이 함께 저장된다
@@ -201,6 +273,19 @@ public class MembershipPayment extends BaseTimeEntity {
             throw new IllegalStateException("MANUAL_REVIEW로 바꿀 수 없는 회차 상태입니다: " + this);
         }
         this.status = MembershipPaymentStatus.MANUAL_REVIEW;
+    }
+
+    private void requireRenewal(String action) {
+        if (!isRenewal()) {
+            throw new IllegalStateException(action + "은(는) 갱신 회차에서만 가능합니다: " + this);
+        }
+    }
+
+    private static String requireCode(String code) {
+        if (code == null || !CODE.matcher(code).matches()) {
+            throw new IllegalArgumentException("사유 코드 형식이 아닙니다(고정 코드만 허용)");
+        }
+        return code;
     }
 
     private void requireUnresolved(String action) {
