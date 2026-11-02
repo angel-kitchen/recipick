@@ -573,6 +573,10 @@
     - 같은 이용권에 결과 확인 중인 `REQUESTED` 환불이 있으면 다른 키의 새 요청은 거절합니다.
     - 명확한 실패가 `FAILED`로 확정된 뒤에는 새 `Idempotency-Key`로 다시 요청할 수 있습니다.
 - **결제 결과에 따른 전환** (담당: 채빈)
+    - existsConflictingMembershipForBilling(memberId, membershipId, now)는 쓰기 가능한 바깥 트랜잭션(MANDATORY)에서 회원 잠금 후 호출. 같은 회원의 대상 외 이용권 중 terminated_at이 없고 활성·결제 대기·전환 대기이거나 대상보다 나중에 생성된 행이 있으면 충돌로 판정
+    - 후속 생성은 created_at이 대상보다 크거나 같은 시각에 ID가 더 큰 행. terminated_at이 있는 실패·환불 종료 이력은 제외하지만, 단순 갱신 중단·기간 만료만으로 후속 생성 충돌을 제외하지 않음. 대상이 없거나 다른 회원 소유면 MEMBERSHIP-006
+    - 웹훅·복구용 findOverdueRenewalTargets(now, afterMembershipId, limit)는 SUBSCRIBE·TRIAL_CONVERT 경로의 활성화된 유료 이용권 중 즉시 종료·해지 예약 없이 자동갱신이 켜져 있고 유예 종료 시각이 지난(해당 시각 포함) 대상을 이용권 ID 오름차순 커서로 조회. 유예 종료가 없는 행은 제외하며 대상별 실제 상태 변경은 호출자가 회원·이용권을 잠근 뒤 재확인
+    - MemberService.lockMemberForSettlement(memberId)는 기존 거래 정산·복구 전용으로 탈퇴 여부와 무관하게 회원 PK를 잠그고 MemberSettlementLock(memberId, withdrawn)을 반환. 쓰기 가능한 바깥 트랜잭션(MANDATORY)이 필수이며 없는 회원은 MEMBER-001. 신규 거래·로그인·탈퇴 차단 계약은 변경하지 않음
     - 결제 연동은 MembershipBillingService의 공개 계약과 DTO(BillingMembershipData, MembershipConsent, MembershipBillingTarget, MembershipBillingResult)로 제공하며 엔티티를 다른 도메인에 반환하지 않음
     - 변경 계약은 쓰기 가능한 바깥 트랜잭션(MANDATORY) 안에서만 실행. 호출자는 회원 → 빌링키 → 이용권 PK → 결제 회차 → 시도 → 환불 순서로 필요한 행을 잠그고 소유권·현재 회차·반영 여부를 검사하며 과거·확정 회차 결과는 반영 계약에 전달하지 않음
     - 웹훅·복구 경로는 잠금 트랜잭션 진입 전 findMemberIdOfMembership(membershipId)로 소유 회원 ID를 잠금 없이 읽고, 없으면 MEMBERSHIP-006으로 처리. 만료·종료 이용권과 탈퇴 회원의 이용권도 매핑 조회에 포함하며 이후 쓰기 트랜잭션에서는 회원 잠금부터 기존 소유권·상태 검사를 수행
