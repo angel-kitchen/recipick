@@ -46,6 +46,9 @@ public final class PortOneStubServer {
     private final Map<String, List<String>> cancelBodies = new ConcurrentHashMap<>();
     private final Map<String, List<String>> cancelIdempotencyKeys = new ConcurrentHashMap<>();
     private final AtomicReference<Long> cancelDelayMillis = new AtomicReference<>();
+    // 결제 ID별 취소 시뮬레이션(멤버십 환불 흐름용). 취소 POST 본문의 금액·reason으로 취소 내역을 만들어 보관하고 GET이 그 목록·누적액을
+    // 돌려준다. 같은 멱등 키의 재POST는 같은 취소 내역을 돌려준다(PortOne 멱등 동작). 명시 스텁(onGetPayment·onCancel)이 있으면 그것이 우선
+    private final Map<String, Simulation> simulations = new ConcurrentHashMap<>();
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final ExecutorService handlers = Executors.newCachedThreadPool();
     private final AtomicReference<CountDownLatch> postGate = new AtomicReference<>();
@@ -106,7 +109,177 @@ public final class PortOneStubServer {
         cancelBodies.clear();
         cancelIdempotencyKeys.clear();
         cancelDelayMillis.set(null);
+        simulations.clear();
         requests.clear();
+    }
+
+    // ---------- 취소 시뮬레이션 ----------
+
+    public static final class SimulatedCancellation {
+        private final String id;
+        private volatile String status;
+        private final long totalAmount;
+        private final String reason;
+        private final LocalDateTime requestedAt;
+
+        SimulatedCancellation(String id, String status, long totalAmount, String reason, LocalDateTime requestedAt) {
+            this.id = id;
+            this.status = status;
+            this.totalAmount = totalAmount;
+            this.reason = reason;
+            this.requestedAt = requestedAt;
+        }
+
+        public String id() {
+            return id;
+        }
+
+        public String status() {
+            return status;
+        }
+
+        public long totalAmount() {
+            return totalAmount;
+        }
+
+        public String reason() {
+            return reason;
+        }
+    }
+
+    private static final class Simulation {
+        final String storeId;
+        final long amount;
+        final LocalDateTime paidAt;
+        volatile String postStatus = "SUCCEEDED";
+        volatile boolean postWithoutId = false;
+        final List<SimulatedCancellation> cancellations = new CopyOnWriteArrayList<>();
+        final Map<String, SimulatedCancellation> byIdempotencyKey = new ConcurrentHashMap<>();
+        final AtomicInteger sequence = new AtomicInteger();
+
+        Simulation(String storeId, long amount, LocalDateTime paidAt) {
+            this.storeId = storeId;
+            this.amount = amount;
+            this.paidAt = paidAt;
+        }
+    }
+
+    // 이 결제 ID의 GET·취소 POST를 시뮬레이션한다. POST는 기본 SUCCEEDED 취소 내역을 만든다
+    public void simulateRefunds(String paymentId, String storeId, long amount, LocalDateTime paidAtKst) {
+        simulations.put(paymentId, new Simulation(storeId, amount, paidAtKst));
+    }
+
+    // 다음 취소 POST가 만들 취소 내역의 상태(SUCCEEDED·REQUESTED·FAILED)
+    public void simulatePostStatus(String paymentId, String status) {
+        simulation(paymentId).postStatus = status;
+    }
+
+    // 다음 취소 POST 응답에서 취소 ID를 빼고 돌려준다(응답은 결과 불명이지만 PG에는 취소가 만들어진 상황)
+    public void simulatePostWithoutId(String paymentId, boolean withoutId) {
+        simulation(paymentId).postWithoutId = withoutId;
+    }
+
+    // 보관된 취소 내역의 상태를 바꾼다(REQUESTED → SUCCEEDED 등). GET이 바로 반영한다
+    public void settleSimulated(String paymentId, String cancellationId, String status) {
+        simulation(paymentId).cancellations.stream().filter(c -> c.id.equals(cancellationId)).findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("없는 시뮬레이션 취소: " + cancellationId)).status = status;
+    }
+
+    // 외부(콘솔 등)에서 생긴 취소를 보관 목록에 넣는다 — 서버 생성 reason이 아닌 취소
+    public SimulatedCancellation addSimulatedCancellation(String paymentId, String status, long totalAmount, String reason,
+                                                          LocalDateTime requestedAtKst) {
+        return addSimulatedCancellation(paymentId, status, totalAmount, reason, requestedAtKst, "CONSOLE");
+    }
+
+    // trigger를 지정해 넣는다(API면 서버 생성 reason의 중복 취소 재현)
+    public SimulatedCancellation addSimulatedCancellation(String paymentId, String status, long totalAmount, String reason,
+                                                          LocalDateTime requestedAtKst, String trigger) {
+        Simulation sim = simulation(paymentId);
+        String prefix = "API".equals(trigger) ? "cxl_api_" : "cxl_ext_";
+        SimulatedCancellation c = new SimulatedCancellation(prefix + sim.sequence.incrementAndGet(), status,
+            totalAmount, reason, requestedAtKst);
+        sim.cancellations.add(c);
+        return c;
+    }
+
+    // 명시 취소 스텁을 지워 시뮬레이션으로 돌아간다
+    public void clearCancelStub(String paymentId) {
+        cancelStubs.remove(paymentId);
+    }
+
+    public void clearGetStub(String paymentId) {
+        getStubs.remove(paymentId);
+    }
+
+    public List<SimulatedCancellation> simulatedCancellations(String paymentId) {
+        return List.copyOf(simulation(paymentId).cancellations);
+    }
+
+    private Simulation simulation(String paymentId) {
+        Simulation sim = simulations.get(paymentId);
+        if (sim == null) {
+            throw new IllegalStateException("시뮬레이션이 없는 결제 ID: " + paymentId);
+        }
+        return sim;
+    }
+
+    private Stub simulatedCancel(Simulation sim, String idempotencyKey, String body) {
+        synchronized (sim) {
+            SimulatedCancellation existing = sim.byIdempotencyKey.get(idempotencyKey);
+            SimulatedCancellation c = existing;
+            if (c == null) {
+                long amount = Long.parseLong(jsonNumber(body, "amount"));
+                String reason = jsonString(body, "reason");
+                c = new SimulatedCancellation("cxl_" + sim.sequence.incrementAndGet(), sim.postStatus, amount, reason,
+                    LocalDateTime.of(2027, 3, 10, 15, 0).plusSeconds(sim.sequence.get()));
+                sim.cancellations.add(c);
+                sim.byIdempotencyKey.put(idempotencyKey, c);
+            }
+            String json = sim.postWithoutId
+                ? "{\"cancellation\":{\"status\":\"" + c.status + "\",\"totalAmount\":" + c.totalAmount + "}}"
+                : "{\"cancellation\":" + simulatedCancellationJson(c) + "}";
+            return new Stub(200, json);
+        }
+    }
+
+    private Stub simulatedGet(String paymentId, Simulation sim) {
+        long cancelled = sim.cancellations.stream().filter(c -> "SUCCEEDED".equals(c.status))
+            .mapToLong(c -> c.totalAmount).sum();
+        String status = cancelled <= 0 ? "PAID" : (cancelled >= sim.amount ? "CANCELLED" : "PARTIAL_CANCELLED");
+        StringBuilder cancellations = new StringBuilder("[");
+        for (int i = 0; i < sim.cancellations.size(); i++) {
+            if (i > 0) {
+                cancellations.append(',');
+            }
+            cancellations.append(simulatedCancellationJson(sim.cancellations.get(i)));
+        }
+        cancellations.append(']');
+        return new Stub(200, "{\"id\":\"" + paymentId + "\",\"transactionId\":\"tx_" + paymentId
+            + "\",\"storeId\":\"" + sim.storeId + "\",\"status\":\"" + status + "\",\"amount\":{\"total\":" + sim.amount
+            + ",\"paid\":" + sim.amount + ",\"cancelled\":" + cancelled + "},\"currency\":\"KRW\",\"paidAt\":\""
+            + iso(sim.paidAt) + "\"" + (sim.cancellations.isEmpty() ? "" : ",\"cancellations\":" + cancellations) + "}");
+    }
+
+    private static String simulatedCancellationJson(SimulatedCancellation c) {
+        String trigger = c.id.startsWith("cxl_ext_") ? "CONSOLE" : "API";
+        return cancellationJson(c.id, c.status, c.totalAmount, c.reason, trigger, c.requestedAt,
+            "SUCCEEDED".equals(c.status) ? c.requestedAt.plusSeconds(3) : null);
+    }
+
+    private static String jsonNumber(String json, String field) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"" + field + "\"\\s*:\\s*(-?\\d+)").matcher(json);
+        if (!m.find()) {
+            throw new IllegalArgumentException("취소 본문에 " + field + " 없음");
+        }
+        return m.group(1);
+    }
+
+    private static String jsonString(String json, String field) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"" + field + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
+        if (!m.find()) {
+            throw new IllegalArgumentException("취소 본문에 " + field + " 없음");
+        }
+        return m.group(1);
     }
 
     // POST /payments/{id}/billing-key
@@ -292,10 +465,18 @@ public final class PortOneStubServer {
             cancelCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
             cancelBodies.computeIfAbsent(id, k -> new CopyOnWriteArrayList<>())
                 .add(new String(requestBody, StandardCharsets.UTF_8));
-            cancelIdempotencyKeys.computeIfAbsent(id, k -> new CopyOnWriteArrayList<>())
-                .add(String.valueOf(exchange.getRequestHeaders().getFirst("Idempotency-Key")));
-            stub = cancelStubs.getOrDefault(id, new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}"));
+            String idempotencyKey = String.valueOf(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
+            cancelIdempotencyKeys.computeIfAbsent(id, k -> new CopyOnWriteArrayList<>()).add(idempotencyKey);
             awaitPostGate();
+            Stub explicit = cancelStubs.get(id);
+            Simulation sim = simulations.get(id);
+            if (explicit != null) {
+                stub = explicit;
+            } else if (sim != null) {
+                stub = simulatedCancel(sim, idempotencyKey, new String(requestBody, StandardCharsets.UTF_8));
+            } else {
+                stub = new Stub(404, "{\"type\":\"PAYMENT_NOT_FOUND\"}");
+            }
             Long delay = cancelDelayMillis.get();
             if (delay != null) {
                 try {
@@ -312,7 +493,9 @@ public final class PortOneStubServer {
         } else if ("GET".equals(method) && path.startsWith("/payments/")) {
             String id = path.substring("/payments/".length());
             getCounts.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
-            stub = getStubs.getOrDefault(id, defaultGet(id));
+            Stub explicit = getStubs.get(id);
+            Simulation sim = simulations.get(id);
+            stub = explicit != null ? explicit : (sim != null ? simulatedGet(id, sim) : defaultGet(id));
         } else if ("GET".equals(method) && path.startsWith("/billing-keys/")) {
             String key = path.substring("/billing-keys/".length());
             stub = billingKeyStubs.getOrDefault(key, new Stub(404, "{\"type\":\"BILLING_KEY_NOT_FOUND\"}"));

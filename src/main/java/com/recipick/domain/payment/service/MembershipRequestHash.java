@@ -29,6 +29,15 @@ public final class MembershipRequestHash {
         return HexFormat.of().formatHex(sha256(canonical.toString()));
     }
 
+    // 즉시 해지 환불 요청의 멱등 해시. 본문이 없는 요청이라 대상 이용권 ID만 넣는다 — 같은 키로 다른 이용권을 보내면 COMMON-011
+    public static String ofRefund(Long membershipId) {
+        if (membershipId == null) {
+            throw new IllegalArgumentException("이용권 ID가 필요합니다");
+        }
+        String field = String.valueOf(membershipId);
+        return HexFormat.of().formatHex(sha256(field.length() + ":" + field));
+    }
+
     private static byte[] sha256(String value) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));

@@ -335,6 +335,11 @@ public class MembershipRefund extends BaseTimeEntity {
         this.nextCheckAt = at;
     }
 
+    // 임대 해제. 토큰은 그대로 둔다(다음 실행권이 다시 올린다)
+    public void releaseLease() {
+        this.leaseExpiresAt = null;
+    }
+
     // 결과 확인 창·재조회 간격의 기준 시각. 최초 발송이 있으면 그 시각, 없으면 접수 시각
     public LocalDateTime checkBaseAt() {
         return firstDispatchedAt != null ? firstDispatchedAt : requestedAt;
