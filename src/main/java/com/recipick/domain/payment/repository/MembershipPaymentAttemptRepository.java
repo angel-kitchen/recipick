@@ -162,7 +162,8 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
     // 운영 목록(최신 시도부터). 조건이 없으면 전체. statuses는 비어 있으면 안 된다 — 호출자가 "전체"를 모든 값으로 넘긴다
     @Query(value = """
         SELECT a FROM MembershipPaymentAttempt a
-         WHERE a.status IN :statuses
+          JOIN FETCH a.membershipPayment
+          WHERE a.status IN :statuses
            AND (:membershipId IS NULL OR a.membershipPayment.membershipId = :membershipId)
            AND (:opsReviewOnly = false OR a.opsReviewRequiredAt IS NOT NULL)
            AND (:blockedOnly = false OR a.opsReviewReason IN :blocking)
