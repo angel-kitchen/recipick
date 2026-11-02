@@ -49,7 +49,14 @@ export default function AutoCartReview({ preview, disabled = false }) {
     if (productId === NONE) return null;
     const candidate = item.candidates.find((c) => c.productId === Number(productId)) ?? item.product;
     const quantity = quantityOf(item, productId);
-    return { item, productId: Number(productId), name: candidate.name, quantity, price: candidate.price * quantity };
+    return {
+      item,
+      productId: Number(productId),
+      name: candidate.name,
+      imageUrl: candidate.imageUrl ?? null,
+      quantity,
+      price: candidate.price * quantity,
+    };
   };
 
   const lines = preview.items.filter((item) => item.purchasable).map(lineOf);
@@ -261,13 +268,16 @@ export default function AutoCartReview({ preview, disabled = false }) {
             <ul className="list-plain" style={{ margin: '12px 0' }}>
               {added.lines.map((line) => (
                 <li key={line.productId}>
-                  <span>
-                    {line.name} × {line.quantity}
-                    {line.total > line.quantity && (
-                      <span className="tile__meta" style={{ display: 'block' }}>
-                        이미 담겨 있어서 합쳐서 총 {line.total}개가 됐어요
-                      </span>
-                    )}
+                  <span className="added__name">
+                    {line.imageUrl ? <img className="added__image" src={line.imageUrl} alt="" /> : <span className="added__image" />}
+                    <span>
+                      {line.name} × {line.quantity}
+                      {line.total > line.quantity && (
+                        <span className="tile__meta" style={{ display: 'block' }}>
+                          이미 담겨 있어서 합쳐서 총 {line.total}개가 됐어요
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <span>{formatWon(line.price)}</span>
                 </li>

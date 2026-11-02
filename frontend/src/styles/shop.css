@@ -1085,3 +1085,19 @@
   background: var(--green-light);
   object-fit: cover;
 }
+
+/* 담기 완료 창의 상품 한 줄 */
+.added__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.added__image {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--green-light);
+  object-fit: cover;
+}
