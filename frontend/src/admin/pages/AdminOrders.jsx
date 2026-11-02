@@ -54,7 +54,8 @@ function OrderDetail({ orderId, onChanged }) {
         </dd>
         <dt>금액</dt>
         <dd>
-          상품 {formatWon(order.productAmount)} + 배송비 {formatWon(order.deliveryFee)} = {formatWon(order.payAmount)}
+          상품 {formatWon(order.productAmount)} + 배송비 {formatWon(order.deliveryFee)}
+          {order.usedPoint > 0 && ` − 포인트 ${formatWon(order.usedPoint)}`} = {formatWon(order.payAmount)}
         </dd>
         {order.cancelReasonDetail && (
           <>
@@ -84,7 +85,7 @@ function OrderDetail({ orderId, onChanged }) {
             수락
           </button>
         )}
-        {order.martStatus === 'PREPARING' && (
+        {order.status === 'PAID' && order.martStatus === 'PREPARING' && (
           <button
             type="button"
             className="btn"
@@ -96,7 +97,7 @@ function OrderDetail({ orderId, onChanged }) {
             배송 시작
           </button>
         )}
-        {order.martStatus === 'SHIPPING' && (
+        {order.status === 'PAID' && order.martStatus === 'SHIPPING' && (
           <button
             type="button"
             className="btn"
