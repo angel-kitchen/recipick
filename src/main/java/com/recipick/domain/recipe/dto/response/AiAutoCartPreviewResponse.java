@@ -40,10 +40,10 @@ public record AiAutoCartPreviewResponse(
         }
     }
 
-    public record RecipeOption(Long recipeId, String name) {
+    public record RecipeOption(Long recipeId, String name, String thumbnailUrl) {
 
         static RecipeOption from(AiRecipeOption recipe) {
-            return new RecipeOption(recipe.id(), recipe.name());
+            return new RecipeOption(recipe.id(), recipe.name(), recipe.thumbnailUrl());
         }
     }
 }

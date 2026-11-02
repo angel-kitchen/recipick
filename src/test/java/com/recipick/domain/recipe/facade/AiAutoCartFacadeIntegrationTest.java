@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -51,6 +52,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
     private static final Long MEMBER_ID = 9502L;
+    private static final String KIMCHI_VIDEO_ID = "dQw4w9WgXcQ";
     private static final AiUsage USAGE = new AiUsage("claude-opus-5-5", 900, 120, 800, 1500);
 
     @Autowired
@@ -84,8 +86,8 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
-        kimchiStew = saveAutoCartRecipe("AI장보기 김치찌개");
-        soybeanStew = saveAutoCartRecipe("AI장보기 된장찌개");
+        kimchiStew = saveAutoCartRecipe("AI장보기 김치찌개", KIMCHI_VIDEO_ID);
+        soybeanStew = saveAutoCartRecipe("AI장보기 된장찌개", null);
         mart = martRepository.save(Mart.builder()
             .regionId(9502L)
             .name("AI 장보기 테스트 마트")
@@ -109,8 +111,9 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
         redisTemplate.delete("ai:request:" + MEMBER_ID);
     }
 
-    private Recipe saveAutoCartRecipe(String name) {
-        Recipe recipe = Recipe.builder().name(name).baseServings(2).steps(List.of()).build();
+    private Recipe saveAutoCartRecipe(String name, String youtubeVideoId) {
+        Recipe recipe = Recipe.builder().name(name).baseServings(2).steps(List.of())
+            .youtubeVideoId(youtubeVideoId).build();
         recipe.enableAutoCart();
         return recipeRepository.save(recipe);
     }
@@ -168,6 +171,10 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(response.menus().get(0).candidates())
             .extracting(AiAutoCartPreviewResponse.RecipeOption::recipeId)
             .containsExactly(kimchiStew.getId(), soybeanStew.getId());
+        // 썸네일은 영상이 있는 레시피에만 있고, 없는 레시피는 null로 내려간다
+        assertThat(response.menus().get(0).candidates())
+            .extracting(AiAutoCartPreviewResponse.RecipeOption::thumbnailUrl)
+            .containsExactly(kimchiStew.getThumbnailUrl(), null);
         assertThat(autoCartRequestRepository.findAll())
             .noneMatch(request -> request.getMemberId().equals(MEMBER_ID));
         assertThat(findLogs()).singleElement()
@@ -196,6 +203,23 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(log.getInputTokens()).isNull();
         assertThat(log.getModel()).isEqualTo("claude-opus-5-5");
         assertThat(log.getLatencyMs()).isEqualTo(15000);
+    }
+
+    @Test
+    @DisplayName("AI가 실패해 FALLBACK이 되어도 영상이 있는 레시피는 썸네일을 함께 준다")
+    void preview_fallbackIncludesThumbnail() {
+        // given
+        givenAiResult(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
+
+        // when
+        AiAutoCartPreviewResponse response = aiAutoCartFacade.preview(MEMBER_ID, "AI장보기 김치찌개 먹고 싶어");
+
+        // then
+        assertThat(response.status()).isEqualTo(AiResultStatus.FALLBACK);
+        assertThat(response.recipes())
+            .extracting(AiAutoCartPreviewResponse.RecipeOption::recipeId,
+                AiAutoCartPreviewResponse.RecipeOption::thumbnailUrl)
+            .containsExactly(tuple(kimchiStew.getId(), kimchiStew.getThumbnailUrl()));
     }
 
     @Test
