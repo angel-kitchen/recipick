@@ -271,6 +271,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
         assertThat(item.path("lineAmount").asLong()).isEqualTo(5000L);
         assertThat(data.path("productAmount").asLong()).isEqualTo(5000L);
         assertThat(data.path("deliveryFee").asLong()).isEqualTo(3000L);
+        assertThat(data.path("usedPoint").isIntegralNumber()).isTrue();
         assertThat(data.path("usedPoint").asLong()).isZero();
         assertThat(data.path("payAmount").asLong()).isEqualTo(8000L);
         assertThat(data.path("receiverName").asText()).isEqualTo("홍길동");
@@ -291,6 +292,25 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
         assertThat(accepted.path("reason").asText()).isEqualTo("수락");
         assertThat(accepted.path("createdAt").asText()).endsWith("+09:00");
         assertThat(histories.get(0).path("changedByAdminId").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("포인트를 쓴 주문은 관리자 상세에서도 사용 포인트를 돌려줘 상품 + 배송비 − 포인트 = 결제금액이 맞는다")
+    void getOrder_usedPoint() throws Exception {
+        // given
+        Order order = order(martA, OrderStatus.PAID, MartStatus.RECEIVED, 3_000L, "애호박");
+
+        // when
+        MockHttpServletResponse response = perform("/api/admin/orders/" + order.getId(), superToken());
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(200);
+        JsonNode data = data(response);
+        assertThat(data.path("usedPoint").isIntegralNumber()).isTrue();
+        assertThat(data.path("usedPoint").asLong()).isEqualTo(3_000L);
+        assertThat(data.path("payAmount").asLong()).isEqualTo(5_000L);
+        assertThat(data.path("productAmount").asLong() + data.path("deliveryFee").asLong()
+                - data.path("usedPoint").asLong()).isEqualTo(data.path("payAmount").asLong());
     }
 
     @Test
@@ -395,6 +415,11 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
     // 상품마다 2,500원 × 2개. 상품금액은 첫 상품 기준 5,000원, 배송비 3,000원으로 고정해 둔다
     private Order order(Long martId, OrderStatus status, MartStatus martStatus, String... productNames) {
+        return order(martId, status, martStatus, 0L, productNames);
+    }
+
+    private Order order(Long martId, OrderStatus status, MartStatus martStatus, long usedPoint,
+            String... productNames) {
         Order order = orderRepository.save(Order.builder()
                 .orderNumber("T" + UUID.randomUUID().toString().substring(0, 20))
                 .memberId(MEMBER_ID)
@@ -403,8 +428,8 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
                 .martStatus(martStatus)
                 .productAmount(5000L)
                 .deliveryFee(3000L)
-                .usedPoint(0L)
-                .payAmount(8000L)
+                .usedPoint(usedPoint)
+                .payAmount(8000L - usedPoint)
                 .receiverName("홍길동")
                 .receiverPhone("01012345678")
                 .address("서울 종로구 삼청로 1")

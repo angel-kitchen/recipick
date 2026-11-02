@@ -158,6 +158,7 @@ class OrderQueryIntegrationTest extends IntegrationTestSupport {
         assertThat(item.path("lineAmount").asLong()).isEqualTo(5000L);
         assertThat(data.path("productAmount").asLong()).isEqualTo(5000L);
         assertThat(data.path("deliveryFee").asLong()).isEqualTo(3000L);
+        assertThat(data.path("usedPoint").isIntegralNumber()).isTrue();
         assertThat(data.path("usedPoint").asLong()).isZero();
         assertThat(data.path("payAmount").asLong()).isEqualTo(8000L);
         assertThat(data.path("receiverName").asText()).isEqualTo("홍길동");
