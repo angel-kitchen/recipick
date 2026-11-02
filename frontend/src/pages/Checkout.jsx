@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { ApiError, api } from '../api/client';
 import { cancelPendingOrder, findPendingOrder } from '../api/orders';
+import { customerOf, payOrder } from '../api/payments';
 import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
 import PendingOrderNotice from '../components/PendingOrderNotice';
 import { CART_STATUS, UNORDERABLE_REASON, formatWon } from '../labels';
+
+// 응답을 받지 못해(네트워크 오류, 프록시 502 이상) 서버에서 주문이 생겼는지 알 수 없는 경우
+const isUnknownOutcome = (e) => !(e instanceof ApiError) || e.status >= 502;
 
 export default function Checkout() {
   const { member } = useAuth();
@@ -30,8 +34,11 @@ export default function Checkout() {
   const [pendingOrder, setPendingOrder] = useState(null);
   const [modalBusy, setModalBusy] = useState(false);
   const [modalError, setModalError] = useState(null);
-  // 같은 내용으로 다시 보낼 땐 같은 키를 써서 주문이 두 번 만들어지지 않게 한다
+  // 주문하려는 시도마다 새 키를 쓴다. 응답을 못 받아 주문이 생겼는지 모를 때만 같은 키로 다시 보내,
+  // 생겼으면 그 주문을 돌려받는다. 같은 키에 다른 내용은 거절되므로 내용이 바뀌면 새 키를 쓴다
   const idempotency = useRef({ body: null, key: null });
+  // 결제창을 닫거나 실패해 주문이 닫혔을 때 주문서에 머물며 보여 줄 결과
+  const [paymentNotice, setPaymentNotice] = useState(null);
 
   const runPreview = useCallback(async () => {
     setError(null);
@@ -59,6 +66,7 @@ export default function Checkout() {
 
   const placeOrder = async () => {
     setError(null);
+    setPaymentNotice(null);
     setSubmitting(true);
     const body = {
       cartItemIds,
@@ -69,13 +77,22 @@ export default function Checkout() {
       legalDongCode: form.legalDongCode || null,
     };
     const serialized = JSON.stringify(body);
-    if (idempotency.current.body !== serialized) {
+    if (!idempotency.current.key || idempotency.current.body !== serialized) {
       idempotency.current = { body: serialized, key: crypto.randomUUID() };
     }
     try {
       const order = await api.post('/api/orders', body, { 'Idempotency-Key': idempotency.current.key });
-      navigate(`/orders/${order.orderId}`, { replace: true });
+      idempotency.current = { body: null, key: null };
+      const payment = await payCreatedOrder(order);
+      // 결제창을 닫거나 실패하면 주문은 서버에서 닫혔다. 주문서에 머물러 바로 다시 결제할 수 있게 한다
+      if (payment?.status === 'FAILED') {
+        setPaymentNotice(payment);
+        return;
+      }
+      navigate(`/orders/${order.orderId}`, { replace: true, state: { payment } });
     } catch (e) {
+      // 응답을 받았으면 주문이 생기지 않은 것이 확실하므로 다음 시도는 새 키를 쓴다
+      if (!isUnknownOutcome(e)) idempotency.current = { body: null, key: null };
       if (e.code === 'ORDER-003') {
         // 결제하지 않은 주문이 남아 있으면 오류 문구 대신 취소를 안내하는 창을 띄운다
         setPendingOrder(await findPendingOrder().catch(() => null));
@@ -86,6 +103,23 @@ export default function Checkout() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // 실패로 닫힌 경우 말고는 주문이 결제 대기로 남았거나 상태 확인이 필요해 주문 상세로 보낸다
+  const payCreatedOrder = async (order) => {
+    // 포인트로 전액 결제한 주문은 생성 때 이미 결제 완료라 결제창이 없다
+    if (order.status !== 'PENDING_PAYMENT') return null;
+    try {
+      return await payOrder({
+        orderId: order.orderId,
+        portonePaymentId: order.portonePaymentId,
+        amount: order.amount,
+        orderName: order.orderName,
+        customer: customerOf(member),
+      });
+    } catch (e) {
+      return { status: 'ERROR', message: e.message };
     }
   };
 
@@ -112,6 +146,13 @@ export default function Checkout() {
     <div className="container page">
       <h1 className="page__title">주문하기</h1>
       <ErrorNotice error={error} />
+      {paymentNotice && (
+        <div className="notice" role="status">
+          결제가 완료되지 않았어요. 다시 결제하려면 [결제하기]를 눌러 주세요.
+          {paymentNotice.message && <br />}
+          {paymentNotice.message}
+        </div>
+      )}
       <PendingOrderNotice onChanged={runPreview} />
       <div className="cart">
         <form className="card form" onSubmit={handleSubmit} id="order-form">
