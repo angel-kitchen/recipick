@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, isUnknownOutcome } from '../api/client';
 import { cancelPaidOrder, cancelPendingOrder } from '../api/orders';
 import { confirmClosedPayment, confirmPayment, customerOf, payOrder } from '../api/payments';
 import { useAuth } from '../auth/AuthContext';
@@ -39,6 +39,8 @@ export default function OrderDetail() {
   const [refunding, setRefunding] = useState(false);
   const [refundError, setRefundError] = useState(null);
   const [refundResult, setRefundResult] = useState(null);
+  // 응답을 못 받은 환불을 다시 보낼 때만 같은 키를 쓴다
+  const refundKey = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -121,13 +123,16 @@ export default function OrderDetail() {
   const refund = async () => {
     setRefundError(null);
     setRefunding(true);
+    if (!refundKey.current) refundKey.current = crypto.randomUUID();
     try {
-      const result = await cancelPaidOrder(orderId);
+      const result = await cancelPaidOrder(orderId, refundKey.current);
+      refundKey.current = null;
       setRefundOpen(false);
       // PortOne 결과를 바로 받지 못하면(202) 환불이 REQUESTED로 남고 서버가 이어서 확인한다
       setRefundResult(result.refundStatus === 'COMPLETED' ? 'DONE' : 'PENDING');
       load();
     } catch (e) {
+      if (!isUnknownOutcome(e)) refundKey.current = null;
       setRefundError(e);
     } finally {
       setRefunding(false);

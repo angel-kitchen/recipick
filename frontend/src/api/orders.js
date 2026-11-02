@@ -1,18 +1,19 @@
 import { api } from './client';
 
 // 결제 전 취소는 결제 취소 API가 맡는다(결제 대기 주문이 닫히고 차감했던 재고가 돌아온다)
-export async function cancelPendingOrder(orderId) {
+export async function cancelPendingOrder(orderId, idempotencyKey = crypto.randomUUID()) {
   const payment = await api.get(`/api/payments/orders/${orderId}`);
   return api.post(
     `/api/payments/${payment.paymentId}/cancel`,
     { reason: '주문자가 직접 취소' },
-    { 'Idempotency-Key': crypto.randomUUID() },
+    { 'Idempotency-Key': idempotencyKey },
   );
 }
 
-// 결제 후 취소(환불)도 같은 결제 취소 API다. 서버가 마트 접수 전(RECEIVED)까지만 받아 주고 PortOne 환불까지 처리한다
-export function cancelPaidOrder(orderId) {
-  return cancelPendingOrder(orderId);
+// 결제 후 취소(환불)도 같은 결제 취소 API다. 서버가 마트 접수 전(RECEIVED)까지만 받아 주고 PortOne 환불까지 처리한다.
+// 결과를 모르는 재시도는 같은 키로 보내야 서버가 처음 환불 결과를 돌려주므로 키는 호출한 화면이 정한다
+export function cancelPaidOrder(orderId, idempotencyKey) {
+  return cancelPendingOrder(orderId, idempotencyKey);
 }
 
 // 회원당 결제 대기 주문은 최대 한 건이다
