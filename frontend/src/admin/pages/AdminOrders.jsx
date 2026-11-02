@@ -108,7 +108,7 @@ function OrderDetail({ orderId, onChanged }) {
             배송 완료
           </button>
         )}
-        {['RECEIVED', 'PREPARING'].includes(order.martStatus) && !rejecting && (
+        {order.martStatus === 'RECEIVED' && !rejecting && (
           <button type="button" className="btn btn--outline" onClick={() => setRejecting(true)}>
             거절
           </button>
