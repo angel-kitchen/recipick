@@ -131,36 +131,17 @@ public class MembershipRefundResultProcessor {
         if (attempt.isSettlementBlocked()) {
             return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
         }
-        if (refund.getStatus() != MembershipRefundStatus.REQUESTED) {
-            return evaluateFinal(refund, attempt, observed, now);
-        }
-        if (refund.isSettlementBlocked()) {
+        boolean requested = refund.getStatus() == MembershipRefundStatus.REQUESTED;
+        if (requested && refund.isSettlementBlocked()) {
             return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
         }
-        RefundMatchSnapshot snapshot = RefundMatchSnapshot.of(refund, attempt.getPortonePaymentId(),
-            portOneProperties.storeId());
-        Identity identity = MembershipRefundCancellationMatcher.identity(snapshot, observed);
-        switch (identity) {
-            case INCOMPLETE -> {
-                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.PENDING);
-            }
-            case MISMATCH -> {
-                refund.requireOpsReview(MembershipRefundOpsReason.PG_IDENTITY_MISMATCH, now);
-                attempt.blockSettlement(now, MembershipOpsReviewReason.REFUND_EVIDENCE_CONFLICT);
-                log.error("환불 대상 결제의 PG 식별값(상점·통화·원수납액)이 저장 근거와 다름 → 강한 차단(운영 확인): refundId={}, attemptId={}",
-                    refund.getId(), attempt.getId());
-                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
-            }
-            case PAYMENT_FAILED -> {
-                refund.requireOpsReview(MembershipRefundOpsReason.EVIDENCE_CONFLICT, now);
-                attempt.blockSettlement(now, MembershipOpsReviewReason.PAID_EVIDENCE_CONFLICT);
-                log.error("수납으로 기록된 시도를 PG가 FAILED라고 함 → 강한 차단(운영 확인): refundId={}, attemptId={}", refund.getId(),
-                    attempt.getId());
-                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
-            }
-            case MATCH -> {
-                // 계속
-            }
+        // 확정 환불도 다른 상점·통화·원수납액의 결제를 근거로 기존 결과를 유지하지 않는다
+        MembershipRefundApplyResult identityRejected = rejectByIdentity(refund, attempt, observed, now);
+        if (identityRejected != null) {
+            return identityRejected;
+        }
+        if (!requested) {
+            return evaluateFinal(refund, attempt, observed, now);
         }
         CancelledSum sum = MembershipRefundCancellationMatcher.cancelledSum(observed);
         if (sum == CancelledSum.UNTRUSTED) {
@@ -170,6 +151,8 @@ public class MembershipRefundResultProcessor {
         if (sum == CancelledSum.INCONSISTENT) {
             return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.PENDING);
         }
+        RefundMatchSnapshot snapshot = RefundMatchSnapshot.of(refund, attempt.getPortonePaymentId(),
+            portOneProperties.storeId());
         List<RefundCancellationBinding> bindings = locked.refunds().stream().map(RefundCancellationBinding::of).toList();
         Match match = MembershipRefundCancellationMatcher.match(snapshot, observed, bindings);
         return switch (match.kind()) {
@@ -192,6 +175,36 @@ public class MembershipRefundResultProcessor {
                 yield MembershipRefundApplyResult.pendingPostAllowed();
             }
         };
+    }
+
+    // PG 식별 검사. MATCH면 null — 계속 판정한다. INCOMPLETE는 이번 관측만 미확정(PENDING)으로 보고 저장된 상태는 그대로 둔다
+    private MembershipRefundApplyResult rejectByIdentity(MembershipRefund refund, MembershipPaymentAttempt attempt,
+                                                         PortOnePayment observed, LocalDateTime now) {
+        RefundMatchSnapshot snapshot = RefundMatchSnapshot.of(refund, attempt.getPortonePaymentId(),
+            portOneProperties.storeId());
+        Identity identity = MembershipRefundCancellationMatcher.identity(snapshot, observed);
+        switch (identity) {
+            case INCOMPLETE -> {
+                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.PENDING);
+            }
+            case MISMATCH -> {
+                refund.requireOpsReview(MembershipRefundOpsReason.PG_IDENTITY_MISMATCH, now);
+                attempt.blockSettlement(now, MembershipOpsReviewReason.REFUND_EVIDENCE_CONFLICT);
+                log.error("환불 대상 결제의 PG 식별값(상점·통화·원수납액)이 저장 근거와 다름 → 강한 차단(운영 확인): refundId={}, attemptId={}",
+                    refund.getId(), attempt.getId());
+                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
+            }
+            case PAYMENT_FAILED -> {
+                refund.requireOpsReview(MembershipRefundOpsReason.EVIDENCE_CONFLICT, now);
+                attempt.blockSettlement(now, MembershipOpsReviewReason.PAID_EVIDENCE_CONFLICT);
+                log.error("수납으로 기록된 시도를 PG가 FAILED라고 함 → 강한 차단(운영 확인): refundId={}, attemptId={}", refund.getId(),
+                    attempt.getId());
+                return MembershipRefundApplyResult.of(MembershipRefundExecutionResult.REVIEW_REQUIRED);
+            }
+            default -> {
+                return null;
+            }
+        }
     }
 
     // 매칭된 취소 내역으로 확정. 금액은 저장 환불액과 같아야 한다. SUCCEEDED → COMPLETED(+MEMBER 종료), FAILED → FAILED,
@@ -246,6 +259,14 @@ public class MembershipRefundResultProcessor {
         // 확정 환불도 취소 ID가 누락된 PG 관측값으로는 정합성을 판정하지 않는다.
         if (observed.cancellations().stream()
             .anyMatch(c -> c.id() == null || c.id().isBlank())) {
+            return MembershipRefundApplyResult.signal(Signal.UNTRUSTED_OBSERVATION);
+        }
+
+        // 같은 취소 ID가 두 번 오면 어느 쪽 상태·금액이 맞는지 알 수 없어 판정하지 않는다
+        if (observed.cancellations().stream()
+            .map(PortOneCancellation::id)
+            .distinct()
+            .count() != observed.cancellations().size()) {
             return MembershipRefundApplyResult.signal(Signal.UNTRUSTED_OBSERVATION);
         }
 
