@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
 import PendingOrderNotice from '../components/PendingOrderNotice';
-import { CART_STATUS, UNORDERABLE_REASON, formatWon } from '../labels';
+import { CART_STATUS, UNORDERABLE_REASON, formatPoint, formatWon } from '../labels';
 
 export default function Checkout() {
   const { member } = useAuth();
@@ -36,6 +36,9 @@ export default function Checkout() {
   const idempotency = useRef({ body: null, key: null });
   // 결제창을 닫거나 실패해 주문이 닫혔을 때 주문서에 머물며 보여 줄 결과
   const [paymentNotice, setPaymentNotice] = useState(null);
+  // 잔액을 못 불러오면 포인트 입력을 숨기고 포인트 없이 주문하게 한다
+  const [pointBalance, setPointBalance] = useState(null);
+  const [usedPointInput, setUsedPointInput] = useState('');
 
   const runPreview = useCallback(async () => {
     setError(null);
@@ -52,14 +55,34 @@ export default function Checkout() {
     }
   }, [cartItemIds, form.legalDongCode]);
 
+  const loadPointBalance = useCallback(async () => {
+    try {
+      setPointBalance((await api.get('/api/points')).availableBalance);
+    } catch {
+      setPointBalance(null);
+    }
+  }, []);
+
   useEffect(() => {
-    if (cartItemIds) runPreview();
+    if (cartItemIds) {
+      runPreview();
+      loadPointBalance();
+    }
     // 처음 열 때와 "다시 확인"을 눌렀을 때만 조회한다
   }, []);
+
+  // 포인트는 상품 금액까지만 쓸 수 있고 배송비에는 쓸 수 없다. 다시 확인으로 상품 금액이 줄면 사용량도 그만큼 줄인다
+  const maxPoint = preview && pointBalance !== null ? Math.min(pointBalance, preview.productAmount) : 0;
+  const usedPoint = Math.min(Number(usedPointInput) || 0, maxPoint);
 
   if (!cartItemIds) return <Navigate to="/cart" replace />;
 
   const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const changeUsedPoint = (event) => {
+    const digits = event.target.value.replace(/\D/g, '');
+    setUsedPointInput(digits === '' ? '' : String(Math.min(Number(digits), maxPoint)));
+  };
 
   const placeOrder = async () => {
     setError(null);
@@ -72,6 +95,7 @@ export default function Checkout() {
       address: form.address,
       detailAddress: form.detailAddress,
       legalDongCode: form.legalDongCode || null,
+      usedPoint,
     };
     const serialized = JSON.stringify(body);
     if (!idempotency.current.key || idempotency.current.body !== serialized) {
@@ -84,6 +108,8 @@ export default function Checkout() {
       // 결제창을 닫거나 실패하면 주문은 서버에서 닫혔다. 주문서에 머물러 바로 다시 결제할 수 있게 한다
       if (payment?.status === 'FAILED') {
         setPaymentNotice(payment);
+        // 주문이 닫히며 사용 포인트가 돌아왔다
+        loadPointBalance();
         return;
       }
       navigate(`/orders/${order.orderId}`, { replace: true, state: { payment } });
@@ -205,6 +231,30 @@ export default function Checkout() {
                   </li>
                 ))}
               </ul>
+              {pointBalance !== null && (
+                <label className="field">
+                  <span className="field__label">포인트</span>
+                  <input
+                    className="field__input"
+                    inputMode="numeric"
+                    value={usedPointInput === '' ? '' : String(usedPoint)}
+                    onChange={changeUsedPoint}
+                    placeholder="0"
+                    disabled={maxPoint === 0}
+                  />
+                  <span className="field__hint">
+                    보유 {formatPoint(pointBalance)} · 배송비에는 사용할 수 없어요{' '}
+                    <button
+                      type="button"
+                      className="header__link-button"
+                      onClick={() => setUsedPointInput(String(maxPoint))}
+                      disabled={maxPoint === 0}
+                    >
+                      전액 사용
+                    </button>
+                  </span>
+                </label>
+              )}
               <div className="summary__row">
                 <span>상품 금액</span>
                 <span>{formatWon(preview.productAmount)}</span>
@@ -213,9 +263,15 @@ export default function Checkout() {
                 <span>배송비</span>
                 <span>{preview.deliveryFee === 0 ? '무료' : formatWon(preview.deliveryFee)}</span>
               </div>
+              {usedPoint > 0 && (
+                <div className="summary__row">
+                  <span>포인트 사용</span>
+                  <span>-{formatWon(usedPoint)}</span>
+                </div>
+              )}
               <div className="summary__row summary__total">
                 <span>결제 금액</span>
-                <span>{formatWon(preview.payAmount)}</span>
+                <span>{formatWon(preview.payAmount - usedPoint)}</span>
               </div>
             </>
           )}

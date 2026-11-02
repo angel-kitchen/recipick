@@ -57,6 +57,7 @@ export const AUTO_CART_STATUS = { PREVIEWED: '미리보기', CONFIRMED: '담기 
 export const MEMBERSHIP_TYPE = { PAID: '유료', TRIAL: '무료 체험' };
 
 export const formatWon = (amount) => `${Number(amount).toLocaleString('ko-KR')}원`;
+export const formatPoint = (amount) => `${Number(amount).toLocaleString('ko-KR')}P`;
 
 // 판매 단위 수치는 소수 문자열이라 불필요한 0을 지운다
 export const formatAmount = (amount, unit) => `${Number(amount)}${SALE_UNIT[unit] ?? ''}`;

@@ -6,7 +6,7 @@ import { confirmClosedPayment, confirmPayment, customerOf, payOrder } from '../a
 import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
-import { ORDER_STATUS, formatDateTime, formatWon } from '../labels';
+import { ORDER_STATUS, formatDateTime, formatPoint, formatWon } from '../labels';
 
 const PAYMENT_NOTICE = {
   PAID: { text: '결제가 완료되었습니다.', info: true },
@@ -18,6 +18,17 @@ const PAYMENT_NOTICE = {
   ERROR: { text: '결제를 처리하지 못했어요.' },
 };
 
+// 주문당 적립 건은 하나라 적립 이력 중 가장 나중 단계가 현재 상태다. 취소된 적립은 보여 주지 않는다
+const EARN_STEPS = ['EARN_PENDING', 'EARN_COMPLETED', 'EARN_CANCELED'];
+
+async function findEarning(orderId) {
+  const page = await api.get('/api/points/history', { orderId, size: 100 });
+  const latest = page.content
+    .filter((history) => EARN_STEPS.includes(history.type))
+    .sort((a, b) => EARN_STEPS.indexOf(b.type) - EARN_STEPS.indexOf(a.type))[0];
+  return latest && latest.type !== 'EARN_CANCELED' ? latest : null;
+}
+
 export default function OrderDetail() {
   const { orderId } = useParams();
   const { member } = useAuth();
@@ -26,6 +37,8 @@ export default function OrderDetail() {
   const [searchParams] = useSearchParams();
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null);
+  // 이 주문의 적립 예정·완료 이력. 못 불러와도 주문 정보는 보여 준다
+  const [earning, setEarning] = useState(null);
   const [error, setError] = useState(null);
   // 주문서에서 넘어오면 결제창 결과를 들고 온다
   const [paymentResult, setPaymentResult] = useState(location.state?.payment ?? null);
@@ -48,6 +61,7 @@ export default function OrderDetail() {
       setOrder(data);
       // 다시 결제할 때 쓰는 PortOne 결제 ID와 만료 시각은 결제 정보에 있다
       setPayment(data.status === 'PENDING_PAYMENT' ? await api.get(`/api/payments/orders/${orderId}`) : null);
+      setEarning(await findEarning(orderId).catch(() => null));
     } catch (e) {
       setError(e);
     }
@@ -210,10 +224,22 @@ export default function OrderDetail() {
           <span>배송비</span>
           <span>{order.deliveryFee === 0 ? '무료' : formatWon(order.deliveryFee)}</span>
         </div>
+        {order.usedPoint > 0 && (
+          <div className="summary__row">
+            <span>포인트 사용</span>
+            <span>-{formatWon(order.usedPoint)}</span>
+          </div>
+        )}
         <div className="summary__row summary__total">
           <span>결제 금액</span>
           <span>{formatWon(order.payAmount)}</span>
         </div>
+        {earning?.type === 'EARN_PENDING' && (
+          <p className="field__hint">배송이 완료되면 {formatPoint(earning.amount)}가 적립돼요.</p>
+        )}
+        {earning?.type === 'EARN_COMPLETED' && (
+          <p className="field__hint">{formatPoint(earning.amount)}가 적립됐어요.</p>
+        )}
         <p className="field__hint" style={{ marginTop: 16 }}>
           {order.receiverName} · {order.receiverPhone}
           <br />

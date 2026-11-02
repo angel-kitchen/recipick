@@ -54,7 +54,8 @@ function OrderDetail({ orderId, onChanged }) {
         </dd>
         <dt>금액</dt>
         <dd>
-          상품 {formatWon(order.productAmount)} + 배송비 {formatWon(order.deliveryFee)} = {formatWon(order.payAmount)}
+          상품 {formatWon(order.productAmount)} + 배송비 {formatWon(order.deliveryFee)}
+          {order.usedPoint > 0 && ` − 포인트 ${formatWon(order.usedPoint)}`} = {formatWon(order.payAmount)}
         </dd>
         {order.cancelReasonDetail && (
           <>
@@ -84,7 +85,31 @@ function OrderDetail({ orderId, onChanged }) {
             수락
           </button>
         )}
-        {['RECEIVED', 'PREPARING'].includes(order.martStatus) && !rejecting && (
+        {order.status === 'PAID' && order.martStatus === 'PREPARING' && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(() => api.patch(`/api/admin/orders/${orderId}/delivery-status`, { status: 'SHIPPING' }), '배송을 시작했습니다.')
+            }
+          >
+            배송 시작
+          </button>
+        )}
+        {order.status === 'PAID' && order.martStatus === 'SHIPPING' && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(() => api.patch(`/api/admin/orders/${orderId}/delivery-status`, { status: 'DELIVERED' }), '배송을 완료했습니다.')
+            }
+          >
+            배송 완료
+          </button>
+        )}
+        {order.martStatus === 'RECEIVED' && !rejecting && (
           <button type="button" className="btn btn--outline" onClick={() => setRejecting(true)}>
             거절
           </button>
