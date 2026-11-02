@@ -175,7 +175,7 @@ export default function Home() {
             })}
           </ol>
           <div className="steps__cta">
-            {member ? (
+            {member?.currentAddress ? (
               <>
                 <p className="steps__cta-text">오늘 만들고 싶은 요리를 골라 볼까요?</p>
                 <Link to="/recipes" className="tbtn tbtn--primary">

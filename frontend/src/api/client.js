@@ -88,7 +88,7 @@ async function parse(res) {
   }
   // 백엔드가 꺼져 있으면 프록시가 본문 없는 502를 돌려준다
   if (!json && res.status >= 502) {
-    throw new ApiError(res.status, { message: '서버에 연결하지 못했어요. 잠시 뒤에 다시 시도해 주세요.' });
+    throw new ApiError(res.status, { message: '서버에 연결하지 못했어요. 잠시 뒤에 화면을 새로고침해서 방금 한 일이 반영됐는지 확인해 주세요.' });
   }
   if (!res.ok || json?.success === false) throw new ApiError(res.status, json);
   return json?.data ?? null;
