@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
@@ -105,6 +106,39 @@ public class BillingKey extends BaseTimeEntity {
             return false;
         }
         status = BillingKeyStatus.REVOKED;
+        return true;
+    }
+
+    // 원격 정리 접수. 호출자가 회원 → 키 순서로 잠그고 미해결 시도 검사를 끝낸 뒤 부른다. ACTIVE는 탈퇴 준비에서만 넘어온다.
+    // 이미 삭제 요청·삭제 완료면 false(멱등) — 요청 시각은 최초 값만 남긴다
+    public boolean requestDeletion(LocalDateTime now) {
+        Objects.requireNonNull(now, "now");
+        if (status == BillingKeyStatus.DELETE_REQUESTED || status == BillingKeyStatus.DELETED) {
+            return false;
+        }
+        if (status != BillingKeyStatus.ACTIVE && status != BillingKeyStatus.REPLACED
+            && status != BillingKeyStatus.REVOKED) {
+            throw new IllegalStateException("삭제 요청할 수 없는 빌링키 상태입니다: " + this);
+        }
+        status = BillingKeyStatus.DELETE_REQUESTED;
+        deleteRequestedAt = now;
+        return true;
+    }
+
+    // PortOne이 삭제를 확인한 증거가 있을 때만 삭제 Processor가 부른다. 행은 지우지 않는다 — 과거 결제 시도의 FK와 이력을 보존한다
+    public boolean confirmRemoteDeletion(LocalDateTime confirmedAt) {
+        Objects.requireNonNull(confirmedAt, "confirmedAt");
+        if (status == BillingKeyStatus.DELETED) {
+            if (deletedAt == null) {
+                throw new IllegalStateException("삭제 확인 시각이 없는 키입니다: " + this);
+            }
+            return false;
+        }
+        if (status != BillingKeyStatus.DELETE_REQUESTED) {
+            throw new IllegalStateException("삭제 요청되지 않은 키입니다: " + this);
+        }
+        status = BillingKeyStatus.DELETED;
+        deletedAt = confirmedAt;
         return true;
     }
 

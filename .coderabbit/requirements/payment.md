@@ -200,6 +200,15 @@
     - 동일 ACTIVE BillingKey 재등록은 새 행을 만들지 않고 기존 결과 반환
     - 자동결제 customer 개인정보(name/email/phone)는 BillingKey에 중복 저장하지 않음
     - 실제 자동결제 시 MemberService의 결제용 회원정보 조회를 통해 원문을 받아 Customer DTO 구성
+- **결제수단 정리·탈퇴 정산** (담당: 정윤, 탈퇴 API 연결: 채빈)
+    - `REPLACED`·`REVOKED` 빌링키는 그 키를 쓰는 미해결 시도(READY·DISPATCHING·UNKNOWN·MANUAL_REVIEW)와 회차 강한 차단이 없을 때만 PortOne에서 원격 삭제. `REVOKED`는 청구 불가 표시일 뿐 원격 삭제 확인과 같지 않음. 일반 카드 삭제 API는 추가하지 않음
+    - 삭제 접수는 회원 정산 잠금 → 빌링키 PK 잠금 뒤 상태를 재검사하고, 키를 `DELETE_REQUESTED`로 바꾸며 삭제 요청(`BILLING_KEY_DELETION`, 키당 1건 UNIQUE)을 같은 트랜잭션에 저장. 요청 시각·상점·사유는 재접수로 바뀌지 않음. 잠금 순서 MEMBER → BILLING_KEY(PK 오름차순) → BILLING_KEY_DELETION
+    - 실행은 실행권(토큰 증가 + 임대 5분) 획득 커밋 → PortOne 조회(같은 키·같은 상점 확인) → 삭제 직전 재검증 커밋 → DELETE → 재조회 → 결과 반영. DELETE 응답만으로 완료하지 않고 조회로 `DELETED`를 확인해야 로컬 키 `DELETED`(행은 지우지 않고 결제 시도 FK·이력 보존)
+    - 첫 조회가 404뿐이면 상점 근거 없이 완료로 추정하지 않고 운영 확인(`SCOPE_UNPROVEN`). 키·상점 식별 불일치, 실연동 채널, 401·403, 400은 자동 DELETE 중단·운영 확인이며 접수 후 24시간이 지나면 DELETE를 멈춤. 운영 확인 상태도 1시간 간격 조회는 계속해 콘솔 삭제를 정합화. 강제 완료·표시 해제 API 없음
+    - 복구는 DB 기준(Redis 큐 사용 안 함): 5분마다 교체·폐기 키 후보를 ID 상한 고정 keyset으로 접수, 1분마다 기한이 된 요청을 최대 20건 실행. 다음 확인 간격은 1·2·4·8분 뒤 10분
+    - 회원 탈퇴 정산 `AUTO_BILLING` 영역: 회원의 모든 빌링키가 삭제 확인(`DELETED` + 확인 시각)이고 운영 확인 중인 삭제 요청·멤버십 미정산(C-17)이 없어야 통과. 탈퇴 준비 단계(회원 잠금 TX)는 활성 키를 포함한 회원의 키 전부를 정리 접수만 하고 커밋하며, 처리 중이면 `BILLING-030`, 운영 확인이면 `BILLING-031`로 응답(접수는 유지). 회원은 정리 뒤 탈퇴를 다시 요청하며 자동 탈퇴·원격 키 복구는 없음
+    - 기능 스위치 `payment.billing-key-deletion.enabled`(정리 접수·실행)·`withdrawal-enabled`(AUTO_BILLING 영역 제공·탈퇴 준비)는 운영 기본 false. 둘 다 true일 때만 AUTO_BILLING을 지원한다고 선언하며 꺼져 있으면 탈퇴는 기존대로 `MEMBER-008`. 신규 자동청구 플래그와 별개
+    - 로그·저장은 내부 ID와 고정 코드만 사용하고 빌링키·API Secret·PG 응답 원문은 남기지 않음
 - **멤버십 결제** (담당: 정윤)
     - 월 이용료 3,900원
     - 체험 종료 또는 일반회원의 유료 구독 시작 시 첫 자동 결제

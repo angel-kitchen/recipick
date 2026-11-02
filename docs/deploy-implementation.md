@@ -658,3 +658,71 @@ UPDATE membership_refund
    AND status = 'REQUESTED' AND requested_by = 'SYSTEM'
    AND pg_idempotency_key IS NULL AND portone_cancellation_id IS NULL;
 ```
+
+### 10-I. 결제 6단계(#391) — billing_key_deletion 신규 테이블 1개 + 환경변수 2개 (추가만, 기존 테이블 변경 없음)
+
+6단계(교체·폐기 빌링키의 PortOne 원격 정리, 회원 탈퇴의 AUTO_BILLING 정산 영역)는 새 테이블 `billing_key_deletion` 하나를 만들고 기존
+테이블·컬럼은 바꾸지 않는다. 이름·열 순서는 엔티티(`BillingKeyDeletion`)·`docs/erd.dbml`과 같다. **6단계 자동 배포 전에 적용이 끝나 있어야 한다**
+(dev 머지가 배포를 시작하므로 적용 완료가 머지 조건이다). 기능은 두 스위치 모두 기본 OFF라 배포만으로는 원격 삭제도 탈퇴 개방도 시작되지 않는다
+(`docs/api/billing-key-cleanup.md`).
+
+```sql
+-- I-1 사전 확인 (같은 이름의 테이블·제약이 없어야 한다. id·FK의 signed/unsigned는 billing_key.id와 맞춘다)
+SHOW CREATE TABLE billing_key;
+SHOW TABLES LIKE 'billing_key_deletion';
+
+-- I-2 테이블 생성
+CREATE TABLE billing_key_deletion (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    billing_key_id BIGINT NOT NULL,
+    status VARCHAR(24) NOT NULL,
+    reason VARCHAR(24) NOT NULL,
+    store_id VARCHAR(100) NOT NULL,
+    requested_at DATETIME(6) NOT NULL,
+    next_check_at DATETIME(6) NOT NULL,
+    claim_token BIGINT NOT NULL DEFAULT 0,
+    claim_count INT NOT NULL DEFAULT 0,
+    lease_expires_at DATETIME(6) NULL,
+    first_dispatched_at DATETIME(6) NULL,
+    completed_at DATETIME(6) NULL,
+    review_required_at DATETIME(6) NULL,
+    identity_verified_at DATETIME(6) NULL,
+    last_code VARCHAR(40) NULL,
+    created_at DATETIME(6) NULL,
+    updated_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_billing_key_deletion_key (billing_key_id),
+    KEY idx_billing_key_deletion_due (status, next_check_at, id),
+    CONSTRAINT fk_billing_key_deletion_key FOREIGN KEY (billing_key_id) REFERENCES billing_key (id)
+) ENGINE=InnoDB;
+
+-- I-3 확인
+SHOW CREATE TABLE billing_key_deletion;
+SHOW INDEX FROM billing_key_deletion;
+EXPLAIN SELECT id FROM billing_key_deletion
+ WHERE status IN ('REQUESTED', 'REVIEW_REQUIRED') AND next_check_at <= NOW(6)
+   AND (lease_expires_at IS NULL OR lease_expires_at <= NOW(6))
+ ORDER BY next_check_at, id LIMIT 20;
+
+-- I-4 롤백 (6단계 코드가 배포되지 않았다면 앱은 이 테이블 없이 동작한다)
+-- 처리 중·완료 행이 하나라도 있으면 DROP 금지 — billing_key에 DELETE_REQUESTED가 남으므로 기록을 보존하고 원인을 고친다
+DROP TABLE billing_key_deletion;
+```
+
+| 확인 | 기대 |
+| --- | --- |
+| I-3 `SHOW INDEX` | PRIMARY, UNIQUE `uk_billing_key_deletion_key`(billing_key_id), 일반 `idx_billing_key_deletion_due`(status, next_check_at, id) |
+| I-3 `EXPLAIN` | `possible_keys`에 `idx_billing_key_deletion_due`(행이 없으면 `type=ALL`일 수 있다 — 결과를 기록한다) |
+| 기동 뒤 10-B 스냅숏 diff | 테이블 1개 추가 외 변경 없음 |
+| 운영 `.env`의 `BILLING_KEY_DELETION_ENABLED`·`BILLING_KEY_DELETION_WITHDRAWAL_ENABLED` | 없음 또는 `false`(기본 false). 6단계 머지는 원격 삭제·탈퇴 개방이 아니다 |
+
+#### 환경변수 2개 (기본 OFF, 켤 때만 전달)
+
+`application.yml`의 `payment.billing-key-deletion.enabled` ← `BILLING_KEY_DELETION_ENABLED`, `payment.billing-key-deletion.withdrawal-enabled`
+← `BILLING_KEY_DELETION_WITHDRAWAL_ENABLED`. 현재 Compose `app.environment`는 두 값을 전달하지 않으므로 운영 `.env`만 바꿔서는 켜지지 않는다
+(기본 false 유지). 켤 때 `BILLING_KEY_DELETION_ENABLED: ${BILLING_KEY_DELETION_ENABLED:-false}` 식으로 전달을 함께 추가한다.
+
+켜는 순서: ① 이 테이블 적용 → 기본 OFF로 배포 → 스냅숏 diff ② PortOne 테스트 상점에서 시험 키로 GET → DELETE → GET(DELETED), 정확한 404의 의미,
+이미 삭제한 키 재요청, DELETE 응답 유실 뒤 GET 복구, **키 삭제 뒤 기존 결제 ID 조회·환불 가능 여부**를 확인 ③ 확인되면 `BILLING_KEY_DELETION_ENABLED`만
+true(교체·폐기 키 정리) ④ 회원 탈퇴 연동(찜·장바구니·포인트·전체 탈퇴) 통합 검증이 끝난 뒤 `BILLING_KEY_DELETION_WITHDRAWAL_ENABLED` true.
+`MEMBERSHIP_BILLING_ENABLED`는 별도 승인 없이 계속 false.
