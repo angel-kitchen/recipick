@@ -449,7 +449,7 @@
 /* 자동 장바구니 확인: 재료마다 체크, 상품 선택, 금액 */
 .review__row {
   display: grid;
-  grid-template-columns: auto 1fr 1.6fr auto;
+  grid-template-columns: auto 72px 1fr 1.6fr auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3) 0;
@@ -457,6 +457,7 @@
 }
 
 .review__row.is-off .cart-row__name,
+.review__row.is-off .cart-row__image,
 .review__row.is-off .tile__price {
   opacity: 0.45;
 }
@@ -466,8 +467,13 @@
     grid-template-columns: auto 1fr;
   }
 
-  .review__row > :nth-child(3),
-  .review__row > :nth-child(4) {
+  /* 장바구니 화면은 479px 이하에서 사진을 숨기므로, 이 행은 2열이 되는 599px 이하부터 숨겨 배치가 어긋나지 않게 한다 */
+  .review__row .cart-row__image {
+    display: none;
+  }
+
+  .review__row > :nth-child(4),
+  .review__row > :nth-child(5) {
     grid-column: 2;
   }
 }
