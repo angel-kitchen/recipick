@@ -84,7 +84,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
       rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
       if (done.length > 0) notifyCartChanged();
       setError(
-        done.length > 0 ? new Error(`${e.message} (앞의 ${done.length}개는 장바구니에 담겼습니다. 장바구니를 확인해 주세요.)`) : e,
+        done.length > 0 ? new Error(`${e.message} (앞의 ${done.length}개는 장바구니에 담겼어요. 장바구니를 확인해 주세요.)`) : e,
       );
     } finally {
       setSubmitting(false);
@@ -141,7 +141,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
       const cartItemIds = cart.items
         .filter((item) => ids.has(item.productId) && item.status === 'AVAILABLE')
         .map((item) => item.cartItemId);
-      if (cartItemIds.length === 0) throw new Error('주문할 수 있는 상품이 없습니다. 장바구니를 확인해 주세요.');
+      if (cartItemIds.length === 0) throw new Error('주문할 수 있는 상품이 없어요. 장바구니를 확인해 주세요.');
       navigate('/checkout', { state: { cartItemIds } });
     } catch (e) {
       setError(e);
@@ -249,12 +249,12 @@ export default function AutoCartReview({ preview, disabled = false }) {
         </ConfirmModal>
       )}
       {added && (
-        <div className="modal" role="dialog" aria-modal="true" aria-label="장바구니에 담겼습니다">
+        <div className="modal" role="dialog" aria-modal="true" aria-label="장바구니에 담겼어요">
           <div className="modal__box card modal__box--center">
             <button type="button" className="modal__close" aria-label="닫기" onClick={() => setAdded(null)}>
               ×
             </button>
-            <h2 className="tile__title">장바구니에 담겼습니다</h2>
+            <h2 className="tile__title">장바구니에 담겼어요</h2>
             <p className="field__hint">
               {menuLabels.join(', ')} 재료 {added.lines.length}개
             </p>

@@ -88,9 +88,9 @@ export default function KoreaMap() {
     <>
       <div ref={elementRef} className="korea-map" role="img" aria-label="가맹 마트 위치 지도" />
       {status === 'error' && (
-        <p className="field__hint">마트 위치를 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.</p>
+        <p className="field__hint">마트 위치를 불러오지 못했어요. 잠시 뒤에 다시 시도해 주세요.</p>
       )}
-      {status === 'done' && marts.length === 0 && <p className="field__hint">표시할 마트가 아직 없습니다.</p>}
+      {status === 'done' && marts.length === 0 && <p className="field__hint">표시할 마트가 아직 없어요.</p>}
     </>
   );
 }

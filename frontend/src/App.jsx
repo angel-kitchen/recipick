@@ -12,6 +12,7 @@ import AdminOrders from './admin/pages/AdminOrders';
 import AdminPayments from './admin/pages/AdminPayments';
 import AdminProducts from './admin/pages/AdminProducts';
 import AdminRecipes from './admin/pages/AdminRecipes';
+import EmptyState from './components/EmptyState';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import RequireDelivery from './components/RequireDelivery';
@@ -76,7 +77,17 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:orderId" element={<OrderDetail />} />
         </Route>
-        <Route path="*" element={<p className="state-message">페이지를 찾을 수 없습니다.</p>} />
+        <Route
+          path="*"
+          element={
+            <EmptyState
+              icon="recipe"
+              title="찾으시는 페이지가 없어요"
+              hint="주소가 바뀌었거나 없어진 페이지일 수 있어요."
+              actions={[{ to: '/', label: '홈으로 가기' }]}
+            />
+          }
+        />
       </Route>
     </Routes>
   );

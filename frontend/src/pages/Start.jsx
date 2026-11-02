@@ -37,7 +37,7 @@ export default function Start() {
   const pick = (selected) => {
     setError(null);
     if (!/^\d{10}$/.test(selected.legalDongCode ?? '')) {
-      setError(new Error('이 주소의 지역 정보를 찾지 못했습니다. 다른 주소로 검색해 주세요.'));
+      setError(new Error('이 주소의 지역 정보를 찾지 못했어요. 다른 주소로 검색해 주세요.'));
       return;
     }
     setPlace(selected);
@@ -65,7 +65,7 @@ export default function Start() {
     if (!member) {
       // 저장하지 못한 채 가입으로 넘어가면 로그인한 뒤 주소가 없어 이 화면으로 되돌아오므로 여기서 멈춘다
       if (!savePendingAddress(value)) {
-        setError(new Error('가입 전 주소를 저장할 수 없습니다. 브라우저 저장소 설정을 확인한 뒤 다시 시도해 주세요.'));
+        setError(new Error('가입 전에 주소를 저장하지 못했어요. 브라우저 저장소 설정을 확인한 뒤 다시 시도해 주세요.'));
         return;
       }
       navigate('/signup');
