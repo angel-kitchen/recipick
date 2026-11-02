@@ -108,25 +108,10 @@ public class OrderFacade {
         pointCommandService.createPendingEarning(
             memberId, order.getId(), order.getProductAmount(), order.getUsedPoint(), order.getPointRate());
         // 외부 결제금액이 0원이면 PG 없이 이 트랜잭션에서 결제 완료까지 끝낸다. 음수는 OrderAmount가 막는다
-        PaymentCreated payment;
-        if (order.getPayAmount() == 0) {
-            payment = pointsOnlyPaymentProcessor.complete(order.getId());
-            removePaidItemsFromCart(order.getId());
-        } else {
-            payment = paymentCommandService.create(order.getId(), order.getPayAmount());
-        }
+        PaymentCreated payment = order.getPayAmount() == 0
+            ? pointsOnlyPaymentProcessor.complete(order.getId())
+            : paymentCommandService.create(order.getId(), order.getPayAmount());
         return new OrderCreateResult(OrderCreateResponse.of(order, items, payment), true);
-    }
-
-    // 결제에 성공한 주문의 상품만 장바구니에서 지워, 결제 실패·만료 때는 회원이 다시 담지 않아도 되게 한다.
-    // 카드 승인과 0원 결제 트랜잭션의 맨 끝에서 불러 잠금 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고
-    // 뒤에 CART_ITEM을 둔다. 탈퇴도 정산 확인 뒤에 장바구니를 지워 CART_ITEM을 마지막에 잠그므로 순환이 생기지 않는다
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void removePaidItemsFromCart(Long orderId) {
-        List<Long> productIds = orderService.findOrderItems(orderId).stream()
-            .map(OrderItem::getProductId)
-            .toList();
-        cartService.deleteByProductIds(orderService.getMemberIdOf(orderId), productIds);
     }
 
     // 락 순서 PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고에서 포인트 복구가 사이에 들어가야 해서

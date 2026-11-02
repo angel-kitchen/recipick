@@ -135,12 +135,10 @@ class OrderFacadeTest {
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 5_000L, 3_000L, POINT_RATE);
         inOrder.verify(paymentCommandService).create(ORDER_ID, 5_000L);
         verify(pointsOnlyPaymentProcessor, never()).complete(any());
-        // 카드 결제는 아직 승인 전이라 장바구니를 지우지 않는다
-        verify(cartService, never()).deleteByProductIds(any(), any());
     }
 
     @Test
-    @DisplayName("외부 결제금액이 0원이면 카드 결제를 만들지 않고 적립 예정 생성 뒤 0원 결제 완료 처리를 부르고 마지막에 결제한 상품을 장바구니에서 지운다")
+    @DisplayName("외부 결제금액이 0원이면 카드 결제를 만들지 않고 적립 예정 생성 뒤 0원 결제 완료 처리를 부른다")
     void createOrder_pointsOnly() {
         // given — 20,000원 상품 2개(상품 40,000원, 무료배송)를 40,000P로 사면 외부 결제금액은 0원이다
         OrderCreateRequest request = new OrderCreateRequest(List.of(CART_ITEM_ID), "홍길동", "01012345678",
@@ -151,9 +149,6 @@ class OrderFacadeTest {
         givenOrderCreation(request, quantities, products, order, false);
         given(pointsOnlyPaymentProcessor.complete(ORDER_ID)).willReturn(
             new PaymentCreated(30L, null, 0L, null, LocalDateTime.of(2026, 10, 29, 12, 0)));
-        given(orderService.findOrderItems(ORDER_ID)).willReturn(List.of(
-            OrderItem.builder().productId(PRODUCT_ID).build()));
-        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
 
         // when
         OrderCreateResult result = orderFacade.createOrder(MEMBER_ID, IDEMPOTENCY_KEY, request);
@@ -163,12 +158,11 @@ class OrderFacadeTest {
         assertThat(result.response().amount()).isZero();
         assertThat(result.response().portonePaymentId()).isNull();
         assertThat(result.response().expiresAt()).isNull();
-        InOrder inOrder = inOrder(pointCommandService, productStockService, pointsOnlyPaymentProcessor, cartService);
+        InOrder inOrder = inOrder(pointCommandService, productStockService, pointsOnlyPaymentProcessor);
         inOrder.verify(pointCommandService).reserveUsage(MEMBER_ID, ORDER_ID, 40_000L);
         inOrder.verify(productStockService).decreaseStocks(MART_ID, quantities);
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 40_000L, 40_000L, POINT_RATE);
         inOrder.verify(pointsOnlyPaymentProcessor).complete(ORDER_ID);
-        inOrder.verify(cartService).deleteByProductIds(MEMBER_ID, List.of(PRODUCT_ID));
         verify(paymentCommandService, never()).create(anyLong(), anyLong());
     }
 

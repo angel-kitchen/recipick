@@ -61,7 +61,7 @@ class PaymentConfirmProcessorTest {
     private PaymentConfirmProcessor processor;
 
     @Test
-    @DisplayName("APPROVED면 결제를 PAID로 바꾸고 주문 markPaid를 PG 결제 시각으로 부른 뒤 포인트 사용을 확정하고 마지막에 장바구니를 정리한다")
+    @DisplayName("APPROVED면 결제를 PAID로 바꾸고 주문 markPaid를 PG 결제 시각으로 부른 뒤 포인트 사용을 확정한다")
     void approved() {
         // given
         Payment payment = inProgressPayment();
@@ -77,13 +77,12 @@ class PaymentConfirmProcessorTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPortoneTransactionId()).isEqualTo("tx_1");
         assertThat(payment.getPaidAt()).isEqualTo(PAID_AT);
-        InOrder inOrder = inOrder(orderService, pointCommandService, orderFacade);
+        InOrder inOrder = inOrder(orderService, pointCommandService);
         inOrder.verify(orderService).markPaid(ORDER_ID, PAID_AT);
         inOrder.verify(pointCommandService).confirmUsage(ORDER_ID);
-        inOrder.verify(orderFacade).removePaidItemsFromCart(ORDER_ID);
         verify(pointCommandService, never()).restoreUsageAndCancelEarning(any());
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
-        verify(orderFacade, never()).closeByPaymentFailure(any(), any(), any());
+        verifyNoInteractions(orderFacade);
     }
 
     @Test
@@ -111,7 +110,6 @@ class PaymentConfirmProcessorTest {
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(paymentService, never()).requestSystemRefund(any(), any(), any());
         verify(orderService, never()).markPaid(any(), any());
-        verify(orderFacade, never()).removePaidItemsFromCart(any());
     }
 
     @Test
@@ -165,7 +163,6 @@ class PaymentConfirmProcessorTest {
         inOrder.verify(pointCommandService).restoreUsageAndCancelEarning(ORDER_ID);
         inOrder.verify(orderFacade).restoreStock(RESTORE_ITEMS);
         verify(orderService, never()).markPaid(any(), any());
-        verify(orderFacade, never()).removePaidItemsFromCart(any());
     }
 
     @Test
