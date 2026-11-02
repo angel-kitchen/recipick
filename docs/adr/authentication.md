@@ -7,8 +7,8 @@
 | --- | --- |
 | 담당 | 채빈 |
 | 문서 갱신·검증일 | 2026-11-02 |
-| 코드 기준 | `dev`의 `02043c5`(PR #339 병합). 직전 전체 검증 소스는 #339의 `a561664`이며 현재 src·build.gradle과 동일 |
-| 관련 구현 | 탈퇴 인증·비밀번호 변경 #192·#215·#222, 정산 일부 연결 #302, 해지 예약 #289, 멤버십 계약·회원 매핑 #315·#322·#324, 지급 Facade #336, 체험 생성 #339 |
+| 코드 기준 | `dev`의 `84c4c0b`(구독 API #382·결제 정합화 #380 병합). 테스트 실행 근거는 아래 별도 표기 |
+| 관련 구현 | 탈퇴 인증·비밀번호 변경 #192·#215·#222, 정산 일부 연결 #302, 해지 예약 #289, 멤버십 계약·회원 매핑 #315·#322·#324, 지급 Facade #336, 체험 생성 #339, 지급 C-17 #376, 체험 API #377, 구독 API #382, 정산 Checker #380 |
 | 확인 환경 | Java 17, Spring Boot 3.5.16, 테스트 전용 MySQL 8.4·Redis 7.4, MockMvc |
 | 상태 | 현재 구현과 대상 테스트 확인 완료, 문서 리뷰 대기 |
 
@@ -122,7 +122,7 @@ DB 변경 실패 시에는 세션을 삭제하지 않습니다. Redis와 DB를 �
 쓰기 트랜잭션의 첫 DB 작업으로 회원을 잠그고 비밀번호·진행 중 주문·활성 또는 결제 대기·전환 대기 이용권을 확인합니다.
 이후 [WithdrawalSettlementChecker](../../src/main/java/com/recipick/domain/member/service/WithdrawalSettlementChecker.java)의
 `PRODUCT_PAYMENT`, `MEMBERSHIP_PAYMENT`, `POINTS`, `AUTO_BILLING` 전체 범위가 연결돼야 정산 검사와 개인정보 변경을 진행합니다.
-**현재 dev에는 `PRODUCT_PAYMENT`·`POINTS` 실제 Checker가 연결돼 있습니다. `MEMBERSHIP_PAYMENT`·`AUTO_BILLING`은
+**현재 dev에는 `PRODUCT_PAYMENT`·`POINTS`·`MEMBERSHIP_PAYMENT` 실제 Checker가 연결돼 있습니다. `AUTO_BILLING`은
 아직 없어 운영 구성의 탈퇴 성공 처리는 `503 MEMBER-008`로 차단됩니다.**
 주문·멤버십 등 앞선 거절 조건이 있으면 해당 오류가 먼저 반환됩니다.
 
@@ -137,7 +137,7 @@ DB 변경 실패 시에는 세션을 삭제하지 않습니다. Redis와 DB를 �
 만료된 기록은 배치 삭제 전에도 자격을 제한하지 않습니다. 이는 번호 기준 제한이며 본인 인증을 통한 사람 단위 차단은 아닙니다.
 `TRIAL_BLOCK_HMAC_SECRET`은 JWT 키와 별도로 관리하며 로컬 외 환경에서 필수입니다. 키를 바꾸면 기존 해시와 비교할 수 없으므로
 임의 교체하지 않습니다. 포인트 잔액 확인·소멸과 상품 결제 검사는 실제 구현됐지만, 나머지 Scope를 테스트용 구현으로
-채운 통합 검증과 운영에서 실제 탈퇴 가능한 상태는 구분합니다. 장바구니·찜 정리도 최종 연결 확인 대상입니다.
+채운 통합 검증과 운영에서 실제 탈퇴 가능한 상태는 구분합니다. 장바구니는 전체 정산 검사 뒤 같은 트랜잭션에서 삭제하며 담기 이력은 유지합니다. 찜 정리는 최종 연결 확인 대상입니다.
 
 ### 3-5. 쿠키·CORS와 브라우저 경계
 
@@ -189,8 +189,7 @@ CORS는 지정한 Origin과 자격 증명을 허용합니다. 서로 다른 출�
 슈퍼 관리자 지급·이력 API는 Controller 권한과 서비스의 관리자 검증을 유지합니다.
 [MembershipGrantFacade](../../src/main/java/com/recipick/domain/member/facade/MembershipGrantFacade.java)가
 회원 잠금·관리자 확인·활성/대기 검사·지급을 조립하고, 생성과 감사 기록은 같은 쓰기 트랜잭션으로 커밋합니다.
-활성·결제 대기·전환 대기 이용권 차단은 이미 연결돼 있습니다. 별도의 미해결 멤버십 결제 조회 C-17은
-이 문서 기준 dev에 없어 해당 검사 연결과 실제 청구·관리자 지급 간 경합 검증이 남아 있습니다.
+활성·결제 대기·전환 대기 이용권 차단과 C-17이 연결돼 있습니다. 회원 잠금 뒤 종료·만료를 포함한 전체 이용권 ID로 미해결·미정산 결제를 확인하고, 있으면 `MEMBERSHIP-009`로 지급을 거절합니다. 실제 청구와 지급의 전체 양방향 경합 검증은 별도로 구분합니다.
 
 [MembershipBillingService](../../src/main/java/com/recipick/domain/member/service/MembershipBillingService.java)는
 결제 도메인이 부르는 내부 계약이며 새 HTTP API가 아닙니다. 잠금·생성·결과 반영은 `MANDATORY`이며 읽기 전용 바깥 트랜잭션을 거절합니다.
@@ -199,9 +198,17 @@ CORS는 지정한 Origin과 자격 증명을 허용합니다. 서로 다른 출�
 이 매핑은 인증·인가나 쓰기 전 소유권 재검증을 대체하지 않습니다.
 
 [MembershipTrialService](../../src/main/java/com/recipick/domain/member/service/MembershipTrialService.java)는
-서버 시각의 동의·금액·버전, 기존 이용 이력과 번호 차단을 검사하고 정확히 7일 체험을 생성하는 내부 기반입니다.
-**체험 시작 Controller는 아직 없으며 활성 카드·미해결 결제 확인을 포함한 Facade 연결 전에는 외부에서 시작할 수 없습니다.**
-이는 가입·체험·정기결제 흐름이 완성됐다는 의미가 아닙니다.
+서버 시각의 동의·금액·버전, 기존 이용 이력과 번호 차단을 검사하고 정확히 7일 체험을 생성합니다.
+[체험 시작 API](../api/membership-trial-start.md) `POST /api/memberships/trial`은 `MembershipTrialFacade`에서
+첫 DB 작업으로 회원을 잠그고 활성 카드(C-10)·전체 이용권 미정산(C-17)을 확인한 뒤 생성합니다.
+요청은 `@Valid`로 동의 버전의 공백·길이를 검증하며 위반은 `MEMBERSHIP-004`입니다. 시작 시 PG를 청구하지 않습니다.
+
+[구독 API](../api/membership-subscribe.md) `POST /api/memberships/subscribe`는 동의와 `Idempotency-Key`를 받아
+`MembershipSubscribeFacade`가 바깥 트랜잭션 없이 결제 C-11을 호출합니다(`Propagation.NEVER`).
+회원 쪽에서 회원 잠금·이용권 검사를 선행하지 않습니다. 접수 트랜잭션의 첫 회원 잠금과 멱등 키 확인은 결제가 담당합니다.
+HTTP 200이어도 `PAID`·`IN_PROGRESS`·`FAILED`·`UNKNOWN`을 구분하며 유료 혜택은 결제 확정 뒤 제공됩니다.
+같은 키의 재요청은 기존 결과를 반환하고 동의 내용이 다르면 `COMMON-011`입니다. 서버 동의 시각은 해시에서 제외합니다.
+즉시 해지 API와 운영 PG·최종 브라우저 검증은 별도 범위입니다.
 
 ## 4. 트레이드오프와 후속 범위
 
@@ -210,13 +217,14 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
 탈퇴 상태 캐시와 조회 최적화는 차단 시점·부하를 측정해 판단할 별도 작업입니다.
 
 비밀번호 변경 시 전체 리프레시 세션 무효화는 [비밀번호 변경 API](../api/member-password-change.md)에 정리했습니다.
-탈퇴 API·개인정보 정리·세션 폐기·체험 차단 및 상품 결제·포인트 검사는 구현됐지만, 멤버십 결제·자동결제 Checker와 최종 통합 검증은 남아 있습니다.
+탈퇴 API·개인정보 정리·세션 폐기·체험 차단 및 상품 결제·포인트 검사는 구현됐지만, 자동결제 Checker와 최종 통합 검증은 남아 있습니다.
 테스트용 정산 계약으로 검증한 성공 경로와 실제 서비스의 탈퇴 가능 상태를 구분합니다.
 운영 브라우저 확인은 위 배포 담당 기록을 근거로 구분하고, 실제 구독·체험 시작·환불·탈퇴 완결 흐름의 브라우저 검증은 최종 연동 후 수행합니다.
 
 ## 5. 실제 검증 결과
 
-2026-11-02의 직전 전체 테스트 **2,736건·실패 0·오류 0·건너뜀 2** 리포트에서 아래 인증·비밀번호·탈퇴 관련 12개 클래스의 결과를 추렸습니다.
+2026-11-02에 아래 인증·비밀번호·탈퇴 관련 12개 클래스의 결과를 기존 XML에서 추렸습니다.
+전체 테스트 근거는 PR #382의 `434ea0f`에서 실행한 3,091건(실패 0·오류 0·실제 AI 평가 건너뜀 2) XML입니다. 현재 `84c4c0b`에는 이후 병합된 결제 정합화 #380이 포함됩니다. 이번 문서 작업에서는 테스트를 재실행하지 않았으며, 3,091건을 최신 dev 전체 실행 결과로 해석하지 않습니다.
 실행 명령은 `./gradlew test`이며 이번 실행에 UTC JVM 강제를 추가하지 않았습니다. 건너뜀 2건은
 `AI_EVAL=true`일 때만 실행하는 실제 Claude API 평가입니다. 문서 갱신을 위해 테스트를 다시 실행하지 않았으며,
 아래 수치는 해당 전체 실행의 클래스별 XML 기준입니다.
@@ -232,11 +240,23 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
 | [MemberWithdrawalFoundationIntegrationTest](../../src/test/java/com/recipick/domain/member/service/MemberWithdrawalFoundationIntegrationTest.java) | 6 | 0 | 0 | 0 |
 | [MemberPasswordChangeIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MemberPasswordChangeIntegrationTest.java) | 23 | 0 | 0 | 0 |
 | [MemberPasswordFacadeTest](../../src/test/java/com/recipick/domain/member/facade/MemberPasswordFacadeTest.java) | 2 | 0 | 0 | 0 |
-| [MemberWithdrawalIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MemberWithdrawalIntegrationTest.java) | 18 | 0 | 0 | 0 |
+| [MemberWithdrawalIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MemberWithdrawalIntegrationTest.java) | 21 | 0 | 0 | 0 |
 | [MemberWithdrawalProcessorTest](../../src/test/java/com/recipick/domain/member/facade/MemberWithdrawalProcessorTest.java) | 15 | 0 | 0 | 0 |
 | [MemberWithdrawalFacadeTest](../../src/test/java/com/recipick/domain/member/facade/MemberWithdrawalFacadeTest.java) | 2 | 0 | 0 | 0 |
 | [TrialBlockIntegrationTest](../../src/test/java/com/recipick/domain/member/service/TrialBlockIntegrationTest.java) | 6 | 0 | 0 | 0 |
-| 합계 | 174 | 0 | 0 | 0 |
+| 합계 | 177 | 0 | 0 | 0 |
+
+추가 API 연결은 같은 전체 실행에서 다음 결과를 확인했습니다. 위 12개 클래스 합계와는 별도입니다.
+
+| 추가 검증 클래스 | 테스트 | 실패 | 오류 |
+| --- | --- | --- | --- |
+| [MembershipGrantIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MembershipGrantIntegrationTest.java) | 18 | 0 | 0 |
+| [MembershipTrialStartIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MembershipTrialStartIntegrationTest.java) | 23 | 0 | 0 |
+| [MembershipSubscribeIntegrationTest](../../src/test/java/com/recipick/domain/member/controller/MembershipSubscribeIntegrationTest.java) | 16 | 0 | 0 |
+
+체험은 실제 카드·C-17 조회와 동시 API 요청에서 한 건 생성, 탈퇴 전 토큰 거절을 검증했습니다.
+구독은 실제 C-11 접수·멱등·상태 전달·바깥 트랜잭션 거절을 검증하되 PG 실행 경계만 대체했습니다.
+신규 멤버십 정산 Checker #380의 실행 결과를 위 수치에 포함한 것은 아닙니다.
 
 실행 시나리오에서 다음 결과를 확인했습니다.
 
@@ -278,7 +298,7 @@ Redis 장애 시 재발급·로그아웃을 성공으로 간주하지 않으며,
 ```
 
 Docker가 켜져 있어야 하며 테스트 전용 MySQL·Redis는 IntegrationTestSupport가 실행합니다.
-위 명령은 보고서에서 추린 12개 클래스·174개를 재현합니다. 기존 회원 경합 6개와 추가 멤버십 7개 클래스를 합친 선택 실행 목록은 동시성 문서에 있습니다.
+위 명령은 보고서에서 추린 12개 클래스·177개를 재현합니다. 기존 회원 경합과 추가 멤버십 검증을 합친 선택 실행 목록은 동시성 문서에 있습니다.
 전체 실행은 `./gradlew test`로 재현합니다. 추가로 UTC JVM에서 확인하려면 `JAVA_TOOL_OPTIONS=-Duser.timezone=UTC ./gradlew --no-daemon test`를 사용합니다. 추가 명령을 이번 문서 작업에서 실행한 것으로 기록하지 않으며 운영의 한국 시간 정책도 바꾸지 않습니다.
 
 ## 6. 관련 코드·규칙
