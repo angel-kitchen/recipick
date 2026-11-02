@@ -94,7 +94,7 @@ public record AutoCartPreviewResponse(
                 item.getRequiredAmount().stripTrailingZeros(),
                 unit,
                 item.isPurchasable(),
-                item.getProductId() == null ? null : new Product(item.getProductId(), item.getProductName(),
+                item.getProductId() == null ? null : new Product(item.getProductId(), item.getProductName(), null,
                     item.getSaleUnitAmount().stripTrailingZeros(), unit, item.getUnitPrice()),
                 item.getPurchaseQuantity(),
                 remaining == null ? null : remaining.stripTrailingZeros(),
@@ -105,18 +105,19 @@ public record AutoCartPreviewResponse(
         }
     }
 
-    public record Product(Long productId, String name, BigDecimal saleUnitAmount, SaleUnit unit, Long price) {
+    public record Product(
+        Long productId, String name, String imageUrl, BigDecimal saleUnitAmount, SaleUnit unit, Long price) {
 
         static Product from(ProductSummary product) {
-            return new Product(product.productId(), product.name(), product.saleUnitAmount().stripTrailingZeros(),
-                product.saleUnit(), product.price());
+            return new Product(product.productId(), product.name(), product.imageUrl(),
+                product.saleUnitAmount().stripTrailingZeros(), product.saleUnit(), product.price());
         }
     }
 
-    public record Candidate(Long productId, String name, Long price, BigDecimal saleUnitAmount) {
+    public record Candidate(Long productId, String name, String imageUrl, Long price, BigDecimal saleUnitAmount) {
 
         static Candidate from(ProductSummary product) {
-            return new Candidate(product.productId(), product.name(), product.price(),
+            return new Candidate(product.productId(), product.name(), product.imageUrl(), product.price(),
                 product.saleUnitAmount().stripTrailingZeros());
         }
     }
