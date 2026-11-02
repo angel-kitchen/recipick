@@ -133,6 +133,21 @@ public final class PortOneStubServer {
             + "\",\"issuedAt\":\"" + iso(issuedAtKst) + "\"}"));
     }
 
+    // GET /billing-keys/{billingKey} 응답을 직접 정한다(정합화 조회의 404 유형·권한 오류·장애 재현)
+    public void onBillingKeyLookup(String billingKey, int status, String body) {
+        billingKeyStubs.put(billingKey, new Stub(status, body));
+    }
+
+    // PortOne이 삭제됐다고 답하는 키
+    public void billingKeyDeleted(String billingKey) {
+        onBillingKeyLookup(billingKey, 200, "{\"status\":\"DELETED\",\"billingKey\":\"" + billingKey
+            + "\",\"deletedAt\":\"2027-02-27T00:00:00Z\"}");
+    }
+
+    public int billingKeyLookupCount() {
+        return (int) requests.stream().filter("GET /billing-keys/[REDACTED]"::equals).count();
+    }
+
     // GET /payments/{id}
     public void onGetPayment(String paymentId, int status, String body) {
         getStubs.put(paymentId, new Stub(status, body));

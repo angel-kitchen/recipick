@@ -12,6 +12,7 @@ import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
+import com.recipick.domain.payment.facade.BillingKeyReconciliationFacade;
 import com.recipick.domain.payment.facade.MembershipChargeDispatchProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
 import com.recipick.domain.payment.facade.MembershipChargeRecoveryFacade;
@@ -57,6 +58,7 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
     @Autowired MembershipRepository memberships;
     @Autowired MembershipBillingProperties properties;
     @Autowired PortOneBillingClient portOneBillingClient;
+    @Autowired BillingKeyReconciliationFacade billingKeyReconciliation;
     @Autowired PortOnePaymentClient portOnePaymentClient;
 
     private Member member;
@@ -287,7 +289,8 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         // 선점(실제 시각)은 성공하고 POST 직전 재확인(창 + 1분 뒤 시각)만 닫힌 창을 보게 한다
         Clock afterWindow = Clock.offset(clock, properties.firstChargeAcceptWindow().plus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
-            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient, afterWindow);
+            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
+            billingKeyReconciliation, afterWindow);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 
@@ -310,7 +313,8 @@ class MembershipChargeFlowIntegrationTest extends MembershipChargeFlowSupport {
         PORTONE.getPaymentPaid(paymentId, FEE, "KRW", pgPaidAt);
         Clock nearEnd = Clock.offset(clock, properties.firstChargeAcceptWindow().minus(Duration.ofMinutes(1)));
         MembershipChargeExecutor lateExecutor = new MembershipChargeExecutor(gate, properties, memberService,
-            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient, nearEnd);
+            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
+            billingKeyReconciliation, nearEnd);
 
         MembershipChargeOutcome outcome = lateExecutor.execute(member.getId(), receipt.attemptId());
 

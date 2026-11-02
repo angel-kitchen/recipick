@@ -52,7 +52,8 @@ public class MembershipChargeDispatchProcessor {
             return MembershipChargeClaim.rejected(attempt.getStatus(), attempt.getDispatchedAt());
         }
         return MembershipChargeClaim.claimed(new MembershipChargeTicket(attempt.getId(), payment.getId(),
-            payment.getMembershipId(), attempt.getPortonePaymentId(), attempt.getBillingKey().getPortoneBillingKey(),
+            payment.getMembershipId(), attempt.getPortonePaymentId(), attempt.getBillingKey().getId(),
+            attempt.getBillingKey().getPortoneBillingKey(),
             payment.getAmount(), attempt.getDispatchedAt(), acceptUntil(payment, attempt)));
     }
 

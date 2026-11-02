@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.entity;
 
+import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
 import com.recipick.global.entity.BaseTimeEntity;
@@ -182,10 +183,12 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
 
     // 선점(선점 TX, 시도 PK만 잠금). READY이고 임대 안이면 DISPATCHING. 그 외는 false(예외 아님 — 다른 Worker가 먼저 집었거나 만료).
     // 강한 차단 표시가 있는 READY는 미발송 보장에 반하는 증거가 있는 시도라 선점하지 않는다(상태 불변, 운영 확인 대상).
+    // 접수 때 고정한 키가 폐기·삭제 상태(REVOKED·DELETE_REQUESTED·DELETED)면 PG에 보내지 않는다 — READY로 남아 임대 만료로 접힌다.
+    // 교체된 키(REPLACED)는 이미 접수된 시도에 그대로 쓴다.
     // dispatchedAt은 DB(DATETIME(6))에 저장되는 정밀도로 맞춰 둔다 — releaseUnsent가 재조회한 값과 같은지 비교하기 때문
     public boolean claim(LocalDateTime now) {
         if (status != MembershipPaymentAttemptStatus.READY || now == null || !now.isBefore(leaseExpiresAt)
-            || isSettlementBlocked()) {
+            || isSettlementBlocked() || !isChargeableKey(billingKey.getStatus())) {
             return false;
         }
         this.status = MembershipPaymentAttemptStatus.DISPATCHING;
@@ -217,6 +220,10 @@ public class MembershipPaymentAttempt extends BaseTimeEntity {
 
     public boolean isFinal() {
         return !isUnresolved();
+    }
+
+    private static boolean isChargeableKey(BillingKeyStatus keyStatus) {
+        return keyStatus == BillingKeyStatus.ACTIVE || keyStatus == BillingKeyStatus.REPLACED;
     }
 
     // PG에 보낸 적이 있는지. READY·미발송 CANCELED와 미발송으로 되돌린 시도는 dispatchedAt이 null이다 — 이 값 하나가 미발송 보장의 기준

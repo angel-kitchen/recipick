@@ -6,6 +6,7 @@ import com.recipick.domain.payment.config.MembershipBillingProperties;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor.ExpiredReadyResult;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
+import com.recipick.domain.payment.service.BillingKeyRecheckRef;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import com.recipick.global.exception.BusinessException;
@@ -43,6 +44,7 @@ public class MembershipChargeRecoveryFacade {
     private final MembershipPaymentAttemptRepository attempts;
     private final MembershipChargeExecutor executor;
     private final MembershipChargeResultProcessor resultProcessor;
+    private final BillingKeyReconciliationFacade billingKeyReconciliation;
     private final Clock clock;
 
     // 처리한 시도 수
@@ -60,7 +62,32 @@ public class MembershipChargeRecoveryFacade {
             ref -> reconcile(ref));
         processed += sweep(page -> attempts.findExpiredReady(now, BLOCKING, page.afterId(), page.pageable()),
             ref -> expireReady(ref, now));
+        processed += recheckBillingKeys(now.minus(properties.unknownWindow()));
         return processed;
+    }
+
+    // 결과 불명 창 안의 404 UNKNOWN 시도에 묶인 키를 한 번씩 확인한다(키 없음·삭제로 결제가 만들어지지 않았을 수 있다).
+    // 키 상태만 바꾸고 결제 시도는 그대로 둔다(같은 결제 ID 재조회 계속). 건별 격리
+    private int recheckBillingKeys(LocalDateTime since) {
+        int processed = 0;
+        long afterId = 0;
+        Pageable pageable = PageRequest.of(0, properties.batchSize());
+        while (true) {
+            List<BillingKeyRecheckRef> refs = attempts.findBillingKeysToRecheck(since, afterId, pageable);
+            for (BillingKeyRecheckRef ref : refs) {
+                processed++;
+                try {
+                    billingKeyReconciliation.recheck(ref);
+                } catch (RuntimeException e) {
+                    log.warn("빌링키 재검사 실패(다음 실행에서 재시도): billingKeyId={}, cause={}", ref.billingKeyId(),
+                        e.getClass().getSimpleName());
+                }
+            }
+            if (refs.size() < properties.batchSize()) {
+                return processed;
+            }
+            afterId = refs.get(refs.size() - 1).billingKeyId();
+        }
     }
 
     private record Page(long afterId, Pageable pageable) {

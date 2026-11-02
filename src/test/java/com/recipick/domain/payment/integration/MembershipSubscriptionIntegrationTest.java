@@ -30,6 +30,7 @@ import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.exception.MembershipSettlementInvariantException;
 import com.recipick.domain.payment.exception.MembershipSettlementInvariantException.Kind;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
+import com.recipick.domain.payment.facade.BillingKeyReconciliationFacade;
 import com.recipick.domain.payment.facade.MembershipChargeDispatchProcessor;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
 import com.recipick.domain.payment.facade.MembershipChargeResultProcessor;
@@ -98,6 +99,7 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
     @Autowired MembershipRepository memberships;
     @Autowired MembershipBillingProperties properties;
     @Autowired PortOneBillingClient portOneBillingClient;
+    @Autowired BillingKeyReconciliationFacade billingKeyReconciliation;
     @Autowired PortOnePaymentClient portOnePaymentClient;
     @Autowired PasswordEncoder encoder;
     @Autowired TransactionTemplate transactionTemplate;
@@ -247,7 +249,8 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         assertThat(codeOf(thrown)).isEqualTo(PaymentErrorCode.MEMBERSHIP_BILLING_DISABLED);
 
         MembershipChargeExecutor offExecutor = new MembershipChargeExecutor(() -> false, properties, memberService,
-            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient, clock);
+            dispatchProcessor, resultProcessor, attempts, portOneBillingClient, portOnePaymentClient,
+            billingKeyReconciliation, clock);
         assertThat(offExecutor.execute(member.getId(), first.attemptId()))
             .isEqualTo(MembershipChargeOutcome.NOT_DISPATCHED);
         assertThat(attempts.findById(first.attemptId()).orElseThrow().getStatus())
@@ -277,7 +280,8 @@ class MembershipSubscriptionIntegrationTest extends IntegrationTestSupport {
         SubscriptionReceipt first = accept();
         MembershipChargeTicket ticket = dispatchProcessor.claim(first.attemptId()).ticket().orElseThrow();
         MembershipChargeTicket other = new MembershipChargeTicket(ticket.attemptId(), ticket.membershipPaymentId(),
-            ticket.membershipId(), ticket.portonePaymentId(), ticket.billingKey(), ticket.amount(),
+            ticket.membershipId(), ticket.portonePaymentId(), ticket.billingKeyId(), ticket.billingKey(),
+            ticket.amount(),
             ticket.dispatchedAt().plusSeconds(1), ticket.acceptUntil());
 
         assertThat(dispatchProcessor.releaseUnsent(other)).isFalse();

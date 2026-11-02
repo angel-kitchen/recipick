@@ -18,6 +18,7 @@ import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.portone.PortOneBillingClient;
 import com.recipick.infra.portone.PortOnePaymentClient;
+import com.recipick.infra.portone.dto.PortOneBillingPaymentOutcome;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentRequest;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentResult;
 import java.time.Clock;
@@ -55,6 +56,7 @@ public class MembershipChargeExecutor {
     private final MembershipPaymentAttemptRepository attempts;
     private final PortOneBillingClient portOneBillingClient;
     private final PortOnePaymentClient portOnePaymentClient;
+    private final BillingKeyReconciliationFacade billingKeyReconciliation;
     private final Clock clock;
 
     // READY 시도에서 시작한다. 플래그 OFF면 POST 없이 READY 유지(임대 만료 규칙이 정리)
@@ -103,8 +105,21 @@ public class MembershipChargeExecutor {
                 profile.name(), profile.email(), profile.phone()));
         log.info("빌링키 청구 호출 완료(재조회로 확정): attemptId={}, outcome={}", attemptId, response.outcome());
         // 여기부터는 플래그가 꺼져도 멈추지 않는다 — PG에 도착했을 수 있다
-        MembershipPgVerdict verdict = recheck(ticket.portonePaymentId(), ticket.amount());
-        return apply(memberId, attemptId, ticket.dispatchedAt(), verdict, MembershipReconciliationTrigger.SCHEDULED);
+        try {
+            MembershipPgVerdict verdict = recheck(ticket.portonePaymentId(), ticket.amount());
+            return apply(memberId, attemptId, ticket.dispatchedAt(), verdict,
+                MembershipReconciliationTrigger.SCHEDULED);
+        } finally {
+            if (response.outcome() == PortOneBillingPaymentOutcome.BILLING_KEY_UNUSABLE) {
+                // 결제 결과 확인이 실패해도 그 키만은 다시 본다. 키 확인 실패는 격리하고 결제 쪽 예외는 그대로 올라간다
+                try {
+                    billingKeyReconciliation.verifyUnusable(memberId, ticket.billingKeyId());
+                } catch (RuntimeException e) {
+                    log.warn("사용 불가 응답 뒤 빌링키 확인 실패: attemptId={}, cause={}", attemptId,
+                        e.getClass().getSimpleName());
+                }
+            }
+        }
     }
 
     // 복구 Sweep·선점 실패 뒤의 재조회(원인 SCHEDULED)

@@ -373,6 +373,10 @@ public class MembershipRenewalRules {
         if (!gate.newChargeEnabled()) {
             return MembershipRenewalDecision.of(Kind.BLOCKED, paymentId);
         }
+        if (membershipBillingService.existsConflictingMembershipForBilling(memberId, membership.membershipId(), now)) {
+            // 다른 이용권과 겹친다. 같은 회차에 새 시도를 만들지 않는다 — 결제 마감에서 종료 조건이 회차를 닫는다
+            return halted(paymentId, "CONFLICTING_MEMBERSHIP");
+        }
         // 위에서 바꾼 시도·회차 상태가 가드 조회에 보이도록 먼저 내보낸다(커밋 아님)
         payments.flush();
         if (membershipPaymentQueryService.existsUnresolvedForRetry(membershipBillingService.findMembershipIds(memberId),

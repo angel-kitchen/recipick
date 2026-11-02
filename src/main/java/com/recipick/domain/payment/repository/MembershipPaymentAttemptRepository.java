@@ -3,6 +3,7 @@ package com.recipick.domain.payment.repository;
 import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus;
+import com.recipick.domain.payment.service.BillingKeyRecheckRef;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -135,6 +136,23 @@ public interface MembershipPaymentAttemptRepository extends JpaRepository<Member
         @Param("blocking") Collection<MembershipOpsReviewReason> blocking,
         @Param("afterId") Long afterId,
         Pageable pageable);
+
+    // 빌링키 재검사 후보: 결과 불명 창 안에서 404(PAYMENT_NOT_FOUND)로 남은 UNKNOWN 시도에 묶인 ACTIVE·REPLACED 키. 키 ID keyset.
+    // 키가 없거나 삭제돼 PortOne이 결제를 만들지 않았을 수 있는 시도만이다 — 전체 회원·전체 키를 조회하지 않는다
+    @Query("""
+        SELECT DISTINCT new com.recipick.domain.payment.service.BillingKeyRecheckRef(
+            a.billingKey.id, a.billingKey.memberId)
+          FROM MembershipPaymentAttempt a
+         WHERE a.status = com.recipick.domain.payment.entity.enums.MembershipPaymentAttemptStatus.UNKNOWN
+           AND a.failureReason = 'PAYMENT_NOT_FOUND'
+           AND a.dispatchedAt >= :since
+           AND a.billingKey.status IN (com.recipick.domain.payment.entity.enums.BillingKeyStatus.ACTIVE,
+                                       com.recipick.domain.payment.entity.enums.BillingKeyStatus.REPLACED)
+           AND a.billingKey.id > :afterId
+         ORDER BY a.billingKey.id
+        """)
+    List<BillingKeyRecheckRef> findBillingKeysToRecheck(@Param("since") LocalDateTime since,
+                                                        @Param("afterId") Long afterId, Pageable pageable);
 
     // 회차 단위 강한 차단 조회(일반 조회, 잠금 없음). 선점 TX·재조회 진입·POST 직전이 "이 회차에 차단 시도가 있나"를 본다.
     // 파생 쿼리: membershipPayment.id IN 조건
