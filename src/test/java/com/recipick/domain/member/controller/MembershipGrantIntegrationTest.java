@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.data.domain.PageRequest;
@@ -59,6 +60,9 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private Member member;
     private Admin admin;
     private String token;
@@ -69,6 +73,57 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("지급 검증 회원").passwordHash("hash").build());
         admin = admin(AdminRole.SUPER_ADMIN, true);
         token = adminToken(admin, "SUPER_ADMIN", null);
+    }
+
+    private Membership oldMembership(boolean terminated) {
+        LocalDateTime start = LocalDateTime.now(clock).minusDays(40).withNano(0);
+        Membership value = Membership.builder().member(member).type(MembershipType.PAID)
+                .source(MembershipSource.SUBSCRIBE).startAt(start).activatedAt(start).endAt(start.plusDays(30))
+                .autoRenew(false).build();
+        if (terminated) {
+            value.terminateAfterRefund(start.plusDays(1));
+        }
+        return memberships.saveAndFlush(value);
+    }
+
+    private void paymentFor(Membership value, String status) {
+        jdbc.update("""
+                INSERT INTO membership_payment
+                    (membership_id, amount, status, billing_date, period_start_date, period_end_date, created_at, updated_at)
+                VALUES (?, 3900, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, value.getId(), status, value.getStartAt().toLocalDate(), value.getStartAt().toLocalDate(),
+                value.getEndAt().toLocalDate());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,UNKNOWN", "true,UNKNOWN", "true,MANUAL_REVIEW"})
+    @DisplayName("만료·종료된 이전 이용권에 결과 불명·수동 확인 결제가 남으면 지급과 감사 기록을 거절한다")
+    void rejectsUnresolvedPaymentsOnOldMemberships(boolean terminated, String status) throws Exception {
+        // given
+        Membership old = oldMembership(terminated);
+        paymentFor(old, status);
+        Long audits = jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class, admin.getId());
+        // when
+        MockHttpServletResponse response = grant(member.getId(), token);
+        // then
+        assertError(response, 409, "MEMBERSHIP-009");
+        assertThat(memberships.findIdsByMemberId(member.getId())).containsExactly(old.getId());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class, admin.getId()))
+                .isEqualTo(audits);
+    }
+
+    @Test
+    @DisplayName("종료된 이전 이용권의 결제가 확정 실패로 정산됐으면 새 관리자 지급을 허용한다")
+    void grantsAfterOldPaymentIsSettled() throws Exception {
+        // given
+        Membership old = oldMembership(true);
+        paymentFor(old, "FAILED");
+        // when
+        MockHttpServletResponse response = grant(member.getId(), token);
+        // then
+        assertThat(response.getStatus()).isEqualTo(201);
+        assertThat(memberships.findIdsByMemberId(member.getId())).hasSize(2);
+        assertThat(body(response).path("data").path("source").asText()).isEqualTo("ADMIN_GRANT");
     }
 
     @Test

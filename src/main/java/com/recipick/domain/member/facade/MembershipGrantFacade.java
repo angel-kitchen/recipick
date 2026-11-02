@@ -8,6 +8,7 @@ import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipBillingService;
 import com.recipick.domain.member.service.MembershipGrantService;
 import com.recipick.global.exception.BusinessException;
+import com.recipick.domain.payment.service.MembershipPaymentQueryService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class MembershipGrantFacade {
     private final MemberService members;
     private final MembershipBillingService billing;
     private final MembershipGrantService grants;
+    private final MembershipPaymentQueryService payments;
     private final Clock clock;
 
     @Transactional
@@ -30,6 +32,9 @@ public class MembershipGrantFacade {
         LocalDateTime now = LocalDateTime.now(clock);
         if (billing.existsBlockingMembership(memberId, now)) {
             throw new BusinessException(MemberErrorCode.MEMBERSHIP_ALREADY_ACTIVE);
+        }
+        if (payments.existsUnresolved(billing.findMembershipIds(memberId))) {
+            throw new BusinessException(MemberErrorCode.MEMBERSHIP_PAYMENT_IN_PROGRESS);
         }
         return grants.grant(member, admin, now);
     }

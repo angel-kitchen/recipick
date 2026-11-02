@@ -56,6 +56,18 @@ public class MembershipBillingService {
         return memberships.existsBlocking(memberId, now);
     }
 
+    // 호출자는 회원을 먼저 잠근다. 현재 이용권과 다른 활성·대기·후속 생성 이용권만 검사한다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean existsConflictingMembershipForBilling(Long memberId, Long membershipId, LocalDateTime now) {
+        requireWritableTransaction();
+        requireTime(now);
+        Membership target = findMembership(membershipId);
+        if (!target.getMember().getId().equals(memberId)) {
+            throw new BusinessException(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND);
+        }
+        return memberships.existsConflictingForBilling(memberId, membershipId, now);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public Long createPendingSubscription(Long memberId, MembershipConsent consent, LocalDateTime requestedAt) {
         requireWritableTransaction();
@@ -92,6 +104,11 @@ public class MembershipBillingService {
 
     public List<MembershipBillingTarget> findRenewalTargets(LocalDateTime now, Long afterMembershipId, int limit) {
         return memberships.findRenewalTargets(requireTime(now), cursor(afterMembershipId), page(limit));
+    }
+
+    public List<MembershipBillingTarget> findOverdueRenewalTargets(LocalDateTime now,
+            Long afterMembershipId, int limit) {
+        return memberships.findOverdueRenewalTargets(requireTime(now), cursor(afterMembershipId), page(limit));
     }
 
     // 결과 반영 전 회원·이용권·회차·시도 잠금과 현재 회차 검증은 결제 호출자가 수행한다.
