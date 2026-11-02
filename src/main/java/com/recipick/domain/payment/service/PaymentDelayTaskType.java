@@ -6,5 +6,6 @@ public enum PaymentDelayTaskType {
     REFUND_RECONCILE,      // PortOne 결과를 못 받은 회원 환불(REFUND.id)을 재조회로 확정한다
     SYSTEM_REFUND_EXECUTE, // SYSTEM 환불(REFUND.id)을 PortOne 조회 뒤 필요하면 취소까지 실행해 확정한다
     ADMIN_REFUND_EXECUTE,  // 마트 거절 환불(REFUND.id)을 PortOne 조회 뒤 필요하면 취소까지 실행해 확정한다
-    PAYMENT_EXPIRE         // 5분이 지난 결제(PAYMENT.id)를 PortOne 조회 뒤 만료하거나 기존 확정 판정으로 넘긴다
+    PAYMENT_EXPIRE,        // 5분이 지난 결제(PAYMENT.id)를 PortOne 조회 뒤 만료하거나 기존 확정 판정으로 넘긴다
+    MEMBERSHIP_REFUND_EXECUTE // 멤버십 환불(MEMBERSHIP_REFUND.id)을 실행권 확보 → PortOne 조회·금액 지정 취소 → 결과 반영으로 처리한다
 }

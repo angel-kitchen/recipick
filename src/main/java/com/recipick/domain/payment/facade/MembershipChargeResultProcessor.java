@@ -29,11 +29,13 @@ import com.recipick.domain.payment.repository.MembershipPaymentRepository;
 import com.recipick.domain.payment.repository.MembershipRefundRepository;
 import com.recipick.domain.payment.service.MembershipBillingPeriods;
 import com.recipick.domain.payment.service.MembershipBillingPeriods.RenewalPeriod;
+import com.recipick.domain.payment.service.MembershipChargeApplyDecision;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.domain.payment.service.MembershipPaymentAttemptRef;
 import com.recipick.domain.payment.service.MembershipPgVerdict;
 import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRenewalDecision;
+import com.recipick.domain.payment.service.PgObservation;
 import com.recipick.global.common.PolicyConstants;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
@@ -84,10 +86,21 @@ public class MembershipChargeResultProcessor {
 
     // 판정 순서: ① 잠금(회차의 시도 전부) ② 잠금 뒤 시각 ③ 회차 전체 강한 차단 ④ 오래된 관측 ⑤ 미발송 시도의 PG 거래 관측
     // ⑥ 확정 시도의 재전송·늦은 수납 ⑦ 미해결 시도의 정상 판정(확정 회차에 도착한 다른 시도의 수납 포함).
-    // observedDispatchedAt은 호출자가 GET 전에 본 선점 시각이다 — 그 사이 다른 선점으로 바뀌었으면 이 관측으로 미확정 결과를 적지 않는다
+    // observedDispatchedAt은 호출자가 GET 전에 본 선점 시각이다 — 그 사이 다른 선점으로 바뀌었으면 이 관측으로 미확정 결과를 적지 않는다.
+    // 판정만 넘기는 진입점(PG 응답 없음) — 취소 관측의 환불 위임은 일어나지 않는다
     @Transactional
     public MembershipChargeOutcome apply(Long memberId, Long attemptId, LocalDateTime observedDispatchedAt,
                                          MembershipPgVerdict verdict, MembershipReconciliationTrigger trigger) {
+        return decide(memberId, attemptId, observedDispatchedAt, PgObservation.withoutPayment(verdict), trigger)
+            .outcome();
+    }
+
+    // 관측(판정 + PG 응답)으로 결정한다. ③ 뒤에 수납 PAID 시도에 취소 계열 응답이 왔으면 결제 상태를 바꾸지 않고 환불 정합화로 넘기는
+    // 결정만 돌려준다 — 최신 시도 상태는 잠금 아래에서 본 것이다(GET 전 투영이 UNKNOWN이었어도 지금 PAID면 환불 정합화다)
+    @Transactional
+    public MembershipChargeApplyDecision decide(Long memberId, Long attemptId, LocalDateTime observedDispatchedAt,
+                                                PgObservation observation, MembershipReconciliationTrigger trigger) {
+        MembershipPgVerdict verdict = observation.verdict();
         Locked locked = lock(memberId, attemptId);
         LocalDateTime now = LocalDateTime.now(clock);
         MembershipPayment payment = locked.payment();
@@ -96,8 +109,22 @@ public class MembershipChargeResultProcessor {
             // 이 시도든 같은 회차의 다른 시도든 강한 차단이면 결과를 반영하지 않는다 — 다른 시도로 차단을 우회하지 않게
             log.warn("강한 정합성 차단 회차의 결과 반영 요청을 건너뜀(운영 확인 대상): attemptId={}, membershipPaymentId={}",
                 attemptId, payment.getId());
-            return MembershipChargeOutcome.RECONCILE_HALTED;
+            return MembershipChargeApplyDecision.of(MembershipChargeOutcome.RECONCILE_HALTED);
         }
+        if (observation.cancellationObserved() && attempt.getStatus() == MembershipPaymentAttemptStatus.PAID) {
+            // 수납으로 기록된 시도에 PG가 취소(전체·부분)를 돌려줬다 — 환불의 결과일 수 있으므로 수납 불신뢰로 보내지 않고 환불 정합화가
+            // 저장된 환불 근거와 대조한다. 결제 시도·회차·이용권은 여기서 바꾸지 않는다
+            return MembershipChargeApplyDecision.delegateToRefund();
+        }
+        return MembershipChargeApplyDecision.of(applyVerdict(locked, attemptId, observedDispatchedAt, verdict, trigger,
+            now));
+    }
+
+    private MembershipChargeOutcome applyVerdict(Locked locked, Long attemptId, LocalDateTime observedDispatchedAt,
+                                                 MembershipPgVerdict verdict, MembershipReconciliationTrigger trigger,
+                                                 LocalDateTime now) {
+        MembershipPayment payment = locked.payment();
+        MembershipPaymentAttempt attempt = locked.attempt();
         if (isStaleObservation(attempt, observedDispatchedAt) && !verdict.isTrustedPaid()) {
             // GET 전에 본 선점과 지금의 선점이 다르다 — 다른 선점자의 결과를 이 관측으로 덮지 않는다
             return MembershipChargeOutcome.IN_PROGRESS;

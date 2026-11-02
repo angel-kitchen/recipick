@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.AdminRefundExecutionFacade;
+import com.recipick.domain.payment.facade.MembershipRefundExecutionFacade;
 import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
@@ -30,6 +31,7 @@ public class PaymentDelayQueueWorker {
     private final SystemRefundExecutionFacade systemRefundExecutionFacade;
     private final AdminRefundExecutionFacade adminRefundExecutionFacade;
     private final PaymentExpirationFacade paymentExpirationFacade;
+    private final MembershipRefundExecutionFacade membershipRefundExecutionFacade;
     private final Clock clock;
 
     // 실행 시각이 된 작업을 꺼내 처리한다. 주기 실행은 PaymentScheduledTasks가 맡고, 테스트는 이 메서드를 직접 부른다.
@@ -50,6 +52,7 @@ public class PaymentDelayQueueWorker {
                 case SYSTEM_REFUND_EXECUTE -> systemRefundExecutionFacade.execute(task.id());
                 case ADMIN_REFUND_EXECUTE -> adminRefundExecutionFacade.execute(task.id());
                 case PAYMENT_EXPIRE -> paymentExpirationFacade.execute(task.id());
+                case MEMBERSHIP_REFUND_EXECUTE -> membershipRefundExecutionFacade.execute(task.id());
             };
             log.debug("지연 큐 작업 처리: task={}, outcome={}", task.member(), outcome);
         } catch (RuntimeException e) {

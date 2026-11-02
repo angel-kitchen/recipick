@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.MembershipChargeRecoveryFacade;
+import com.recipick.domain.payment.facade.MembershipRefundRecoveryFacade;
 import com.recipick.domain.payment.facade.MembershipRenewalFacade;
 import com.recipick.domain.payment.facade.TrialConversionFacade;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class MembershipBillingScheduledTasks {
     private final TrialConversionFacade trialConversionFacade;
     private final MembershipChargeRecoveryFacade recoveryFacade;
     private final MembershipRenewalFacade renewalFacade;
+    private final MembershipRefundRecoveryFacade refundRecoveryFacade;
 
     // 5분마다. 플래그는 Facade가 본다(OFF면 즉시 0)
     @Scheduled(fixedDelay = 300_000, initialDelay = 120_000,
@@ -48,5 +50,19 @@ public class MembershipBillingScheduledTasks {
         scheduler = MembershipBillingSchedulingConfig.MEMBERSHIP_BILLING_TASK_SCHEDULER)
     public void settleRenewals() {
         renewalFacade.settleOnce();
+    }
+
+    // 1분마다. 플래그 무관 — 접수된 환불의 실행·재조회(큐 유실 복구 포함). 임대·다음 확인 시각·운영 표시로 중복 실행을 막는다
+    @Scheduled(fixedDelay = 60_000, initialDelay = 90_000,
+        scheduler = MembershipBillingSchedulingConfig.MEMBERSHIP_BILLING_TASK_SCHEDULER)
+    public void recoverRefunds() {
+        refundRecoveryFacade.recoverOnce();
+    }
+
+    // 5분마다. 플래그 무관 — 환불 실행 기능이 없던 때 보존한 취소 웹훅을 재처리 대기로 되돌린다(되돌릴 것이 없으면 0)
+    @Scheduled(fixedDelay = 300_000, initialDelay = 240_000,
+        scheduler = MembershipBillingSchedulingConfig.MEMBERSHIP_BILLING_TASK_SCHEDULER)
+    public void reopenPendingCancelWebhooks() {
+        refundRecoveryFacade.reopenPendingCancelWebhooks();
     }
 }

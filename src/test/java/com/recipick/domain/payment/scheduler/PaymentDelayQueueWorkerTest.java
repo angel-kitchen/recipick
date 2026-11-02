@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.payment.facade.AdminRefundExecutionFacade;
+import com.recipick.domain.payment.facade.MembershipRefundExecutionFacade;
 import com.recipick.domain.payment.facade.PaymentExpirationFacade;
 import com.recipick.domain.payment.facade.PaymentReconciliationFacade;
 import com.recipick.domain.payment.facade.RefundReconciliationFacade;
@@ -48,13 +49,30 @@ class PaymentDelayQueueWorkerTest {
     @Mock
     private PaymentExpirationFacade paymentExpirationFacade;
 
+    @Mock
+    private MembershipRefundExecutionFacade membershipRefundExecutionFacade;
+
     private PaymentDelayQueueWorker worker;
 
     @BeforeEach
     void setUp() {
         worker = new PaymentDelayQueueWorker(paymentDelayQueue, paymentReconciliationFacade,
             refundReconciliationFacade, systemRefundExecutionFacade, adminRefundExecutionFacade,
-            paymentExpirationFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+            paymentExpirationFacade, membershipRefundExecutionFacade, Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
+    }
+
+    @Test
+    @DisplayName("MEMBERSHIP_REFUND_EXECUTE 작업은 멤버십 환불 실행기에 환불 ID로 넘긴다")
+    void dispatchMembershipRefundExecute() {
+        // given
+        given(paymentDelayQueue.popDue(NOW, PaymentDelayQueueWorker.BATCH_SIZE))
+            .willReturn(List.of(PaymentDelayTask.membershipRefundExecute(77L)));
+
+        // when
+        worker.poll();
+
+        // then
+        verify(membershipRefundExecutionFacade).execute(77L);
     }
 
     @Test

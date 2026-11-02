@@ -44,6 +44,13 @@ public interface MembershipRefundRepository extends JpaRepository<MembershipRefu
 
     Optional<MembershipRefund> findByIdempotencyKey(String idempotencyKey);
 
+    // 운영 응답 조립용(잠금 없음). 시도 연관을 함께 읽어 트랜잭션 밖에서도 시도 ID를 쓸 수 있게 한다
+    @Query("SELECT r FROM MembershipRefund r JOIN FETCH r.membershipPaymentAttempt WHERE r.id = :id")
+    Optional<MembershipRefund> findWithAttemptById(@Param("id") Long id);
+
+    // 운영 상세의 전체 환불 이력(MEMBER·SYSTEM, ID 순)
+    List<MembershipRefund> findByMembershipPaymentAttemptIdOrderByIdAsc(Long membershipPaymentAttemptId);
+
     // 잠금 전 투영 조회. 회원 ID는 들어 있지 않다(이용권 ID로 회원 도메인에 묻는다)
     @Query("""
         SELECT new com.recipick.domain.payment.service.MembershipRefundRef(

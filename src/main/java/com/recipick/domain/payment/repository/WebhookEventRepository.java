@@ -46,6 +46,18 @@ public interface WebhookEventRepository extends JpaRepository<WebhookEvent, Long
         @Param("processingBefore") LocalDateTime processingBefore,
         Pageable pageable);
 
+    // 환불 실행 기능이 없던 때 운영 확인으로 보존한 취소 웹훅(사유 정확 일치)의 ID. 복구가 keyset으로 읽어 재처리 대기로 되돌린다
+    @Query("""
+        SELECT e.id
+          FROM WebhookEvent e
+         WHERE e.status = com.recipick.domain.payment.entity.enums.WebhookEventStatus.MANUAL_REVIEW
+           AND e.failureReason = :reason
+           AND e.id > :afterId
+         ORDER BY e.id
+        """)
+    List<Long> findManualReviewIdsByReason(@Param("reason") String reason, @Param("afterId") Long afterId,
+                                           Pageable pageable);
+
     // 탈퇴 정산용 잠금 읽기(FOR SHARE). 회원 잠금 뒤에 저장·처리된 웹훅도 최신 커밋으로 본다.
     // 조건 순서가 idx_webhook_event_portone_payment_id_status와 같아 그 결제들의 행만 잠근다 — 인덱스가 없으면 전체 스캔이 되어
     // 테이블 전 행이 잠긴다. 잠금이 적용되지 않는 스칼라 exists 대신 행을 돌려주고 호출자가 비어 있는지 본다

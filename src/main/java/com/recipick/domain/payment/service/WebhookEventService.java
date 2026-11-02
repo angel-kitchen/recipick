@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +76,19 @@ public class WebhookEventService {
                                          LocalDateTime processingBefore, Long afterId, int limit) {
         return webhookEventRepository.findRecoverableIds(
             afterId, receivedBefore, retryBefore, processingBefore, PageRequest.ofSize(limit));
+    }
+
+    // 환불 정합화 대기로 보존된 취소 웹훅 ID(사유 정확 일치, 잠금 없음). 복구가 keyset으로 읽는다
+    public List<Long> findManualReviewIdsByReason(String reason, Long afterId, Pageable pageable) {
+        return webhookEventRepository.findManualReviewIdsByReason(reason, afterId, pageable);
+    }
+
+    // 보존된 이벤트 하나를 행 잠금 아래에서 재처리 대기로 되돌린다. 사유가 정확히 preservedReason이 아니거나 이미 바뀐 행은 false
+    @Transactional
+    public boolean reopenForRetry(Long webhookEventId, String preservedReason, LocalDateTime now) {
+        return webhookEventRepository.findByIdForUpdate(webhookEventId)
+            .map(event -> event.reopenForRetry(preservedReason, now))
+            .orElse(false);
     }
 
     // 잠금 아래에서 처리권을 확인한다. claim할 때마다 attemptCount가 1씩 오르므로 번호가 같으면 그 뒤 아무도 다시 잡지 않았다.

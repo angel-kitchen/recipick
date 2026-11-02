@@ -15,5 +15,8 @@ public enum MembershipChargeOutcome {
     EXTENDED,                    // 갱신 성공 -> 이용기간 연장(C-4a) + 회차 PAID + 반영 표시
     RETRY_WAITING,               // 갱신 확정 실패 -> 같은 회차 재시도 대기(다음 청구 시각 = 실패 확정 + 24시간, 마감 이상이면 없음)
     RENEWAL_STOPPED,             // 갱신 최종 실패·마감·해지 -> 회차 FAILED + 자동갱신 끔(C-4b). 유예 종료 시각은 그대로
-    PAYMENT_METHOD_REQUIRED      // 갱신에 쓸 ACTIVE 카드 없음 -> 회차 카드 대기. 새 시도 없음
+    PAYMENT_METHOD_REQUIRED,     // 갱신에 쓸 ACTIVE 카드 없음 -> 회차 카드 대기. 새 시도 없음
+    REFUND_RECONCILED,           // 수납 PAID 시도에 취소 계열 관측 -> 환불 정합화가 확정 결과(완료·실패)로 설명함. 결제 상태 변경 없음
+    REFUND_RECONCILIATION_PENDING,          // 환불 정합화가 미확정(처리 중·취소 ID 미노출). 결제 쪽은 재시도 대기로 다시 본다
+    REFUND_RECONCILIATION_REVIEW_REQUIRED   // 환불 행 없는 취소(외부 취소)·환불 운영 확인·차단. 결제 쪽도 운영 확인으로 남긴다
 }

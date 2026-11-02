@@ -8,7 +8,6 @@ import com.recipick.domain.payment.dto.response.MembershipPaymentAttemptSummaryR
 import com.recipick.domain.payment.dto.response.MembershipPaymentRecheckResponse;
 import com.recipick.domain.payment.entity.MembershipPaymentAttempt;
 import com.recipick.domain.payment.entity.enums.MembershipOpsReviewReason;
-import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.repository.MembershipPaymentAttemptRepository;
 import com.recipick.domain.payment.repository.MembershipRefundRepository;
@@ -55,8 +54,7 @@ public class MembershipPaymentAdminFacade {
         MembershipPaymentAttempt attempt = attempts.findById(attemptId)
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.MEMBERSHIP_PAYMENT_NOT_FOUND));
         MembershipPaymentAttemptDetailResponse response = MembershipPaymentAttemptDetailResponse.of(summary(attempt),
-            attempt.getMembershipPayment(),
-            refunds.findByMembershipPaymentAttemptIdAndRequestedByOrderByIdAsc(attemptId, RefundRequester.SYSTEM));
+            attempt.getMembershipPayment(), refunds.findByMembershipPaymentAttemptIdOrderByIdAsc(attemptId));
         adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.MEMBERSHIP_PAYMENT_DETAIL_VIEW, attemptId,
             null, null));
         return response;
