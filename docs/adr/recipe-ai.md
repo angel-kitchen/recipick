@@ -49,11 +49,17 @@
 | AI가 재료·수량까지 구성 | 구현이 짧음 | 수량·가격 환각이 그대로 결제로 이어짐, 재현·테스트 불가 |
 | **AI는 해석만, 서버가 계산·판정(선택)** | 계산은 단위 테스트로 고정, AI 결과는 서버 규칙으로 다시 판정 | AI 결과를 검증하는 코드가 필요 |
 
-- AI가 고른 레시피 ID는 서버가 존재·활성·자동 장보기 가능 여부와 메뉴 1~5개·인분 1~10·중복 금지를 다시 확인한다(`AiAutoCartResolver`, `AiRecipeRecommendResolver`).
+- AI에게 보내는 후보와 서버가 다시 확인하는 기준은 기능마다 다르다.
+
+| 기능 | AI에게 보내는 후보 | AI가 고른 뒤 서버가 다시 확인 |
+| --- | --- | --- |
+| AI 자연어 장보기 | `ACTIVE`이면서 자동 장보기 가능한 레시피(`AutoCartService.findAiRecipeOptions`) | 후보 목록 안의 ID인지, 메뉴 1~5개·인분 1~10·중복 금지(`AiAutoCartResolver`) |
+| AI 조건 추천 | 조건으로 거른 `ACTIVE` 레시피. 자동 장보기 가능 여부는 보지 않음(`RecipeService.findRecommendCandidates`) | 후보 목록 안의 ID인지, 최대 5개(`AiRecipeRecommendResolver`) |
+
 - AI 결과로 만든 미리보기도 직접 고른 경우와 같은 `AutoCartFacade` 계산을 탄다(`AiAutoCartProcessor`). 계산 규칙이 두 벌이 되지 않는다.
 
 ### D2. 수량 계산
-- 같은 재료를 메뉴마다 따로 올림하면 더 많이 사게 되므로, 올림 전에 재료별로 합산한다(`AutoCartCalculator.calculate`).
+- 같은 재료를 메뉴마다 따로 올림하면 더 많이 사게 되므로, 올림 전에 재료별로 합산한다. 메뉴별 필요량을 인분으로 환산해 합치는 것은 `AutoCartService.sumIngredients`, 합친 양을 상품 판매 단위로 올리는 것은 `AutoCartCalculator.calculate`다.
 - 수량은 `BigDecimal`과 `RoundingMode.CEILING`으로 계산해 0.5개 같은 소수 오차를 막는다.
 - 상품 선택 순서: 구매 가능 → 총 구매금액 → 예상 잔량 → 상품명. 같은 입력이면 항상 같은 상품이 골라진다.
 - 예상 잔량은 저장하지 않고 미리보기 때 계산한다. 가격·재고가 바뀌므로 저장값은 금방 틀린다.
@@ -64,20 +70,52 @@
 - 확정 시점에 가격·재고·수량을 다시 계산하고, 미리보기와 합계가 다르면 가격 변경을 안내한다.
 
 ### D4. AI 연동 방식
+도입 시점(#236)에 필요했던 것은 대화나 Tool이 아니라 **한 번 묻고 정해진 형태로 받는 호출 3개**(메뉴 분석·조건 분석·후보 고르기)였다.
+그 호출을 안전하게 다루는 데 필요한 조건은 아래 다섯 가지였다.
+
+1. 응답을 Java 객체 형태로 강제(구조화 출력)
+2. 생각에 쓰는 토큰·지연 조절(effort)
+3. 매번 같은 레시피 목록의 입력 비용 절감(프롬프트 캐시)
+4. 잘림·거절 같은 종료 사유와 캐시 토큰까지 포함한 사용량 확인
+5. 429·타임아웃·5xx를 구분해 `FALLBACK` 사유로 기록
+
 | 후보 | 장점 | 비용·한계 |
 | --- | --- | --- |
-| HTTP 직접 호출 | 의존성 없음 | 스키마·재시도·오류 분류를 모두 직접 구현 |
-| Spring AI(`ChatClient`) | 여러 AI 제공사를 같은 코드로 호출, `@Tool` 지원 | 제공사 신기능(effort, 구조화 출력 세부 옵션) 반영이 늦을 수 있음, 의존성 추가 |
-| **Anthropic Java SDK(선택)** | 구조화 출력(`outputConfig(Class)`), effort, 프롬프트 캐시, 재시도, 오류 타입(`RateLimitException` 등)을 공식 지원 | Claude 전용. 다른 제공사로 바꾸려면 구현체를 새로 작성 |
+| HTTP 직접 호출 | 의존성 없음 | 스키마 생성·재시도·오류 분류·응답 파싱을 모두 직접 구현하고 테스트해야 함 |
+| Spring AI(`ChatClient`) | 여러 AI 제공사를 같은 코드로 호출, `@Tool`·대화 기록 같은 기능 제공 | 제공사 공통 추상화라 Claude 전용 옵션(effort, 시스템 블록 단위 캐시, 종료 사유·캐시 토큰)을 쓰려면 제공사별 옵션으로 다시 내려가야 함. 공통 기능은 지금 쓰지 않음. 자체 자동 설정을 우리 `ai.client` 전환(가짜 기본값)과 맞춰야 함 |
+| **Anthropic Java SDK(선택)** | 위 다섯 가지를 SDK 기능으로 바로 씀 | Claude 전용. 다른 제공사로 바꾸려면 구현체를 새로 작성 |
 
-- 제공사 종속은 `infra/ai/AiClient` 인터페이스로 가둔다. domain은 `AiClient`와 `AiResult`만 알고, 구현체는 `ai.client` 설정으로 바뀐다(`FakeAiClient`, `ClaudeAiClient`).
+선택한 이유는 다음과 같다. 코드에서 쓰는 SDK 기능은 위 조건 번호와 맞춰 적었다.
+
+- **필요한 기능이 Claude 전용 옵션이었다.**
+
+  | 조건 | 사용한 SDK 기능 |
+  | --- | --- |
+  | ① 구조화 출력 | `outputConfig(MenuOutput.class)`처럼 record로 스키마 생성 |
+  | ② 생각 조절 | `OutputConfig.Effort.LOW` |
+  | ③ 프롬프트 캐시 | 시스템 블록 `CacheControlEphemeral` |
+  | ④ 종료 사유·사용량 | `StopReason.MAX_TOKENS`·`REFUSAL`, `cacheReadInputTokens` |
+  | ⑤ 오류 구분 | `RateLimitException`·`AnthropicIoException` |
+
+  공통 추상화를 거치면 이 옵션들을 제공사별 설정으로 다시 다뤄야 해서 얻는 것이 적었다.
+- **제공사를 바꿀 가능성은 우리 인터페이스로 이미 막았다.** domain은 `infra/ai/AiClient`와 `AiResult`만 알고, 구현체는 `ai.client` 설정으로 바뀐다(`FakeAiClient`, `ClaudeAiClient`). Spring AI의 가장 큰 장점인 "제공사 교체"는 호출 3개 규모에서는 구현체 하나를 더 쓰는 것으로 충분하다.
+- **키 없이 개발하는 구조와 맞았다.** 키가 없을 때는 Claude 빈 자체를 만들지 않는다(`@ConditionalOnProperty(name = "ai.client", havingValue = "claude")`). 클라이언트 설정도 `ClaudeClientConfig` 한 곳(`timeout`, `maxRetries`)에 모였다.
+- **의존성이 하나다.** `com.anthropic:anthropic-java` 하나만 추가했다. 스타터·BOM·자동 설정을 추가로 관리하지 않는다.
+
+추가로 정한 것:
 - 실패는 예외 대신 `AiResult.failure(AiFailureType, usage)`로 돌려준다. 호출부가 실패를 상태(`FALLBACK`)로 바꿔야 하므로 예외 흐름보다 분기가 명확하다.
-- **다시 검토할 조건:** Tool Calling(`@Tool`)을 도입하면 Spring AI 병행 여부를 다시 정한다(7절).
 
-> 확인 필요(보민): Spring AI 대신 SDK를 고른 당시의 실제 판단 이유가 위와 다르면 고쳐 주세요.
+감수한 것과 다시 검토할 조건:
+- **감수한 것:** Claude 전용 코드가 `ClaudeAiClient`에 모인다. Tool 호출·대화 기록 같은 기능이 필요해지면 직접 짜거나 프레임워크를 들여야 한다.
+- **다시 검토할 조건:** AI 필수 항목은 Spring AI `@Tool`을 요구하므로, Tool Calling을 도입할 때 정한다(8절 ③). 후보는 두 가지다.
+  - Spring AI를 Tool 기능에만 함께 쓰기
+  - SDK의 Tool 사용 기능으로 구현하고, 항목 해석을 확인받기
 
 ### D5. 응답 형식: 구조화 출력
-- SDK가 출력 record(`MenuOutput`, `ConditionOutput`, `RecommendOutput`)로 JSON 스키마를 만들어 보내므로, 응답이 항상 그 형태로 온다. 자유 텍스트를 파싱하다 깨지는 경우가 없다.
+- SDK가 출력 record(`MenuOutput`, `ConditionOutput`, `RecommendOutput`)로 JSON 스키마를 만들어 보내므로, 정상적으로 끝난 응답 블록은 그 형태로 온다. 자유 텍스트를 직접 파싱하지 않는다.
+- 스키마가 응답이 끝까지 오는 것까지 보장하지는 않는다. 그래서 `ClaudeAiClient`가 따로 실패 처리한다.
+  - 최대 토큰에서 잘림(`MAX_TOKENS`), 거절(`REFUSAL`): 모든 기능에서 실패
+  - 응답 블록 없음: 조건 분석·레시피 추천에서 실패(`INVALID_RESPONSE`). 자연어 장보기의 차이는 D6 참고
 - 구조화 출력은 null을 쓸 수 없어 "말하지 않음"을 0·-1·빈 문자열로 받고 서버에서 null로 바꾼다. 맵기 0은 "안 매움"이라는 조건이라 비어 있음은 -1로 쓴다.
 - 형식은 스키마가, 값이 맞는지는 서버가 본다(`RecipeRecommendCondition.from`이 범위 밖 값과 모르는 enum을 버림).
 - 분석 결과는 `ai_request_log.parsed_result`(JSON)에 저장해 관리자 이력 조회와 평가에 쓴다.
@@ -89,7 +127,8 @@
 | **조건 추출 → 서버 필터 → 후보 안에서 고르기(선택)** | 조건은 DB 검색으로 정확히 지킴, AI가 볼 후보가 줄어 환각·토큰 감소 | 호출 2회라 지연이 늘어남 |
 
 - 분석한 조건이 하나도 없으면 전체 레시피를 후보로 삼지 않고 `NO_MATCH`. 예전에는 "통오징어찜"처럼 조건이 없는 문장에 ID 순 첫 5개(무관한 찌개)가 추천됐다(`3a1f2de`).
-- ③에서 AI가 빈 목록을 주면 "후보 중 맞는 게 없다"는 정상 판단이라 `NO_MATCH`, 후보 밖 ID만 주면 응답 오류로 보고 `FALLBACK`(`7a7d5c0`). 응답 블록 자체가 없으면 빈 목록과 구분할 수 없어 실패로 처리한다(`670f848`).
+- 조건 추천 ③에서 AI가 빈 목록을 주면 "후보 중 맞는 게 없다"는 정상 판단이라 `NO_MATCH`, 후보 밖 ID만 주면 응답 오류로 보고 `FALLBACK`(`7a7d5c0`). 응답 블록 자체가 없으면 빈 목록과 구분할 수 없어 실패로 처리해 `FALLBACK`이 된다(`670f848`).
+- 자연어 장보기의 메뉴 분석(`ClaudeAiClient.extractMenus`)은 응답 블록이 없어도 빈 메뉴 목록으로 성공 처리하고, `AiAutoCartResolver`가 이를 `NO_MATCH`로 판정한다. 조건 추천과 기준이 달라 맞출지 따로 검토한다(8절 ⑦).
 - 후보 목록은 조건마다 달라 프롬프트 캐시를 걸지 않는다. 자연어 장보기의 레시피 목록은 매번 같아 캐시한다.
 
 ### D7. 장애 응답과 트랜잭션 경계
@@ -115,7 +154,7 @@
 - 실제 호출 평가(`ClaudeAiEvaluationTest`)는 비용이 들어 `AI_EVAL=true`일 때만 돈다.
 
 ### D10. 관측
-- 모든 요청(성공·실패)을 `ai_request_log`에 남긴다: 유형·원문·분석 결과·연결 레시피·결과 상태·모델·입력/출력/캐시 토큰·응답 시간·실패 사유. 조건 추천은 두 호출을 합산한다.
+- AI 호출까지 간 요청은 성공·실패 모두 `ai_request_log`에 남긴다. AI를 부르기 전에 거절한 요청(멤버십 없음, `AiRequestLimiter`의 회원별 한도 초과)은 남기지 않으며 지표에도 잡히지 않는다. 남기는 항목: 유형·원문·분석 결과·연결 레시피·결과 상태·모델·입력/출력/캐시 토큰·응답 시간·실패 사유. 조건 추천은 두 호출을 합산한다.
 - 이력 저장이 커밋된 뒤 Micrometer 지표 3개(`recipick_ai_requests_total`, `recipick_ai_latency_seconds`, `recipick_ai_tokens_total`)를 기록하고 Prometheus·Grafana "Recipick 개요"에 AI 패널 5개를 둔다. 선택 근거는 [모니터링 4절](../monitoring.md)에 있다.
 - 지표 태그에는 enum과 모델명만 쓴다. 원문·회원 ID는 개인정보이고 태그 값이 끝없이 늘어난다.
 
@@ -193,7 +232,7 @@
 4. **카테고리별 프롬프트 분기**: 외부화와 함께 추천기를 한식·양식 등으로 나눌지 결정한다.
 5. **대시보드 보완**: 요청 수·지연 지표에 `model` 태그 추가, 누적 토큰 패널, 모델별 P95·에러율.
 6. **격리 확인**: AI 지연 주입 상태의 주문 API 응답 측정, `classify` 단위 테스트.
-7. 기타: 포함 재료 조건, ③에 레시피 정보 더 넘기기(평가 결과를 보고 결정), 레시피 조회 캐싱.
+7. 기타: 자연어 장보기 메뉴 분석의 응답 블록 없음을 조건 추천처럼 실패로 볼지 결정(D6), 포함 재료 조건, ③에 레시피 정보 더 넘기기(평가 결과를 보고 결정), 레시피 조회 캐싱.
 
 ## 9. 참고 자료
 
