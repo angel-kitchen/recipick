@@ -156,6 +156,65 @@
   min-width: 140px;
 }
 
+/* 상품 목록: 왼쪽에 카테고리·가격대·판매 상태, 오른쪽에 상품 */
+.catalog {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.side-group {
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.side-group:last-child {
+  border-bottom: 0;
+}
+
+.side-group__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.side-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.side-list__item {
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-list__item:hover {
+  background: var(--green-wash);
+}
+
+.side-list__item.is-active {
+  background: var(--green-light);
+  color: var(--green-brand);
+  font-weight: 700;
+}
+
+@media (max-width: 767px) {
+  .catalog {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pager {
   margin-top: var(--space-5);
   display: flex;
