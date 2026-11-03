@@ -8,7 +8,6 @@ import java.util.List;
 
 import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -22,7 +21,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
     List<OrderItem> findAllByOrderIdInOrderByIdAsc(Collection<Long> orderIds);
 
-    @Query(value = """
+    // 페이지 계산은 삭제 상품을 거른 뒤 상품 도메인이 하므로, 여기서는 상위 N개 ID만 순서대로 돌려준다
+    @Query("""
             SELECT oi.productId
             FROM OrderItem oi
             JOIN oi.order o
@@ -32,17 +32,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             AND o.paidAt >= :from
             GROUP BY oi.productId
             ORDER BY SUM(oi.quantity) DESC, oi.productId DESC
-            """,
-        countQuery = """
-            SELECT COUNT(DISTINCT oi.productId)
-            FROM OrderItem oi
-            JOIN oi.order o
-            WHERE o.martId = :martId
-            AND o.status = :status
-            AND o.martStatus <> :rejected
-            AND o.paidAt >= :from
             """)
-    Page<Long> findBestSellingProductIds(
+    List<Long> findBestSellingProductIds(
         @Param("martId") Long martId,
         @Param("status") OrderStatus status,
         @Param("rejected") MartStatus rejected,

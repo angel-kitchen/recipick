@@ -27,8 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -90,17 +88,17 @@ class ProductFacadeTest {
     }
 
     @Test
-    @DisplayName("베스트 : 이용 마트와 기간 시작 시각으로 순위를 구해 상품 서비스에 넘기고 요청한 정렬은 무시한다")
+    @DisplayName("베스트 : 이용 마트와 기간 시작 시각으로 상위 순위를 구해 상품 서비스에 페이지 정보와 함께 넘긴다")
     void findBestProducts() {
         // given
         Pageable requested = PageRequest.of(1, 10, Sort.by("price"));
-        Pageable expected = PageRequest.of(1, 10);
-        Page<Long> rankedIds = new PageImpl<>(List.of(3L, 1L), expected, 12);
+        List<Long> rankedIds = List.of(3L, 1L);
         PageResponse<ProductSearchResponse> response = new PageResponse<>(List.of(), 1, 10, 12, 2);
         given(memberService.getMartId(7L)).willReturn(Optional.of(1L));
-        given(orderSalesService.findBestSellingProductIds(1L, LocalDateTime.of(2026, 10, 27, 9, 0), expected))
+        given(orderSalesService.findBestSellingProductIds(
+            1L, LocalDateTime.of(2026, 10, 27, 9, 0), ProductService.BEST_PRODUCT_LIMIT))
             .willReturn(rankedIds);
-        given(productService.findBestProducts(1L, rankedIds)).willReturn(response);
+        given(productService.findBestProducts(1L, rankedIds, requested)).willReturn(response);
 
         // when
         PageResponse<ProductSearchResponse> result =

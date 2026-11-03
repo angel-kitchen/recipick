@@ -9,10 +9,10 @@ import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,19 +66,17 @@ class OrderItemRepositoryTest extends IntegrationTestSupport {
         em.clear();
 
         // when
-        Page<Long> weekly = findBest(MART_ID, now.minusDays(7), PageRequest.of(0, 20));
-        Page<Long> all = findBest(MART_ID, LocalDateTime.of(2000, 1, 1, 0, 0), PageRequest.of(0, 20));
+        List<Long> weekly = findBest(MART_ID, now.minusDays(7), 20);
+        List<Long> all = findBest(MART_ID, LocalDateTime.of(2000, 1, 1, 0, 0), 20);
 
         // then
-        assertThat(weekly.getContent()).containsExactly(2L, 1L);
-        assertThat(weekly.getTotalElements()).isEqualTo(2);
-        assertThat(all.getContent()).containsExactly(6L, 2L, 1L);
-        assertThat(all.getTotalElements()).isEqualTo(3);
+        assertThat(weekly).containsExactly(2L, 1L);
+        assertThat(all).containsExactly(6L, 2L, 1L);
     }
 
     @Test
-    @DisplayName("베스트: 수량이 같으면 상품 ID가 큰 상품이 먼저이고 페이지 크기만큼 자른다")
-    void findBestSellingProductIds_tieAndPaging() {
+    @DisplayName("베스트: 수량이 같으면 상품 ID가 큰 상품이 먼저이고 상위 N개까지만 돌려준다")
+    void findBestSellingProductIds_tieAndLimit() {
         // given
         LocalDateTime now = LocalDateTime.now();
         Order order = paidOrder(MART_ID, now);
@@ -89,19 +87,15 @@ class OrderItemRepositoryTest extends IntegrationTestSupport {
         em.clear();
 
         // when
-        Page<Long> firstPage = findBest(MART_ID, now.minusDays(1), PageRequest.of(0, 2));
-        Page<Long> secondPage = findBest(MART_ID, now.minusDays(1), PageRequest.of(1, 2));
+        List<Long> top2 = findBest(MART_ID, now.minusDays(1), 2);
 
         // then
-        assertThat(firstPage.getContent()).containsExactly(12L, 11L);
-        assertThat(secondPage.getContent()).containsExactly(13L);
-        assertThat(firstPage.getTotalElements()).isEqualTo(3);
-        assertThat(firstPage.getTotalPages()).isEqualTo(2);
+        assertThat(top2).containsExactly(12L, 11L);
     }
 
-    private Page<Long> findBest(Long martId, LocalDateTime from, PageRequest pageable) {
+    private List<Long> findBest(Long martId, LocalDateTime from, int limit) {
         return orderItemRepository.findBestSellingProductIds(
-            martId, OrderStatus.PAID, MartStatus.REJECTED, from, pageable);
+            martId, OrderStatus.PAID, MartStatus.REJECTED, from, PageRequest.of(0, limit));
     }
 
     private Order paidOrder(Long martId, LocalDateTime paidAt) {

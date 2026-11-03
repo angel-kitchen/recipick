@@ -11,14 +11,13 @@ import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -54,8 +53,8 @@ public class ProductFacade {
     ){
         Long martId = findMartId(memberId);
         LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
-        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        Page<Long> rankedIds = orderSalesService.findBestSellingProductIds(martId, from, unsorted);
-        return productService.findBestProducts(martId, rankedIds);
+        List<Long> rankedIds = orderSalesService.findBestSellingProductIds(
+            martId, from, ProductService.BEST_PRODUCT_LIMIT);
+        return productService.findBestProducts(martId, rankedIds, pageable);
     }
 }
