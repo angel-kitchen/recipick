@@ -52,6 +52,7 @@ public class CategoryServiceTest {
     @Test
     @DisplayName("목록: 삭제되지 않은 카테고리를 응답으로 바꿔 돌려준다.")
     void getCategories(){
+        // given
         given(categoryRepository.findAllByDeletedFalse())
             .willReturn(List.of(category(1L,"채소"), category(2L,"육류")));
 
