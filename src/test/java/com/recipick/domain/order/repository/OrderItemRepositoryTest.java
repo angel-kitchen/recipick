@@ -54,9 +54,9 @@ class OrderItemRepositoryTest extends IntegrationTestSupport {
         Order otherMart = paidOrder(OTHER_MART_ID, now);
         item(otherMart, 7L, 100);
         em.flush();
-        // 영속성 컨텍스트를 거치지 않는 벌크 UPDATE로 마트 거절·환불 상태를 만든다
-        em.createQuery("update Order o set o.martStatus = :martStatus where o.id = :id")
-            .setParameter("martStatus", MartStatus.REJECTED)
+        // 영속성 컨텍스트를 거치지 않는 벌크 UPDATE로 마트 거절(취소 요청)·환불 상태를 만든다
+        em.createQuery("update Order o set o.status = :status where o.id = :id")
+            .setParameter("status", OrderStatus.CANCEL_REQUESTED)
             .setParameter("id", rejected.getId())
             .executeUpdate();
         em.createQuery("update Order o set o.status = :status where o.id = :id")
@@ -95,7 +95,7 @@ class OrderItemRepositoryTest extends IntegrationTestSupport {
 
     private List<Long> findBest(Long martId, LocalDateTime from, int limit) {
         return orderItemRepository.findBestSellingProductIds(
-            martId, OrderStatus.PAID, MartStatus.REJECTED, from, PageRequest.of(0, limit));
+            martId, OrderStatus.PAID, from, PageRequest.of(0, limit));
     }
 
     private Order paidOrder(Long martId, LocalDateTime paidAt) {

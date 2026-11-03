@@ -1,6 +1,5 @@
 package com.recipick.domain.order.service;
 
-import com.recipick.domain.order.entity.enums.MartStatus;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.repository.OrderItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +19,6 @@ public class OrderSalesService {
 
     public List<Long> findBestSellingProductIds(Long martId, LocalDateTime from, int limit){
         return orderItemRepository.findBestSellingProductIds(
-            martId, OrderStatus.PAID, MartStatus.REJECTED, from, PageRequest.of(0, limit));
+            martId, OrderStatus.PAID, from, PageRequest.of(0, limit));
     }
 }
