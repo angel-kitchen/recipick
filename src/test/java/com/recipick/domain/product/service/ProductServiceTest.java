@@ -102,7 +102,7 @@ public class ProductServiceTest {
         return product;
     }
 
-    private AdminProductSearchRequest conditionOf(Long martId){
+    private AdminProductSearchRequest requestOf(Long martId){
         return new AdminProductSearchRequest(martId, null,null,null,null);
     }
 
@@ -115,7 +115,7 @@ public class ProductServiceTest {
 
         // when
         PageResponse<AdminProductResponse> result =
-            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, conditionOf(null), pageable);
+            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, requestOf(null), pageable);
 
         // then
         ArgumentCaptor<AdminProductSearchCondition> captor =
@@ -136,7 +136,7 @@ public class ProductServiceTest {
 
         // when
         PageResponse<AdminProductResponse> result =
-            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, conditionOf(null), pageable);
+            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, requestOf(null), pageable);
 
         // then
         assertThat(result.content().get(0).description()).isEqualTo("신선한 애호박");
@@ -146,11 +146,11 @@ public class ProductServiceTest {
     @DisplayName("마트 관리자가 다른 마트를 지정하면 접근이 거부된다")
     void martAdminOtherMartDenied() {
         // given
-        AdminProductSearchRequest condition = conditionOf(2L);
+        AdminProductSearchRequest request = requestOf(2L);
 
         // when & then
         assertThatThrownBy(() ->
-            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, condition, pageable))
+            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, request, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
@@ -165,7 +165,7 @@ public class ProductServiceTest {
             .willReturn(new PageImpl<>(List.of(), pageable, 0));
 
         // when
-        productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, conditionOf(null), pageable);
+        productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, requestOf(null), pageable);
 
         // then
         ArgumentCaptor<AdminProductSearchCondition> captor =
@@ -179,11 +179,11 @@ public class ProductServiceTest {
     void superAdminMartNotFound() {
         // given
         given(martRepository.existsById(99L)).willReturn(false);
-        AdminProductSearchRequest condition = conditionOf(99L);
+        AdminProductSearchRequest request = requestOf(99L);
 
         // when & then
         assertThatThrownBy(() ->
-            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, condition, pageable))
+            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, request, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_NOT_FOUND);
