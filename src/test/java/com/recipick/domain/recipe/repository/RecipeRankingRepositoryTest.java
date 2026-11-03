@@ -1,6 +1,7 @@
 package com.recipick.domain.recipe.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.recipe.entity.Recipe;
@@ -72,6 +73,34 @@ class RecipeRankingRepositoryTest extends IntegrationTestSupport {
         // then
         assertThat(page.getContent()).isEmpty();
         assertThat(page.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("찜 수: 기간 안의 찜만 레시피별로 세고 찜이 없는 레시피는 결과에 없다")
+    void countByRecipeIdsSince() {
+        // given
+        Recipe three = saveRecipe("랭킹 찜 수 셋");
+        Recipe one = saveRecipe("랭킹 찜 수 하나");
+        Recipe none = saveRecipe("랭킹 찜 수 없음");
+        bookmark(three, 1L, 2L, 3L);
+        bookmark(one, 1L);
+        em.flush();
+        em.clear();
+        List<Long> ids = List.of(three.getId(), one.getId(), none.getId());
+
+        // when
+        List<RecipeBookmarkCount> inPeriod = recipeBookmarkRepository.countByRecipeIdsSince(
+            ids, LocalDateTime.now().minusDays(1));
+        List<RecipeBookmarkCount> afterAll = recipeBookmarkRepository.countByRecipeIdsSince(
+            ids, LocalDateTime.now().plusDays(1));
+
+        // then
+        assertThat(inPeriod)
+            .extracting(RecipeBookmarkCount::getRecipeId, RecipeBookmarkCount::getBookmarkCount)
+            .containsExactlyInAnyOrder(
+                tuple(three.getId(), 3L),
+                tuple(one.getId(), 1L));
+        assertThat(afterAll).isEmpty();
     }
 
     @Test

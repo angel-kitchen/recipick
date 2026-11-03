@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.service;
 
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeBookmarkId;
@@ -9,6 +10,7 @@ import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.global.common.RankingPeriod;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.RecipeBookmarkCount;
 import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -57,17 +60,14 @@ public class RecipeService {
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
-    public PageResponse<RecipeSummaryResponse> findPopularRecipes(
+    public PageResponse<RecipeRankingResponse> findPopularRecipes(
         Long memberId,
         RankingPeriod period,
         Pageable pageable
     ){
         LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
         Page<Recipe> recipes = recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, from, withoutSort(pageable));
-        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
-
-        return PageResponse.from(recipes.map(recipe ->
-            RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+        return toRankingPage(memberId, recipes, from);
     }
 
     public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {
@@ -86,13 +86,33 @@ public class RecipeService {
         recipeRepository.increaseViewCount(recipeId);
     }
 
-    public PageResponse<RecipeSummaryResponse> findMostViewedRecipes(Long memberId, Pageable pageable){
+    // 조회수 순위의 찜 수는 기간 없이 전체 기간 기준이다
+    public PageResponse<RecipeRankingResponse> findMostViewedRecipes(Long memberId, Pageable pageable){
         Page<Recipe> recipes = recipeRepository
             .findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, withoutSort(pageable));
-        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
+        LocalDateTime from = RankingPeriod.ALL.startFrom(LocalDateTime.now(clock));
+        return toRankingPage(memberId, recipes, from);
+    }
 
-        return PageResponse.from(recipes.map(recipe ->
-            RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+    private PageResponse<RecipeRankingResponse> toRankingPage(Long memberId, Page<Recipe> recipes, LocalDateTime from) {
+        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
+        Map<Long, Long> bookmarkCounts = findBookmarkCounts(recipes.getContent(), from);
+
+        return PageResponse.from(recipes.map(recipe -> RecipeRankingResponse.of(
+            recipe,
+            bookmarkedRecipeIds.contains(recipe.getId()),
+            bookmarkCounts.getOrDefault(recipe.getId(), 0L))));
+    }
+
+    private Map<Long, Long> findBookmarkCounts(List<Recipe> recipes, LocalDateTime from) {
+        if (recipes.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> recipeIds = recipes.stream()
+            .map(Recipe::getId)
+            .toList();
+        return recipeBookmarkRepository.countByRecipeIdsSince(recipeIds, from).stream()
+            .collect(Collectors.toMap(RecipeBookmarkCount::getRecipeId, RecipeBookmarkCount::getBookmarkCount));
     }
 
     // 순위 API는 순서가 정해져 있으므로 클라이언트가 보낸 sort는 무시하고 page·size만 쓴다

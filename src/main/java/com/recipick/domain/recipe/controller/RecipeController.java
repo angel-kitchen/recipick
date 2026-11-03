@@ -4,6 +4,7 @@ import com.recipick.domain.recipe.dto.request.AiRecipeRecommendRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
 import com.recipick.domain.recipe.facade.RecipeFacade;
@@ -44,7 +45,7 @@ public class RecipeController {
     }
 
     @GetMapping("/popular")
-    public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> findPopularRecipes(
+    public ResponseEntity<ApiResponse<PageResponse<RecipeRankingResponse>>> findPopularRecipes(
         @LoginMember Long memberId,
         @RequestParam(defaultValue = "WEEKLY") RankingPeriod period,
         Pageable pageable
@@ -70,7 +71,7 @@ public class RecipeController {
     }
 
     @GetMapping("/most-viewed")
-    public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> findMostViewedRecipes(
+    public ResponseEntity<ApiResponse<PageResponse<RecipeRankingResponse>>> findMostViewedRecipes(
         @LoginMember Long memberId,
         Pageable pageable
     ){

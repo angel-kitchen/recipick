@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
@@ -17,6 +18,7 @@ import com.recipick.domain.recipe.entity.RecipeIngredient;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.entity.RecipeStep;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.domain.recipe.repository.RecipeBookmarkCount;
 import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
@@ -79,6 +81,20 @@ class RecipeServiceTest {
             .build();
         ReflectionTestUtils.setField(recipe, "id", id);
         return recipe;
+    }
+
+    private RecipeBookmarkCount bookmarkCount(Long recipeId, long count) {
+        return new RecipeBookmarkCount() {
+            @Override
+            public Long getRecipeId() {
+                return recipeId;
+            }
+
+            @Override
+            public long getBookmarkCount() {
+                return count;
+            }
+        };
     }
 
     private RecipeIngredient recipeIngredient(Recipe recipe, String amountPerServing) {
@@ -207,27 +223,30 @@ class RecipeServiceTest {
     }
 
     @Test
-    @DisplayName("찜 순위: 주간은 7일 전부터 조회하고 내가 찜한 레시피만 bookmarked가 true다")
+    @DisplayName("찜 순위: 주간은 7일 전부터 조회하고 그 기간의 찜 수와 내가 찜한 여부를 함께 내려준다")
     void findPopularRecipes_weekly() {
         // given
         PageRequest pageable = PageRequest.of(0, 20);
+        LocalDateTime weekAgo = LocalDateTime.of(2026, 10, 27, 9, 0);
         List<Recipe> recipes = List.of(recipe(18L, "두부조림"), recipe(12L, "된장찌개"));
-        given(recipeBookmarkRepository.findPopularRecipes(
-            RecipeStatus.ACTIVE, LocalDateTime.of(2026, 10, 27, 9, 0), pageable))
+        given(recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, weekAgo, pageable))
             .willReturn(new PageImpl<>(recipes, pageable, 2));
         given(recipeBookmarkRepository.findBookmarkedRecipeIds(MEMBER_ID, List.of(18L, 12L)))
             .willReturn(Set.of(12L));
+        given(recipeBookmarkRepository.countByRecipeIdsSince(List.of(18L, 12L), weekAgo))
+            .willReturn(List.of(bookmarkCount(18L, 5L), bookmarkCount(12L, 3L)));
 
         // when
-        PageResponse<RecipeSummaryResponse> response =
+        PageResponse<RecipeRankingResponse> response =
             recipeService.findPopularRecipes(MEMBER_ID, RankingPeriod.WEEKLY, pageable);
 
         // then
         assertThat(response.content())
-            .extracting(RecipeSummaryResponse::recipeId, RecipeSummaryResponse::bookmarked)
+            .extracting(RecipeRankingResponse::recipeId, RecipeRankingResponse::bookmarked,
+                RecipeRankingResponse::bookmarkCount)
             .containsExactly(
-                Tuple.tuple(18L, false),
-                Tuple.tuple(12L, true)
+                Tuple.tuple(18L, false, 5L),
+                Tuple.tuple(12L, true, 3L)
             );
     }
 
@@ -242,34 +261,41 @@ class RecipeServiceTest {
             .willReturn(new PageImpl<>(List.of(), expected, 0));
 
         // when
-        PageResponse<RecipeSummaryResponse> response =
+        PageResponse<RecipeRankingResponse> response =
             recipeService.findPopularRecipes(MEMBER_ID, RankingPeriod.DAILY, requested);
 
         // then
         assertThat(response.content()).isEmpty();
         verify(recipeBookmarkRepository, never()).findBookmarkedRecipeIds(any(), any());
+        verify(recipeBookmarkRepository, never()).countByRecipeIdsSince(any(), any());
     }
 
     @Test
-    @DisplayName("조회수 순위: 활성 레시피를 조회수 순으로 조회하고 내가 찜한 레시피만 bookmarked가 true다")
+    @DisplayName("조회수 순위: 조회수 순으로 조회하고 전체 기간 찜 수와 내가 찜한 여부, 조회수를 함께 내려준다")
     void findMostViewedRecipes() {
         // given
         PageRequest pageable = PageRequest.of(0, 20);
         List<Recipe> recipes = List.of(recipe(12L, "된장찌개"), recipe(18L, "두부조림"));
+        ReflectionTestUtils.setField(recipes.get(0), "viewCount", 40);
+        ReflectionTestUtils.setField(recipes.get(1), "viewCount", 25);
         given(recipeRepository.findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, pageable))
             .willReturn(new PageImpl<>(recipes, pageable, 2));
         given(recipeBookmarkRepository.findBookmarkedRecipeIds(MEMBER_ID, List.of(12L, 18L)))
             .willReturn(Set.of(18L));
+        given(recipeBookmarkRepository.countByRecipeIdsSince(
+            List.of(12L, 18L), LocalDateTime.of(2000, 1, 1, 0, 0)))
+            .willReturn(List.of(bookmarkCount(18L, 7L)));
 
         // when
-        PageResponse<RecipeSummaryResponse> response = recipeService.findMostViewedRecipes(MEMBER_ID, pageable);
+        PageResponse<RecipeRankingResponse> response = recipeService.findMostViewedRecipes(MEMBER_ID, pageable);
 
         // then
         assertThat(response.content())
-            .extracting(RecipeSummaryResponse::recipeId, RecipeSummaryResponse::bookmarked)
+            .extracting(RecipeRankingResponse::recipeId, RecipeRankingResponse::bookmarked,
+                RecipeRankingResponse::bookmarkCount, RecipeRankingResponse::viewCount)
             .containsExactly(
-                Tuple.tuple(12L, false),
-                Tuple.tuple(18L, true)
+                Tuple.tuple(12L, false, 0L, 40),
+                Tuple.tuple(18L, true, 7L, 25)
             );
     }
 
