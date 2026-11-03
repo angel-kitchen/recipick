@@ -125,6 +125,6 @@ DELETE 응답은 `DELETE_ACCEPTED`(2xx, 409 `BILLING_KEY_ALREADY_DELETED`, 404 `
 
 ## 7. 팀 계약
 
-- **회원(탈퇴 API)**: 신규 계약 `WithdrawalPaymentMethodPreparer`·`WithdrawalPaymentMethodPreparation`(이 PR에 포함)을 회원 잠금 쓰기 TX 안에서 부르는 `MemberWithdrawalPreparationProcessor`와, 준비 결과를 보고 최종 탈퇴를 부르는 `MemberWithdrawalFacade` 변경은 회원 담당이 반영한다. 기존 `MemberWithdrawalProcessor`는 바꾸지 않는다. `withdrawal-enabled`는 그 연동 검증이 끝난 뒤에만 켠다.
+- **회원(탈퇴 API)**: 신규 계약 `WithdrawalPaymentMethodPreparer`·`WithdrawalPaymentMethodPreparation`(이 PR에 포함)을 회원 잠금 쓰기 TX 안에서 부르는 `MemberWithdrawalPreparationProcessor`와, 준비 결과를 보고 최종 탈퇴를 부르는 `MemberWithdrawalFacade` 변경은 회원 담당이 반영한다. 회원 연결은 `MemberWithdrawalPreparationProcessor`와 `MemberWithdrawalFacade`에 반영하며 기존 `MemberWithdrawalProcessor`는 유지한다. 호출·응답 안내는 [회원 탈퇴 API](member-withdrawal.md)를 따른다. `withdrawal-enabled`는 연동과 운영 PG 검증이 끝난 뒤에만 켠다.
 - **배포**: 신규 테이블 DDL·환경변수 2개·기본 OFF·배포 전후 스키마 확인(10-I).
 - **실제 PG 검증(운영 켜기 전)**: 테스트 상점 시험 키로 GET → DELETE → GET(`DELETED`), 정확한 `BILLING_KEY_NOT_FOUND`의 의미와 상점 범위, 이미 삭제한 키 재요청, DELETE 응답 유실 뒤 GET 복구, 키 삭제 뒤 기존 결제 ID 조회·환불 가능 여부. 살아 있는 시연 회원의 카드로 실험하지 않는다.
