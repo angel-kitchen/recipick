@@ -5,12 +5,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.recipick.domain.member.repository.MemberAddressRepository;
 import com.recipick.domain.payment.facade.BillingKeyDeletionExecutionFacade;
 import com.recipick.domain.payment.repository.BillingKeyDeletionRepository;
 import com.recipick.global.security.JwtTokenProvider;
 import com.recipick.infra.portone.PortOneBillingKeyDeletionClient;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,6 +73,9 @@ class BillingKeyWithdrawalFlowIntegrationTest extends MembershipRenewalFlowSuppo
     @AfterEach
     void cleanupWithdrawalRows() {
         KEY_PG.releaseDeleteReply();
+        if (!workersTerminated) {
+            return;
+        }
         for (Long memberId : memberIds) {
             jdbc.update("DELETE d FROM billing_key_deletion d JOIN billing_key b ON d.billing_key_id = b.id WHERE b.member_id = ?",
                     memberId);
@@ -136,6 +141,47 @@ class BillingKeyWithdrawalFlowIntegrationTest extends MembershipRenewalFlowSuppo
         assertThat(deletionId()).isEqualTo(id);
         assertNotWithdrawn();
         assertThat(KEY_PG.deleteCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("동시 탈퇴 요청은 카드 삭제 접수를 한 건만 만들고 두 요청 모두 정리 대기를 반환한다")
+    void concurrentWithdrawalsShareOneCleanupRequest() throws Exception {
+        // given
+        var pool = Executors.newFixedThreadPool(2);
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        workersTerminated = false;
+        java.util.concurrent.Callable<MockHttpServletResponse> attempt = () -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("동시 탈퇴 요청 대기 시간 초과");
+            }
+            return withdraw(PASSWORD, 0);
+        };
+        try {
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            // when
+            start.countDown();
+            var firstResponse = first.get(20, TimeUnit.SECONDS);
+            var secondResponse = second.get(20, TimeUnit.SECONDS);
+            // then
+            assertThat(firstResponse.getStatus()).isEqualTo(409);
+            assertThat(firstResponse.getContentAsString()).contains("BILLING-030");
+            assertThat(secondResponse.getStatus()).isEqualTo(409);
+            assertThat(secondResponse.getContentAsString()).contains("BILLING-030");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM billing_key_deletion WHERE billing_key_id = ?",
+                    Long.class, cardA.getId())).isEqualTo(1);
+            assertNotWithdrawn();
+            assertThat(KEY_PG.getCount()).isZero();
+            assertThat(KEY_PG.deleteCount()).isZero();
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+            workersTerminated = pool.awaitTermination(5, TimeUnit.SECONDS);
+        }
+        assertThat(workersTerminated).isTrue();
     }
 
     @Test

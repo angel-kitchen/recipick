@@ -12,6 +12,11 @@ recipick:
     enabled: true
 
 spring:
+  datasource:
+    hikari:
+      # 여러 테스트 컨텍스트가 MySQL을 공유하므로 풀마다 유휴 연결 10개를 선점하지 않는다.
+      # 최대 풀 크기는 유지해 기존 동시 요청 테스트의 병렬성을 보존한다.
+      minimum-idle: 0
   jpa:
     hibernate:
       ddl-auto: create-drop
