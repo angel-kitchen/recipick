@@ -1,5 +1,6 @@
 package com.recipick.domain.order.facade;
 
+import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.member.service.RegionService;
@@ -28,6 +29,8 @@ import com.recipick.domain.product.service.ProductStockService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -59,6 +62,7 @@ public class OrderFacade {
     private final PointPolicyService pointPolicyService;
     private final PointCommandService pointCommandService;
     private final PointsOnlyPaymentProcessor pointsOnlyPaymentProcessor;
+    private final Clock clock;
 
     @Transactional
     public OrderCreateResult createOrder(Long memberId, String idempotencyKey, OrderCreateRequest request) {
@@ -92,9 +96,12 @@ public class OrderFacade {
         validateSameMart(quantities, martId);
 
         // 같은 키 재시도는 위에서 기존 주문으로 끝났으므로 새 주문에만 적립률·배송비 기준을 정한다.
-        // 배송비는 주문에 저장되므로 이후 멤버십이 끝나도 이미 만든 주문의 금액은 바뀌지 않는다
-        BigDecimal pointRate = pointPolicyService.resolveRate(memberId);
-        boolean membershipActive = membershipService.isActive(memberId);
+        // 기준시각 하나로 이용권 유형을 한 번만 조회해 두 판정에 같이 써야 유예 종료 같은 경계에서 서로 엇갈리지 않는다.
+        // 적립률과 배송비는 주문에 저장되므로 이후 멤버십이 끝나도 이미 만든 주문의 금액은 바뀌지 않는다
+        LocalDateTime now = LocalDateTime.now(clock);
+        Optional<MembershipType> membershipType = membershipService.getTypeAt(memberId, now);
+        BigDecimal pointRate = pointPolicyService.resolveRate(membershipType);
+        boolean membershipActive = membershipType.isPresent();
         Order order = orderService.createPendingOrder(
             memberId, martId, regionId, normalizedKey, requestHash, pointRate, request);
         // 락 순서 MEMBER → ORDERS → MEMBER_POINT → POINT_EARNING → 재고라 포인트를 재고보다 먼저 예약한다.
