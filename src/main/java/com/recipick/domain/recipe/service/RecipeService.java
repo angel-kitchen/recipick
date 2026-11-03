@@ -71,16 +71,20 @@ public class RecipeService {
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
-    @Transactional
     public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {
         Recipe recipe = getActiveRecipe(recipeId);
-        recipeRepository.increaseViewCount(recipeId);
         int resolvedServings = recipe.resolveServings(servings);
         List<RecipeIngredient> recipeIngredients =
                 recipeIngredientRepository.findAllWithIngredient(recipeId);
         boolean bookmarked = recipeBookmarkRepository.existsById(new RecipeBookmarkId(memberId, recipeId));
 
         return RecipeDetailResponse.of(recipe, resolvedServings, recipeIngredients, bookmarked);
+    }
+
+    // 상세 조회와 다른 트랜잭션으로 둬서 UPDATE의 행 락을 이 한 문장 동안만 잡는다
+    @Transactional
+    public void increaseViewCount(Long recipeId) {
+        recipeRepository.increaseViewCount(recipeId);
     }
 
     public PageResponse<RecipeSummaryResponse> findMostViewRecipes(Long memberId, Pageable pageable){

@@ -16,6 +16,7 @@ import com.recipick.domain.recipe.controller.RecipeBookmarkController;
 import com.recipick.domain.recipe.controller.RecipeController;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
 import com.recipick.domain.recipe.service.RecipeBookmarkService;
+import com.recipick.domain.recipe.facade.RecipeFacade;
 import com.recipick.domain.recipe.service.RecipeService;
 import com.recipick.global.config.ClockConfig;
 import com.recipick.global.config.JacksonConfig;
@@ -81,6 +82,8 @@ class AuthenticationWebTest {
     private MemberStatusChecker memberStatusChecker;
     @MockitoBean
     private RecipeService recipeService;
+    @MockitoBean
+    private RecipeFacade recipeFacade;
     @MockitoBean
     private RecipeBookmarkService bookmarkService;
     @MockitoBean
@@ -236,7 +239,7 @@ class AuthenticationWebTest {
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
-        verify(recipeService).getRecipe(17L, 5L, null);
+        verify(recipeFacade).getRecipe(17L, 5L, null);
     }
 
     @Test

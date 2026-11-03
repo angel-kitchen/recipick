@@ -6,6 +6,7 @@ import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
+import com.recipick.domain.recipe.facade.RecipeFacade;
 import com.recipick.domain.recipe.service.RecipeService;
 import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.response.ApiResponse;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RecipeController {
 
     private final RecipeService recipeService;
+    private final RecipeFacade recipeFacade;
     private final AiRecipeRecommendFacade aiRecipeRecommendFacade;
 
     @GetMapping
@@ -56,7 +58,7 @@ public class RecipeController {
             @PathVariable Long recipeId,
             @RequestParam(required = false) Integer servings
     ) {
-        return ResponseEntity.ok(ApiResponse.success(recipeService.getRecipe(memberId, recipeId, servings)));
+        return ResponseEntity.ok(ApiResponse.success(recipeFacade.getRecipe(memberId, recipeId, servings)));
     }
 
     @PostMapping("/ai-recommendations")

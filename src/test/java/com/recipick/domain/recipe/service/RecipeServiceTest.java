@@ -183,8 +183,8 @@ class RecipeServiceTest {
     }
 
     @Test
-    @DisplayName("상세: 조회할 때마다 조회수를 올린다")
-    void getRecipe_increasesViewCount() {
+    @DisplayName("상세: 조회만으로는 조회수를 올리지 않는다(조회수 증가는 Facade가 별도 트랜잭션으로 한다)")
+    void getRecipe_doesNotIncreaseViewCount() {
         // given
         given(recipeRepository.findByIdAndStatus(12L, RecipeStatus.ACTIVE))
             .willReturn(Optional.of(recipe(12L, "된장찌개")));
@@ -193,21 +193,17 @@ class RecipeServiceTest {
         recipeService.getRecipe(MEMBER_ID, 12L, null);
 
         // then
-        verify(recipeRepository).increaseViewCount(12L);
+        verify(recipeRepository, never()).increaseViewCount(any());
     }
 
     @Test
-    @DisplayName("상세: 없거나 비활성인 레시피는 조회수를 올리지 않는다")
-    void getRecipe_notFound_noViewCount() {
-        // given
-        given(recipeRepository.findByIdAndStatus(99L, RecipeStatus.ACTIVE)).willReturn(Optional.empty());
-
+    @DisplayName("조회수: 레시피 조회수를 1 올린다")
+    void increaseViewCount() {
         // when
-        assertThatThrownBy(() -> recipeService.getRecipe(MEMBER_ID, 99L, null))
-            .isInstanceOf(BusinessException.class);
+        recipeService.increaseViewCount(12L);
 
         // then
-        verify(recipeRepository, never()).increaseViewCount(any());
+        verify(recipeRepository).increaseViewCount(12L);
     }
 
     @Test
