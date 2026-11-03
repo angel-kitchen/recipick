@@ -1,4 +1,4 @@
-package com.recipick.domain.member.dto;
+package com.recipick.domain.member.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

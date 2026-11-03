@@ -1,4 +1,4 @@
-package com.recipick.domain.member.dto;
+package com.recipick.domain.member.dto.response;
 
 import com.recipick.domain.member.entity.Member;
 import java.time.LocalDateTime;

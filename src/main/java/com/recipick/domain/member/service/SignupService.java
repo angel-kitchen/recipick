@@ -1,7 +1,7 @@
 package com.recipick.domain.member.service;
 
-import com.recipick.domain.member.dto.SignupRequest;
-import com.recipick.domain.member.dto.SignupResponse;
+import com.recipick.domain.member.dto.request.SignupRequest;
+import com.recipick.domain.member.dto.response.SignupResponse;
 import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;
