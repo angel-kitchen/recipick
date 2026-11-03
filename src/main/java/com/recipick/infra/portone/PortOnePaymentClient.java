@@ -19,7 +19,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-
 //PortOne V2 결제 단건 조회와 전액 취소. 외부 호출만 담당하고 승인 가능 여부 같은 업무 판단은 domain Service가 한다.
 // DB 트랜잭션 밖에서 호출해야 한다.
 
@@ -53,7 +52,7 @@ public class PortOnePaymentClient {
             log.warn("PortOne 결제 조회 오류 응답: paymentId={}, status={}", portonePaymentId, e.getStatusCode());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR, e);
         } catch (ResourceAccessException e) {
-            if (PortOneResponses.isTimeout(e)) {
+            if (PortOneErrorClassifier.isTimeout(e)) {
                 log.warn("PortOne 결제 조회 timeout: paymentId={}", portonePaymentId);
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT, e);
             }
@@ -99,7 +98,7 @@ public class PortOnePaymentClient {
                         return PortOneCancelResult.from(response.bodyTo(PortOneCancelResponse.class));
                     }
                     return PortOneCancelResult.fromError(response.getStatusCode().value(),
-                        PortOneResponses.errorTypeOf(response));
+                        PortOneErrorClassifier.errorTypeOf(response));
                 });
             // REQUESTED는 PortOne이 정의한 정상 비동기 처리, REJECTED는 우리 요청·인증 설정 문제라 운영자가 바로 봐야 한다
             if (result.outcome() == PortOneCancelOutcome.REQUESTED) {
@@ -114,7 +113,7 @@ public class PortOnePaymentClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            String detail = PortOneResponses.isTimeout(e) ? "timeout" : "연결 실패";
+            String detail = PortOneErrorClassifier.isTimeout(e) ? "timeout" : "연결 실패";
             log.warn("PortOne 결제 취소 {}: paymentId={}", detail, portonePaymentId);
             return PortOneCancelResult.unconfirmed(detail);
         } catch (RestClientException e) {

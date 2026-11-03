@@ -47,7 +47,8 @@ public class PortOneMembershipRefundClient {
                         return PortOneMembershipCancelResult.from(status,
                             response.bodyTo(PortOneMembershipCancelResponse.class));
                     }
-                    return PortOneMembershipCancelResult.fromError(status, PortOneResponses.errorTypeOf(response));
+                    return PortOneMembershipCancelResult.fromError(status,
+                        PortOneErrorClassifier.errorTypeOf(response));
                 });
             if (result.outcome() == PortOneCancelOutcome.REJECTED) {
                 log.error("PortOne 멤버십 취소 요청 거절: paymentId={}, detail={}", portonePaymentId, result.detail());
@@ -57,7 +58,7 @@ public class PortOneMembershipRefundClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            String detail = PortOneResponses.isTimeout(e) ? "timeout" : "연결 실패";
+            String detail = PortOneErrorClassifier.isTimeout(e) ? "timeout" : "연결 실패";
             log.warn("PortOne 멤버십 취소 {}: paymentId={}", detail, portonePaymentId);
             return PortOneMembershipCancelResult.unconfirmed(detail);
         } catch (RestClientException e) {

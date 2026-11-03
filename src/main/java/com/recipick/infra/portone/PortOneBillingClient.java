@@ -63,7 +63,7 @@ public class PortOneBillingClient {
             log.warn("PortOne 빌링키 조회 오류 응답: status={}", e.getStatusCode());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR);
         } catch (ResourceAccessException e) {
-            if (PortOneResponses.isTimeout(e)) {
+            if (PortOneErrorClassifier.isTimeout(e)) {
                 log.warn("PortOne 빌링키 조회 timeout");
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
             }
@@ -98,7 +98,8 @@ public class PortOneBillingClient {
                         return PortOneBillingKeyLookup.found(PortOneBillingKeyInfo.from(body));
                     }
                     if (status == 404) {
-                        if (PortOneBillingKeyLookup.CODE_NOT_FOUND.equals(PortOneResponses.errorTypeOf(response))) {
+                        String errorType = PortOneErrorClassifier.errorTypeOf(response);
+                        if (PortOneBillingKeyLookup.CODE_NOT_FOUND.equals(errorType)) {
                             log.info("PortOne에 빌링키가 없음(정합화 조회)");
                             return PortOneBillingKeyLookup.notFound();
                         }
@@ -113,7 +114,7 @@ public class PortOneBillingClient {
                     return PortOneBillingKeyLookup.unavailable("HTTP_" + status);
                 });
         } catch (ResourceAccessException e) {
-            if (PortOneResponses.isTimeout(e)) {
+            if (PortOneErrorClassifier.isTimeout(e)) {
                 log.warn("PortOne 빌링키 정합화 조회 timeout");
                 return PortOneBillingKeyLookup.unavailable("TIMEOUT");
             }
@@ -151,7 +152,7 @@ public class PortOneBillingClient {
                         return PortOneBillingPaymentResult.from(readSuccessBody(response));
                     }
                     PortOneBillingPaymentResult classified =
-                        PortOneBillingPaymentResult.fromError(status, PortOneResponses.errorTypeOf(response));
+                        PortOneBillingPaymentResult.fromError(status, PortOneErrorClassifier.errorTypeOf(response));
                     logError(paymentId, status, classified);
                     return classified;
                 });
@@ -163,7 +164,7 @@ public class PortOneBillingClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            if (PortOneResponses.isTimeout(e)) {
+            if (PortOneErrorClassifier.isTimeout(e)) {
                 log.warn("PortOne 빌링키 청구 timeout: paymentId={}", paymentId);
                 return PortOneBillingPaymentResult.unknown(PortOneBillingPaymentResult.DETAIL_TIMEOUT);
             }

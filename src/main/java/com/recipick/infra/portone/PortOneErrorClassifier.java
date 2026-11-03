@@ -9,9 +9,9 @@ import java.net.http.HttpTimeoutException;
 import java.util.concurrent.TimeoutException;
 
 // 결제·빌링·멤버십 환불 클라이언트가 같은 기준으로 PortOne 오류와 타임아웃을 분류하도록 한 곳에 둔다
-final class PortOneResponses {
+final class PortOneErrorClassifier {
 
-    private PortOneResponses() {
+    private PortOneErrorClassifier() {
     }
 
     // 오류 본문을 못 읽어도 분류는 계속한다. type이 없으면 상태 코드만으로 판단된다. message는 읽지 않는다
