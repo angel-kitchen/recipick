@@ -7,8 +7,8 @@
 | 항목 | 내용 |
 | --- | --- |
 | 담당 | 보민 |
-| 문서 작성·검증일 | 2026-11-02 |
-| 코드 기준 | `fix/recipe-ai-recommend-no-match`의 `7a7d5c0`(dev 대비 NO_MATCH 보완 4커밋 포함) |
+| 문서 작성·검증일 | 2026-11-02 작성, 2026-11-03 코드 기준 갱신 |
+| 코드 기준 | `dev`의 `8215c63`. 처음 작성한 `7a7d5c0` 이후 레시피·AI 코드 변경은 확정 시 회원 잠금 추가(#334)와 응답의 이미지 필드 추가(#361, #363)이며, 이미지는 AI에게 보내지 않는다 |
 | 관련 문서 | [요구사항](../requirement.md)(레시피·자동 구성·AI 항목), [모델 선택](../ai/model-selection.md), [프롬프트 이력](../ai/prompt-history.md), [AI 평가](../ai/evaluation.md), [모니터링 4절 AI 지표](../monitoring.md) |
 | 확인 환경 | Java 17, Spring Boot 3.5.16, Anthropic Java SDK 2.34.0, 테스트 전용 MySQL·Redis(Testcontainers) |
 | 상태 | 작성 중. 실제 Claude 호출 수치(정답률·토큰·지연)는 API 키 수령 후 측정 예정 |
@@ -87,6 +87,7 @@
 
 ### D3. 확정 중복 방지
 - 확정은 `findByIdAndMemberIdForUpdate`로 요청 행을 잠근 뒤 `validateConfirmable()`로 `PREVIEWED`인지 확인하고 `CONFIRMED`로 바꾼다. 두 번째 요청은 락을 기다린 뒤 상태 검사에서 막혀 장바구니가 두 번 합산되지 않는다.
+- 요청 행보다 먼저 `MemberService.lockActiveMember`로 회원 행을 잠근다(`MEMBER → AUTO_CART_REQUEST → 장바구니`). 확정과 탈퇴가 겹쳐도 탈퇴 뒤에 장바구니 항목이 남지 않게 하려는 것으로, 컨벤션의 "회원 포함 시 `MEMBER`가 맨 앞" 순서를 따른다(#334).
 - 낙관적 락(`@Version`)은 컨벤션에서 금지라 쓰지 않았다.
 - 확정 시점에 가격·재고·수량을 다시 계산하고, 미리보기와 합계가 다르면 가격 변경을 안내한다.
 
@@ -205,13 +206,14 @@
 | 검증 항목 | 방법 | 기대 결과 | 실제 결과 |
 | --- | --- | --- | --- |
 | 수량 계산·상품 선택 | `AutoCartCalculatorTest` | 합산 후 한 번 올림, 정해진 순서로 선택 | 통과 |
+| 확정 중복·탈퇴 경합 | `AutoCartFacadeIntegrationTest` | 같은 요청 5건 동시 확정 시 장바구니 합산 1회, 회원 잠금에서 탈퇴로 거절되면 담지 않고 확정하지 않음 | 통과 |
 | AI 결과 재판정 | `AiAutoCartResolverTest`, `AiRecipeRecommendResolverTest` | 목록 밖 ID·범위 밖 인분 제외 | 통과 |
 | AI 장애 시 대체 | `AiAutoCartFacadeIntegrationTest`, `AiRecipeRecommendFacadeIntegrationTest` | 실패해도 `FALLBACK` + 대체 결과, 실패 이력 저장 | 통과 |
 | NO_MATCH 판정 | 같은 통합 테스트(조건 없음·후보 없음·AI 빈 목록) | 무관한 추천 없이 `NO_MATCH` | 통과 |
 | 응답 잘림·빈 응답 | `ClaudeAiClientTest` | `max_tokens` 잘림·응답 블록 없음은 실패 | 통과 |
 | 요청 한도 | `AiRequestLimiterTest`, 장보기 통합 테스트 | 6번째 요청은 AI 호출 없이 `AI-001` | 통과 |
 | 지표 | `AiRequestMetricsTest`, `AiRequestLogServiceMetricsTest` | 커밋 시 1회 기록, 롤백 시 미기록 | 통과 |
-| 전체 테스트 | `./gradlew test`(`7a7d5c0`) | 실패 0 | 2508개 중 실패 0, 건너뜀 2 |
+| 전체 테스트 | `./gradlew test`(`8215c63`, 2026-11-03) | 실패 0 | 3384개 중 실패 0·오류 0, 건너뜀 2(실제 AI 평가) |
 | 실제 Claude 정답률·지연·토큰 | `ClaudeAiEvaluationTest`(문장 50개). `extractMenus`·`extractConditions`만 평가하고, 조건 추천 ③ 후보 고르기(`recommendRecipes`)는 정답이 하나로 정해지지 않아 범위 밖 | [평가](../ai/evaluation.md) 5절 | 측정 예정(API 키 수령 후) |
 
 ## 7. AI 필수 항목 점검(2026-11-02)
