@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | SonarQube Community | 버그·취약점·코드 스멜·중복 분석, 규칙은 기본 Sonar way(Java 274개) | 로컬 Docker 컨테이너 |
 | `org.sonarqube` Gradle 플러그인 | 분석 결과를 SonarQube 서버로 업로드 | `build.gradle`의 `sonar` 블록 |
-| JaCoCo | 테스트 커버리지 측정. `test`가 끝나면 `jacocoTestReport`가 XML·HTML 리포트를 만든다 | `build.gradle`의 `jacocoTestReport` 블록 |
+| JaCoCo | 테스트 커버리지 측정. `sonar` 실행 전에 `jacocoTestReport`가 XML·HTML 리포트를 만든다. `./gradlew test`만으로는 리포트를 만들지 않는다 | `build.gradle`의 `jacocoTestReport` 블록 |
 
 - 분석 대상은 `src/main/java`이고 `frontend/`는 제외한다.
 - 커버리지는 리팩토링 대상을 고를 때 참고하는 값이다. 목표 수치나 품질 게이트로 쓰지 않는다.
@@ -27,7 +27,7 @@ docker start sonarqube                                             # 이미 만�
 
 ```bash
 export SONAR_TOKEN=<발급한 토큰>   # 토큰은 커밋하지 않고 환경변수로만 넘긴다
-./gradlew test sonar               # 테스트 → JaCoCo 리포트 → Sonar 업로드
+./gradlew sonar                    # 테스트 → JaCoCo 리포트 → Sonar 업로드를 차례로 실행
 ```
 
 전체 테스트는 약 5분, 분석은 약 1분 걸린다.
@@ -42,7 +42,7 @@ export SONAR_TOKEN=<발급한 토큰>   # 토큰은 커밋하지 않고 환경�
 | JaCoCo HTML 리포트 | `build/reports/jacoco/test/html/index.html`을 브라우저로 연다 |
 | JaCoCo XML(Sonar가 읽는 파일) | `build/reports/jacoco/test/jacocoTestReport.xml` |
 
-`build/`는 커밋하지 않는다. 결과는 마지막으로 실행한 `./gradlew test` 기준이다.
+`build/`는 커밋하지 않는다. 분석 없이 커버리지만 보려면 `./gradlew test jacocoTestReport`를 실행한다.
 
 ## 4. 이슈 처리 기준
 

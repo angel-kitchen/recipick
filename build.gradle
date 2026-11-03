@@ -62,20 +62,26 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy jacocoTestReport
 }
 
 // Sonar가 커버리지를 읽으려면 XML 리포트가 필요하다
 jacocoTestReport {
+    dependsOn test
     reports {
         xml.required = true
     }
 }
 
-// 로컬 SonarQube 기준. 토큰은 커밋하지 않고 -Dsonar.token으로 넘긴다
+// 로컬 SonarQube 기준. 주소를 비우면 플러그인 7.x는 SonarCloud로 보낸다
+// 토큰은 커밋하지 않고 SONAR_TOKEN 환경변수나 -Dsonar.token으로 넘긴다
 sonar {
     properties {
         property 'sonar.projectKey', 'recipick'
         property 'sonar.host.url', 'http://localhost:9000'
     }
+}
+
+// 플러그인이 테스트를 자동으로 돌리지 않으므로 커버리지 리포트를 먼저 만들게 한다. CI의 test에서는 리포트를 만들지 않는다
+tasks.named('sonar') {
+    dependsOn 'jacocoTestReport'
 }
