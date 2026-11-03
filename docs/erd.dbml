@@ -142,6 +142,7 @@ Table ORDERS {
     (member_id, idempotency_key) [unique]
     member_id
     (mart_id, mart_status)
+    (mart_id, status, paid_at) [name: 'idx_orders_mart_id_status_paid_at']
   }
 }
 
@@ -370,6 +371,7 @@ Table RECIPE_BOOKMARK {
   created_at datetime
   indexes {
     (member_id, recipe_id) [pk]
+    (created_at, recipe_id) [name: 'idx_recipe_bookmark_created_at_recipe_id']
   }
 }
 

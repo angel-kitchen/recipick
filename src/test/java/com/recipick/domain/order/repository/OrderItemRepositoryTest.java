@@ -93,6 +93,20 @@ class OrderItemRepositoryTest extends IntegrationTestSupport {
         assertThat(top2).containsExactly(12L, 11L);
     }
 
+    @Test
+    @DisplayName("베스트 집계용 인덱스가 마트 ID, 상태, 결제 시각 순서로 생성된다")
+    void bestSellerIndexExists() {
+        // when
+        List<?> rows = em.createNativeQuery(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS "
+                    + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' "
+                    + "AND INDEX_NAME = 'idx_orders_mart_id_status_paid_at' ORDER BY SEQ_IN_INDEX")
+            .getResultList();
+
+        // then
+        assertThat(rows.stream().map(Object::toString).toList()).containsExactly("mart_id", "status", "paid_at");
+    }
+
     private List<Long> findBest(Long martId, LocalDateTime from, int limit) {
         return orderItemRepository.findBestSellingProductIds(
             martId, OrderStatus.PAID, from, PageRequest.of(0, limit));

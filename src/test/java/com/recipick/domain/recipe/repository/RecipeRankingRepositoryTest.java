@@ -122,6 +122,20 @@ class RecipeRankingRepositoryTest extends IntegrationTestSupport {
         assertThat(page.getContent().get(0).getViewCount()).isEqualTo(3);
     }
 
+    @Test
+    @DisplayName("찜 순위용 인덱스가 찜 시각, 레시피 ID 순서로 생성된다")
+    void bookmarkCreatedAtIndexExists() {
+        // when
+        List<?> rows = em.createNativeQuery(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS "
+                    + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'recipe_bookmark' "
+                    + "AND INDEX_NAME = 'idx_recipe_bookmark_created_at_recipe_id' ORDER BY SEQ_IN_INDEX")
+            .getResultList();
+
+        // then
+        assertThat(rows.stream().map(Object::toString).toList()).containsExactly("created_at", "recipe_id");
+    }
+
     private Recipe saveRecipe(String name) {
         return recipeRepository.save(Recipe.builder()
             .name(name)
