@@ -1,7 +1,5 @@
 package com.recipick.domain.payment.dto;
 
-import com.recipick.domain.payment.entity.Payment;
-
 // 결제 취소 TX1의 결과. 트랜잭션 안에서 이미 끝났으면 finishedResult가 있고,
 // PortOne을 불러야 하면 finishedResult가 비고 호출 인자가 찬다. Facade가 이걸 보고 PortOne 호출 → TX2로 이어 간다
 public record PaymentCancelPreparation(

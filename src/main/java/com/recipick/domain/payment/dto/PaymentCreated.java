@@ -2,7 +2,6 @@ package com.recipick.domain.payment.dto;
 
 import com.recipick.domain.payment.entity.Payment;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record PaymentCreated(

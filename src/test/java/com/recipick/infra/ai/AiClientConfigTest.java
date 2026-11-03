@@ -34,7 +34,7 @@ class AiClientConfigTest {
                 // then
                 assertThat(context).hasSingleBean(AiClient.class);
                 assertThat(context.getBean(AiClient.class)).isInstanceOf(ClaudeAiClient.class);
-                assertThat(context.getBean(ClaudeProperties.class).model()).isEqualTo("claude-opus-5-5");
+                assertThat(context.getBean(ClaudeProperties.class).model()).isEqualTo("claude-sonnet-5-5");
             });
     }
 
