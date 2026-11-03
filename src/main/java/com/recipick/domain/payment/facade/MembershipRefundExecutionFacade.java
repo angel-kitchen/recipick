@@ -67,11 +67,12 @@ public class MembershipRefundExecutionFacade {
     @Transactional(propagation = Propagation.NEVER)
     public MembershipRefundExecutionResult execute(Long refundId) {
         Claim claim = executionProcessor.claim(refundId);
-        if (claim.ticket().isEmpty()) {
+        Optional<MembershipRefundTicket> claimedTicket = claim.ticket();
+        if (claimedTicket.isEmpty()) {
             return claim.halted() ? MembershipRefundExecutionResult.REVIEW_REQUIRED
                 : MembershipRefundExecutionResult.SKIPPED;
         }
-        MembershipRefundTicket ticket = claim.ticket().get();
+        MembershipRefundTicket ticket = claimedTicket.get();
         Lookup lookup = lookup(ticket.portonePaymentId());
         if (lookup.payment() == null) {
             return nextCheckOrExpire(ticket, "GET_" + lookup.code());
