@@ -158,6 +158,8 @@ public class PaymentReconciliationFacade {
             // customData의 주문 ID가 이 결제의 주문과 다르다. 자동으로 고칠 수 없는 불일치
             case ORDER_MISMATCH -> Decision.manualReview(
                 "customData 주문 ID 불일치: " + portOnePayment.customDataOrderId());
+            // PG가 원화가 아닌 결제를 말한다. Processor가 아무것도 바꾸지 않았으므로 처리 완료가 아니라 운영 확인이다
+            case CURRENCY_MISMATCH -> Decision.manualReview("PG 결제 통화 불일치: paymentId=" + payment.getId());
         };
     }
 

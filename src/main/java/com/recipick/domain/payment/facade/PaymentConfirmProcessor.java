@@ -62,6 +62,12 @@ public class PaymentConfirmProcessor {
                 requestSystemRefund(payment, portOnePayment.totalAmount(), EXPIRED_DETAIL);
                 closeOrder(orderId, CancelReasonCode.PAYMENT_TIMEOUT, EXPIRED_DETAIL);
             }
+            case CURRENCY_MISMATCH -> {
+                // PG가 원화가 아닌 결제를 말한다. 승인 근거도, 실패 확정도, SYSTEM 환불의 금액 근거도 아니므로
+                // 결제·주문·포인트·재고를 그대로 두고 운영이 실제 PG 거래를 확인한다. 응답 원문은 로그에 남기지 않는다
+                log.error("PG 결제 통화 불일치 — 운영 확인 필요: paymentId={}, orderId={}, status={}",
+                    payment.getId(), payment.getOrderId(), payment.getStatus());
+            }
             case ALREADY_CLOSED -> {
                 // 만료 큐가 먼저 FAILED로 닫았는데 PG 승인이 뒤늦게 확인된 경우. 결제는 FAILED 유지, 주문·포인트·재고는 이미 닫혀 있어
                 // 건드리지 않고 돈만 돌려준다 (주문-결제 정책 5절 "만료 뒤 늦은 승인"). CANCELED는 취소 흐름 몫이라 제외

@@ -21,6 +21,7 @@ public enum PaymentErrorCode implements ErrorCode {
     PORTONE_CONFIG_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-010", "결제 공개 설정을 불러올 수 없습니다."),
     WEBHOOK_NOT_CONFIGURED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT-011", "웹훅 설정이 없어 요청을 처리할 수 없습니다."),
     PAYMENT_UNSETTLED_FOR_WITHDRAWAL(HttpStatus.CONFLICT, "PAYMENT-012", "처리 중인 결제나 환불이 있어 탈퇴할 수 없습니다."),
+    PAYMENT_CURRENCY_MISMATCH(HttpStatus.CONFLICT, "PAYMENT-013", "지원하지 않는 결제 통화입니다. 고객센터로 문의해 주세요."),
     INSUFFICIENT_POINT_BALANCE(HttpStatus.CONFLICT, "POINT-001", "사용 가능한 포인트가 부족합니다."),
     POINT_BALANCE_MISMATCH(HttpStatus.CONFLICT, "POINT-002", "안내된 포인트 잔액과 현재 잔액이 다릅니다. 잔액을 다시 확인해 주세요."),
     POINT_UNSETTLED_FOR_WITHDRAWAL(HttpStatus.CONFLICT, "POINT-003", "적립 예정이거나 사용 중인 포인트가 있어 탈퇴할 수 없습니다. 주문·배송이 끝난 뒤 다시 시도해 주세요."),

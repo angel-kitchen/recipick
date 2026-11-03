@@ -11,7 +11,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 탈퇴 정산의 POINTS 영역. 회원 탈퇴 트랜잭션(회원 잠금 뒤)이 Scope 순서대로 부른다.
-// 포인트는 소멸이라는 변경이 있어 네 Scope 중 마지막(400)에 둔다 — 앞 Scope에서 막히면 포인트를 건드리기 전에 끝난다.
+// 포인트는 소멸이라는 변경이 있어 상품결제(100)·멤버십결제(200) 검사 뒤(400)에 둔다 — 앞 검사에서 막히면 포인트를 건드리기 전에 끝난다
+// 뒤따르는 자동결제 검사(1000)가 막아도 같은 탈퇴 트랜잭션이 롤백되므로 여기서 한 소멸은 확정되지 않는다.
 // 판정·소멸 규칙은 PointCommandService가 갖고, 여기서는 계약(Scope·호출)만 잇는다
 @Component
 @Order(400)
