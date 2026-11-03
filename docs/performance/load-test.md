@@ -149,8 +149,8 @@ docker run --rm -e PERF_PASSWORD -e MODE=mixed -e SMOKE=1 \
 
 ### 지표와 종료 확인
 
-`http_req_duration{phase:journey}`·API별 고정 name 태그, `journey_duration`, `journey_failed`, `contract_failed`, `journey_completed`를 확인한다. setup 요청은 phase 태그로 분리한다. p95 1초·실패율 1%는 기존 검색 기준을 가져온 비교선이며 모든 업무의 확정 SLO가 아니다.
+`http_req_duration{phase:journey}`·API별 고정 name 태그, `journey_duration`, `journey_failed`, `contract_failed`, `journey_completed`를 확인한다. setup 요청은 phase 태그로 분리한다. 로그인은 계정별 순서대로 하고 독립적인 GET은 계정 안에서 batch로 병렬 조회한다. 상품·레시피 상세는 목록 최대 100건을 회원·반복별로 나눠 조회한다(실제 데이터가 적으면 중복될 수 있다). p95 1초·실패율 1%는 기존 검색 기준을 가져온 비교선이며 모든 업무의 확정 SLO가 아니다.
 
-`blocked_writers`·`cleanup_failed`는 0이어야 한다. 주문 생성 응답 유실·서버 오류에는 같은 키와 같은 본문으로 한 번만 확인하고, 해결되지 않은 쓰기 오류가 있으면 해당 VU의 추가 요청을 멈춘다. 성공한 흐름은 본인이 추가한 항목만 삭제한다. 불명확한 주문이 남으면 임의로 새 주문·환불을 만들지 않으며, 중단·강제 종료 후 잔여 주문·장바구니를 담당자가 확인해야 한다.
+`blocked_writers`·`cleanup_failed`·`skipped_writes`는 0이어야 한다. 주문 생성 응답 유실·서버 오류에는 1초 대기 뒤 같은 키와 같은 본문으로 한 번만 확인한다. 최초 요청이 명확한 4xx로 거절되면 장바구니를 정리한다(COMMON-006 처리 중은 제외). 최초 결과가 불명확하면 재시도가 4xx여도 정리하지 않는다. 주문·장바구니 담기 결과가 불명확하거나 정리가 실패하면 해당 VU의 추가 쓰기를 막고, mixed의 조회 흐름은 계속한다. 건너뛴 쓰기도 journey_failed·journey_duration과 skipped_writes에 기록하며 실제 HTTP 요청 수를 인위적으로 늘리지는 않는다. 성공한 흐름은 본인이 추가한 항목만 삭제한다. 불명확한 주문이 남으면 임의로 새 주문·환불을 만들지 않으며, 중단·강제 종료 후 잔여 주문·장바구니를 담당자가 확인해야 한다.
 
 각 회차의 회원·상품·재고·캐시 조건을 동일하게 맞추고, 종료 뒤 주문 CANCELED·결제 FAILED/CANCELED_BEFORE_PAY, 재고 복원·예약 포인트/적립 예정 취소를 확인한다. 스크립트의 HTTP 상태 확인만으로 재고·포인트 전체 정합성이 입증되는 것은 아니다. API 응답 계약이나 신규 필수 입력이 바뀌면 실제 실행 전에 요청부를 대조한다.
