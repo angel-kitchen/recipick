@@ -1,7 +1,7 @@
 package com.recipick.domain.product.controller;
 
 
-import com.recipick.domain.product.dto.MartMapResponse;
+import com.recipick.domain.product.dto.response.MartMapResponse;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;

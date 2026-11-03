@@ -7,16 +7,17 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.audit.AdminAuditField;
 import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.ProductCreateRequest;
-import com.recipick.domain.product.dto.ProductDetailResponse;
-import com.recipick.domain.product.dto.ProductIdResponse;
-import com.recipick.domain.product.dto.ProductPriceResponse;
-import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
-import com.recipick.domain.product.dto.ProductSearchRequest;
-import com.recipick.domain.product.dto.ProductSearchResponse;
-import com.recipick.domain.product.dto.ProductStatusResponse;
-import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
-import com.recipick.domain.product.dto.ProductUpdateRequest;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
+import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.response.ProductIdResponse;
+import com.recipick.domain.product.dto.response.ProductPriceResponse;
+import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductStatusResponse;
+import com.recipick.domain.product.dto.request.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -25,7 +26,7 @@ import com.recipick.domain.product.repository.CategoryRepository;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductMartId;
 import com.recipick.domain.product.repository.ProductRepository;
-import com.recipick.domain.product.dto.AdminProductResponse;
+import com.recipick.domain.product.dto.response.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
 import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
@@ -67,16 +68,16 @@ public class ProductService {
     public PageResponse<AdminProductResponse> getAdminProducts(
         AdminRole role,
         Long adminMartId,
-        AdminProductSearchCondition condition,
+        AdminProductSearchRequest request,
         Pageable pageable
     ) {
-        Long martId = resolveMartId(role, adminMartId, condition.martId());
+        Long martId = resolveMartId(role, adminMartId, request.martId());
         AdminProductSearchCondition scoped = new AdminProductSearchCondition(
             martId,
-            condition.keyword(),
-            condition.categoryId(),
-            condition.ingredientId(),
-            condition.status()
+            request.keyword(),
+            request.categoryId(),
+            request.ingredientId(),
+            request.status()
         );
 
         return PageResponse.from(

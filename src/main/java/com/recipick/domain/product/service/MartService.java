@@ -8,11 +8,11 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.audit.AdminAuditField;
 import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.MartCreateRequest;
-import com.recipick.domain.product.dto.MartIdResponse;
-import com.recipick.domain.product.dto.MartUpdateRequest;
-import com.recipick.domain.product.dto.OpenMartResponse;
-import com.recipick.domain.product.dto.MartResponse;
+import com.recipick.domain.product.dto.request.MartCreateRequest;
+import com.recipick.domain.product.dto.response.MartIdResponse;
+import com.recipick.domain.product.dto.request.MartUpdateRequest;
+import com.recipick.domain.product.dto.OpenMartData;
+import com.recipick.domain.product.dto.response.MartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.exception.ProductErrorCode;
@@ -25,7 +25,7 @@ import com.recipick.global.config.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import com.recipick.domain.product.dto.MartMapResponse;
+import com.recipick.domain.product.dto.response.MartMapResponse;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -137,17 +137,17 @@ public class MartService {
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'all'")
-    public List<OpenMartResponse> findOpenMarts() {
+    public List<OpenMartData> findOpenMarts() {
         return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
-            .map(OpenMartResponse::from)
+            .map(OpenMartData::from)
             .toList();
     }
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'region:' + #regionId")
-    public List<OpenMartResponse> findOpenMarts(Long regionId) {
+    public List<OpenMartData> findOpenMarts(Long regionId) {
         return martRepository.findAllByRegionIdAndStatusOrderByIdAsc(regionId, MartStatus.OPEN).stream()
-            .map(OpenMartResponse::from)
+            .map(OpenMartData::from)
             .toList();
     }
     @Transactional(readOnly = true)

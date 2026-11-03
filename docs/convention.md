@@ -119,9 +119,9 @@ com.{project}
 │  │  ├─ service
 │  │  ├─ repository
 │  │  ├─ entity
-│  │  ├─ dto
-│  │  │  ├─ request
-│  │  │  └─ response
+│  │  ├─ dto                       // request·response에 속하지 않는 전달 전용 DTO는 dto에 바로 둔다
+│  │  │  ├─ request                 // API 요청 본문·검색 조건
+│  │  │  └─ response                // API 응답
 │  │  ├─ event                     // 다른 도메인에 알리는 이벤트(필요할 때만)
 │  │  ├─ scheduler                 // 만료·자동 처리 등 정기 작업(필요할 때만)
 │  │  └─ exception                 // MemberErrorCode 등
@@ -148,6 +148,9 @@ com.{project}
 ```
 
 - `domain` 아래 다섯 패키지는 모두 `member`와 같은 하위 구조를 씁니다. `event`, `scheduler`는 필요한 도메인만 만듭니다.
+- Controller가 받거나 내보내는 DTO만 `dto/request`, `dto/response`에 둡니다. 쿼리 파라미터 검색 조건도 `dto/request`에 둡니다. Controller에는 로직을 두지 않으므로 Request DTO는 Service까지 그대로 넘겨도 되고, Repository 조회 조건(`repository/dto`)으로는 Service에서 바꿉니다.
+- Service·Facade 사이나 다른 도메인에 넘기는 전달 전용 DTO는 API 계약이 아니므로 `dto`에 바로 둡니다. 이름에 `Request`·`Response` 접미어만 쓰지 않으면 되고, 정해진 접미어는 없습니다. 담는 내용(`MemberProfile`, `MembershipBillingTarget`)이나 용도(`MemberAddressData`, `MemberLoginResult`)가 드러나게 짓습니다.
+- API 응답 DTO를 다른 도메인이 함께 쓰면(예: `MartResponse`) API 응답 쪽을 우선해 `dto/response`에 둡니다.
 - 클래스는 이름만 보고 찾을 수 있게 `{대상}{역할}`로 짓습니다(예: `domain/member/service/MembershipService`, `domain/payment/scheduler/MembershipBillingScheduler`).
 - 특정 도메인에서만 쓰는 코드는 그 도메인 안에 두고, 두 개 이상 도메인이 함께 쓸 때만 `global/common`으로 올립니다.
 - `infra`에는 외부 호출만 두고, 환불 가능 여부 같은 업무 판단은 `domain`의 Service가 합니다.

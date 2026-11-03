@@ -1,16 +1,16 @@
 package com.recipick.domain.product.controller;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.AdminProductResponse;
-import com.recipick.domain.product.dto.ProductCreateRequest;
-import com.recipick.domain.product.dto.ProductIdResponse;
-import com.recipick.domain.product.dto.ProductPriceResponse;
-import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
-import com.recipick.domain.product.dto.ProductStatusResponse;
-import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
-import com.recipick.domain.product.dto.ProductUpdateRequest;
+import com.recipick.domain.product.dto.response.AdminProductResponse;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
+import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.response.ProductIdResponse;
+import com.recipick.domain.product.dto.response.ProductPriceResponse;
+import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.response.ProductStatusResponse;
+import com.recipick.domain.product.dto.request.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductUpdateRequest;
 import com.recipick.domain.product.facade.ProductAdminFacade;
-import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
 import com.recipick.domain.product.service.ProductService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
@@ -43,11 +43,11 @@ public class ProductAdminController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<AdminProductResponse>>> getProducts(
         @AuthenticationPrincipal AuthPrincipal principal,
-        @ModelAttribute AdminProductSearchCondition condition,
+        @ModelAttribute AdminProductSearchRequest request,
         Pageable pageable
         ){
         PageResponse<AdminProductResponse> response = productService.getAdminProducts(
-            AdminRole.valueOf(principal.role()), principal.martId(), condition, pageable);
+            AdminRole.valueOf(principal.role()), principal.martId(), request, pageable);
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.", response));
     }
 

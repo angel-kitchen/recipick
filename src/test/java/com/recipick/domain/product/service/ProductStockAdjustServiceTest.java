@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.StockAdjustmentRequest;
-import com.recipick.domain.product.dto.StockAdjustmentResponse;
+import com.recipick.domain.product.dto.request.StockAdjustmentRequest;
+import com.recipick.domain.product.dto.response.StockAdjustmentResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.entity.StockAdjustment;

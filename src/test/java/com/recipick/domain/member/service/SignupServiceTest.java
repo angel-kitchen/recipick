@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.recipick.domain.member.dto.SignupRequest;
+import com.recipick.domain.member.dto.request.SignupRequest;
 import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;

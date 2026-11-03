@@ -1,7 +1,7 @@
 package com.recipick.domain.product.service;
 
-import com.recipick.domain.product.dto.MartMapResponse;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.response.MartMapResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.repository.MartRepository;
@@ -48,10 +48,10 @@ public class MartServiceOpenMartsTest {
         given(martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN))
             .willReturn(List.of(mart(1L,31L,"삼청동 마트"), mart(2L,32L, "혜화동 마트")));
 
-        List<OpenMartResponse> result = martService.findOpenMarts();
+        List<OpenMartData> result = martService.findOpenMarts();
 
-        assertThat(result).extracting(OpenMartResponse::martId).containsExactly(1L,2L);
-        assertThat(result).extracting(OpenMartResponse::name).containsExactly("삼청동 마트", "혜화동 마트");
+        assertThat(result).extracting(OpenMartData::martId).containsExactly(1L,2L);
+        assertThat(result).extracting(OpenMartData::name).containsExactly("삼청동 마트", "혜화동 마트");
     }
 
     @Test
@@ -60,7 +60,7 @@ public class MartServiceOpenMartsTest {
         given(martRepository.findAllByRegionIdAndStatusOrderByIdAsc(31L, MartStatus.OPEN))
             .willReturn(List.of(mart(1L, 31L, "삼청동 마트")));
 
-        List<OpenMartResponse> result = martService.findOpenMarts(31L);
+        List<OpenMartData> result = martService.findOpenMarts(31L);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).regionId()).isEqualTo(31L);
