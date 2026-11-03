@@ -577,6 +577,13 @@ DROP INDEX idx_membership_payment_attempt_status_dispatch_id ON membership_payme
 UNKNOWN 시도 조회(`status, updated_at`)는 행이 적어 인덱스를 만들지 않고 `EXPLAIN` 결과만 기록한다. 플래그와 무관하게 웹훅 멤버십 분기·복구·
 마감 누락 정리·빌링키 폐기 반영은 돈다(이미 생긴 결제의 정합화는 멈추지 않는다). 새 청구만 플래그가 막는다.
 
+**운영 실행 기록 (2026-11-02, 배포 담당).** 시각은 KST다.
+
+- 머지 전 적용을 하지 못했다. #380은 21:42에 머지·배포됐고, 23:5x 10-H 사전 확인 때 `membership_payment_attempt` 인덱스를 조회했다.
+- 결과: `idx_membership_payment_attempt_status_lease_id`(status, lease_expires_at, id)·`idx_membership_payment_attempt_status_dispatch_id`
+  (status, dispatched_at, id)가 이름·열 순서대로 하나씩 있고 같은 열 조합의 중복 인덱스가 없다. 수동 적용인지 기동 때 `ddl-auto: update`가
+  만든 것인지는 이 조회로 구분할 수 없어 적지 않는다. EXPLAIN은 뜨지 않았다.
+
 
 ### 10-H. 결제 5단계(#381) — membership_refund 컬럼 16개·인덱스 3개 (추가만, 지우는 문장 없음)
 
@@ -659,6 +666,19 @@ UPDATE membership_refund
    AND pg_idempotency_key IS NULL AND portone_cancellation_id IS NULL;
 ```
 
+**운영 실행 기록 (2026-11-02~03, 배포 담당).** 시각은 KST다(서버 출력은 UTC 2026-11-02 14:54).
+
+- 사전: 운영 MySQL `8.4.13`. `membership_refund` 0행(H-6 대상 없음), 컬럼 17개. `backup.sh pre-deploy ddl-381`로 덤프
+  (`pre-deploy-20261102-145424-ddl-381.sql.gz`, 16K). H-1의 `SHOW CREATE TABLE`은 컬럼 수·인덱스 목록 조회로 대신했다.
+- H-2: `ALGORITHM`·`LOCK` 절 없이 한 문장으로 실행해 `Query OK`(0.07s), Warnings 0, `exit=0`.
+- H-3: 세 문장을 한 번의 `mysql -vvv -e` 실행으로 각각 `Query OK`(0.02s씩), Warnings 0, `exit=0`. 23:5x, #388 머지(11/3 01:48) 전이다.
+- H-4: 컬럼 17 → 33, `claim_token` NOT NULL DEFAULT 0. `uk_membership_refund_pg_idempotency_key`·`uk_membership_refund_retry_of`
+  UNIQUE, `idx_membership_refund_status_next_check_id`(status, next_check_at, id) 일반. 같은 열 조합의 중복 인덱스 없음. `EXPLAIN`
+  `possible_keys`에 `PRIMARY`와 새 인덱스, 선택은 `key=PRIMARY`(`type=range`, 0행).
+- H-6: 기존 행이 0건이라 실행하지 않았다.
+- 확인: 11/3 #399(엔티티 변경 없음)까지 포함한 `96e6cb3` 이미지 `healthy` 상태에서 컬럼 33개·인덱스 8개가 적용 직후와 같다. #388 기동 로그는
+  #396·#399 재배포로 컨테이너가 바뀌어 확인하지 못했다.
+
 ### 10-I. 결제 6단계(#391) — billing_key_deletion 신규 테이블 1개 + 환경변수 2개 (추가만, 기존 테이블 변경 없음)
 
 6단계(교체·폐기 빌링키의 PortOne 원격 정리, 회원 탈퇴의 AUTO_BILLING 정산 영역)는 새 테이블 `billing_key_deletion` 하나를 만들고 기존
@@ -726,3 +746,16 @@ DROP TABLE billing_key_deletion;
 이미 삭제한 키 재요청, DELETE 응답 유실 뒤 GET 복구, **키 삭제 뒤 기존 결제 ID 조회·환불 가능 여부**를 확인 ③ 확인되면 `BILLING_KEY_DELETION_ENABLED`만
 true(교체·폐기 키 정리) ④ 회원 탈퇴 연동(찜·장바구니·포인트·전체 탈퇴) 통합 검증이 끝난 뒤 `BILLING_KEY_DELETION_WITHDRAWAL_ENABLED` true.
 `MEMBERSHIP_BILLING_ENABLED`는 별도 승인 없이 계속 false.
+
+**운영 실행 기록 (2026-11-03, 배포 담당).** 시각은 KST다.
+
+- I-2는 실행하지 않았다. 결제 담당과 합의해 #396 배포(02:52 머지) 때 `ddl-auto: update`가 엔티티대로 테이블을 만들게 했다. 엔티티에 UNIQUE·인덱스·FK
+  이름이 이 절과 같게 적혀 있어 자동 이름이 생기지 않는다.
+- I-3(#399 `96e6cb3` 이미지 `healthy` 상태): 컬럼 17개의 타입·길이·NOT NULL이 I-2와 같다. 컬럼 순서는 Hibernate 생성 순서(알파벳순)라 I-2와
+  다르다. `uk_billing_key_deletion_key`(billing_key_id)·`idx_billing_key_deletion_due`(status, next_check_at, id)·
+  `fk_billing_key_deletion_key`(→ `billing_key.id`)가 하나씩 있고, 0행. `EXPLAIN`은 `type=range`, `key=idx_billing_key_deletion_due`
+  (`Using index condition; Using where; Using filesort`).
+- 차이 정리: Hibernate는 `claim_token`·`claim_count`에 DEFAULT를 붙이지 않아
+  `ALTER TABLE billing_key_deletion ALTER COLUMN claim_token SET DEFAULT 0;`·`... claim_count SET DEFAULT 0;`을 실행했다(각 0.01s, `exit=0`).
+  두 컬럼 `IS_NULLABLE = NO`, `COLUMN_DEFAULT = 0` 확인.
+- #396 기동 로그는 #399 재배포로 컨테이너가 바뀌어 확인하지 못했고, 테이블 구조 조회로 대신했다.
