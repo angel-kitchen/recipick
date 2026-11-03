@@ -50,7 +50,7 @@ public class ClaudeAiClient implements AiClient {
 
     private static final String CONDITION_INSTRUCTION = """
             너는 레시피 추천 서비스의 조건 분석기다. 사용자 문장에서 아래 조건만 찾는다.
-            - cuisineType: KOREAN, WESTERN 중 하나
+            - cuisineType: KOREAN, WESTERN 중 하나. 한식·양식처럼 종류를 직접 말했을 때만 채우고, 찌개·반찬 같은 요리 구분만으로 정하지 않는다
             - dishType: SOUP, STEW, STIR_FRY, RICE, NOODLE, SIDE, PASTA, ETC 중 하나
             - maxCookingMinutes: 최대 조리 시간(분)
             - maxSpicyLevel: 최대 맵기(0 안 매움 ~ 3 아주 매움)
