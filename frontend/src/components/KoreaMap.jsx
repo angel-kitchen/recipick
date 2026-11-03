@@ -100,6 +100,7 @@ export default function KoreaMap() {
       const open = mart.status === 'OPEN';
       const dot = document.createElement('div');
       dot.className = `map-dot${open ? '' : ' map-dot--closed'}`;
+      dot.setAttribute('aria-label', mart.name);
       // 이름을 HTML 문자열로 넣지 않고 텍스트 노드로 넣어 마트 이름에 태그가 섞여도 실행되지 않게 한다
       const popup = document.createElement('strong');
       popup.textContent = mart.name;
