@@ -359,6 +359,7 @@ Table RECIPE {
 
   status varchar(20)
   auto_cart_enabled boolean
+  view_count int [not null, default: 0, note: '상세 조회 누적 횟수(전체 기간)']
   created_at datetime
   updated_at datetime
 }
