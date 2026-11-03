@@ -17,6 +17,8 @@ public interface MartRepository extends JpaRepository<Mart, Long> {
     @Query("select m from Mart m where m.id = :martId")
     Optional<Mart> findByIdForUpdate(@Param("martId") Long martId);
 
+    List<Mart> findAllByOrderByIdAsc();
+
     boolean existsByRegionId(Long regionId);
 
     List<Mart> findAllByStatusOrderByIdAsc(MartStatus status);
