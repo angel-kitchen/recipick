@@ -6,10 +6,12 @@ import com.recipick.domain.member.dto.response.MembershipCancelReservationRespon
 import com.recipick.domain.member.dto.response.MembershipMeResponse;
 import com.recipick.domain.member.dto.response.MembershipSubscribeResponse;
 import com.recipick.domain.member.dto.response.MembershipTrialStartResponse;
+import com.recipick.domain.member.facade.MembershipCancelFacade;
 import com.recipick.domain.member.facade.MembershipSubscribeFacade;
 import com.recipick.domain.member.facade.MembershipTrialFacade;
 import com.recipick.domain.member.service.MembershipCancelReservationService;
 import com.recipick.domain.member.service.MembershipService;
+import com.recipick.domain.payment.dto.response.MembershipRefundResult;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
 import jakarta.validation.Valid;
@@ -31,9 +33,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class MembershipController {
 
     private final MembershipService membershipService;
+    private final MembershipCancelFacade cancelFacade;
     private final MembershipTrialFacade trialFacade;
     private final MembershipSubscribeFacade subscribeFacade;
     private final MembershipCancelReservationService cancelReservationService;
+
+    @PostMapping("/{membershipId}/terminate")
+    public ResponseEntity<ApiResponse<MembershipRefundResult>> terminate(
+            @LoginMember Long memberId, @Positive @PathVariable Long membershipId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return ResponseEntity.ok(ApiResponse.success("해지 요청이 처리되었습니다.",
+                cancelFacade.terminate(memberId, membershipId, idempotencyKey)));
+    }
 
     @PostMapping("/subscribe")
     public ResponseEntity<ApiResponse<MembershipSubscribeResponse>> subscribe(

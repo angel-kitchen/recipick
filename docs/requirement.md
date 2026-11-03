@@ -565,7 +565,9 @@
     - 기존 시도가 READY이면 결제 도메인의 선점 절차로 같은 시도를 이어서 실행하며, 발송 여부나 결과가 불명확한 DISPATCHING·UNKNOWN·MANUAL_REVIEW는 기존 PG 결제 식별자로 결과를 재조회. 재조회 전 새 결제 호출·새 시도·새 식별자 생성으로 복구하지 않으며, PG 재호출 허용 여부는 결제 도메인의 확정 상태 전이·멱등 정책과 검증에 따름
 - **즉시 해지** (담당: 채빈, 환불 처리: 정윤)
     - 유료 멤버십 회원은 이용기간 중 즉시 해지 및 환불을 요청할 수 있습니다.
-    - 즉시 해지 요청 API는 멤버십 도메인이 소유합니다.
+    - `POST /api/memberships/{membershipId}/terminate`는 회원 도메인이 소유하며 요청 본문 없이 `Idempotency-Key`를 필수로 받습니다.
+    - 회원 Facade는 바깥 트랜잭션 없이 결제 `MembershipRefundFacade.requestMemberRefund(memberId, membershipId, idempotencyKey)`를 호출하고 `MembershipRefundResult`를 HTTP 200의 data로 반환합니다. 환불 완료와 이용권 종료는 결제 결과 반영 트랜잭션에서 함께 처리하며 회원 쪽에서 별도로 종료하지 않습니다.
+    - 응답은 `refundStatus`(COMPLETED·REQUESTED·FAILED), `membershipTerminated`, `reviewRequired`를 함께 확인합니다. 같은 키 재요청은 새 계산·PG 호출 없이 기존 환불의 현재 결과를 반환합니다.
     - 요청 시 `Idempotency-Key`를 필수로 받고 결제 도메인의 이용료 환불 서비스를 호출합니다.
     - 환불 처리 중에는 멤버십을 `ACTIVE`로 유지합니다.
     - 환불이 `COMPLETED`된 경우에만 멤버십을 즉시 종료합니다.
