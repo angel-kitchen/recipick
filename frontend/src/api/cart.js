@@ -8,5 +8,8 @@ export async function hasPreviousMartItems() {
 export async function clearPreviousMartItems() {
   const cart = await api.get('/api/cart-items');
   const ids = cart.items.filter((item) => item.status === 'PREVIOUS_MART').map((item) => item.cartItemId);
-  if (ids.length > 0) await api.post('/api/cart-items/bulk-delete', { cartItemIds: ids });
+  // 한 번에 지울 수 있는 개수가 100개라 나눠서 보낸다
+  for (let i = 0; i < ids.length; i += 100) {
+    await api.post('/api/cart-items/bulk-delete', { cartItemIds: ids.slice(i, i + 100) });
+  }
 }
