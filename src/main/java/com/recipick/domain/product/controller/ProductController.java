@@ -4,6 +4,7 @@ import com.recipick.domain.product.dto.ProductDetailResponse;
 import com.recipick.domain.product.dto.ProductSearchRequest;
 import com.recipick.domain.product.dto.ProductSearchResponse;
 import com.recipick.domain.product.facade.ProductFacade;
+import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.LoginMember;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -41,5 +43,15 @@ public class ProductController {
     ){
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
             productFacade.getProduct(memberId, productId)));
+    }
+
+    @GetMapping("/best")
+    public ResponseEntity<ApiResponse<PageResponse<ProductSearchResponse>>> findBestProducts(
+        @LoginMember Long memberId,
+        @RequestParam(defaultValue = "WEEKLY") RankingPeriod period,
+        Pageable pageable
+        ){
+        return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
+            productFacade.findBestProducts(memberId, period, pageable)));
     }
 }

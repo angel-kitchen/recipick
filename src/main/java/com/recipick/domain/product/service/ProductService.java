@@ -34,11 +34,14 @@ import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -320,6 +323,22 @@ public class ProductService {
         return Arrays.asList(product.getCategory().getId(), product.getIngredientId(), product.getName(),
                 product.getBrand(), product.getDescription(), product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
                 product.getSaleUnit(), product.getImageUrl());
+    }
+
+    public PageResponse<ProductSearchResponse> findBestProducts(Long martId, Page<Long> rankedIds){
+        List<Long> ids = rankedIds.getContent();
+        if (ids.isEmpty()){
+            return PageResponse.from(Page.<ProductSearchResponse>empty(rankedIds.getPageable()));
+        }
+        Map<Long, Product> productById = productRepository
+            .findAllByIdInAndMartIdAndDeletedFalse(ids, martId).stream()
+            .collect(Collectors.toMap(Product::getId, Function.identity()));
+        List<ProductSearchResponse> content = ids.stream()
+            .map(productById :: get)
+            .filter(Objects::nonNull)
+            .map(ProductSearchResponse::from)
+            .toList();
+        return PageResponse.from(new PageImpl<>(content, rankedIds.getPageable(), rankedIds.getTotalElements()));
     }
 
 }

@@ -45,6 +45,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -1020,5 +1021,36 @@ public class ProductServiceTest {
         assertThat(otherMart).isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("베스트: 순위 순서를 유지하고 조회되지 않은(삭제·다른 마트) 상품은 건너뛴다")
+    void findBestProducts_keepsRankOrder() {
+        // given
+        // 마지막 페이지가 아니어야 PageImpl이 전체 개수를 보정하지 않는다
+        Page<Long> rankedIds = new PageImpl<>(List.of(3L, 2L, 1L), PageRequest.of(0, 3), 10);
+        given(productRepository.findAllByIdInAndMartIdAndDeletedFalse(List.of(3L, 2L, 1L), 1L))
+            .willReturn(List.of(product(1L, 1L), product(3L, 1L)));
+
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, rankedIds);
+
+        // then
+        assertThat(result.content()).extracting(ProductSearchResponse::productId).containsExactly(3L, 1L);
+        assertThat(result.totalElements()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("베스트: 순위가 비어 있으면 상품을 조회하지 않고 빈 페이지를 돌려준다")
+    void findBestProducts_empty() {
+        // given
+        Page<Long> rankedIds = new PageImpl<>(List.of(), pageable, 0);
+
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, rankedIds);
+
+        // then
+        assertThat(result.content()).isEmpty();
+        verifyNoInteractions(productRepository);
     }
 }
