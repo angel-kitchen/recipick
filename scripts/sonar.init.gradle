@@ -1,0 +1,37 @@
+// 로컬 SonarQube 분석을 필요할 때만 붙이는 init 스크립트. build.gradle과 CI 빌드에는 영향을 주지 않는다.
+// 사용: SONAR_TOKEN=<토큰> ./gradlew --init-script scripts/sonar.init.gradle sonar
+initscript {
+    repositories {
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:7.5.0.8588'
+    }
+}
+
+rootProject {
+    apply plugin: 'jacoco'
+    apply plugin: org.sonarqube.gradle.SonarQubePlugin
+
+    // 주소를 비우면 플러그인 7.x는 SonarCloud로 보낸다
+    sonar {
+        properties {
+            property 'sonar.projectKey', 'recipick'
+            property 'sonar.host.url', 'http://localhost:9000'
+        }
+    }
+
+    // jacocoTestReport는 java 플러그인이 적용된 뒤에 생기므로 평가가 끝난 뒤 연결한다
+    afterEvaluate {
+        tasks.named('jacocoTestReport') {
+            dependsOn 'test'
+            reports {
+                xml.required = true
+            }
+        }
+        // 플러그인이 테스트를 자동으로 돌리지 않으므로 커버리지 리포트를 먼저 만든다
+        tasks.named('sonar') {
+            dependsOn 'jacocoTestReport'
+        }
+    }
+}

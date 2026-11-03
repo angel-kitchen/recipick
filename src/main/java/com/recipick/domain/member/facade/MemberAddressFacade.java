@@ -9,7 +9,7 @@ import com.recipick.domain.member.entity.MemberAddress;
 import com.recipick.domain.member.exception.AddressErrorCode;
 import com.recipick.domain.member.service.MemberAddressService;
 import com.recipick.domain.member.service.MemberService;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
@@ -58,11 +58,11 @@ public class MemberAddressFacade {
             throw new BusinessException(AddressErrorCode.ADDRESS_LIMIT_EXCEEDED);
         }
         Long previousMartId = member.getMartId();
-        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(request.legalDongCode());
+        Optional<OpenMartData> availableMart = serviceAreaFacade.findAvailableMart(request.legalDongCode());
         MemberAddress address = memberAddressService.createAddress(member, request);
         boolean selected = count == 0 || Boolean.TRUE.equals(request.select());
         if (selected) {
-            member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
+            member.selectAddress(address, availableMart.map(OpenMartData::martId).orElse(null));
         }
         if (Boolean.TRUE.equals(request.locationAgreed())) {
             member.agreeToLocation(LocalDateTime.now(clock));
@@ -87,11 +87,11 @@ public class MemberAddressFacade {
         if (request.address() != null) {
             address.changeAddress(request.address(), request.detailAddress(), request.legalDongCode());
         }
-        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
+        Optional<OpenMartData> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
         boolean selected = member.getSelectedAddress() != null
                 && address.getId().equals(member.getSelectedAddress().getId());
         if (selected) {
-            member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
+            member.selectAddress(address, availableMart.map(OpenMartData::martId).orElse(null));
         }
         MemberAddressResponse.Mart currentMart = member.getMartId() == null ? null
                 : martService.findMart(member.getMartId())
@@ -107,8 +107,8 @@ public class MemberAddressFacade {
         MemberAddress address = memberAddressService.getOwnedAddress(memberId, addressId);
         Long previousMartId = member.getMartId();
         // 같은 배송지 재선택도 마트 운영 재개·중지 결과를 반영해야 한다.
-        Optional<OpenMartResponse> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
-        member.selectAddress(address, availableMart.map(OpenMartResponse::martId).orElse(null));
+        Optional<OpenMartData> availableMart = serviceAreaFacade.findAvailableMart(address.getLegalDongCode());
+        member.selectAddress(address, availableMart.map(OpenMartData::martId).orElse(null));
         MemberAddressResponse.Mart currentMart = availableMart
                 .map(mart -> new MemberAddressResponse.Mart(mart.martId(), mart.name())).orElse(null);
         return new MemberAddressResponse(address.getId(), address.getLabel(), address.getAddress(),

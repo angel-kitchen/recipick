@@ -1,4 +1,4 @@
-package com.recipick.domain.product.dto;
+package com.recipick.domain.product.dto.response;
 
 import com.recipick.domain.product.entity.Product;
 

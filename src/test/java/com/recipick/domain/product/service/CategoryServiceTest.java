@@ -1,9 +1,9 @@
 package com.recipick.domain.product.service;
 
-import com.recipick.domain.product.dto.CategoryCreateRequest;
-import com.recipick.domain.product.dto.CategoryIdResponse;
-import com.recipick.domain.product.dto.CategoryResponse;
-import com.recipick.domain.product.dto.CategoryUpdateRequest;
+import com.recipick.domain.product.dto.request.CategoryCreateRequest;
+import com.recipick.domain.product.dto.response.CategoryIdResponse;
+import com.recipick.domain.product.dto.response.CategoryResponse;
+import com.recipick.domain.product.dto.request.CategoryUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.repository.CategoryRepository;
@@ -52,10 +52,15 @@ public class CategoryServiceTest {
     @Test
     @DisplayName("목록: 삭제되지 않은 카테고리를 응답으로 바꿔 돌려준다.")
     void getCategories(){
+        // given
         given(categoryRepository.findAllByDeletedFalse())
             .willReturn(List.of(category(1L,"채소"), category(2L,"육류")));
 
+        // when
         List<CategoryResponse> result = categoryService.getCategories();
+
+        // then
+        assertThat(result).isEqualTo(List.of(new CategoryResponse(1L, "채소"), new CategoryResponse(2L, "육류")));
     }
 
     @Test

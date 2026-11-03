@@ -44,6 +44,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -160,7 +161,7 @@ public class MembershipChargeResultProcessor {
             return false;
         }
         if (observedDispatchedAt == null || attempt.getDispatchedAt() == null) {
-            return observedDispatchedAt != attempt.getDispatchedAt();
+            return !Objects.equals(observedDispatchedAt, attempt.getDispatchedAt());
         }
         return !observedDispatchedAt.truncatedTo(ChronoUnit.MICROS)
             .equals(attempt.getDispatchedAt().truncatedTo(ChronoUnit.MICROS));

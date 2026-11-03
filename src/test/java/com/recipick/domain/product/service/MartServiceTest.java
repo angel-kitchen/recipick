@@ -1,10 +1,10 @@
 package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.MartCreateRequest;
-import com.recipick.domain.product.dto.MartIdResponse;
-import com.recipick.domain.product.dto.MartResponse;
-import com.recipick.domain.product.dto.MartUpdateRequest;
+import com.recipick.domain.product.dto.request.MartCreateRequest;
+import com.recipick.domain.product.dto.response.MartIdResponse;
+import com.recipick.domain.product.dto.response.MartResponse;
+import com.recipick.domain.product.dto.request.MartUpdateRequest;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.entity.Product;

@@ -1,9 +1,9 @@
 package com.recipick.domain.product.service;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.ProductCreateRequest;
-import com.recipick.domain.product.dto.ProductIdResponse;
-import com.recipick.domain.product.dto.ProductUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.response.ProductIdResponse;
+import com.recipick.domain.product.dto.request.ProductUpdateRequest;
 import com.recipick.domain.product.facade.ProductAdminFacade;
 import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
