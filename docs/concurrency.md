@@ -408,7 +408,7 @@ AutoCartFacade.confirm (@Transactional)
 
 | 영역 | 담당 | 추가할 내용·현재 문서 상태 |
 | --- | --- | --- |
-| 상품·재고 | 태헌 | 작성 대기: 재고 차감·관리자 조정·복구의 잠금 대상·순서·동시 요청 결과 |
+| 상품·재고 | 태헌 | 작성: [상품 ADR](adr/product-domain.md) 3-4절(재고 차감·복구·관리자 조정의 잠금 대상·순서)·5절(`ProductStockConcurrencyTest` 등 검증 결과) |
 | 레시피 자동 구성 | 보민 | 5절 작성·리뷰 대기: 확정 중복·탈퇴 거절 롤백·찜·AI 한도. 실제 회원 잠금 대기와 확정·직접 담기 교차 경합은 미검증 |
 | 주문 | 준희 | 작성: [장바구니·주문 ADR](adr/cart-order.md) 3절(결정별 근거)·5절(검증 결과). 담기는 회원 행 잠금 + 조건부 UPDATE + `UNIQUE cart_item(member_id, product_id)`, 주문 생성은 회원 행 잠금 + `UNIQUE orders(member_id, idempotency_key)` + `UNIQUE orders(pending_member_id)`(결제 대기일 때만 값이 있음)로 중복 방어, 결제 결과·수락·거절·배송은 주문 행 잠금 뒤 상태로 판정, 주문 종료·재고 복구·배송완료 적립 확정은 `MANDATORY`로 같은 트랜잭션에서만 실행. 주문 도메인 34개 클래스 405개 통과(2026-11-03, `742a694`) |
 | 결제·환불·포인트 | 정윤 | 작성 대기: 승인·만료·취소·웹훅·포인트의 경합·멱등·재처리 결과 |
