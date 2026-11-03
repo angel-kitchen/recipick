@@ -38,7 +38,7 @@
 | 인증·인가 | [선택 근거·검증](adr/authentication.md) | 채빈 | 검증·리뷰: 인증·비밀번호 변경·탈퇴 12개 클래스·177건 및 지급·체험·구독 API 3개 클래스·57건의 기존 실행 근거. C-17·체험/구독 진입점·멤버십 정산 Checker 반영 |
 | 동시성 | [전략·검증 결과](concurrency.md) | 각 도메인, 회원 부분 채빈, 레시피 부분 보민 | 회원 부분 검증·리뷰: 인증·기존 경합·추가 멤버십 32개 클래스·366건의 기존 실행 근거. 체험 API 동시 요청·구독 멱등·정산 잠금·충돌 계약 반영. 실제 전체 정산·다른 도메인 취합 대기 |
 | 결제·웹훅·환불 정합성 | `docs/adr/payment-consistency.md` | 정윤, 주문 연동 준희 | 작성 대기: 상태 전이·멱등성·외부 호출·복구·검증 |
-| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가 수치 측정 대기 |
+| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v3 재평가 완료. Tool Calling 등 고도화 남음 |
 | 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/load-test.md) · [병목 개선](performance/bottleneck.md) · [캐싱](performance/caching.md) | 태헌, 각 도메인 협조 | 부하·병목·캐싱 보고서 있음. 호출 제한 결과와 제출용 수치 확정은 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
 | 트러블슈팅 | `docs/troubleshooting/<주제>.md` · 레시피·AI: [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) · 주문: [잠금 전 엔티티 조회로 변경 덮어씀](troubleshooting/order-stale-entity-before-lock.md) · [회원 잠금 테스트 경합 없이 통과](troubleshooting/order-member-lock-test-false-pass.md) · [결제 완료 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md) | 문제를 해결한 담당자 | 레시피·AI 1건, 주문 3건 작성. 나머지 도메인 작성 대기: 재현·확인된 원인·수정·회귀 결과 |
