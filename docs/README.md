@@ -13,6 +13,7 @@
 | [ERD DBML](erd.dbml) | 테이블·컬럼·관계·제약 | 도메인 담당, 공통 확인 |
 | [모니터링](monitoring.md) | 관리 포트·상태 확인·지표 공개 규칙 | 태헌 |
 | [성능 시드](performance/seed-data.md) | 데이터 분포·재현 명령·사용 범위 | 태헌 |
+| [정적 분석](static-analysis.md) | SonarQube·JaCoCo 실행 방법·결과 위치·이슈 처리 근거 | 기준 변경은 팀 합의 |
 
 요구사항 원본을 바꾸면 저장소 루트에서 `python3 .coderabbit/split_requirements.py`를 실행하고
 `.coderabbit/requirements/` 결과도 함께 검토·커밋합니다. 문서 틀만 바꿀 때는 재생성이 필요하지 않습니다.
