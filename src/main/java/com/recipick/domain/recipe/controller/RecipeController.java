@@ -4,9 +4,12 @@ import com.recipick.domain.recipe.dto.request.AiRecipeRecommendRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
+import com.recipick.domain.recipe.facade.RecipeFacade;
 import com.recipick.domain.recipe.service.RecipeService;
+import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
 import com.recipick.global.response.PageResponse;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RecipeController {
 
     private final RecipeService recipeService;
+    private final RecipeFacade recipeFacade;
     private final AiRecipeRecommendFacade aiRecipeRecommendFacade;
 
     @GetMapping
@@ -40,13 +44,22 @@ public class RecipeController {
         return ResponseEntity.ok(ApiResponse.success(recipeService.searchRecipes(memberId, request, pageable)));
     }
 
+    @GetMapping("/popular")
+    public ResponseEntity<ApiResponse<PageResponse<RecipeRankingResponse>>> findPopularRecipes(
+        @LoginMember Long memberId,
+        @RequestParam(defaultValue = "WEEKLY") RankingPeriod period,
+        Pageable pageable
+        ){
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findPopularRecipes(memberId, period, pageable)));
+    }
+
     @GetMapping("/{recipeId}")
     public ResponseEntity<ApiResponse<RecipeDetailResponse>> getRecipe(
             @LoginMember Long memberId,
             @PathVariable Long recipeId,
             @RequestParam(required = false) Integer servings
     ) {
-        return ResponseEntity.ok(ApiResponse.success(recipeService.getRecipe(memberId, recipeId, servings)));
+        return ResponseEntity.ok(ApiResponse.success(recipeFacade.getRecipe(memberId, recipeId, servings)));
     }
 
     @PostMapping("/ai-recommendations")
@@ -55,5 +68,13 @@ public class RecipeController {
         @Valid @RequestBody AiRecipeRecommendRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(aiRecipeRecommendFacade.recommend(memberId, request.text())));
+    }
+
+    @GetMapping("/most-viewed")
+    public ResponseEntity<ApiResponse<PageResponse<RecipeRankingResponse>>> findMostViewedRecipes(
+        @LoginMember Long memberId,
+        Pageable pageable
+    ){
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findMostViewedRecipes(memberId, pageable)));
     }
 }

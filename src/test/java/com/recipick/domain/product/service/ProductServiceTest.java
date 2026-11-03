@@ -1022,4 +1022,52 @@ public class ProductServiceTest {
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
     }
+
+    @Test
+    @DisplayName("베스트: 순위 순서를 유지하고 조회되지 않은(삭제·다른 마트) 상품은 건너뛴다")
+    void findBestProducts_keepsRankOrder() {
+        // given
+        List<Long> rankedIds = List.of(3L, 2L, 1L);
+        given(productRepository.findAllByIdInAndMartIdAndDeletedFalse(rankedIds, 1L))
+            .willReturn(List.of(product(1L, 1L), product(3L, 1L)));
+
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, rankedIds, pageable);
+
+        // then
+        assertThat(result.content()).extracting(ProductSearchResponse::productId).containsExactly(3L, 1L);
+        assertThat(result.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("베스트: 삭제 상품을 거른 목록 기준으로 페이지를 잘라 빈 칸 없이 채운다")
+    void findBestProducts_pagesAfterFiltering() {
+        // given
+        List<Long> rankedIds = List.of(5L, 4L, 3L, 2L, 1L);
+        given(productRepository.findAllByIdInAndMartIdAndDeletedFalse(rankedIds, 1L))
+            .willReturn(List.of(product(5L, 1L), product(3L, 1L), product(2L, 1L), product(1L, 1L)));
+
+        // when
+        PageResponse<ProductSearchResponse> first = productService.findBestProducts(1L, rankedIds, PageRequest.of(0, 2));
+        PageResponse<ProductSearchResponse> second = productService.findBestProducts(1L, rankedIds, PageRequest.of(1, 2));
+        PageResponse<ProductSearchResponse> beyond = productService.findBestProducts(1L, rankedIds, PageRequest.of(5, 2));
+
+        // then
+        assertThat(first.content()).extracting(ProductSearchResponse::productId).containsExactly(5L, 3L);
+        assertThat(second.content()).extracting(ProductSearchResponse::productId).containsExactly(2L, 1L);
+        assertThat(first.totalElements()).isEqualTo(4);
+        assertThat(first.totalPages()).isEqualTo(2);
+        assertThat(beyond.content()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("베스트: 순위가 비어 있으면 상품을 조회하지 않고 빈 페이지를 돌려준다")
+    void findBestProducts_empty() {
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, List.of(), pageable);
+
+        // then
+        assertThat(result.content()).isEmpty();
+        verifyNoInteractions(productRepository);
+    }
 }
