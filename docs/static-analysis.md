@@ -18,8 +18,9 @@
 ## 2. 실행 방법
 
 ```bash
-docker run -d --name sonarqube -p 9000:9000 sonarqube:community   # SonarQube 서버 실행(처음 한 번)
-docker start sonarqube                                             # 이미 만든 컨테이너를 다시 켤 때
+docker run -d --name sonarqube -p 127.0.0.1:9000:9000 sonarqube:community   # SonarQube 서버 실행(처음 한 번). 같은 네트워크에서 접속하지 못하게 로컬에만 연다
+docker start sonarqube                                                       # 이미 만든 컨테이너를 다시 켤 때
+docker rm -f sonarqube                                                       # 확인이 끝나면 컨테이너와 분석 기록을 지운다
 ```
 
 1. http://localhost:9000 이 열리면 `admin` / `admin`으로 로그인하고, 안내에 따라 비밀번호를 바꾼다.
