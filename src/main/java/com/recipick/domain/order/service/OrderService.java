@@ -322,8 +322,12 @@ public class OrderService {
         OrderStatus fromStatus = order.getStatus();
         order.cancel(reasonCode, reasonDetail);
 
-        orderStatusHistoryRepository.save(systemHistory(
-            order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), reasonCode.name()));
+        // 결제 전 회원 취소는 회원이 직접 요청한 종료라 결제 후 취소 요청과 같이 MEMBER로 남긴다. 나머지는 시스템이 판정한 종료다
+        OrderStatusActor actor = reasonCode == CancelReasonCode.MEMBER_CANCELED
+            ? OrderStatusActor.MEMBER
+            : OrderStatusActor.SYSTEM;
+        orderStatusHistoryRepository.save(history(
+            order, OrderStatusType.ORDER, fromStatus.name(), order.getStatus().name(), actor, reasonCode.name()));
         return orderItemRepository.findAllByOrderId(orderId);
     }
 
