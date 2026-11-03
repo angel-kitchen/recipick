@@ -7,6 +7,7 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.audit.AdminAuditField;
 import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
 import com.recipick.domain.product.dto.request.ProductCreateRequest;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
 import com.recipick.domain.product.dto.response.ProductIdResponse;
@@ -62,16 +63,16 @@ public class ProductService {
     public PageResponse<AdminProductResponse> getAdminProducts(
         AdminRole role,
         Long adminMartId,
-        AdminProductSearchCondition condition,
+        AdminProductSearchRequest request,
         Pageable pageable
     ) {
-        Long martId = resolveMartId(role, adminMartId, condition.martId());
+        Long martId = resolveMartId(role, adminMartId, request.martId());
         AdminProductSearchCondition scoped = new AdminProductSearchCondition(
             martId,
-            condition.keyword(),
-            condition.categoryId(),
-            condition.ingredientId(),
-            condition.status()
+            request.keyword(),
+            request.categoryId(),
+            request.ingredientId(),
+            request.status()
         );
 
         return PageResponse.from(

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.response.AdminProductResponse;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
 import com.recipick.domain.product.dto.request.ProductCreateRequest;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
 import com.recipick.domain.product.dto.response.ProductIdResponse;
@@ -101,8 +102,8 @@ public class ProductServiceTest {
         return product;
     }
 
-    private AdminProductSearchCondition conditionOf(Long martId){
-        return new AdminProductSearchCondition(martId, null,null,null,null);
+    private AdminProductSearchRequest conditionOf(Long martId){
+        return new AdminProductSearchRequest(martId, null,null,null,null);
     }
 
     @Test
@@ -145,7 +146,7 @@ public class ProductServiceTest {
     @DisplayName("마트 관리자가 다른 마트를 지정하면 접근이 거부된다")
     void martAdminOtherMartDenied() {
         // given
-        AdminProductSearchCondition condition = conditionOf(2L);
+        AdminProductSearchRequest condition = conditionOf(2L);
 
         // when & then
         assertThatThrownBy(() ->
@@ -178,7 +179,7 @@ public class ProductServiceTest {
     void superAdminMartNotFound() {
         // given
         given(martRepository.existsById(99L)).willReturn(false);
-        AdminProductSearchCondition condition = conditionOf(99L);
+        AdminProductSearchRequest condition = conditionOf(99L);
 
         // when & then
         assertThatThrownBy(() ->
