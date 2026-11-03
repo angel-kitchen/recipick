@@ -5,7 +5,6 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.shaded.org.bouncycastle.pqc.legacy.math.linearalgebra.PolynomialRingGF2;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

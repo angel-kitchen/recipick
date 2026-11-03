@@ -5,7 +5,6 @@ import com.recipick.global.common.SaleUnit;
 import com.recipick.global.entity.BaseTimeEntity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
-import com.recipick.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
