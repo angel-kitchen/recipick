@@ -2,7 +2,7 @@ package com.recipick.domain.member.facade;
 
 import com.recipick.domain.member.dto.response.ServiceAreaCheckResponse;
 import com.recipick.domain.member.service.RegionService;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.service.MartService;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ public class ServiceAreaFacade {
                 .orElseGet(() -> new ServiceAreaCheckResponse(false, null));
     }
 
-    public Optional<OpenMartResponse> findAvailableMart(String legalDongCode) {
+    public Optional<OpenMartData> findAvailableMart(String legalDongCode) {
         return regionService.getRegionIdByLegalDongCode(legalDongCode)
                 .flatMap(regionId -> martService.findOpenMarts(regionId).stream().findFirst());
     }

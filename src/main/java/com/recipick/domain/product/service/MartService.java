@@ -11,7 +11,7 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.request.MartCreateRequest;
 import com.recipick.domain.product.dto.response.MartIdResponse;
 import com.recipick.domain.product.dto.request.MartUpdateRequest;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.dto.response.MartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
@@ -137,17 +137,17 @@ public class MartService {
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'all'")
-    public List<OpenMartResponse> findOpenMarts() {
+    public List<OpenMartData> findOpenMarts() {
         return martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN).stream()
-            .map(OpenMartResponse::from)
+            .map(OpenMartData::from)
             .toList();
     }
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.OPEN_MARTS, key = "'region:' + #regionId")
-    public List<OpenMartResponse> findOpenMarts(Long regionId) {
+    public List<OpenMartData> findOpenMarts(Long regionId) {
         return martRepository.findAllByRegionIdAndStatusOrderByIdAsc(regionId, MartStatus.OPEN).stream()
-            .map(OpenMartResponse::from)
+            .map(OpenMartData::from)
             .toList();
     }
     @Transactional(readOnly = true)

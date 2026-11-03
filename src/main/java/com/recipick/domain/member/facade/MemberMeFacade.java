@@ -5,7 +5,7 @@ import com.recipick.domain.member.dto.MemberProfile;
 import com.recipick.domain.member.dto.response.MemberMeResponse;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.service.MartService;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -28,7 +28,7 @@ public class MemberMeFacade {
     public MemberMeResponse getMe(Long memberId) {
         MemberProfile profile = memberService.getProfile(memberId);
         MemberAddressData address = profile.address();
-        Optional<OpenMartResponse> availableMart = address == null ? Optional.empty()
+        Optional<OpenMartData> availableMart = address == null ? Optional.empty()
                 : serviceAreaFacade.findAvailableMart(address.legalDongCode());
         MemberMeResponse.Mart mart = profile.martId() == null ? null : martService.findMart(profile.martId())
                 .map(value -> new MemberMeResponse.Mart(value.martId(), value.name())).orElse(null);

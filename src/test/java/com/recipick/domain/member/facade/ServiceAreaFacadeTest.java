@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.dto.response.ServiceAreaCheckResponse;
 import com.recipick.domain.member.service.RegionService;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.service.MartService;
 import java.util.List;
 import java.util.Optional;
@@ -63,7 +63,7 @@ class ServiceAreaFacadeTest {
         // given
         given(regionService.getRegionIdByLegalDongCode("1111014000")).willReturn(Optional.of(12L));
         given(martService.findOpenMarts(12L)).willReturn(List.of(
-                new OpenMartResponse(42L, "첫 마트", 12L), new OpenMartResponse(43L, "다음 마트", 12L)));
+                new OpenMartData(42L, "첫 마트", 12L), new OpenMartData(43L, "다음 마트", 12L)));
 
         // when
         ServiceAreaCheckResponse response = facade.checkServiceArea("1111014000");

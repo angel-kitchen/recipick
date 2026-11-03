@@ -27,7 +27,7 @@ import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.product.dto.response.MartResponse;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.entity.ProductStatus;
@@ -222,7 +222,7 @@ class OrderQueryFacadeTest {
         givenOpenMart();
         givenRegion(OTHER_REGION_ID);
         given(martService.findOpenMarts(OTHER_REGION_ID))
-                .willReturn(List.of(new OpenMartResponse(OTHER_MART_ID, "하안 마트", OTHER_REGION_ID)));
+                .willReturn(List.of(new OpenMartData(OTHER_MART_ID, "하안 마트", OTHER_REGION_ID)));
         givenCart(product(10L, MART_ID, ProductStatus.SELLING, 10, 2500L));
         givenNoPendingOrder();
 
@@ -276,7 +276,7 @@ class OrderQueryFacadeTest {
         given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.empty());
         givenRegion(REGION_ID);
         given(martService.findOpenMarts(REGION_ID))
-                .willReturn(List.of(new OpenMartResponse(MART_ID, "삼청 마트", REGION_ID)));
+                .willReturn(List.of(new OpenMartData(MART_ID, "삼청 마트", REGION_ID)));
         givenCart(product(10L, MART_ID, ProductStatus.SELLING, 10, 2500L));
         givenNoPendingOrder();
 
