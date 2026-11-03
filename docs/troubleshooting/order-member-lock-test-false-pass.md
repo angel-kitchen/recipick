@@ -69,7 +69,7 @@ private long countMemberLockWaiters() {
 | --- | --- |
 | 대기 시간을 늘림(예: 2초) | 경합이 생길 확률만 높일 뿐 보장하지 않는다. 테스트도 느려진다. |
 | 테스트 스레드가 주문 생성 직전에 신호를 보냄 | 신호와 실제 잠금 조회 사이에도 트랜잭션 시작·커넥션 획득이 있어 같은 문제가 남는다. |
-| `performance_schema.data_lock_waits` 조회 | 정확하지만 권한·설정에 따라 비어 있을 수 있다. 테스트용 계정에서 바로 쓸 수 있는 `PROCESSLIST`로 충분했다. |
+| `performance_schema.data_lock_waits` 조회 | InnoDB의 잠금 대기 목록을 직접 보므로 더 정확하다. 앱 계정은 `performance_schema`를 읽을 권한이 없어 관리자 계정 연결을 따로 열어야 하지만, `MembershipRenewalConcurrencyTest.awaitLockWait`가 같은 Testcontainers 환경에서 이 방식을 이미 쓰고 있다. 이 테스트는 앱 연결로 바로 볼 수 있는 `PROCESSLIST`로 먼저 고쳤고, 바꾸는 것은 남은 작업으로 둔다. |
 
 - 변경 코드: `src/test/java/com/recipick/domain/order/facade/OrderCreateMemberLockTest.java`의 `lockMemberThen`, `awaitMemberLockWaiter`, `countMemberLockWaiters`
 - 기존 데이터·운영에 필요한 조치: 없음(테스트 코드만 변경)
@@ -88,7 +88,10 @@ private long countMemberLockWaiters() {
 - 추가한 테스트·문서
   - 대기 확인 헬퍼와 "고정 시간만 기다리면 경합 없이 통과할 수 있다"는 이유 주석
 - 남은 제한과 담당 이슈
-  - `PROCESSLIST`의 `INFO`를 문자열로 찾으므로, Hibernate가 만드는 SQL 형태(`from member ... for update`)가 바뀌면 대기를 못 찾아 테스트가 실패한다. 이 경우 잘못 통과하는 것이 아니라 실패하므로, 실패 메시지를 보고 조건을 고치면 된다.
+  - `PROCESSLIST`의 `INFO`를 문자열로 찾으므로 두 가지 한계가 있다.
+    - Hibernate가 만드는 SQL 형태(`from member ... for update`)가 바뀌면 대기를 못 찾아 테스트가 실패한다. 실패 메시지를 보고 조건을 고치면 된다.
+    - 다른 연결이 같은 형태의 쿼리를 실행 중이면(이전 테스트가 남긴 스레드, 다른 회원의 잠금 등) 이 회원 행을 기다리는 요청이 아니어도 대기로 센다. 이 경우 경합 없이 통과할 수 있다. 지금은 테스트를 한 프로세스에서 순서대로 실행해 가능성이 낮지만 완전히 막지는 못한다.
+    - 두 한계 모두 `performance_schema.data_lock_waits`에서 잠금 대상 테이블·행을 조건으로 걸어 확인하면 줄일 수 있다.
   - 결제 도메인의 동시성 테스트 일부에도 `Thread.sleep`이 있다. 같은 문제가 있는지는 확인하지 않았다(결제 담당 확인 필요).
 - 다른 팀원에게 공유할 적용 방법
   - 동시성 테스트는 "결과가 맞다"와 "의도한 경합이 실제로 일어났다"를 따로 확인한다. 경합이 없어도 결과가 같다면, 경합을 직접 확인하는 장치가 필요하다.
