@@ -77,7 +77,7 @@ public class MartServiceOpenMartsTest {
 
     @Test
     @DisplayName("지도용: 위도나 경도가 없는 마트는 제외하고 ID 순서를 유지한다")
-    void findOpenMartsForMap_excludesMartWithoutCoordinates(){
+    void findMartsForMap_excludesMartWithoutCoordinates(){
         Mart noLatitude = Mart.builder()
             .regionId(33L)
             .name("위도 없는 마트")
@@ -94,11 +94,16 @@ public class MartServiceOpenMartsTest {
             .build();
         ReflectionTestUtils.setField(noLongitude, "id", 3L);
 
-        given(martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN))
-            .willReturn(List.of(mart(1L, 31L, "삼청동 마트"), noLatitude, noLongitude, mart(4L, 35L, "혜화동 마트")));
+        Mart planned = mart(4L, null, "녹번마트 (준비중)");
+        planned.update(null, null, null, MartStatus.CLOSED);
 
-        List<MartMapResponse> result = martService.findOpenMartsForMap();
+        given(martRepository.findAllByOrderByIdAsc())
+            .willReturn(List.of(mart(1L, 31L, "삼청동 마트"), noLatitude, noLongitude, planned));
+
+        List<MartMapResponse> result = martService.findMartsForMap();
 
         assertThat(result).extracting(MartMapResponse::martId).containsExactly(1L, 4L);
+        assertThat(result.get(1).status()).isEqualTo(MartStatus.CLOSED);
+        assertThat(result.get(1).name()).isEqualTo("녹번마트 (준비중)");
     }
 }

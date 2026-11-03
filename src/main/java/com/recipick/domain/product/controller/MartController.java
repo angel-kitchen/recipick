@@ -21,6 +21,6 @@ public class MartController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<MartMapResponse>>> getMarts(){
-        return ResponseEntity.ok(ApiResponse.success(martService.findOpenMartsForMap()));
+        return ResponseEntity.ok(ApiResponse.success(martService.findMartsForMap()));
     }
 }

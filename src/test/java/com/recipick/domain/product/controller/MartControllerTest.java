@@ -77,7 +77,7 @@ class MartControllerTest {
     @DisplayName("토큰 없이 마트 공개 목록을 조회하면 위치와 반경을 반환한다")
     void getMarts() throws Exception {
         // given
-        given(martService.findOpenMartsForMap()).willReturn(List.of(
+        given(martService.findMartsForMap()).willReturn(List.of(
             new MartMapResponse(1L, "삼청 마트", new BigDecimal("37.5860000"),
                 new BigDecimal("126.9820000"), 2000, MartStatus.OPEN)));
 
