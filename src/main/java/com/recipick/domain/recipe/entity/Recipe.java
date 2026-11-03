@@ -72,6 +72,10 @@ public class Recipe extends BaseTimeEntity {
 
     private boolean autoCartEnabled;
 
+    // 컬럼 목록에 view_count가 없는 SQL INSERT(초기 데이터 등)도 0으로 들어가게 DB 기본값을 둔다
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int viewCount;
+
     @Builder
     private Recipe(
         String name,

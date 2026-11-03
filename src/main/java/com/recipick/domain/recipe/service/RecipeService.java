@@ -6,6 +6,7 @@ import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeBookmarkId;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.global.common.RankingPeriod;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
 import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
@@ -16,10 +17,13 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,6 +36,7 @@ public class RecipeService {
     private final RecipeRepository recipeRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
     private final RecipeBookmarkRepository recipeBookmarkRepository;
+    private final Clock clock;
 
     public PageResponse<RecipeSummaryResponse> searchRecipes(
             Long memberId,
@@ -52,14 +57,40 @@ public class RecipeService {
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
+    public PageResponse<RecipeSummaryResponse> findPopularRecipes(
+        Long memberId,
+        RankingPeriod period,
+        Pageable pageable
+    ){
+        LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<Recipe> recipes = recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, from, unsorted);
+        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
+
+        return PageResponse.from(recipes.map(recipe ->
+            RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+    }
+
+    @Transactional
     public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {
         Recipe recipe = getActiveRecipe(recipeId);
+        recipeRepository.increaseViewCount(recipeId, LocalDateTime.now(clock));
         int resolvedServings = recipe.resolveServings(servings);
         List<RecipeIngredient> recipeIngredients =
                 recipeIngredientRepository.findAllWithIngredient(recipeId);
         boolean bookmarked = recipeBookmarkRepository.existsById(new RecipeBookmarkId(memberId, recipeId));
 
         return RecipeDetailResponse.of(recipe, resolvedServings, recipeIngredients, bookmarked);
+    }
+
+    public PageResponse<RecipeSummaryResponse> findMostViewRecipes(Long memberId, Pageable pageable){
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        Page<Recipe> recipes = recipeRepository
+            .findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, unsorted);
+        Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
+
+        return PageResponse.from(recipes.map(recipe ->
+            RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
     private Recipe getActiveRecipe(Long recipeId) {

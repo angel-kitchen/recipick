@@ -7,6 +7,7 @@ import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
 import com.recipick.domain.recipe.service.RecipeService;
+import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
 import com.recipick.global.response.PageResponse;
@@ -40,6 +41,15 @@ public class RecipeController {
         return ResponseEntity.ok(ApiResponse.success(recipeService.searchRecipes(memberId, request, pageable)));
     }
 
+    @GetMapping("/popular")
+    public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> findPopularRecipes(
+        @LoginMember Long memberId,
+        @RequestParam(defaultValue = "WEEKLY") RankingPeriod period,
+        Pageable pageable
+        ){
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findPopularRecipes(memberId, period, pageable)));
+    }
+
     @GetMapping("/{recipeId}")
     public ResponseEntity<ApiResponse<RecipeDetailResponse>> getRecipe(
             @LoginMember Long memberId,
@@ -55,5 +65,13 @@ public class RecipeController {
         @Valid @RequestBody AiRecipeRecommendRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(aiRecipeRecommendFacade.recommend(memberId, request.text())));
+    }
+
+    @GetMapping("/most-viewed")
+    public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> findMostViewedRecipes(
+        @LoginMember Long memberId,
+        Pageable pageable
+    ){
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findMostViewRecipes(memberId, pageable)));
     }
 }

@@ -23,21 +23,27 @@ import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
+import com.recipick.global.common.RankingPeriod;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.assertj.core.groups.Tuple;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,8 +60,16 @@ class RecipeServiceTest {
     @Mock
     private RecipeBookmarkRepository recipeBookmarkRepository;
 
-    @InjectMocks
+    // 기준 시각을 고정해 기간 계산과 updated_at 값을 비교한다. 2026-11-03 09:00 (KST)
+    private final Clock clock = Clock.fixed(Instant.parse("2026-11-03T00:00:00Z"), ZoneId.of("Asia/Seoul"));
+
     private RecipeService recipeService;
+
+    @BeforeEach
+    void setUp() {
+        recipeService = new RecipeService(
+            recipeRepository, recipeIngredientRepository, recipeBookmarkRepository, clock);
+    }
 
     private Recipe recipe(Long id, String name) {
         Recipe recipe = Recipe.builder()
@@ -166,6 +180,101 @@ class RecipeServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(RecipeErrorCode.RECIPE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상세: 조회할 때마다 조회수를 올리고 기준 시각으로 updated_at을 갱신한다")
+    void getRecipe_increasesViewCount() {
+        // given
+        given(recipeRepository.findByIdAndStatus(12L, RecipeStatus.ACTIVE))
+            .willReturn(Optional.of(recipe(12L, "된장찌개")));
+
+        // when
+        recipeService.getRecipe(MEMBER_ID, 12L, null);
+
+        // then
+        verify(recipeRepository).increaseViewCount(12L, LocalDateTime.of(2026, 11, 3, 9, 0));
+    }
+
+    @Test
+    @DisplayName("상세: 없거나 비활성인 레시피는 조회수를 올리지 않는다")
+    void getRecipe_notFound_noViewCount() {
+        // given
+        given(recipeRepository.findByIdAndStatus(99L, RecipeStatus.ACTIVE)).willReturn(Optional.empty());
+
+        // when
+        assertThatThrownBy(() -> recipeService.getRecipe(MEMBER_ID, 99L, null))
+            .isInstanceOf(BusinessException.class);
+
+        // then
+        verify(recipeRepository, never()).increaseViewCount(any(), any());
+    }
+
+    @Test
+    @DisplayName("찜 순위: 주간은 7일 전부터 조회하고 내가 찜한 레시피만 bookmarked가 true다")
+    void findPopularRecipes_weekly() {
+        // given
+        PageRequest pageable = PageRequest.of(0, 20);
+        List<Recipe> recipes = List.of(recipe(18L, "두부조림"), recipe(12L, "된장찌개"));
+        given(recipeBookmarkRepository.findPopularRecipes(
+            RecipeStatus.ACTIVE, LocalDateTime.of(2026, 10, 27, 9, 0), pageable))
+            .willReturn(new PageImpl<>(recipes, pageable, 2));
+        given(recipeBookmarkRepository.findBookmarkedRecipeIds(MEMBER_ID, List.of(18L, 12L)))
+            .willReturn(Set.of(12L));
+
+        // when
+        PageResponse<RecipeSummaryResponse> response =
+            recipeService.findPopularRecipes(MEMBER_ID, RankingPeriod.WEEKLY, pageable);
+
+        // then
+        assertThat(response.content())
+            .extracting(RecipeSummaryResponse::recipeId, RecipeSummaryResponse::bookmarked)
+            .containsExactly(
+                Tuple.tuple(18L, false),
+                Tuple.tuple(12L, true)
+            );
+    }
+
+    @Test
+    @DisplayName("찜 순위: 요청한 정렬은 무시하고 페이지 정보만 넘긴다")
+    void findPopularRecipes_ignoresSort() {
+        // given
+        PageRequest requested = PageRequest.of(1, 10, Sort.by("name"));
+        PageRequest expected = PageRequest.of(1, 10);
+        given(recipeBookmarkRepository.findPopularRecipes(
+            RecipeStatus.ACTIVE, LocalDateTime.of(2026, 11, 2, 9, 0), expected))
+            .willReturn(new PageImpl<>(List.of(), expected, 0));
+
+        // when
+        PageResponse<RecipeSummaryResponse> response =
+            recipeService.findPopularRecipes(MEMBER_ID, RankingPeriod.DAILY, requested);
+
+        // then
+        assertThat(response.content()).isEmpty();
+        verify(recipeBookmarkRepository, never()).findBookmarkedRecipeIds(any(), any());
+    }
+
+    @Test
+    @DisplayName("조회수 순위: 활성 레시피를 조회수 순으로 조회하고 내가 찜한 레시피만 bookmarked가 true다")
+    void findMostViewRecipes() {
+        // given
+        PageRequest pageable = PageRequest.of(0, 20);
+        List<Recipe> recipes = List.of(recipe(12L, "된장찌개"), recipe(18L, "두부조림"));
+        given(recipeRepository.findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, pageable))
+            .willReturn(new PageImpl<>(recipes, pageable, 2));
+        given(recipeBookmarkRepository.findBookmarkedRecipeIds(MEMBER_ID, List.of(12L, 18L)))
+            .willReturn(Set.of(18L));
+
+        // when
+        PageResponse<RecipeSummaryResponse> response = recipeService.findMostViewRecipes(MEMBER_ID, pageable);
+
+        // then
+        assertThat(response.content())
+            .extracting(RecipeSummaryResponse::recipeId, RecipeSummaryResponse::bookmarked)
+            .containsExactly(
+                Tuple.tuple(12L, false),
+                Tuple.tuple(18L, true)
+            );
     }
 
     @ParameterizedTest
