@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
+// v6는 워커 주소를 실행 중에 계산해서 Vite가 워커 파일을 빌드에 넣지 못하므로, 빌드된 워커 주소를 직접 알려 준다
+maplibregl.setWorkerUrl(workerUrl);
 
 // 서버는 소수를 "37.5860000" 같은 문자열로 내려주므로 숫자로 바꾸고, 위치를 알 수 없는 마트는 그리지 않는다
 function toMapMarts(list) {
