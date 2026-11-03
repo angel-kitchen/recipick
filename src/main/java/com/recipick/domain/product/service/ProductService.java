@@ -34,11 +34,13 @@ import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -52,6 +54,9 @@ import org.springframework.cache.annotation.Cacheable;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProductService {
+
+    // 베스트는 상위 N개만 보여 주는 화면이라 페이지는 이 범위 안에서만 나뉜다
+    public static final int BEST_PRODUCT_LIMIT = 100;
 
     private final AdminAuditRecorder auditRecorder;
 
@@ -320,6 +325,25 @@ public class ProductService {
         return Arrays.asList(product.getCategory().getId(), product.getIngredientId(), product.getName(),
                 product.getBrand(), product.getDescription(), product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
                 product.getSaleUnit(), product.getImageUrl());
+    }
+
+    // 순위 ID는 주문 도메인이 정한다. 삭제·다른 마트 상품을 먼저 거른 목록을 기준으로 페이지를 잘라서
+    // 페이지가 덜 차거나 전체 개수가 실제보다 커지지 않는다
+    public PageResponse<ProductSearchResponse> findBestProducts(Long martId, List<Long> rankedIds, Pageable pageable){
+        List<ProductSearchResponse> ranked = List.of();
+        if (!rankedIds.isEmpty()){
+            Map<Long, Product> productById = productRepository
+                .findAllByIdInAndMartIdAndDeletedFalse(rankedIds, martId).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+            ranked = rankedIds.stream()
+                .map(productById :: get)
+                .filter(Objects::nonNull)
+                .map(ProductSearchResponse::from)
+                .toList();
+        }
+        int from = (int) Math.min(pageable.getOffset(), ranked.size());
+        int to = Math.min(from + pageable.getPageSize(), ranked.size());
+        return PageResponse.from(new PageImpl<>(ranked.subList(from, to), pageable, ranked.size()));
     }
 
 }
