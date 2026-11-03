@@ -46,3 +46,7 @@ deploy/.env
 deploy/certbot/
 deploy/backups/
 deploy/.deploy.lock
+
+# 로컬 부하 측정 입력과 결과
+scripts/perf/k6/shopper-fixtures.local.json
+scripts/perf/results/
