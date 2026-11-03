@@ -265,7 +265,7 @@ public ResponseEntity<ApiResponse<AutoCartPreviewResponse>> preview(
     - 최종 값은 팀 합의 후 DB 환경 설정에 동일하게 적용합니다.
     - `jakarta.persistence.lock.timeout` 힌트의 양수 값은 DB·Dialect에 따라 적용되지 않을 수 있으므로 의존하지 않습니다.
 - 잠금 전용 Repository 메서드는 `findByIdForUpdate`처럼 이름으로 용도를 명확히 드러내며 일반 조회 메서드와 구분합니다.
-- 대량 배치는 행별 비즈니스 처리나 감사 이력이 필요 없는 단순 일괄 변경에 한해 벌크 UPDATE를 사용할 수 있습니다. 벌크 UPDATE는 JPA Auditing을 거치지 않으므로 `updated_at`을 함께 갱신합니다.
+- 대량 배치는 행별 비즈니스 처리나 감사 이력이 필요 없는 단순 일괄 변경에 한해 벌크 UPDATE를 사용할 수 있습니다. 벌크 UPDATE는 JPA Auditing을 거치지 않으므로 `updated_at`을 함께 갱신합니다. 단, 조회수 같은 카운터 증가는 내용이 바뀐 것이 아니므로 `updated_at`(마지막 수정 시각)을 갱신하지 않습니다.
 - 포인트 만료처럼 잔액 변경·상태 변경·History 기록을 함께 처리해야 하는 작업은 포인트 도메인의 별도 배치 정책에 따라 정합성을 보장합니다.
 - 같은 요청 반복은 비관적 락만으로 처리하지 않고 UK(`pending_member_id`, `webhook_id`, `idempotency_key` 등)과 잠금 후 현재 상태 확인을 함께 사용합니다. 동일 요청이 이미 정상 처리된 경우에는 부작용을 다시 실행하지 않고 기존 결과를 반환합니다.
 

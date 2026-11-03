@@ -11,7 +11,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,7 +28,8 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long>, RecipeRep
     @Query("SELECT r FROM Recipe r WHERE r.id = :id")
     Optional<Recipe> findByIdForUpdate(@Param("id") Long id);
 
+    // 조회수는 레시피 내용이 바뀐 게 아니라서 updated_at(마지막 수정 시각)은 갱신하지 않는다
     @Modifying
-    @Query("update Recipe r set r.viewCount = r.viewCount + 1, r.updatedAt = :now where r.id = :id")
-    int increaseViewCount(@Param("id") Long id, @Param("now") LocalDateTime now);
+    @Query("update Recipe r set r.viewCount = r.viewCount + 1 where r.id = :id")
+    int increaseViewCount(@Param("id") Long id);
 }

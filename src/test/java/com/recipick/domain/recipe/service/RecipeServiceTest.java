@@ -183,7 +183,7 @@ class RecipeServiceTest {
     }
 
     @Test
-    @DisplayName("상세: 조회할 때마다 조회수를 올리고 기준 시각으로 updated_at을 갱신한다")
+    @DisplayName("상세: 조회할 때마다 조회수를 올린다")
     void getRecipe_increasesViewCount() {
         // given
         given(recipeRepository.findByIdAndStatus(12L, RecipeStatus.ACTIVE))
@@ -193,7 +193,7 @@ class RecipeServiceTest {
         recipeService.getRecipe(MEMBER_ID, 12L, null);
 
         // then
-        verify(recipeRepository).increaseViewCount(12L, LocalDateTime.of(2026, 11, 3, 9, 0));
+        verify(recipeRepository).increaseViewCount(12L);
     }
 
     @Test
@@ -207,7 +207,7 @@ class RecipeServiceTest {
             .isInstanceOf(BusinessException.class);
 
         // then
-        verify(recipeRepository, never()).increaseViewCount(any(), any());
+        verify(recipeRepository, never()).increaseViewCount(any());
     }
 
     @Test

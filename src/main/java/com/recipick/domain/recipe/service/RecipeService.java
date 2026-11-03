@@ -74,7 +74,7 @@ public class RecipeService {
     @Transactional
     public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {
         Recipe recipe = getActiveRecipe(recipeId);
-        recipeRepository.increaseViewCount(recipeId, LocalDateTime.now(clock));
+        recipeRepository.increaseViewCount(recipeId);
         int resolvedServings = recipe.resolveServings(servings);
         List<RecipeIngredient> recipeIngredients =
                 recipeIngredientRepository.findAllWithIngredient(recipeId);

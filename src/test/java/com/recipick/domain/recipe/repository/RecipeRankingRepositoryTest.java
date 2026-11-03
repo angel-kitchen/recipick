@@ -75,24 +75,25 @@ class RecipeRankingRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("조회수: 조회수를 1씩 올리고 updated_at도 함께 갱신한다")
+    @DisplayName("조회수: 조회수를 1씩 올리고 마지막 수정 시각(updated_at)은 바꾸지 않는다")
     void increaseViewCount() {
         // given
         Recipe recipe = saveRecipe("랭킹 조회수 레시피");
         em.flush();
         em.clear();
-        LocalDateTime now = LocalDateTime.of(2026, 11, 3, 9, 0);
+        LocalDateTime updatedAtBefore = recipeRepository.findById(recipe.getId()).orElseThrow().getUpdatedAt();
+        em.clear();
 
         // when
-        int updated = recipeRepository.increaseViewCount(recipe.getId(), now);
-        recipeRepository.increaseViewCount(recipe.getId(), now);
+        int updated = recipeRepository.increaseViewCount(recipe.getId());
+        recipeRepository.increaseViewCount(recipe.getId());
         em.clear();
 
         // then
         Recipe found = recipeRepository.findById(recipe.getId()).orElseThrow();
         assertThat(updated).isEqualTo(1);
         assertThat(found.getViewCount()).isEqualTo(2);
-        assertThat(found.getUpdatedAt()).isEqualTo(now);
+        assertThat(found.getUpdatedAt()).isEqualTo(updatedAtBefore);
     }
 
     @Test
@@ -104,10 +105,9 @@ class RecipeRankingRepositoryTest extends IntegrationTestSupport {
         Recipe inactive = saveRecipe("랭킹 조회 비활성 레시피");
         inactive.changeStatus(RecipeStatus.INACTIVE);
         em.flush();
-        LocalDateTime now = LocalDateTime.of(2026, 11, 3, 9, 0);
-        increase(few, now, 1);
-        increase(many, now, 3);
-        increase(inactive, now, 10);
+        increase(few, 1);
+        increase(many, 3);
+        increase(inactive, 10);
         em.clear();
 
         // when
@@ -139,9 +139,9 @@ class RecipeRankingRepositoryTest extends IntegrationTestSupport {
         }
     }
 
-    private void increase(Recipe recipe, LocalDateTime now, int times) {
+    private void increase(Recipe recipe, int times) {
         for (int i = 0; i < times; i++) {
-            recipeRepository.increaseViewCount(recipe.getId(), now);
+            recipeRepository.increaseViewCount(recipe.getId());
         }
     }
 }
