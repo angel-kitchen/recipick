@@ -16,12 +16,21 @@ import { formatAmount, formatWon } from '../labels';
 
 const PAGE_SIZE = 12;
 
+// 서버는 최소·최대 가격 한 구간만 받으므로 가격대는 하나만 고른다
+const PRICE_RANGES = [
+  { key: 'low', label: '5,000원 미만', maxPrice: 4999 },
+  { key: 'mid', label: '5,000 ~ 10,000원', minPrice: 5000, maxPrice: 10000 },
+  { key: 'high', label: '10,000원 이상', minPrice: 10000 },
+];
+
 export default function Products() {
   const { member } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState(searchParams.get('keyword') ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState([]);
+  const [priceKey, setPriceKey] = useState('');
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -39,17 +48,26 @@ export default function Products() {
     setPage(0);
   }, [searchParams]);
 
+  const priceRange = PRICE_RANGES.find((range) => range.key === priceKey);
+
   useEffect(() => {
     let ignore = false;
     setError(null);
     api
-      .get('/api/products', { keyword, categoryId, page, size: PAGE_SIZE })
+      .get('/api/products', {
+        keyword,
+        categoryId,
+        minPrice: priceRange?.minPrice,
+        maxPrice: priceRange?.maxPrice,
+        page,
+        size: PAGE_SIZE,
+      })
       .then((data) => !ignore && setResult(data))
       .catch((e) => !ignore && setError(e));
     return () => {
       ignore = true;
     };
-  }, [keyword, categoryId, page]);
+  }, [keyword, categoryId, priceRange, page]);
 
   const addToCart = async (product) => {
     setError(null);
@@ -66,9 +84,13 @@ export default function Products() {
   const clearFilters = () => {
     setKeyword('');
     setCategoryId('');
+    setPriceKey('');
+    setOnlyAvailable(false);
     setPage(0);
     setSearchParams({});
   };
+
+  const visible = result?.content.filter((product) => !onlyAvailable || !product.soldOut);
 
   return (
     <div className="container page">
@@ -85,68 +107,103 @@ export default function Products() {
             setKeyword(e.target.value);
           }}
         />
-        <select
-          className="field__input"
-          value={categoryId}
-          onChange={(e) => {
-            setPage(0);
-            setCategoryId(e.target.value);
-          }}
-        >
-          <option value="">전체 카테고리</option>
-          {categories.map((category) => (
-            <option key={category.categoryId} value={category.categoryId}>
-              {category.name}
-            </option>
-          ))}
-        </select>
       </div>
 
       {modal}
-      <ErrorNotice error={error} />
-      {!result && !error && <CardSkeletons />}
-      {result?.content.length === 0 && (
-        <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 카테고리를 바꿔 보세요." actions={[{ onClick: clearFilters, label: '조건 지우기' }]} />
-      )}
-
-      <div className="grid">
-        {result?.content.map((product) => (
-          <div key={product.productId} className="tile">
-            <Link to={`/products/${product.productId}`} className="tile__link">
-              {product.imageUrl ? (
-                <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
-              ) : (
-                <ImagePlaceholder />
-              )}
-            </Link>
-            <div className="tile__body">
-              <Link to={`/products/${product.productId}`} className="tile__title">
-                {product.name}
-              </Link>
-              <span className="tile__meta">
-                {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
-              </span>
-              <span className="tile__price">{formatWon(product.price)}</span>
-              <div className="tile__actions">
-                {product.soldOut ? (
-                  <span className="badge badge--warn">품절</span>
-                ) : (
+      <div className="catalog">
+        <aside className="catalog__side" aria-label="상품 조건">
+          <section className="side-group">
+            <h2 className="side-group__title">카테고리</h2>
+            <ul className="side-list">
+              {[{ categoryId: '', name: '전체' }, ...categories].map((category) => (
+                <li key={category.categoryId}>
                   <button
                     type="button"
-                    className="btn btn--outline"
-                    disabled={Boolean(block)}
-                    title={block?.text}
-                    onClick={() => guard(() => addToCart(product))}
+                    className={`side-list__item${String(category.categoryId) === String(categoryId) ? ' is-active' : ''}`}
+                    aria-pressed={String(category.categoryId) === String(categoryId)}
+                    onClick={() => {
+                      setPage(0);
+                      setCategoryId(category.categoryId);
+                    }}
                   >
-                    담기
+                    {category.name}
                   </button>
-                )}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="side-group">
+            <h2 className="side-group__title">가격대</h2>
+            {PRICE_RANGES.map((range) => (
+              <label key={range.key} className="check">
+                <input
+                  type="checkbox"
+                  checked={priceKey === range.key}
+                  onChange={(e) => {
+                    setPage(0);
+                    setPriceKey(e.target.checked ? range.key : '');
+                  }}
+                />
+                {range.label}
+              </label>
+            ))}
+          </section>
+          <section className="side-group">
+            <h2 className="side-group__title">판매 상태</h2>
+            <label className="check">
+              <input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} />
+              구매 가능한 상품만
+            </label>
+          </section>
+        </aside>
+
+        <div className="catalog__main">
+          <ErrorNotice error={error} />
+          {!result && !error && <CardSkeletons />}
+          {visible?.length === 0 && (
+            <EmptyState icon="product" title="조건에 맞는 상품이 없어요" hint="검색어나 조건을 바꿔 보세요." actions={[{ onClick: clearFilters, label: '조건 지우기' }]} />
+          )}
+
+          <div className="grid">
+            {visible?.map((product) => (
+              <div key={product.productId} className="tile">
+                <Link to={`/products/${product.productId}`} className="tile__link">
+                  {product.imageUrl ? (
+                    <img className="tile__image" src={product.imageUrl} alt="" loading="lazy" />
+                  ) : (
+                    <ImagePlaceholder />
+                  )}
+                </Link>
+                <div className="tile__body">
+                  <Link to={`/products/${product.productId}`} className="tile__title">
+                    {product.name}
+                  </Link>
+                  <span className="tile__meta">
+                    {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
+                  </span>
+                  <span className="tile__price">{formatWon(product.price)}</span>
+                  <div className="tile__actions">
+                    {product.soldOut ? (
+                      <span className="badge badge--warn">품절</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--outline"
+                        disabled={Boolean(block)}
+                        title={block?.text}
+                        onClick={() => guard(() => addToCart(product))}
+                      >
+                        담기
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
+          {result && <Pager page={result.page} totalPages={result.totalPages} onChange={setPage} />}
+        </div>
       </div>
-      {result && <Pager page={result.page} totalPages={result.totalPages} onChange={setPage} />}
     </div>
   );
 }
