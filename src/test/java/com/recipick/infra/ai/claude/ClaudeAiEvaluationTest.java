@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
+import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
 import com.recipick.infra.ai.dto.AiUsage;
 import java.io.IOException;
@@ -41,7 +42,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 @EnabledIfEnvironmentVariable(named = "AI_EVAL", matches = "true")
 class ClaudeAiEvaluationTest {
 
-    private static final String DEFAULT_MODEL = "claude-opus-5-5";
+    private static final String DEFAULT_MODEL = "claude-sonnet-5-5";
     // 로컬 시드와 같은 100개 목록을 쓰려고 시드 SQL에서 레시피 이름을 순서대로 읽는다. ID는 시드 순서(1부터)다
     private static final Pattern SEED_RECIPE_NAME =
         Pattern.compile("^SELECT '([^']+)', '(?:KOREAN|WESTERN)'", Pattern.MULTILINE);
@@ -52,12 +53,15 @@ class ClaudeAiEvaluationTest {
     private static AnthropicClient anthropicClient;
     private static ClaudeAiClient claudeAiClient;
     private static String model;
+    // 같은 모델로 프롬프트만 바꿔 비교할 때 결과 파일을 구분하려고 붙이는 이름(예: recommend-v1)
+    private static String label;
     private static List<AiRecipeOption> catalog;
     private static Map<Long, String> nameById;
 
     @BeforeAll
     static void setUp() throws IOException {
         model = System.getenv().getOrDefault("AI_EVAL_MODEL", DEFAULT_MODEL);
+        label = System.getenv().getOrDefault("AI_EVAL_LABEL", "");
         // 평가 결과로 운영 모델을 고르므로 타임아웃·재시도·최대 토큰은 ClaudeProperties 기본값과 같게 둔다
         ClaudeProperties properties = new ClaudeProperties(
             System.getenv("ANTHROPIC_API_KEY"), model, Duration.ofSeconds(15), 2, 4096);
@@ -69,7 +73,7 @@ class ClaudeAiEvaluationTest {
         claudeAiClient = new ClaudeAiClient(anthropicClient, properties);
         catalog = loadCatalog();
         nameById = catalog.stream().collect(Collectors.toMap(AiRecipeOption::id, AiRecipeOption::name));
-        report.add("# AI 평가 결과: " + model);
+        report.add("# AI 평가 결과: " + model + (label.isBlank() ? "" : " (" + label + ")"));
         report.add("");
         report.add("- 실행 시각: " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         report.add("- 레시피 목록: " + catalog.size() + "개");
@@ -81,7 +85,7 @@ class ClaudeAiEvaluationTest {
         Path dir = Path.of("build", "ai-eval");
         Files.createDirectories(dir);
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-        Path file = dir.resolve(model + "-" + stamp + ".md");
+        Path file = dir.resolve(model + (label.isBlank() ? "" : "-" + label) + "-" + stamp + ".md");
         Files.writeString(file, String.join("\n", report) + "\n");
         System.out.println("AI 평가 결과: " + file.toAbsolutePath());
     }
@@ -118,6 +122,29 @@ class ClaudeAiEvaluationTest {
         assertThat(rows).hasSameSizeAs(cases);
     }
 
+    // 조건 추천 ③: 서버가 조건으로 거른 후보 안에서 문장에 맞는 레시피를 고르는지, 맞는 게 없으면 빈 목록을 주는지 잰다.
+    // AI는 후보 이름만 보므로 정답도 이름으로 판단할 수 있는 문장만 둔다
+    @Test
+    @DisplayName("조건 추천 후보 고르기: 후보 안에서 맞는 레시피를 고르고, 없으면 빈 목록을 주는지 잰다")
+    void evaluateRecommendPicks() throws IOException {
+        List<PickCase> cases = readCases("ai-eval/recommend-pick-cases.json", new TypeReference<>() {
+        });
+        Map<String, Long> idByName = catalog.stream()
+            .collect(Collectors.toMap(AiRecipeOption::name, AiRecipeOption::id));
+        List<Row> rows = new ArrayList<>();
+        for (PickCase evalCase : cases) {
+            List<AiRecipeOption> candidates = evalCase.candidates().stream()
+                .map(name -> new AiRecipeOption(idByName.get(name), name))
+                .toList();
+            AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(evalCase.text(), candidates);
+            String answer = result.isSuccess() ? describePicks(result.content()) : "실패: " + result.failureType();
+            rows.add(new Row(evalCase.text(), result.isSuccess() && evalCase.matches(result.content(), nameById),
+                answer, result));
+        }
+        appendSection("조건 추천 후보 고르기 (③)", rows);
+        assertThat(rows).hasSameSizeAs(cases);
+    }
+
     private static List<AiRecipeOption> loadCatalog() throws IOException {
         try (InputStream in = ClaudeAiEvaluationTest.class.getResourceAsStream("/data-recipe-local.sql")) {
             Matcher matcher = SEED_RECIPE_NAME.matcher(new String(in.readAllBytes(), StandardCharsets.UTF_8));
@@ -139,6 +166,13 @@ class ClaudeAiEvaluationTest {
         return menus.stream()
             .map(menu -> menu.recipeIds().stream().map(nameById::get).toList() + "×" + menu.servings())
             .collect(Collectors.joining(", "));
+    }
+
+    private static String describePicks(List<AiRecommendedRecipe> picks) {
+        return picks.isEmpty()
+            ? "(빈 목록)"
+            : picks.stream().map(pick -> nameById.getOrDefault(pick.recipeId(), "목록 밖 " + pick.recipeId()))
+                .collect(Collectors.joining(", "));
     }
 
     private static void appendSection(String title, List<Row> rows) {
@@ -230,6 +264,19 @@ class ClaudeAiEvaluationTest {
             return names == null
                 ? Set.of()
                 : names.stream().map(String::strip).collect(Collectors.toCollection(HashSet::new));
+        }
+    }
+
+    // accept가 비어 있으면 후보 중 맞는 레시피가 없는 문장이라 빈 목록이어야 정답이다.
+    // 그 밖에는 하나 이상 골라야 하고, 고른 레시피가 모두 accept 안에 있어야 정답이다(후보 밖 ID도 틀림)
+    record PickCase(String text, List<String> candidates, List<String> accept) {
+
+        boolean matches(List<AiRecommendedRecipe> picks, Map<Long, String> nameById) {
+            List<String> names = picks.stream().map(pick -> nameById.get(pick.recipeId())).toList();
+            if (accept.isEmpty()) {
+                return names.isEmpty();
+            }
+            return !names.isEmpty() && accept.containsAll(names);
         }
     }
 }
