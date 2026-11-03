@@ -1,0 +1,19 @@
+{
+  "emailPrefix": "perf-user-",
+  "emailDomain": "recipick.test",
+  "keywords": [
+    "대파",
+    "유기농",
+    "양파",
+    "두부",
+    "소고기"
+  ],
+  "productIds": [],
+  "delivery": {
+    "receiverName": "성능측정 회원",
+    "receiverPhone": "01090000000",
+    "address": "",
+    "detailAddress": "",
+    "legalDongCode": ""
+  }
+}
