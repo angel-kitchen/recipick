@@ -7,12 +7,13 @@
 | 도구 | 역할 | 설정 위치 |
 | --- | --- | --- |
 | SonarQube Community | 버그·취약점·코드 스멜·중복 분석, 규칙은 기본 Sonar way(Java 274개) | 로컬 Docker 컨테이너 |
-| `org.sonarqube` Gradle 플러그인 | 분석 결과를 SonarQube 서버로 업로드 | `build.gradle`의 `sonar` 블록 |
-| JaCoCo | 테스트 커버리지 측정. `sonar` 실행 전에 `jacocoTestReport`가 XML·HTML 리포트를 만든다. `./gradlew test`만으로는 리포트를 만들지 않는다 | `build.gradle`의 `jacocoTestReport` 블록 |
+| `org.sonarqube` Gradle 플러그인 | 분석 결과를 SonarQube 서버로 업로드 | `scripts/sonar.init.gradle` |
+| JaCoCo | 테스트 커버리지 측정. `sonar` 실행 전에 `jacocoTestReport`가 XML·HTML 리포트를 만든다 | `scripts/sonar.init.gradle` |
 
 - 분석 대상은 `src/main/java`이고 `frontend/`는 제외한다.
 - 커버리지는 리팩토링 대상을 고를 때 참고하는 값이다. 목표 수치나 품질 게이트로 쓰지 않는다.
 - 분석 서버는 로컬에만 띄운다. 코드는 외부로 나가지 않는다.
+- 플러그인은 `build.gradle`에 넣지 않고 init 스크립트로 필요할 때만 붙인다. 평소 빌드와 CI는 Sonar·JaCoCo 없이 돈다.
 
 ## 2. 실행 방법
 
@@ -26,8 +27,8 @@ docker start sonarqube                                             # 이미 만�
 3. 아래 명령으로 테스트·커버리지·분석을 한 번에 실행한다. `./gradlew test`는 Testcontainers를 쓰므로 Docker가 켜져 있어야 한다.
 
 ```bash
-export SONAR_TOKEN=<발급한 토큰>   # 토큰은 커밋하지 않고 환경변수로만 넘긴다
-./gradlew sonar                    # 테스트 → JaCoCo 리포트 → Sonar 업로드를 차례로 실행
+export SONAR_TOKEN=<발급한 토큰>                              # 토큰은 커밋하지 않고 환경변수로만 넘긴다
+./gradlew --init-script scripts/sonar.init.gradle sonar     # 테스트 → JaCoCo 리포트 → Sonar 업로드를 차례로 실행
 ```
 
 전체 테스트는 약 5분, 분석은 약 1분 걸린다.
@@ -42,7 +43,7 @@ export SONAR_TOKEN=<발급한 토큰>   # 토큰은 커밋하지 않고 환경�
 | JaCoCo HTML 리포트 | `build/reports/jacoco/test/html/index.html`을 브라우저로 연다 |
 | JaCoCo XML(Sonar가 읽는 파일) | `build/reports/jacoco/test/jacocoTestReport.xml` |
 
-`build/`는 커밋하지 않는다. 분석 없이 커버리지만 보려면 `./gradlew test jacocoTestReport`를 실행한다.
+`build/`는 커밋하지 않는다. 분석 없이 커버리지만 보려면 `./gradlew --init-script scripts/sonar.init.gradle jacocoTestReport`를 실행한다.
 
 ## 4. 이슈 처리 기준
 
