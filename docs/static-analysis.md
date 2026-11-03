@@ -81,4 +81,6 @@ export SONAR_TOKEN=<발급한 토큰>                              # 토큰은 �
 | S2699 단언 없는 테스트 | `RecipickApplicationTests` | Won't Fix | 컨텍스트 로딩 확인용 |
 | S8786 정규식 백트래킹 ×2 | `FakeAiClient` | 미룸 | Medium, 테스트·시연용 가짜 클라이언트 |
 
+S4502(CSRF)·S2068(하드코딩 비밀번호)은 예전 버전에서는 Security Hotspot 규칙이지만, 이번에 쓴 `sonarqube:community`(Sonar way core)에서는 Vulnerability로 보고되어 표에도 그대로 옮겼다(Hotspot 0건). Safe 처리는 분류와 관계없이 같다.
+
 로컬 SonarQube는 사람마다 따로 띄우므로 Won't Fix·Safe 표시가 공유되지 않는다. 다시 분석하면 위 11건이 계속 보이는 것이 정상이며, 판단 근거는 이 표를 기준으로 한다.
