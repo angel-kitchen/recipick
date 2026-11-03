@@ -40,7 +40,7 @@
 | 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가 수치 측정 대기 |
 | 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/load-test.md) · [병목 개선](performance/bottleneck.md) · [캐싱](performance/caching.md) | 태헌, 각 도메인 협조 | 부하·병목·캐싱 보고서 있음. 호출 제한 결과와 제출용 수치 확정은 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
-| 트러블슈팅 | `docs/troubleshooting/<주제>.md` | 문제를 해결한 담당자 | 작성 대기: 재현·확인된 원인·수정·회귀 결과 |
+| 트러블슈팅 | 주문: [잠금 전 엔티티 조회로 변경 덮어씀](troubleshooting/order-stale-entity-before-lock.md) · [회원 잠금 테스트 경합 없이 통과](troubleshooting/order-member-lock-test-false-pass.md) · [결제 완료 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md) | 문제를 해결한 담당자, 주문 준희 | 주문 3건 작성(2026-11-03 `dev` 관련 테스트 통과 기록). 다른 도메인 작성 대기 |
 
 위 표는 문서 분담과 작성 위치 제안입니다. 실제 담당·측정 범위가 정해지면 갱신합니다.
 개별 기술 선택 문서는 해당 양식을 쓰고, 여러 도메인의 동시성 결과는 공통 문서의 도메인별 절로 모읍니다.
