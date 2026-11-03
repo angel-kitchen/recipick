@@ -6,7 +6,7 @@
 - Java 17, Spring Boot 3.x, Spring Data JPA, QueryDSL
 - 시간은 한국 시간(+09:00), ISO-8601 (`2026-10-14T20:30:00+09:00`)
 - 패키지: `domain`(member, product, recipe, order, payment), `global`, `infra`
-- 도메인 하위 구조: `controller`, `service`, `repository`, `entity`, `dto/request`, `dto/response`, `exception`, 필요할 때만 `event`, `scheduler`
+- 도메인 하위 구조: `controller`, `service`, `repository`, `entity`, `dto/request`, `dto/response`(API 입출력만, 계층 간·도메인 간 전달용은 `dto`에 바로), `exception`, 필요할 때만 `event`, `scheduler`
 - 한 도메인에서만 쓰는 코드는 그 도메인 안에, 두 개 이상 도메인이 쓸 때만 `global/common`
 - `infra`에는 외부 호출만 두고 업무 판단은 `domain`의 Service가 한다.
 
