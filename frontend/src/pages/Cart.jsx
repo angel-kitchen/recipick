@@ -11,6 +11,9 @@ import { ListSkeleton } from '../components/Skeleton';
 import { deliveryBlock } from '../delivery';
 import { CART_STATUS, formatAmount, formatWon } from '../labels';
 
+// 주문 한 건이 잠그는 재고 범위를 묶으려고 서버가 한 주문에 100개까지만 받는다. 넘으면 주문서가 400으로 실패한다
+const MAX_ORDER_ITEMS = 100;
+
 export default function Cart() {
   const navigate = useNavigate();
   const { member } = useAuth();
@@ -92,6 +95,7 @@ export default function Cart() {
   const selectableIds = cart.items.filter((item) => item.status === 'AVAILABLE').map((item) => item.cartItemId);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const chosen = cart.items.filter((item) => selected.has(item.cartItemId));
+  const tooManyChosen = chosen.length > MAX_ORDER_ITEMS;
   const productAmount = chosen.reduce((sum, item) => sum + item.lineAmount, 0);
   const { freeDeliveryThreshold, deliveryFee } = cart.deliveryPolicy;
   const fee = productAmount === 0 || productAmount >= freeDeliveryThreshold ? 0 : deliveryFee;
@@ -241,12 +245,17 @@ export default function Cart() {
               type="button"
               className="btn btn--large btn--block"
               style={{ marginTop: 16 }}
-              disabled={chosen.length === 0 || Boolean(deliveryBlock(member))}
+              disabled={chosen.length === 0 || tooManyChosen || Boolean(deliveryBlock(member))}
               title={deliveryBlock(member)?.text}
               onClick={() => navigate('/checkout', { state: { cartItemIds: chosen.map((item) => item.cartItemId) } })}
             >
               주문하기
             </button>
+            {tooManyChosen && (
+              <p className="field__hint">
+                한 번에 {MAX_ORDER_ITEMS}개까지 주문할 수 있어요. 선택을 줄여 주세요.
+              </p>
+            )}
           </aside>
         </div>
       )}
