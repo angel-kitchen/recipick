@@ -43,7 +43,7 @@
 ## 3. 해결
 
 - 바꾼 내용과 이유
-  1. `70745c2`에서 결제 코드와 `OrderFacade`에 넣었던 호출을 모두 되돌렸다. `domain/payment/`는 이 기능 전과 같다.
+  1. `70745c2`에서 결제 코드와 `OrderFacade`에 넣었던 호출을 모두 되돌렸다. 메인 코드 기준으로 `src/main/java/com/recipick/domain/payment/`는 이 기능 전과 같다. 테스트는 결제 흐름에서 검증해야 해서 `src/test/java/com/recipick/domain/payment/integration/`에 `PaymentCartCleanupIntegrationTest`를 추가하고 `PointsOnlyPaymentIntegrationTest`를 고쳤다.
   2. `OrderService.markPaid`가 주문을 PAID로 바꾸는 트랜잭션 안에서 주문 상품을 조회해 `OrderPaidEvent`를 발행한다(`8d75583`). 모든 결제 성공 경로가 `markPaid`를 거치므로, 새 경로가 생겨도 호출을 빠뜨릴 일이 없다.
   3. `PaidCartCleanupListener`가 커밋 뒤에 받아 `CartService.deductPaidItems`를 호출한다.
 
@@ -70,7 +70,7 @@ public void removePaidItems(OrderPaidEvent event) { ... }
 | --- | --- |
 | 결제 트랜잭션 안에서 삭제(처음 시도) | 1절의 롤백 범위·잠금 순서·도메인 경계 문제 |
 | `@Async` 비동기 리스너 | 정리 작업이 가벼운 DELETE·UPDATE뿐이다. 비동기로 하면 결제 직후 장바구니에 상품이 남아 보일 수 있고, 서버 종료 시 큐의 작업이 사라질 수 있으며, 스레드 풀·커넥션 사용량·MDC 전파를 따로 관리해야 한다. |
-| 주문 상품에 장바구니 항목 ID를 저장해 그 행만 정리 | CodeRabbit이 "결제 대기 중 항목을 지우고 같은 상품을 다시 담으면 새 행까지 차감한다"고 지적했다. 맞는 지적이지만 주문 상품 컬럼·ERD·주문 생성을 모두 바꿔야 한다. 결제 대기(5분)와 만료 후 재확인(최대 10분) 사이에 지우고 다시 담는 경우뿐이고 결과도 결제 수량만큼 덜 남는 정도라, 회원·상품 기준을 유지하고 요구사항 문장을 그 기준으로 고쳤다(`ed37115`). |
+| 주문 상품에 장바구니 항목 ID를 저장해 그 행만 정리 | CodeRabbit이 "결제 대기 중 항목을 지우고 같은 상품을 다시 담으면 새 행까지 차감한다"고 지적했다. 맞는 지적이지만 주문 상품 컬럼·ERD·주문 생성을 모두 바꿔야 한다. 주문 생성부터 결제가 늦게 반영될 때까지(결제 대기 5분, 만료 뒤 1분 간격 재확인 10분, 그 뒤 Fallback·결제 대사) 같은 상품을 지우고 다시 담은 경우뿐이고 결과도 결제 수량만큼 덜 남는 정도라, 회원·상품 기준을 유지하고 요구사항 문장을 그 기준으로 고쳤다(`ed37115`). |
 
 - 변경 코드
   - `src/main/java/com/recipick/domain/order/event/OrderPaidEvent.java`
