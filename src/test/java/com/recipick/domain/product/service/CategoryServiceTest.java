@@ -55,7 +55,11 @@ public class CategoryServiceTest {
         given(categoryRepository.findAllByDeletedFalse())
             .willReturn(List.of(category(1L,"채소"), category(2L,"육류")));
 
+        // when
         List<CategoryResponse> result = categoryService.getCategories();
+
+        // then
+        assertThat(result).isEqualTo(List.of(new CategoryResponse(1L, "채소"), new CategoryResponse(2L, "육류")));
     }
 
     @Test
