@@ -2,6 +2,7 @@
 
 공통 잠금 원칙과 도메인별 검증 결과를 모으는 문서입니다. 현재는 채빈 담당의 회원·배송지·멤버십 지급,
 인증 관련 원자적 처리와 비밀번호 변경·탈퇴·체험 차단, 해지 예약·결제 결과 반영 계약·체험 생성 기반을 작성했습니다.
+레시피 도메인(보민)의 자동 구성 확정·찜·AI 요청 한도는 5절에 있습니다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -321,19 +322,101 @@ JUnit·Mockito 기반 토큰 단위 테스트와 실제 DB·Redis 통합 테스�
 배포 환경의 여러 앱 인스턴스·부하·실 PG 호출 테스트를 수행한 결과는 아닙니다.
 기존 테스트 종료 시 공유 스키마 중복 정리 로그와 실제 테스트 실패 여부는 구분해서 확인합니다.
 
-## 5. 다른 도메인의 작성 위치
+## 5. 레시피 도메인: 자동 구성 확정·찜·AI 요청 한도
+
+| 항목 | 내용 |
+| --- | --- |
+| 작성 담당 | 보민 |
+| 코드 기준 | `dev`의 `8215c63` |
+| 실행 근거 | 2026-11-03 같은 커밋의 `./gradlew test` 전체 실행 3,384건(실패 0·오류 0·실제 AI 평가 건너뜀 2) XML |
+
+### 5-1. 무엇을 보호하는가
+
+| 작업 | 유지해야 하는 조건 | 방어 수단 |
+| --- | --- | --- |
+| 자동 구성 확정 | 한 요청은 장바구니에 한 번만 합산. 확정과 탈퇴가 겹쳐도 탈퇴 뒤 장바구니 항목이 남지 않음 | 회원 행 → 요청 행 비관적 락 + `PREVIEWED` 상태 검사 |
+| 확정 중 장바구니 합산 | 같은 상품 수량 증가가 유실되지 않고 최대 수량·재고를 넘지 않음 | 주문 도메인 `CartService`의 조건부 UPDATE + UNIQUE(`member_id`, `product_id`) |
+| 레시피 찜 | 같은 회원·레시피 찜은 1건 | 복합 PK(`member_id`, `recipe_id`) |
+| AI 요청 한도 | 회원별 1분 5회를 넘지 않음 | Redis Lua 스크립트로 증가와 만료 설정을 한 번에 처리 |
+
+### 5-2. 확정의 후보와 선택 이유
+
+| 후보 | 장점 | 이 요구사항에서의 한계 |
+| --- | --- | --- |
+| 상태 조회 후 일반 저장 | 구현이 단순 | 두 요청이 모두 `PREVIEWED`를 읽고 둘 다 장바구니에 합산 |
+| 조건부 UPDATE(`WHERE status = 'PREVIEWED'`) | 잠금 대기 없이 상태 전환이 원자적 | 상태 규칙이 엔티티 메서드가 아닌 쿼리에 놓임. 컨벤션은 겹치는 자원을 잠근 뒤 검증·변경하도록 정함 |
+| 낙관적 락 | 충돌이 적으면 대기 없음 | 컨벤션상 금지, 충돌 후 재시도 필요 |
+| **요청 행 비관적 락 + 상태 검사(선택)** | 컨벤션의 기본 방식이고 상태 규칙을 `AutoCartRequest.validateConfirmable()`에 둠. 뒤 요청은 기다린 뒤 `RECIPE-015`로 명확히 거절 | 같은 요청의 확정끼리는 앞 트랜잭션이 끝날 때까지 대기 |
+
+요구사항의 확정 문구도 이 방식에 맞춰 고쳤습니다.
+회원 행을 먼저 잠그는 것은 탈퇴와의 경합 때문이며, 공통 잠금 순서의 "회원 포함 시 `MEMBER`가 맨 앞"을 따릅니다(#334).
+
+### 5-3. 코드에서의 적용
+
+```text
+AutoCartFacade.confirm (@Transactional)
+→ MemberService.lockActiveMember: 회원 행 잠금, 탈퇴 회원이면 MEMBER-001
+→ AutoCartRequestRepository.findByIdAndMemberIdForUpdate: 요청 행 PESSIMISTIC_WRITE
+→ validateConfirmable(): PREVIEWED가 아니면 RECIPE-015(409)
+→ 멤버십·이용 마트 변경·이전 마트 상품 검사
+→ 가격·재고·수량 재계산 → CartService.addAutoCartItem으로 장바구니 합산
+→ CONFIRMED와 확정 시점 결과 저장 → 커밋
+```
+
+- **장바구니 합산:** 기존 항목은 조건부 UPDATE로 수량을 늘리고, 바뀐 행이 0이면 `CART-007`입니다. 새 항목 INSERT가 UNIQUE에 걸려도 `CART-007`입니다. 확정 중 이 오류가 나면 확정 트랜잭션 전체가 롤백되어 요청은 `PREVIEWED`로 남고 다시 확정할 수 있습니다.
+- **찜:** `existsById`로 먼저 막고, 동시에 통과한 요청은 `saveAndFlush`의 PK 중복(`DataIntegrityViolationException`)을 `RECIPE-017`(409)로 바꿉니다. `Persistable.isNew()`로 조회 없이 INSERT하도록 했습니다.
+- **AI 요청 한도:** `RedisAiRequestCounter`가 `INCR`와 첫 요청의 `PEXPIRE`를 Lua 스크립트 하나로 실행합니다. 둘을 따로 호출하면 그 사이 실패 시 만료 없는 키가 남아 회원이 계속 막힐 수 있습니다. 서버가 여러 대여도 같은 Redis 키를 셉니다.
+
+### 5-4. 잠금 실패와 롤백
+
+- 잠금 대기 시간 초과는 회원 도메인과 같이 `409 COMMON-010`이며 자동 재시도하지 않습니다.
+- 회원 잠금에서 탈퇴로 거절되면 장바구니 변경 없이 롤백되고 요청은 `PREVIEWED`로 남습니다.
+- 확정은 한 트랜잭션이라 장바구니 일부만 담기고 끝나는 경우가 없습니다.
+
+### 5-5. 실제 동시 요청·실패 결과
+
+| 시나리오 | 동시 요청·방법 | 실제 결과 |
+| --- | --- | --- |
+| 같은 요청 동시 확정 | 5건 동시 요청 | 성공 1건·`RECIPE-015` 4건, 장바구니 수량 1회 합산(2) |
+| 확정 중 탈퇴 | 회원 잠금이 `MEMBER-001`을 던지도록 고정 | 장바구니 항목 없음, 요청 `PREVIEWED` 유지 |
+| 같은 레시피 동시 찜 | 10건 동시 요청 | 성공 1건·`RECIPE-017` 9건, 찜 1건 |
+| AI 요청 동시 | 같은 회원 10건 동시 요청 | 통과 5건·`AI-001` 5건 |
+
+| 검증 클래스 | 테스트 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- |
+| [AutoCartFacadeIntegrationTest](../src/test/java/com/recipick/domain/recipe/facade/AutoCartFacadeIntegrationTest.java) | 15 | 0 | 0 | 0 |
+| [RecipeBookmarkConcurrencyTest](../src/test/java/com/recipick/domain/recipe/service/RecipeBookmarkConcurrencyTest.java) | 1 | 0 | 0 | 0 |
+| [AiRequestLimiterTest](../src/test/java/com/recipick/domain/recipe/service/AiRequestLimiterTest.java) | 3 | 0 | 0 | 0 |
+| 합계 | 19 | 0 | 0 | 0 |
+
+19건 전부가 동시 요청 테스트는 아니며 미리보기·확정의 일반 흐름과 롤백 검증을 포함합니다.
+
+```bash
+./gradlew test \
+  --tests 'com.recipick.domain.recipe.facade.AutoCartFacadeIntegrationTest' \
+  --tests 'com.recipick.domain.recipe.service.RecipeBookmarkConcurrencyTest' \
+  --tests 'com.recipick.domain.recipe.service.AiRequestLimiterTest'
+```
+
+**검증하지 않은 범위**
+
+- `AutoCartFacadeIntegrationTest`는 `MemberService`·`MembershipService`를 목으로 둡니다. 동시 확정 결과는 실제 DB의 요청 행 잠금으로 얻은 것이지만, 회원 행 잠금의 실제 대기와 "탈퇴 커밋 대기 후 확정 거절"은 확인하지 않았습니다. 탈퇴 테스트는 거절 시 롤백만 확인합니다.
+- 확정과 직접 장바구니 담기가 같은 상품에서 겹치는 경우는 레시피 테스트에 없습니다. 장바구니 자체의 동시 담기는 주문 도메인의 `CartAddConcurrencyTest`(3건) 범위입니다.
+- AI 한도는 Redis 하나를 공유하는 설계로 여러 서버에서도 같은 값을 세지만 여러 앱 인스턴스로 실행하지 않았습니다. 고정 구간이라 구간 경계에서 짧게 최대 10회까지 통과할 수 있습니다.
+
+## 6. 다른 도메인의 작성 위치
 
 | 영역 | 담당 | 추가할 내용·현재 문서 상태 |
 | --- | --- | --- |
 | 상품·재고 | 태헌 | 작성 대기: 재고 차감·관리자 조정·복구의 잠금 대상·순서·동시 요청 결과 |
-| 레시피 자동 구성 | 보민 | 작성 대기: 확정 중복 방어·장바구니 합산 경합·실패 롤백 결과 |
+| 레시피 자동 구성 | 보민 | 5절 작성·리뷰 대기: 확정 중복·탈퇴 거절 롤백·찜·AI 한도. 실제 회원 잠금 대기와 확정·직접 담기 교차 경합은 미검증 |
 | 주문 | 준희 | 작성 대기: 주문 생성·멱등 키·결제 대기 제한·취소와 수락 경합. 위 회원 잠금 연동은 검증된 일부 사례 |
 | 결제·환불·포인트 | 정윤 | 작성 대기: 승인·만료·취소·웹훅·포인트의 경합·멱등·재처리 결과 |
 
 각 담당자는 보호할 조건 → 후보·선택 이유 → 실제 잠금·제약 → 실패 처리 → 재현 명령·수치·테스트 근거 순으로 추가합니다.
 `작성 대기`는 문서 취합 상태이며 해당 기능 코드의 미구현 여부를 뜻하지 않습니다.
 
-## 6. 관련 규칙
+## 7. 관련 규칙
 
 - [요구사항](requirement.md), [트랜잭션·동시성 컨벤션](convention.md#트랜잭션동시성).
 - [회원 Repository](../src/main/java/com/recipick/domain/member/repository/MemberRepository.java), [배송지 Facade](../src/main/java/com/recipick/domain/member/facade/MemberAddressFacade.java), [멤버십 지급 Facade](../src/main/java/com/recipick/domain/member/facade/MembershipGrantFacade.java).
