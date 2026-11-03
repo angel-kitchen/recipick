@@ -7,7 +7,6 @@ import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelRequest;
 import com.recipick.infra.portone.dto.PortOneCancelResponse;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
-import com.recipick.infra.portone.dto.PortOneErrorResponse;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -17,13 +16,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
-import java.util.concurrent.TimeoutException;
 
 //PortOne V2 결제 단건 조회와 전액 취소. 외부 호출만 담당하고 승인 가능 여부 같은 업무 판단은 domain Service가 한다.
 // DB 트랜잭션 밖에서 호출해야 한다.
@@ -58,7 +53,7 @@ public class PortOnePaymentClient {
             log.warn("PortOne 결제 조회 오류 응답: paymentId={}, status={}", portonePaymentId, e.getStatusCode());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR, e);
         } catch (ResourceAccessException e) {
-            if (isTimeout(e)) {
+            if (PortOneResponses.isTimeout(e)) {
                 log.warn("PortOne 결제 조회 timeout: paymentId={}", portonePaymentId);
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT, e);
             }
@@ -103,7 +98,8 @@ public class PortOnePaymentClient {
                     if (response.getStatusCode().is2xxSuccessful()) {
                         return PortOneCancelResult.from(response.bodyTo(PortOneCancelResponse.class));
                     }
-                    return PortOneCancelResult.fromError(response.getStatusCode().value(), errorTypeOf(response));
+                    return PortOneCancelResult.fromError(response.getStatusCode().value(),
+                        PortOneResponses.errorTypeOf(response));
                 });
             // REQUESTED는 PortOne이 정의한 정상 비동기 처리, REJECTED는 우리 요청·인증 설정 문제라 운영자가 바로 봐야 한다
             if (result.outcome() == PortOneCancelOutcome.REQUESTED) {
@@ -118,7 +114,7 @@ public class PortOnePaymentClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            String detail = isTimeout(e) ? "timeout" : "연결 실패";
+            String detail = PortOneResponses.isTimeout(e) ? "timeout" : "연결 실패";
             log.warn("PortOne 결제 취소 {}: paymentId={}", detail, portonePaymentId);
             return PortOneCancelResult.unconfirmed(detail);
         } catch (RestClientException e) {
@@ -126,28 +122,5 @@ public class PortOnePaymentClient {
             log.warn("PortOne 결제 취소 응답 처리 실패: paymentId={}", portonePaymentId, e);
             return PortOneCancelResult.unconfirmed("응답 처리 실패");
         }
-    }
-
-    // 오류 본문을 못 읽어도 분류는 계속한다. type이 없으면 상태 코드만으로 판단된다
-    private static String errorTypeOf(ConvertibleClientHttpResponse response) {
-        try {
-            PortOneErrorResponse error = response.bodyTo(PortOneErrorResponse.class);
-            return error == null ? null : error.type();
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static boolean isTimeout(ResourceAccessException e) {
-        Throwable cause = e.getCause();
-        while (cause != null) {
-            if (cause instanceof SocketTimeoutException
-                || cause instanceof HttpTimeoutException
-                || cause instanceof TimeoutException) {
-                return true;
-            }
-            cause = cause.getCause();
-        }
-        return false;
     }
 }

@@ -1,20 +1,15 @@
 package com.recipick.infra.portone;
 
 import com.recipick.infra.portone.dto.PortOneCancelOutcome;
-import com.recipick.infra.portone.dto.PortOneErrorResponse;
 import com.recipick.infra.portone.dto.PortOneMembershipCancelRequest;
 import com.recipick.infra.portone.dto.PortOneMembershipCancelResponse;
 import com.recipick.infra.portone.dto.PortOneMembershipCancelResult;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
-import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse;
 import org.springframework.web.client.RestClientException;
 
 // 멤버십 환불용 PortOne V2 금액 지정 취소. 외부 호출만 담당하고 어느 환불을 어떻게 바꿀지는 결제 Facade가 정한다.
@@ -52,7 +47,7 @@ public class PortOneMembershipRefundClient {
                         return PortOneMembershipCancelResult.from(status,
                             response.bodyTo(PortOneMembershipCancelResponse.class));
                     }
-                    return PortOneMembershipCancelResult.fromError(status, errorTypeOf(response));
+                    return PortOneMembershipCancelResult.fromError(status, PortOneResponses.errorTypeOf(response));
                 });
             if (result.outcome() == PortOneCancelOutcome.REJECTED) {
                 log.error("PortOne 멤버십 취소 요청 거절: paymentId={}, detail={}", portonePaymentId, result.detail());
@@ -62,7 +57,7 @@ public class PortOneMembershipRefundClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            String detail = isTimeout(e) ? "timeout" : "연결 실패";
+            String detail = PortOneResponses.isTimeout(e) ? "timeout" : "연결 실패";
             log.warn("PortOne 멤버십 취소 {}: paymentId={}", detail, portonePaymentId);
             return PortOneMembershipCancelResult.unconfirmed(detail);
         } catch (RestClientException e) {
@@ -71,27 +66,5 @@ public class PortOneMembershipRefundClient {
                 e.getClass().getSimpleName());
             return PortOneMembershipCancelResult.unconfirmed("응답 처리 실패");
         }
-    }
-
-    private static String errorTypeOf(ConvertibleClientHttpResponse response) {
-        try {
-            PortOneErrorResponse error = response.bodyTo(PortOneErrorResponse.class);
-            return error == null ? null : error.type();
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static boolean isTimeout(ResourceAccessException e) {
-        Throwable cause = e.getCause();
-        while (cause != null) {
-            if (cause instanceof SocketTimeoutException
-                || cause instanceof HttpTimeoutException
-                || cause instanceof TimeoutException) {
-                return true;
-            }
-            cause = cause.getCause();
-        }
-        return false;
     }
 }

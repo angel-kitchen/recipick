@@ -10,11 +10,7 @@ import com.recipick.infra.portone.dto.PortOneBillingPaymentOutcome;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentRequest;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentResponse;
 import com.recipick.infra.portone.dto.PortOneBillingPaymentResult;
-import com.recipick.infra.portone.dto.PortOneErrorResponse;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import java.util.Optional;
-import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -67,7 +63,7 @@ public class PortOneBillingClient {
             log.warn("PortOne 빌링키 조회 오류 응답: status={}", e.getStatusCode());
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR);
         } catch (ResourceAccessException e) {
-            if (isTimeout(e)) {
+            if (PortOneResponses.isTimeout(e)) {
                 log.warn("PortOne 빌링키 조회 timeout");
                 throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_TIMEOUT);
             }
@@ -102,7 +98,7 @@ public class PortOneBillingClient {
                         return PortOneBillingKeyLookup.found(PortOneBillingKeyInfo.from(body));
                     }
                     if (status == 404) {
-                        if (PortOneBillingKeyLookup.CODE_NOT_FOUND.equals(errorTypeOf(response))) {
+                        if (PortOneBillingKeyLookup.CODE_NOT_FOUND.equals(PortOneResponses.errorTypeOf(response))) {
                             log.info("PortOne에 빌링키가 없음(정합화 조회)");
                             return PortOneBillingKeyLookup.notFound();
                         }
@@ -117,7 +113,7 @@ public class PortOneBillingClient {
                     return PortOneBillingKeyLookup.unavailable("HTTP_" + status);
                 });
         } catch (ResourceAccessException e) {
-            if (isTimeout(e)) {
+            if (PortOneResponses.isTimeout(e)) {
                 log.warn("PortOne 빌링키 정합화 조회 timeout");
                 return PortOneBillingKeyLookup.unavailable("TIMEOUT");
             }
@@ -155,7 +151,7 @@ public class PortOneBillingClient {
                         return PortOneBillingPaymentResult.from(readSuccessBody(response));
                     }
                     PortOneBillingPaymentResult classified =
-                        PortOneBillingPaymentResult.fromError(status, errorTypeOf(response));
+                        PortOneBillingPaymentResult.fromError(status, PortOneResponses.errorTypeOf(response));
                     logError(paymentId, status, classified);
                     return classified;
                 });
@@ -167,7 +163,7 @@ public class PortOneBillingClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            if (isTimeout(e)) {
+            if (PortOneResponses.isTimeout(e)) {
                 log.warn("PortOne 빌링키 청구 timeout: paymentId={}", paymentId);
                 return PortOneBillingPaymentResult.unknown(PortOneBillingPaymentResult.DETAIL_TIMEOUT);
             }
@@ -201,28 +197,5 @@ public class PortOneBillingClient {
         } catch (RuntimeException e) {
             return null;
         }
-    }
-
-    // 오류 본문을 못 읽어도 분류는 계속한다. type이 없으면 상태 코드만으로 판단된다. message는 읽지 않는다
-    private static String errorTypeOf(ConvertibleClientHttpResponse response) {
-        try {
-            PortOneErrorResponse error = response.bodyTo(PortOneErrorResponse.class);
-            return error == null ? null : error.type();
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static boolean isTimeout(ResourceAccessException e) {
-        Throwable cause = e.getCause();
-        while (cause != null) {
-            if (cause instanceof SocketTimeoutException
-                || cause instanceof HttpTimeoutException
-                || cause instanceof TimeoutException) {
-                return true;
-            }
-            cause = cause.getCause();
-        }
-        return false;
     }
 }
