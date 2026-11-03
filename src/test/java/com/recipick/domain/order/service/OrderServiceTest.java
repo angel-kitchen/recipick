@@ -368,6 +368,7 @@ class OrderServiceTest {
         assertThat(order.getCancelReasonCode()).isEqualTo(CancelReasonCode.MEMBER_CANCELED);
         verify(orderStatusHistoryRepository).save(historyCaptor.capture());
         assertThat(historyCaptor.getValue().getReason()).isEqualTo("MEMBER_CANCELED");
+        assertThat(historyCaptor.getValue().getActor()).isEqualTo(OrderStatusActor.MEMBER);
     }
 
     @ParameterizedTest
