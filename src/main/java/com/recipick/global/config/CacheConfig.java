@@ -3,13 +3,13 @@ package com.recipick.global.config;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.recipick.domain.product.dto.CategoryResponse;
+import com.recipick.domain.product.dto.response.CategoryResponse;
 
 import java.time.Duration;
 import java.util.List;
 
 import com.recipick.domain.product.dto.OpenMartResponse;
-import com.recipick.domain.product.dto.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
 import com.recipick.global.response.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

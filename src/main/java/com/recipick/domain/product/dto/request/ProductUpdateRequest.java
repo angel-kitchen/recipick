@@ -1,4 +1,4 @@
-package com.recipick.domain.product.dto;
+package com.recipick.domain.product.dto.request;
 
 import com.recipick.global.common.SaleUnit;
 import jakarta.validation.constraints.Digits;
@@ -8,10 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
-public record ProductCreateRequest(
-    @NotNull
-    Long martId,
-
+public record ProductUpdateRequest(
     @NotNull
     Long categoryId,
 
@@ -21,22 +18,19 @@ public record ProductCreateRequest(
     @Size(max = 50)
     String name,
 
-    @Size(min = 1, max = 50)
+    @Size(min = 1 , max = 50)
     String brand,
 
     String description,
 
     @NotNull
-    @Digits(integer = 8, fraction = 2)
+    @Digits(integer =  8, fraction = 2)
     BigDecimal saleUnitAmount,
 
     @NotNull
     SaleUnit saleUnit,
 
-    @Size(max= 255)
-    String imageUrl,
-
-    @NotNull
-    Long price
+    @Size(max = 255)
+    String imageUrl
 ) {
 }

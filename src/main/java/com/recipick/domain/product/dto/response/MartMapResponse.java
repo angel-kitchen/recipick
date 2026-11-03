@@ -1,14 +1,12 @@
-package com.recipick.domain.product.dto;
-
+package com.recipick.domain.product.dto.response;
 
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 
 import java.math.BigDecimal;
 
-public record MartResponse(
+public record MartMapResponse(
     Long martId,
-    Long regionId,
     String name,
     BigDecimal latitude,
     BigDecimal longitude,
@@ -16,10 +14,9 @@ public record MartResponse(
     MartStatus status
 ) {
 
-    public static MartResponse from(Mart mart){
-        return new MartResponse(
+    public static MartMapResponse from(Mart mart){
+        return new MartMapResponse(
             mart.getId(),
-            mart.getRegionId(),
             mart.getName(),
             mart.getLatitude(),
             mart.getLongitude(),
@@ -27,6 +24,4 @@ public record MartResponse(
             mart.getStatus()
         );
     }
-
-
 }

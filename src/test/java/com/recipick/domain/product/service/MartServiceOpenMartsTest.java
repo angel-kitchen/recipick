@@ -1,6 +1,6 @@
 package com.recipick.domain.product.service;
 
-import com.recipick.domain.product.dto.MartMapResponse;
+import com.recipick.domain.product.dto.response.MartMapResponse;
 import com.recipick.domain.product.dto.OpenMartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;

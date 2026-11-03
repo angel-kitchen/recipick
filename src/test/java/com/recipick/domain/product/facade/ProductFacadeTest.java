@@ -6,9 +6,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.service.MemberService;
-import com.recipick.domain.product.dto.ProductDetailResponse;
-import com.recipick.domain.product.dto.ProductSearchRequest;
-import com.recipick.domain.product.dto.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.service.ProductService;
 import com.recipick.global.exception.BusinessException;

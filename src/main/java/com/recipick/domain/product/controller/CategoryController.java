@@ -1,6 +1,6 @@
 package com.recipick.domain.product.controller;
 
-import com.recipick.domain.product.dto.CategoryResponse;
+import com.recipick.domain.product.dto.response.CategoryResponse;
 import com.recipick.domain.product.service.CategoryService;
 import com.recipick.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;

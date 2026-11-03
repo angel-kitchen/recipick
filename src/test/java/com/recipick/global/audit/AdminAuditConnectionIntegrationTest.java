@@ -12,7 +12,7 @@ import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.enums.OrderStatus;
 import com.recipick.domain.order.repository.OrderRepository;
 import com.recipick.domain.order.service.OrderService;
-import com.recipick.domain.product.dto.*;
+import com.recipick.domain.product.dto.request.*;
 import com.recipick.domain.product.entity.*;
 import com.recipick.domain.product.repository.*;
 import com.recipick.domain.product.service.*;

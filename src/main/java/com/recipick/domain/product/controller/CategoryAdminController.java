@@ -1,8 +1,8 @@
 package com.recipick.domain.product.controller;
 
-import com.recipick.domain.product.dto.CategoryCreateRequest;
-import com.recipick.domain.product.dto.CategoryIdResponse;
-import com.recipick.domain.product.dto.CategoryUpdateRequest;
+import com.recipick.domain.product.dto.request.CategoryCreateRequest;
+import com.recipick.domain.product.dto.response.CategoryIdResponse;
+import com.recipick.domain.product.dto.request.CategoryUpdateRequest;
 import com.recipick.domain.product.service.CategoryService;
 import com.recipick.global.response.ApiResponse;
 import jakarta.validation.Valid;

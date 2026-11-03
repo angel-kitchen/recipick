@@ -1,8 +1,8 @@
 package com.recipick.domain.product.controller;
 
-import com.recipick.domain.product.dto.ProductDetailResponse;
-import com.recipick.domain.product.dto.ProductSearchRequest;
-import com.recipick.domain.product.dto.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
 import com.recipick.domain.product.facade.ProductFacade;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;

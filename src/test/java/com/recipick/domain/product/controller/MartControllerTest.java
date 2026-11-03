@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.recipick.domain.product.dto.MartMapResponse;
+import com.recipick.domain.product.dto.response.MartMapResponse;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.global.config.ClockConfig;

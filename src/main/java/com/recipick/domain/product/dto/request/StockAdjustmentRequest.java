@@ -1,4 +1,4 @@
-package com.recipick.domain.product.dto;
+package com.recipick.domain.product.dto.request;
 
 import com.recipick.domain.product.entity.StockAdjustmentType;
 import jakarta.validation.constraints.NotBlank;

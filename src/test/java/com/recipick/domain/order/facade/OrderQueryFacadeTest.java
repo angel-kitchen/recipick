@@ -26,7 +26,7 @@ import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.service.PaymentService;
-import com.recipick.domain.product.dto.MartResponse;
+import com.recipick.domain.product.dto.response.MartResponse;
 import com.recipick.domain.product.dto.OpenMartResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.entity.MartStatus;

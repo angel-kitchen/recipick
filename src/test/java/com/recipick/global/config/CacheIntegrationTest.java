@@ -7,10 +7,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.recipick.IntegrationTestSupport;
-import com.recipick.domain.product.dto.CategoryCreateRequest;
-import com.recipick.domain.product.dto.CategoryResponse;
-import com.recipick.domain.product.dto.MartCreateRequest;
-import com.recipick.domain.product.dto.ProductSearchRequest;
+import com.recipick.domain.product.dto.request.CategoryCreateRequest;
+import com.recipick.domain.product.dto.response.CategoryResponse;
+import com.recipick.domain.product.dto.request.MartCreateRequest;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
 import com.recipick.domain.product.repository.CategoryRepository;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductRepository;

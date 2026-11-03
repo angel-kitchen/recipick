@@ -1,8 +1,8 @@
 package com.recipick.domain.member.controller;
 
 import com.recipick.domain.member.dto.MemberLoginResult;
-import com.recipick.domain.member.dto.SignupRequest;
-import com.recipick.domain.member.dto.SignupResponse;
+import com.recipick.domain.member.dto.request.SignupRequest;
+import com.recipick.domain.member.dto.response.SignupResponse;
 import com.recipick.domain.member.dto.request.MemberLoginRequest;
 import com.recipick.domain.member.dto.response.MemberLoginResponse;
 import com.recipick.domain.member.dto.response.TokenReissueResponse;

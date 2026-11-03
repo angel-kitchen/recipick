@@ -1,9 +1,9 @@
 package com.recipick.domain.product.controller;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.StockAdjustmentHistoryResponse;
-import com.recipick.domain.product.dto.StockAdjustmentRequest;
-import com.recipick.domain.product.dto.StockAdjustmentResponse;
+import com.recipick.domain.product.dto.response.StockAdjustmentHistoryResponse;
+import com.recipick.domain.product.dto.request.StockAdjustmentRequest;
+import com.recipick.domain.product.dto.response.StockAdjustmentResponse;
 import com.recipick.domain.product.service.ProductStockService;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
