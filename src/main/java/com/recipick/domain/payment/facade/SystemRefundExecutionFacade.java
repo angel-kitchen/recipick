@@ -51,6 +51,9 @@ public class SystemRefundExecutionFacade {
     // 회원 취소(PaymentCancelFacade)와 같은 규칙. 환불 행 하나가 PortOne 취소 작업 하나다
     private static final String PORTONE_IDEMPOTENCY_KEY_PREFIX = "recipick-refund-";
 
+    // 상품 결제가 받는 유일한 통화. 결제 확정 판정(PaymentVerifier)과 같은 기준이다
+    private static final String CURRENCY_KRW = "KRW";
+
     private final PaymentService paymentService;
     private final PortOnePaymentClient portOnePaymentClient;
     private final SystemRefundProcessor systemRefundProcessor;
@@ -65,7 +68,9 @@ public class SystemRefundExecutionFacade {
         // 값을 받는 switch 식이라 판정이 늘면 컴파일이 실패한다. 그 판정이 SYSTEM 환불을 만드는지 그때 정한다
         boolean mayRequestRefund = switch (outcome) {
             case AMOUNT_MISMATCH, EXPIRED, ALREADY_CLOSED -> true;
-            case APPROVED, ALREADY_PAID, NOT_PAID, PG_FAILED, ORDER_MISMATCH, INVALID_STATUS -> false;
+            // CURRENCY_MISMATCH는 검증되지 않은 통화의 금액이라 환불 금액으로 쓰지 않는다. 운영이 원거래를 확인한다
+            case APPROVED, ALREADY_PAID, NOT_PAID, PG_FAILED, ORDER_MISMATCH, INVALID_STATUS, CURRENCY_MISMATCH ->
+                false;
         };
         if (!mayRequestRefund) {
             return;
@@ -141,6 +146,25 @@ public class SystemRefundExecutionFacade {
         } catch (BusinessException e) {
             // 404·5xx·timeout 모두 일시적일 수 있다. 클라이언트가 WARN을 남겼다
             return Decision.retry("PortOne 조회 실패: " + e.getErrorCode().getCode());
+        }
+
+        // 환불을 만들 때 본 결과와 지금 재조회한 결과가 다를 수 있다. 통화와 원수납액이 환불 금액의 근거로 확인될 때만
+        // 기존 취소 반영이든 새 취소 요청이든 진행한다. 누락은 재조회로 채워질 수 있어 다시 보고, 명확한 모순은 운영에 넘긴다.
+        // 금액 기준은 결제가 아니라 환불이다 — 금액 불일치로 생긴 SYSTEM 환불은 결제 금액과 다르다. PG 통화 원문은 사유에 적지 않는다
+        String currency = portOnePayment.currency();
+        if (currency == null || currency.isBlank()) {
+            return Decision.retry("SYSTEM 환불 대상 PG 결제 통화 누락");
+        }
+        if (!CURRENCY_KRW.equals(currency)) {
+            return Decision.manualReview("SYSTEM 환불 대상 PG 결제 통화 불일치: refundId=" + refund.getId());
+        }
+        Long pgAmount = portOnePayment.totalAmount();
+        if (pgAmount == null) {
+            return Decision.retry("SYSTEM 환불 대상 PG 원수납액 누락");
+        }
+        if (!pgAmount.equals(refund.getAmount())) {
+            return Decision.manualReview("SYSTEM 환불 대상 PG 원수납액 불일치: refundAmount=" + refund.getAmount()
+                + ", pgAmount=" + pgAmount);
         }
 
         // POST 여부를 정하기 전에 외부 전액 취소를 먼저 본다. 웹훅·회원 환불 재확인과 같은 판정이다.

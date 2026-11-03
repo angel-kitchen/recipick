@@ -290,6 +290,26 @@ class PaymentExpirationFacadeTest {
     }
 
     @Test
+    @DisplayName("PG 결제 통화가 KRW가 아니면(CURRENCY_MISMATCH) 만료 종료하지 않고 MANUAL_REVIEW — 재예약하지 않는다")
+    void manualReviewWhenCurrencyMismatch() {
+        // given
+        givenPayment(PaymentStatus.IN_PROGRESS, NOW.minusMinutes(1));
+        PortOnePayment portOnePayment = new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", PortOnePaymentStatus.PAID,
+            AMOUNT, "USD", NOW.minusMinutes(2), ORDER_ID, null, List.of());
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment);
+        given(paymentConfirmProcessor.process(ORDER_ID, portOnePayment))
+            .willReturn(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+
+        // when
+        PaymentExpirationOutcome outcome = facade.execute(PAYMENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentExpirationOutcome.MANUAL_REVIEW);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.CURRENCY_MISMATCH);
+        verifyNoInteractions(paymentExpirationProcessor, paymentDelayQueue);
+    }
+
+    @Test
     @DisplayName("잠금 아래에서 다른 흐름이 결제 상태를 가져가 INVALID_STATUS면 SKIPPED")
     void skipWhenInvalidStatus() {
         // given

@@ -2,7 +2,10 @@ package com.recipick.domain.payment.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -31,6 +34,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -184,9 +188,34 @@ class PaymentConfirmFacadeTest {
         verifyNoInteractions(paymentConfirmProcessor, systemRefundExecutionFacade);
     }
 
+    @Test
+    @DisplayName("CURRENCY_MISMATCH는 PAYMENT-013(409)으로 던지고 PG 취소는 부르지 않는다 — 예약 여부 판단은 다른 오류 결과와 같이 맡긴다")
+    void currencyMismatchBecomesCurrencyError() {
+        // given
+        PortOnePayment portOne = new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", PortOnePaymentStatus.PAID,
+            23800L, "USD", PAID_AT, ORDER_ID, null);
+        given(paymentService.getByOrderId(ORDER_ID)).willReturn(inProgressPayment());
+        given(orderService.getMemberIdOf(ORDER_ID)).willReturn(MEMBER_ID);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOne);
+        given(paymentConfirmProcessor.process(ORDER_ID, portOne)).willReturn(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+
+        // when
+        Throwable thrown = catchThrowable(() -> facade.confirm(MEMBER_ID, ORDER_ID, PORTONE_PAYMENT_ID));
+
+        // then
+        assertErrorCode(thrown, PaymentErrorCode.PAYMENT_CURRENCY_MISMATCH);
+        assertThat(PaymentErrorCode.PAYMENT_CURRENCY_MISMATCH.getCode()).isEqualTo("PAYMENT-013");
+        assertThat(PaymentErrorCode.PAYMENT_CURRENCY_MISMATCH.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.CURRENCY_MISMATCH);
+        verify(portOnePaymentClient, never()).cancelPayment(anyString(), anyString(), anyString(), anyLong());
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verify(paymentService, times(1)).getByOrderId(ORDER_ID);
+    }
+
     @ParameterizedTest
     @EnumSource(value = PaymentApprovalOutcome.class, names = {
-        "NOT_PAID", "PG_FAILED", "ORDER_MISMATCH", "AMOUNT_MISMATCH", "EXPIRED", "ALREADY_CLOSED", "INVALID_STATUS"})
+        "NOT_PAID", "PG_FAILED", "ORDER_MISMATCH", "AMOUNT_MISMATCH", "CURRENCY_MISMATCH", "EXPIRED", "ALREADY_CLOSED",
+        "INVALID_STATUS"})
     @DisplayName("오류 결과는 Processor 커밋 뒤 SYSTEM 환불 실행 예약 여부 판단을 맡긴 다음 그 결과의 오류 코드로 바꿔 던지고, 결제를 다시 읽지 않는다")
     void failedOutcomeBecomesError(PaymentApprovalOutcome outcome) {
         // given

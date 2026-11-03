@@ -454,6 +454,51 @@ class PaymentReconciliationFacadeTest {
         verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.ORDER_MISMATCH);
     }
 
+    @Test
+    @DisplayName("FAILED 결제의 늦은 승인에 수납액이 없어 NOT_PAID면 PROCESSED로 확정하지 않고 재시도한다 — 환불 행 없이 끝내지 않는다")
+    void retryLateApprovalWithoutAmount() {
+        // given
+        givenClaimed(claimedEvent(PAID, null));
+        givenOurFailedPayment();
+        PortOnePayment portOnePayment = new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", PortOnePaymentStatus.PAID,
+            null, "KRW", NOW.minusMinutes(5), ORDER_ID, null, List.of());
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment);
+        given(paymentConfirmProcessor.process(ORDER_ID, portOnePayment)).willReturn(PaymentApprovalOutcome.NOT_PAID);
+        given(webhookEventService.markRetryPending(EVENT_ID, ATTEMPT, "PortOne 결제 미확정: status=PAID"))
+            .willReturn(true);
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.RETRY_PENDING);
+        verify(paymentDelayQueue).reschedule(
+            PaymentDelayTask.webhookProcess(EVENT_ID), NOW_INSTANT.plus(Duration.ofMinutes(1)));
+        verify(webhookEventService, never()).markProcessed(anyLong(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("PG 결제 통화가 KRW가 아니면(CURRENCY_MISMATCH) PROCESSED가 아니라 MANUAL_REVIEW — 재시도하지 않고 운영이 실제 거래를 확인한다")
+    void manualReviewOnCurrencyMismatch() {
+        // given
+        givenClaimed(claimedEvent(PAID, null));
+        givenOurPayment();
+        PortOnePayment portOnePayment = new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", PortOnePaymentStatus.PAID,
+            AMOUNT, "USD", NOW.minusMinutes(5), ORDER_ID, null, List.of());
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID)).willReturn(portOnePayment);
+        given(paymentConfirmProcessor.process(ORDER_ID, portOnePayment))
+            .willReturn(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+        givenManualReviewRecorded("통화 불일치");
+
+        // when
+        WebhookProcessOutcome outcome = facade.processWebhook(EVENT_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(WebhookProcessOutcome.MANUAL_REVIEW);
+        verifyNoInteractions(paymentDelayQueue, paymentCancelProcessor);
+        verify(systemRefundExecutionFacade).scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.CURRENCY_MISMATCH);
+    }
+
     // ---------- Cancelled · CancelPending → 환불 찾기 ----------
 
     @Test

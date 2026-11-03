@@ -46,6 +46,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -211,6 +213,98 @@ class SystemRefundExecutionFacadeTest {
         verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
         verifyNoInteractions(systemRefundProcessor);
         verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+    }
+
+    // ---------- 실행 시점 재조회 결과의 통화·원수납액 검증 ----------
+
+    @Test
+    @DisplayName("재조회한 PG 결제 통화가 KRW가 아니면 취소를 요청하지 않고 MANUAL_REVIEW — 검증되지 않은 통화의 금액을 돌려주지 않는다")
+    void manualReviewWhenPgCurrencyIsNotKrw() {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.PAID, AMOUNT, "USD"));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", " "})
+    @DisplayName("재조회한 PG 결제 통화가 비어 있으면 근거 부족으로 보고 취소를 요청하지 않고 10분 뒤 재실행을 예약한다")
+    void recheckWhenPgCurrencyMissing(String currency) {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.PAID, AMOUNT, currency));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("재조회한 PG 원수납액이 없으면 근거 부족으로 보고 취소를 요청하지 않고 10분 뒤 재실행을 예약한다")
+    void recheckWhenPgAmountMissing() {
+        // given
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.PAID, null, "KRW"));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.RESCHEDULED);
+        verify(paymentDelayQueue).enqueueIfEarlier(PaymentDelayTask.systemRefundExecute(REFUND_ID), RECHECK_AT);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor);
+    }
+
+    @Test
+    @DisplayName("재조회한 PG 원수납액이 환불 금액과 다르면 취소를 요청하지 않고 MANUAL_REVIEW — 금액 기준은 결제가 아니라 환불이다")
+    void manualReviewWhenPgAmountDiffersFromRefund() {
+        // given — 환불은 23,800원인데 PG는 25,000원을 말한다
+        givenRequestedRefund();
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.PAID, 25000L, "KRW"));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
+    }
+
+    @Test
+    @DisplayName("콘솔 전액 취소가 이미 성공해 있어도 재조회한 통화가 KRW가 아니면 그 취소로 환불을 완료하지 않고 MANUAL_REVIEW")
+    void manualReviewWhenExistingCancellationButCurrencyIsNotKrw() {
+        // given
+        givenRequestedRefund();
+        PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, AMOUNT);
+        given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, AMOUNT, "USD", console));
+
+        // when
+        RefundReconcileOutcome outcome = facade.execute(REFUND_ID);
+
+        // then
+        assertThat(outcome).isEqualTo(RefundReconcileOutcome.MANUAL_REVIEW);
+        verify(portOnePaymentClient, never()).cancelPaymentByAdmin(anyString(), anyString(), anyString(), anyLong());
+        verifyNoInteractions(systemRefundProcessor, paymentDelayQueue);
     }
 
     // ---------- 아직 취소가 없는 경우: PAID일 때만 POST ----------
@@ -552,12 +646,12 @@ class SystemRefundExecutionFacadeTest {
     @Test
     @DisplayName("결제 금액과 다른 SYSTEM 환불도 환불 금액과 같은 콘솔 전액 취소면 그 취소로 완료한다 — 금액 기준은 환불이다")
     void applyConsoleCancellationForMismatchedAmountRefund() {
-        // given — 결제 23,800원, PG 승인 25,000원이라 25,000원 SYSTEM 환불이 생긴 경우
+        // given — 결제 23,800원, PG 승인 25,000원이라 25,000원 SYSTEM 환불이 생긴 경우. 재조회의 원수납액도 25,000원이다
         Long refundAmount = 25000L;
         givenRequestedRefund(NOW.minusMinutes(1), refundAmount);
         PortOneCancellation console = consoleCancellation(PortOneCancellationStatus.SUCCEEDED, refundAmount);
         given(portOnePaymentClient.getPayment(PORTONE_PAYMENT_ID))
-            .willReturn(portOne(PortOnePaymentStatus.CANCELED, console));
+            .willReturn(portOne(PortOnePaymentStatus.CANCELED, refundAmount, "KRW", console));
         given(systemRefundProcessor.apply(PAYMENT_ID, REFUND_ID, console.toCancelResult()))
             .willReturn(RefundStatus.COMPLETED);
 
@@ -712,6 +806,16 @@ class SystemRefundExecutionFacadeTest {
     }
 
     @Test
+    @DisplayName("CURRENCY_MISMATCH는 환불 예약 대상이 아니다 — 검증되지 않은 통화의 금액을 원화 환불 금액으로 쓰지 않는다")
+    void noScheduleForCurrencyMismatch() {
+        // when
+        facade.scheduleAfterConfirm(PAYMENT_ID, PaymentApprovalOutcome.CURRENCY_MISMATCH);
+
+        // then
+        verifyNoInteractions(paymentService, paymentDelayQueue, portOnePaymentClient, systemRefundProcessor);
+    }
+
+    @Test
     @DisplayName("늦은 승인이어도 REQUESTED SYSTEM 환불이 없으면(만들지 않았거나 이미 끝남) 예약하지 않는다")
     void noScheduleWhenNoRequestedSystemRefund() {
         // given
@@ -820,7 +924,13 @@ class SystemRefundExecutionFacadeTest {
     }
 
     private static PortOnePayment portOne(PortOnePaymentStatus status, PortOneCancellation... cancellations) {
-        return new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", status, AMOUNT, "KRW", NOW.minusMinutes(6), 1L, null,
-            List.of(cancellations));
+        return portOne(status, AMOUNT, "KRW", cancellations);
+    }
+
+    // 실행 시점 재조회 결과의 원수납액·통화를 직접 준다. 환불 금액과 다른 원수납액, 원화가 아닌 통화를 보는 테스트용
+    private static PortOnePayment portOne(PortOnePaymentStatus status, Long totalAmount, String currency,
+                                          PortOneCancellation... cancellations) {
+        return new PortOnePayment(PORTONE_PAYMENT_ID, "tx_1", status, totalAmount, currency, NOW.minusMinutes(6), 1L,
+            null, List.of(cancellations));
     }
 }

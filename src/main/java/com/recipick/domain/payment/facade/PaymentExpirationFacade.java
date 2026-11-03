@@ -143,6 +143,8 @@ public class PaymentExpirationFacade {
             // 다른 주문의 결제를 자동으로 반영하면 안 된다
             case ORDER_MISMATCH -> manualReview(payment, "customData 주문 ID 불일치: "
                 + portOnePayment.customDataOrderId());
+            // PG가 원화가 아닌 결제를 말한다. 미결제로 보고 만료 종료하면 실제 수납이 남을 수 있어 운영이 확인한다
+            case CURRENCY_MISMATCH -> manualReview(payment, "PG 결제 통화 불일치");
             // 잠금 아래에서 다시 보니 다른 흐름이 결제 상태를 가져갔다
             case INVALID_STATUS -> PaymentExpirationOutcome.SKIPPED;
         };

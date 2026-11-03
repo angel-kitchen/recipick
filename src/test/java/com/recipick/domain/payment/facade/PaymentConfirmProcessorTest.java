@@ -239,6 +239,47 @@ class PaymentConfirmProcessorTest {
         verifyNoInteractions(orderService, orderFacade, pointCommandService);
     }
 
+    @Test
+    @DisplayName("CURRENCY_MISMATCH는 결제·주문·포인트·재고를 바꾸지 않고 SYSTEM 환불도 만들지 않는다 — 운영이 실제 거래를 확인한다")
+    void currencyMismatchPreservesState() {
+        // given
+        Payment payment = inProgressPayment();
+        PortOnePayment portOne = new PortOnePayment("pay_1", "tx_1", PortOnePaymentStatus.PAID,
+            23800L, "USD", PAID_AT, ORDER_ID, null);
+        given(paymentService.getByOrderIdForUpdate(ORDER_ID)).willReturn(payment);
+        given(paymentVerifier.verify(payment, portOne)).willReturn(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+
+        // when
+        PaymentApprovalOutcome outcome = processor.process(ORDER_ID, portOne);
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.IN_PROGRESS);
+        assertThat(payment.getFailureReason()).isNull();
+        verify(paymentService, never()).requestSystemRefund(any(), any(), any());
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
+    }
+
+    @Test
+    @DisplayName("FAILED 결제의 늦은 승인이 CURRENCY_MISMATCH면 늦은 승인 환불을 만들지 않는다 — 검증되지 않은 통화의 금액은 환불 근거가 아니다")
+    void lateApprovalInForeignCurrencyMakesNoRefund() {
+        // given
+        Payment payment = payment(PaymentStatus.FAILED);
+        PortOnePayment portOne = new PortOnePayment("pay_1", "tx_1", PortOnePaymentStatus.PAID,
+            23800L, "USD", PAID_AT, ORDER_ID, null);
+        given(paymentService.getByOrderIdForUpdate(ORDER_ID)).willReturn(payment);
+        given(paymentVerifier.verify(payment, portOne)).willReturn(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+
+        // when
+        PaymentApprovalOutcome outcome = processor.process(ORDER_ID, portOne);
+
+        // then
+        assertThat(outcome).isEqualTo(PaymentApprovalOutcome.CURRENCY_MISMATCH);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(paymentService, never()).requestSystemRefund(any(), any(), any());
+        verifyNoInteractions(orderService, orderFacade, pointCommandService);
+    }
+
     @ParameterizedTest
     @EnumSource(value = PaymentApprovalOutcome.class,
         names = {"ALREADY_PAID", "INVALID_STATUS", "NOT_PAID", "ORDER_MISMATCH"})
