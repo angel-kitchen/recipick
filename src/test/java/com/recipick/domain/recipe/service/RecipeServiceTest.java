@@ -252,7 +252,7 @@ class RecipeServiceTest {
 
     @Test
     @DisplayName("조회수 순위: 활성 레시피를 조회수 순으로 조회하고 내가 찜한 레시피만 bookmarked가 true다")
-    void findMostViewRecipes() {
+    void findMostViewedRecipes() {
         // given
         PageRequest pageable = PageRequest.of(0, 20);
         List<Recipe> recipes = List.of(recipe(12L, "된장찌개"), recipe(18L, "두부조림"));
@@ -262,7 +262,7 @@ class RecipeServiceTest {
             .willReturn(Set.of(18L));
 
         // when
-        PageResponse<RecipeSummaryResponse> response = recipeService.findMostViewRecipes(MEMBER_ID, pageable);
+        PageResponse<RecipeSummaryResponse> response = recipeService.findMostViewedRecipes(MEMBER_ID, pageable);
 
         // then
         assertThat(response.content())

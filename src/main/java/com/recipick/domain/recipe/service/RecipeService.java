@@ -63,8 +63,7 @@ public class RecipeService {
         Pageable pageable
     ){
         LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
-        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        Page<Recipe> recipes = recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, from, unsorted);
+        Page<Recipe> recipes = recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, from, withoutSort(pageable));
         Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
 
         return PageResponse.from(recipes.map(recipe ->
@@ -87,14 +86,18 @@ public class RecipeService {
         recipeRepository.increaseViewCount(recipeId);
     }
 
-    public PageResponse<RecipeSummaryResponse> findMostViewRecipes(Long memberId, Pageable pageable){
-        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    public PageResponse<RecipeSummaryResponse> findMostViewedRecipes(Long memberId, Pageable pageable){
         Page<Recipe> recipes = recipeRepository
-            .findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, unsorted);
+            .findByStatusOrderByViewCountDescIdDesc(RecipeStatus.ACTIVE, withoutSort(pageable));
         Set<Long> bookmarkedRecipeIds = findBookmarkedRecipeIds(memberId, recipes.getContent());
 
         return PageResponse.from(recipes.map(recipe ->
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+    }
+
+    // 순위 API는 순서가 정해져 있으므로 클라이언트가 보낸 sort는 무시하고 page·size만 쓴다
+    private static Pageable withoutSort(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     }
 
     private Recipe getActiveRecipe(Long recipeId) {

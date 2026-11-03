@@ -74,6 +74,6 @@ public class RecipeController {
         @LoginMember Long memberId,
         Pageable pageable
     ){
-        return ResponseEntity.ok(ApiResponse.success(recipeService.findMostViewRecipes(memberId, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findMostViewedRecipes(memberId, pageable)));
     }
 }
