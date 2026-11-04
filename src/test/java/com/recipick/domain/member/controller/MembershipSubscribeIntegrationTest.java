@@ -73,7 +73,8 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
                 ON a.membership_payment_id = p.id JOIN membership m ON p.membership_id = m.id
                 WHERE m.member_id = ?
                 """, member.getId());
-        jdbc.update("DELETE p FROM membership_payment p JOIN membership m ON p.membership_id = m.id WHERE m.member_id = ?",
+        jdbc.update("DELETE p FROM membership_payment p JOIN membership m ON p.membership_id = m.id "
+                + "WHERE m.member_id = ?",
                 member.getId());
         jdbc.update("DELETE FROM membership WHERE member_id = ?", member.getId());
         jdbc.update("DELETE FROM billing_key WHERE member_id = ?", member.getId());

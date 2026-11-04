@@ -37,7 +37,8 @@ public class MembershipBillingService {
         return new BillingMembershipData(value.getId(), value.getMember().getId(), value.getType(), value.getSource(),
                 value.getStartAt(), value.getEndAt(), value.getActivatedAt(), value.getGraceEndAt(),
                 value.isAutoRenew(), value.getCancelReservedAt(), value.getTerminatedAt(), value.getBillingAnchorDate(),
-                new MembershipConsent(value.getConsentedAmount(), value.getConsentTextVersion(), value.getAutopayConsentedAt()));
+                new MembershipConsent(value.getConsentedAmount(), value.getConsentTextVersion(),
+                        value.getAutopayConsentedAt()));
     }
 
     // 웹훅·복구는 잠금 트랜잭션에 진입하기 전에 별도 읽기 조회로 회원 ID를 찾는다.
@@ -98,7 +99,8 @@ public class MembershipBillingService {
         return memberships.save(pending).getId();
     }
 
-    public List<MembershipBillingTarget> findTrialConversionTargets(LocalDateTime now, Long afterMembershipId, int limit) {
+    public List<MembershipBillingTarget> findTrialConversionTargets(LocalDateTime now, Long afterMembershipId,
+            int limit) {
         return memberships.findTrialConversionTargets(requireTime(now), cursor(afterMembershipId), page(limit));
     }
 
@@ -127,7 +129,8 @@ public class MembershipBillingService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public MembershipBillingResult applyRenewalPaid(Long membershipId, LocalDateTime newEndAt, LocalDateTime newGraceEndAt) {
+    public MembershipBillingResult applyRenewalPaid(Long membershipId, LocalDateTime newEndAt,
+            LocalDateTime newGraceEndAt) {
         requireWritableTransaction();
         return findMembership(membershipId).extendAfterRenewal(newEndAt, newGraceEndAt);
     }

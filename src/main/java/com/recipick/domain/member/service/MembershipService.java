@@ -38,7 +38,8 @@ public class MembershipService {
                 value.isAutoRenew(), value.getBillingAnchorDate(), value.getCancelReservedAt())).orElse(null);
         MembershipMeResponse.Pending pending = current == null
                 ? membershipRepository.findPendingMemberships(memberId, now, PageRequest.of(0, 1)).stream()
-                        .findFirst().map(value -> new MembershipMeResponse.Pending(value.getId(), value.getType().name(),
+                        .findFirst()
+                        .map(value -> new MembershipMeResponse.Pending(value.getId(), value.getType().name(),
                                 value.getSource().name(), value.getStatus(now).orElseThrow().name(), value.getStartAt(),
                                 value.getEndAt(), value.isAutoRenew(), value.getCancelReservedAt())).orElse(null)
                 : null;

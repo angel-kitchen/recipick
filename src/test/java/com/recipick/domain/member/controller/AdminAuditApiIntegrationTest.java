@@ -72,7 +72,8 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
 
     @AfterEach
     void teardown() {
-        jdbc.update("DELETE FROM admin_audit_log WHERE admin_id IN (?, ?, ?)", admin.getId(), other.getId(), martAdmin.getId());
+        jdbc.update("DELETE FROM admin_audit_log WHERE admin_id IN (?, ?, ?)", admin.getId(), other.getId(),
+                martAdmin.getId());
         jdbc.update("DELETE FROM membership WHERE member_id = ?", member.getId());
         members.deleteById(member.getId());
         admins.deleteAllById(List.of(admin.getId(), other.getId(), martAdmin.getId()));
