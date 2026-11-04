@@ -296,7 +296,9 @@ Table PRODUCT {
   sale_unit_amount decimal(10,2)
   sale_unit varchar(10)
   image_url varchar(255)
-  price bigint
+  price bigint [note: '정상가']
+  discount_rate int [default: 0, note: '할인율(%), 0~99, 0이면 할인 없음']
+  discount_end_at datetime [note: '할인 종료 시각. 이 시각 전까지만 할인 적용. 할인이 없으면 null']
   status varchar(20)
   total_quantity int
   deleted boolean
