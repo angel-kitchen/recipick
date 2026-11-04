@@ -13,6 +13,7 @@ import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
+import com.recipick.domain.member.repository.TrialBlockRepository;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
@@ -32,7 +33,8 @@ class MembershipAccessServiceTest {
 
     private final MembershipRepository memberships = mock(MembershipRepository.class);
     private final MemberRepository members = mock(MemberRepository.class);
-    private final MembershipService service = new MembershipService(memberships, members, CLOCK, mock(TrialBlockService.class));
+    private final MembershipService service = new MembershipService(memberships, members, CLOCK,
+            mock(TrialBlockRepository.class), mock(TrialPhoneHasher.class));
 
     @Test
     @DisplayName("활성 검증은 주입된 한국 시간 Clock을 기준으로 조회하고 활성 회원을 허용한다")
