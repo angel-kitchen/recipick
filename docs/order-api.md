@@ -649,8 +649,8 @@
 | usedPoint | Long | 주문에 사용한 포인트 |
 | amount | Long | 결제 금액(productAmount + deliveryFee − usedPoint). 0이면 PG 결제 없이 생성과 함께 결제가 완료되어 status는 PAID, portonePaymentId · expiresAt은 null |
 | paymentId | Long | 결제 테이블 ID |
-| portonePaymentId | String | PortOne 결제 식별자(`pay_` + UUID) |
-| expiresAt | String | 결제 만료 시각(생성 시점 + 5분) |
+| portonePaymentId | String / null | PortOne 결제 식별자(`pay_` + UUID). 0원 결제는 null |
+| expiresAt | String / null | 결제 만료 시각(생성 시점 + 5분). 0원 결제는 null |
 | receiverName / receiverPhone | String | 주문에 저장된 수령인 이름 · 연락처 |
 
 ### 예외처리
@@ -662,7 +662,7 @@
 | 400 | ORDER-002 (DUPLICATE_ORDER_ITEM) | cartItemIds에 중복 항목 |
 | 400 | ORDER-006 (INVALID_DELIVERY_INFORMATION) | legalDongCode 누락 또는 숫자 10자리가 아님 |
 | 400 | ORDER-008 (OUTSIDE_DELIVERY_AREA) | 배송지 법정동이 이용 마트 지역과 다르거나 서비스 지역(REGION)에 없음 |
-| 400 | ORDER-019 (USED_POINT_EXCEEDS_PRODUCT_AMOUNT) | usedPoint가 재고를 잠근 시점 가격의 상품 합계를 초과 |
+| 400 | ORDER-019 (USED_POINT_EXCEEDS_PRODUCT_AMOUNT) | 포인트 예약을 통과한 뒤, usedPoint가 재고를 잠근 시점 가격의 상품 합계를 초과 |
 | 404 | CART-001 (CART_ITEM_NOT_FOUND) | 장바구니 항목이 없거나 다른 회원의 항목 |
 | 404 | PRODUCT-001 (PRODUCT_NOT_FOUND) | 재고 차감 시점에 상품이 삭제됐거나 이용 마트 상품이 아님 |
 | 409 | ORDER-003 (PENDING_ORDER_EXISTS) | 결제 대기 주문이 이미 있음(동시 생성으로 인한 UNIQUE 충돌 포함) |
@@ -671,7 +671,7 @@
 | 409 | CART-006 (CART_HAS_PREVIOUS_MART_ITEMS) | 선택 항목에 이전 마트 상품이 있음 |
 | 409 | PRODUCT-003 (PRODUCT_NOT_SELLING) | 판매 중이 아닌 상품이 있음 |
 | 409 | STOCK-001 (INSUFFICIENT_STOCK) | 재고가 부족한 상품이 있음 |
-| 409 | POINT-001 (INSUFFICIENT_POINT_BALANCE) | 사용 가능한 포인트가 usedPoint보다 적음 |
+| 409 | POINT-001 (INSUFFICIENT_POINT_BALANCE) | 사용 가능한 포인트가 usedPoint보다 적음. 포인트 예약이 금액 확정보다 먼저라 상품 합계 초과(ORDER-019)보다 먼저 판정 |
 | 409 | COMMON-006 (DUPLICATE_REQUEST_IN_PROGRESS) | 같은 Idempotency-Key의 첫 요청이 아직 처리 중 |
 | 409 | COMMON-011 (IDEMPOTENCY_KEY_PAYLOAD_MISMATCH) | 같은 Idempotency-Key에 다른 요청 본문 |
 | 409 | COMMON-010 (LOCK_ACQUISITION_TIMEOUT) | 주문 · 재고 락 대기 시간 초과 |
