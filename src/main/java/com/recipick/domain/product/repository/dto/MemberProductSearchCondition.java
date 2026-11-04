@@ -8,6 +8,12 @@ public record MemberProductSearchCondition(
     Long categoryId,
     Long minPrice,
     Long maxPrice,
-    LocalDateTime now
+    LocalDateTime now,
+    boolean onSale
 ) {
+
+    public MemberProductSearchCondition(
+        Long martId, String keyword, Long categoryId, Long minPrice, Long maxPrice, LocalDateTime now) {
+        this(martId, keyword, categoryId, minPrice, maxPrice, now, false);
+    }
 }

@@ -337,6 +337,43 @@ class ProductRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("회원 검색 : 특가만 조회하면 할인 중인 상품만 나오고 종료 임박순으로 정렬할 수 있다")
+    void searchMemberProducts_onSale() {
+        // given
+        LocalDateTime now = LocalDateTime.of(2026, 11, 5, 9, 0);
+        productRepository.findAll().forEach(p -> {
+            if (p.getName().equals("애호박")) {
+                p.changeDiscount(30, now.plusDays(3), now.minusDays(1));
+            }
+            if (p.getName().equals("청양고추")) {
+                p.changeDiscount(50, now.plusHours(1), now.minusDays(1));
+            }
+            if (p.getName().equals("삼겹살")) {
+                p.changeDiscount(20, now.plusSeconds(1), now.minusDays(1));
+            }
+        });
+        em.flush();
+        em.clear();
+
+        // when
+        Page<Product> endingSoon = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, now, true),
+            PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "discountEndAt")));
+        Page<Product> afterEnd = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, now.plusDays(1), true),
+            PageRequest.of(0, 20));
+        Page<Product> all = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, now.plusDays(1), false),
+            PageRequest.of(0, 20));
+
+        // then
+        assertThat(endingSoon.getContent()).extracting(Product::getName)
+            .containsExactly("삼겹살", "청양고추", "애호박");
+        assertThat(afterEnd.getContent()).extracting(Product::getName).containsExactly("애호박");
+        assertThat(all.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("회원 검색 : 할인 중인 상품은 판매가 기준으로 정렬·범위가 적용되고 종료된 할인은 정상가다")
     void searchMemberProducts_salePrice() {
         // given

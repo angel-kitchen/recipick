@@ -54,7 +54,7 @@ class ProductFacadeTest {
     }
 
     private final Pageable pageable = PageRequest.of(0, 20);
-    private final ProductSearchRequest request = new ProductSearchRequest(null, null, null, null);
+    private final ProductSearchRequest request = new ProductSearchRequest(null, null, null, null, null);
 
     @Test
     @DisplayName("검색 : 회원의 이용 마트로 상품 서비스를 호출한다")

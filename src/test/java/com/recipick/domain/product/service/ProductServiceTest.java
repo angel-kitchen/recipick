@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -46,7 +47,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import com.recipick.domain.product.dto.request.ProductDiscountBulkRequest;
 import com.recipick.domain.product.dto.request.ProductDiscountUpdateRequest;
+import com.recipick.domain.product.dto.response.ProductDiscountBulkResponse;
 import com.recipick.domain.product.dto.response.ProductDiscountResponse;
 import com.recipick.global.audit.AdminAuditCommand;
 import java.time.LocalDateTime;
@@ -970,6 +973,68 @@ public class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("일괄 할인 : 여러 상품에 같은 할인이 지정되고 상품마다 감사 로그를 남긴다")
+    void updateDiscountBulk() {
+        // given
+        Product first = product(1L, 1L);
+        Product second = product(2L, 1L);
+        given(productRepository.findAllByIdInForUpdate(List.of(1L, 2L))).willReturn(List.of(first, second));
+        ProductDiscountBulkRequest request =
+            new ProductDiscountBulkRequest(List.of(1L, 2L, 2L), 30, LocalDateTime.of(2026, 11, 10, 0, 0));
+
+        // when
+        ProductDiscountBulkResponse result = productService.updateDiscountBulk(AdminRole.MART_ADMIN, 1L, request);
+
+        // then
+        assertThat(result.updatedCount()).isEqualTo(2);
+        assertThat(first.getDiscountRate()).isEqualTo(30);
+        assertThat(second.getDiscountRate()).isEqualTo(30);
+        verify(auditRecorder, times(2)).record(any(AdminAuditCommand.class));
+    }
+
+    @Test
+    @DisplayName("일괄 할인 : 다른 마트 상품이 섞여 있으면 MART_ACCESS_DENIED이고 아무것도 바뀌지 않는다")
+    void updateDiscountBulk_otherMart() {
+        // given
+        Product mine = product(1L, 1L);
+        Product others = product(2L, 2L);
+        given(productRepository.findAllByIdInForUpdate(List.of(1L, 2L))).willReturn(List.of(mine, others));
+        ProductDiscountBulkRequest request =
+            new ProductDiscountBulkRequest(List.of(1L, 2L), 30, LocalDateTime.of(2026, 11, 10, 0, 0));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateDiscountBulk(AdminRole.MART_ADMIN, 1L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+        assertThat(mine.getDiscountRate()).isZero();
+        verify(auditRecorder, never()).record(any(AdminAuditCommand.class));
+    }
+
+    @Test
+    @DisplayName("일괄 할인 : 없는 상품이 하나라도 있으면 PRODUCT_NOT_FOUND이다")
+    void updateDiscountBulk_notFound() {
+        // given
+        given(productRepository.findAllByIdInForUpdate(List.of(1L, 99L))).willReturn(List.of(product(1L, 1L)));
+        ProductDiscountBulkRequest request =
+            new ProductDiscountBulkRequest(List.of(1L, 99L), 30, LocalDateTime.of(2026, 11, 10, 0, 0));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateDiscountBulk(AdminRole.SUPER_ADMIN, null, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("가격 변경 : MART_ADMIN이 다른 마트 상품이면 MART_ACCESS_DENIED, 없는 상품이면 PRODUCT_NOT_FOUND")
     void updatePrice_deniedAndNotFound() {
         // given
@@ -995,7 +1060,7 @@ public class ProductServiceTest {
     }
 
     private ProductSearchRequest searchRequest(Long minPrice, Long maxPrice) {
-        return new ProductSearchRequest("호박", 10L, minPrice, maxPrice);
+        return new ProductSearchRequest("호박", 10L, minPrice, maxPrice, null);
     }
 
     @Test
