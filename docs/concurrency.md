@@ -404,19 +404,260 @@ AutoCartFacade.confirm (@Transactional)
 - 확정과 직접 장바구니 담기가 같은 상품에서 겹치는 경우는 레시피 테스트에 없습니다. 장바구니 자체의 동시 담기는 주문 도메인의 `CartAddConcurrencyTest`(3건) 범위입니다.
 - AI 한도는 Redis 하나를 공유하는 설계로 여러 서버에서도 같은 값을 세지만 여러 앱 인스턴스로 실행하지 않았습니다. 고정 구간이라 구간 경계에서 짧게 최대 10회까지 통과할 수 있습니다.
 
-## 6. 다른 도메인의 작성 위치
+## 6. 결제 도메인: 승인·만료·취소·웹훅·포인트
+
+| 항목 | 내용 |
+| --- | --- |
+| 작성 담당 | 정윤 |
+| 코드 기준 | `dev`의 `9172f6d`(2026-11-04) |
+| 실행 근거 | 2026-11-04 같은 커밋의 `./gradlew test --tests 'com.recipick.domain.payment.*'` 136개 클래스 1,673건(실패 0·오류 0·건너뜀 0). Gradle 테스트 결과 XML 기준. 실행 환경은 아래 문단 참고 |
+| 설계 근거 | [결제·웹훅·환불 정합성 ADR](adr/payment-consistency.md) |
+
+실행 환경: Docker를 쓸 수 없는 작성자 작업 환경이라 `IntegrationTestSupport`의 Testcontainers 연결만 로컬 MySQL 8.0(`innodb_lock_wait_timeout=5`)·Redis로 바꿔 실행한 결과입니다. 이 연결 변경은 커밋하지 않았습니다. 저장소 기본 구성(CI 포함)은 Testcontainers MySQL 8.4(`--innodb-lock-wait-timeout=5`)·Redis 7.4이며, 이 PR의 CI `test` 작업이 같은 범위를 그 환경에서 다시 실행합니다. 두 결과를 같은 환경의 결과로 보지 않습니다.
+
+### 6-1. 무엇을 보호하는가
+
+결제는 같은 사실(승인·실패·취소)이 확정 API·웹훅·만료 작업·Fallback Sweep으로 반복·동시에 들어옵니다. 하나의 사실은 한 번만 반영돼야 합니다.
+
+| 경합 | 보호할 불변 조건 | 공유 잠금·제약 |
+| --- | --- | --- |
+| 승인 vs 만료 | 결제는 `PAID`·`FAILED(EXPIRED)` 중 하나로만 끝남. 재고·포인트 1회 복구, 만료 뒤 승인은 SYSTEM 환불 1건 | 결제 행 → 주문 행 → `MEMBER_POINT` → `POINT_EARNING` → 재고 |
+| 취소 vs 웹훅 | 환불 행 1건, PortOne 취소 1건, 결제 `CANCELED`·주문 `REFUNDED`·재고 복구 1회 | 결제 행 + `refund.idempotency_key`·`portone_cancellation_id` UNIQUE + `webhook_event.webhook_id` UNIQUE |
+| 포인트 사용 vs 만료 | 만료 포인트는 쓰이지 않음. 잔액은 음수가 되지 않고 소멸 이력은 1회 | `MEMBER_POINT` → `POINT_EARNING`(id 오름차순) + `member_point.member_id` UNIQUE |
+| 동일 회차 자동청구 | 같은 회차·같은 시도의 PG POST는 1회. 결과 불명이면 같은 결제 ID로 재조회만 | 회차 UNIQUE + 시도 PK 잠금 선점(READY → DISPATCHING, 임대) |
+| 빌링키 등록·교체 | 회원당 `ACTIVE` 키 1개, 같은 PortOne 키는 한 회원에게만 | 회원 행 + `uk_billing_key_portone_billing_key` |
+| 회원 탈퇴 vs 정산 | 미해결 결제·환불·웹훅·멤버십 회차가 있으면 탈퇴 거절. 이미 접수된 거래의 후속 처리는 막히지 않음 | 회원 행 → 결제(PK 오름차순) → 환불·웹훅 FOR SHARE |
+
+### 6-2. 후보와 선택 이유
+
+| 후보 | 장점 | 이 요구사항에서의 한계 |
+| --- | --- | --- |
+| PG 호출을 포함한 한 트랜잭션 | 구현 단순 | PG 응답을 기다리는 동안 결제·주문 잠금 유지. PG 성공 뒤 DB 롤백 시 돈만 나감 |
+| 낙관적 락 | 대기 없음 | 컨벤션상 금지. 충돌 뒤 PortOne 재조회부터 다시 해야 함 |
+| Redis 분산 락으로 스케줄러·Worker 단일 실행 | 중복 실행 감소 | TTL이 지나면 두 인스턴스가 함께 실행. 이중 결제를 막는 수단이 되지 못함 |
+| **결제 행 비관적 락 + 고정 잠금 순서 + 신규 행 UNIQUE + 업무 행 멱등 키, PG 호출은 잠금 밖(선택)** | 잠근 뒤 현재 상태로 판정해 반복 전달이 멱등. 서로 다른 행을 잠근 경합은 UNIQUE가 최종 판정 | 같은 결제의 요청은 대기. TX1·TX2 사이에 다른 경로가 끝낸 경우를 TX2가 판정해야 함 |
+
+상품 결제의 잠금 대상이 결제 행인 이유는 확정 API·웹훅·만료·취소·마트 거절·외부 취소가 모두 같은 결제를 바꾸기 때문입니다. 회원 행은 잠그지 않습니다(1절의 "회원 잠금이 없는 기존 결제 흐름").
+환불 행은 따로 잠그지 않고 결제 잠금 아래에서만 바꿉니다. 멤버십은 회원 → 이용권 → 회차 → 시도 → 환불 순서로, 범위 `FOR UPDATE` 대신 ID를 읽은 뒤 한 행씩 PK로 잠급니다.
+
+### 6-3. 코드에서의 적용
+
+**잠금 조회**(`src/main/java/com/recipick/domain/payment/repository`)
+
+| Repository 메서드 | 잠금 | 조건 |
+| --- | --- | --- |
+| [PaymentRepository](../src/main/java/com/recipick/domain/payment/repository/PaymentRepository.java).`findByOrderIdForUpdate` | `PESSIMISTIC_WRITE` | `p.orderId = :orderId` |
+| `PaymentRepository.findByIdForUpdate` | `PESSIMISTIC_WRITE` | `p.id = :id` |
+| `PaymentRepository.findAllByIdInForUpdate` | `PESSIMISTIC_WRITE` | `p.id IN :ids ORDER BY p.id` |
+| [MemberPointRepository](../src/main/java/com/recipick/domain/payment/repository/MemberPointRepository.java).`findByMemberIdForUpdate` | `PESSIMISTIC_WRITE` | `mp.memberId = :memberId` |
+| [PointEarningRepository](../src/main/java/com/recipick/domain/payment/repository/PointEarningRepository.java).`findByOrderIdForUpdate`·`findExpiredForUpdate`·`findUsableForUpdate`·`findAllByIdInForUpdate` | `PESSIMISTIC_WRITE` | 주문 ID 또는 회원 ID·상태·만료일, `ORDER BY e.id ASC` |
+| [PointUsageRepository](../src/main/java/com/recipick/domain/payment/repository/PointUsageRepository.java).`findAllByOrderIdForUpdate` | `PESSIMISTIC_WRITE` | `u.orderId = :orderId ORDER BY u.id ASC` |
+| [WebhookEventRepository](../src/main/java/com/recipick/domain/payment/repository/WebhookEventRepository.java).`findByIdForUpdate` | `PESSIMISTIC_WRITE` | Worker 선점·결과 기록 |
+| `WebhookEventRepository.findOpenForWithdrawalForShare` | `PESSIMISTIC_READ` | 탈퇴 정산, `idx_webhook_event_portone_payment_id_status` 사용 |
+| [RefundRepository](../src/main/java/com/recipick/domain/payment/repository/RefundRepository.java).`findOpenForWithdrawalForShare` | `PESSIMISTIC_READ` | 탈퇴 정산, `REQUESTED` 또는 SYSTEM `FAILED` |
+| [BillingKeyRepository](../src/main/java/com/recipick/domain/payment/repository/BillingKeyRepository.java)·[BillingKeyDeletionRepository](../src/main/java/com/recipick/domain/payment/repository/BillingKeyDeletionRepository.java).`findByIdForUpdate` | `PESSIMISTIC_WRITE` | PK |
+| [MembershipPaymentRepository](../src/main/java/com/recipick/domain/payment/repository/MembershipPaymentRepository.java)·[MembershipPaymentAttemptRepository](../src/main/java/com/recipick/domain/payment/repository/MembershipPaymentAttemptRepository.java)·[MembershipRefundRepository](../src/main/java/com/recipick/domain/payment/repository/MembershipRefundRepository.java).`findByIdForUpdate` | `PESSIMISTIC_WRITE` | PK. 여러 행은 ID를 일반 조회로 읽고 오름차순으로 한 행씩 |
+
+**UNIQUE 제약**(엔티티 기준, [ERD](erd.dbml)와 일치)
+
+| 테이블 | 제약 | 막는 경합 |
+| --- | --- | --- |
+| `refund` | `idempotency_key`, `portone_cancellation_id` | 다른 결제에 같은 키 동시 취소, 같은 PortOne 취소의 중복 기록 |
+| `webhook_event` | `webhook_id`(`uk_webhook_event_webhook_id`) | 같은 웹훅 재전송·동시 수신 |
+| `payment` | `order_id`, `portone_payment_id` | 주문당 결제 1건 |
+| `point_earning` | `order_id` | 주문당 적립 예정 1건 |
+| `point_usage` | `(point_earning_id, order_id)` | 같은 적립 건의 같은 주문 사용 중복 |
+| `member_point` | `member_id` | 처음 포인트를 쓰는 회원의 행 동시 생성 |
+| `billing_key` | `portone_billing_key`(`uk_billing_key_portone_billing_key`) | 두 회원의 같은 키 동시 등록 |
+| `billing_key_issue_request` | `issue_id` | 같은 발급 요청 중복 |
+| `membership_payment` | `(membership_id, period_start_date)`, `idempotency_key` | 같은 회차 이중 생성, 같은 구독 요청 |
+| `membership_payment_attempt` | `portone_payment_id`, `(membership_payment_id, attempt_no)` | 같은 시도 번호·같은 PG 결제 ID |
+| `membership_refund` | `idempotency_key`, `portone_cancellation_id`, `pg_idempotency_key`, `retry_of_refund_id` | 같은 환불 요청·같은 PG 취소·같은 재실행 |
+
+**경합별 적용**
+
+```text
+승인 vs 만료
+  PaymentConfirmFacade / PaymentReconciliationFacade / PaymentExpirationFacade (트랜잭션 없음)
+  → PortOne 조회(잠금 없음)
+  → PaymentConfirmProcessor.process 또는 PaymentExpirationProcessor.expire
+      결제 행 잠금 → 상태 재검사(IN_PROGRESS만 변경) → 주문 → 포인트 → 재고
+  → 커밋 뒤 SYSTEM 환불 실행 예약(만료 뒤 승인·금액 불일치)
+
+취소 vs 웹훅
+  TX1 PaymentCancelProcessor.prepare: 결제 잠금 → 같은 키 환불 조회 → CANCEL_REQUESTED·환불 REQUESTED(saveAndFlush)
+  PortOne 취소(잠금 없음, 키 recipick-refund-{환불 ID})
+  TX2 PaymentCancelProcessor.apply: 결제 잠금 → 환불 COMPLETED·FAILED면 그 결과 반환, 아니면 반영
+  웹훅 Worker: webhook_event 행 잠금 선점 → 커밋 → PortOne 조회 → 같은 apply(TX-B) → 결과 기록(TX-C)
+
+포인트 사용 vs 만료
+  주문 생성 reserveUsage / 만료 배치 expireMember(회원마다 새 트랜잭션)
+  → MEMBER_POINT 존재 확인(잠그지 않는 조회)
+  → 행이 없을 때만 INSERT ... ON DUPLICATE KEY UPDATE
+  → MEMBER_POINT PESSIMISTIC_WRITE 잠금
+  → 지연 만료(findExpiredForUpdate) → 사용 가능 적립 건(findUsableForUpdate, id 오름차순)
+
+동일 회차 자동청구
+  MembershipChargeDispatchProcessor: 시도 PK만 잠금 → READY이고 임대 안일 때만 DISPATCHING
+  MembershipChargeExecutor: PG POST(잠금 없음) → 같은 결제 ID GET
+  MembershipChargeResultProcessor: MEMBER → 이용권 → 회차 PK → 시도 PK 오름차순 → 판정 시각 재조회 → 반영
+
+빌링키 등록·교체
+  BillingKeyRegistrationFacade(NEVER): PortOne 검증(잠금 없음)
+  BillingKeyRegistrationProcessor: 회원 잠금 → ACTIVE 조회 → 교체·saveAndFlush(UNIQUE 위반만 BILLING-002)
+
+회원 탈퇴 vs 정산
+  회원 잠금 → ProductPaymentSettlementChecker → PaymentService.existsUnsettledForWithdrawal(MANDATORY)
+      결제 findAllByIdInForUpdate(PK 오름차순) → 환불 FOR SHARE → 웹훅 FOR SHARE
+  → MembershipPaymentSettlementChecker(C-17) → 포인트 검사(마지막)
+```
+
+- 같은 키·같은 결제의 재전송은 결제 잠금 아래 환불 조회가 먼저 거르고, 다른 결제의 같은 키는 `PaymentService.requestMemberRefund`의 `saveAndFlush` UNIQUE 위반을 `COMMON-011`로 바꿉니다.
+- 같은 키 재요청이 PortOne을 다시 부르는 것은 환불에 취소 ID가 없고 요청 + 3시간 안일 때뿐이며, 서버 키가 같아 PortOne에서는 한 건입니다.
+- 웹훅 저장은 짧은 트랜잭션 하나이고 `webhook_id` UNIQUE 충돌은 트랜잭션 밖 `PortOneWebhookFacade`가 200(`DUPLICATE`)으로 바꿉니다.
+- 탈퇴 정산의 판정 행은 잠금 읽기로 최신 커밋을 봅니다. 결제 확정·늦은 승인 환불·외부 취소는 회원을 잠그지 않으므로 회원 잠금만으로는 직렬화되지 않기 때문입니다.
+
+### 6-4. 잠금 실패와 롤백
+
+- 잠금 대기 시간 초과·교착은 결제 도메인 코드에서 업무 오류로 바꾸지 않습니다. 경로별로 다음과 같이 끝납니다.
+
+| 경로 | 처리 | 결과 |
+| --- | --- | --- |
+| HTTP API(확정·취소·마트 거절) | 예외가 [GlobalExceptionHandler](../src/main/java/com/recipick/global/exception/GlobalExceptionHandler.java)까지 올라감. `PessimisticLockingFailureException`(하위 `CannotAcquireLockException` 포함)을 `409 COMMON-010`으로 응답 | 해당 트랜잭션 롤백. 자동 재시도 없음 |
+| 웹훅 Worker TX-B, 만료·환불 재확인·SYSTEM·마트 거절 실행 | `TransientDataAccessException`으로 받아 재시도(웹훅 `RETRY_PENDING`, 만료 1분 뒤, 환불 재확인 재예약) | 상태는 미완료로 남고 다음 실행이 PortOne 조회부터 다시 함 |
+| 웹훅 Worker TX-A(선점) | Worker가 작업 단위로 잡아 로그만 남김 | 큐 작업은 사라지지만 행이 `RECEIVED`로 남아 Fallback이 다시 등록 |
+| 결제 완료 뒤 장바구니 정리 | 커밋 뒤 리스너가 예외를 끊음 | 결제 확정은 유지, 장바구니만 남음 |
+
+- Hibernate 6.6의 MySQL 변환은 교착(SQLState 40001)을 `LockAcquisitionException`, 잠금 대기 초과(1205)를 `PessimisticLockException`으로 만들고, Spring은 각각 `CannotAcquireLockException`·`PessimisticLockingFailureException`으로 바꿉니다. 둘 다 `TransientDataAccessException` 하위입니다.
+- InnoDB는 교착 시 희생 트랜잭션 전체를 롤백하므로 TX1의 주문 `CANCEL_REQUESTED`·결제 `CANCEL_REQUESTED`·환불 행은 남지 않습니다. 다만 이 경로를 교착으로 재현해 최종 상태를 확인한 테스트는 없습니다.
+- `PaymentCancelFacade`·`PaymentService.requestMemberRefund`가 바꾸는 예외는 `DataIntegrityViolationException`(→ `COMMON-011`)뿐입니다. 같은 키 경합이 UNIQUE 충돌이 아니라 교착으로 끝나면 API 응답은 `COMMON-011`이 아니라 `COMMON-010`이 되고, Facade를 직접 부르는 테스트에서는 `CannotAcquireLockException`이 그대로 올라옵니다.
+
+**알려진 문제 #437**
+
+GitHub 이슈 #437은 `PaymentCancelAfterPayConcurrencyTest.sameKeyOnTwoPaidPayments`(두 `PAID` 결제에 같은 키로 동시 취소)가 CI에서 간헐적으로 `CannotAcquireLockException` ← `LockAcquisitionException`으로 실패한다고 보고합니다.
+이 테스트의 `attempt`는 `BusinessException`만 결과로 바꾸므로 교착 예외는 스레드 결과 조회에서 실패로 드러납니다.
+원인은 아직 확인되지 않았습니다. 로컬 반복 실행 230회는 통과했고, 2026-11-04 위 로컬 MySQL 8.0 전체 실행에서도 이 클래스 3건이 통과했습니다. 통과가 문제가 없다는 뜻은 아닙니다.
+원인이 교착으로 확인되면 이 경합의 교착을 업무 오류로 바꿀지, TX1의 쿼리 순서를 바꿀지 결정합니다.
+
+**검증하지 않은 범위**
+
+- 운영 DB의 `innodb_lock_wait_timeout`은 확인하지 않았습니다. 로컬 MySQL 8.0 실행은 `innodb_lock_wait_timeout=5`로 Testcontainers 구성과 맞췄습니다.
+- 여러 앱 인스턴스·실 PortOne 호출·부하 조건에서 실행한 결과가 아닙니다. PortOne은 테스트 스텁 서버 또는 목입니다.
+
+### 6-5. 실제 동시 요청·실패 결과
+
+아래 클래스는 모두 실제 MySQL·Redis를 쓰는 통합 테스트(`IntegrationTestSupport` 상속)이며 별도 스레드가 각자 커밋합니다.
+어느 요청이 먼저 이길지는 고정하지 않고 최종 DB 상태로 판정합니다. `@RepeatedTest(3)`인 시나리오는 반복 횟수가 건수에 포함됩니다.
+
+| 경합 | 시나리오 | DB 최종 결과 | 근거 |
+| --- | --- | --- | --- |
+| 승인 vs 만료 | 같은 결제에 승인 5건 동시 | 결제·주문 `PAID` 1회, 나머지 `ALREADY_PAID` | [PaymentConfirmConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentConfirmConcurrencyTest.java) |
+| 승인 vs 만료 | 만료로 닫힌 결제에 늦은 승인 5건 동시 | SYSTEM 환불 1건, 결제·주문 그대로 | 같은 클래스 |
+| 승인 vs 만료 | 결제 확정과 만료가 같은 결제를 동시에 잡음 | 결제 잠금으로 한쪽만 반영, 재고 이중 복구·환불 중복 없음 | [PaymentExpirationFlowIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentExpirationFlowIntegrationTest.java) |
+| 승인 vs 만료 | 확정 API 흐름과 Paid 웹훅 처리가 동시 | 승인 1회, 주문 이력 2행, SYSTEM 환불 없음 | [PaymentWebhookConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PaymentWebhookConcurrencyTest.java) |
+| 취소 vs 웹훅 | 같은 `webhook_id` 5건 동시 수신 | 모두 200, 행 1개, 큐 작업 1개 | 같은 클래스 |
+| 취소 vs 웹훅 | 결제 전 취소 5건 동시 | 재고 1회 복구, 나머지 멱등 응답 | [PaymentCancelConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelConcurrencyTest.java) |
+| 취소 vs 웹훅 | 같은 `PAID` 결제에 다른 키 취소 5건 | 환불 1건·PortOne 호출 1회, 나머지 `COMMON-006`, 재고 1회 복구 | [PaymentCancelAfterPayConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelAfterPayConcurrencyTest.java) |
+| 취소 vs 웹훅 | 같은 `PAID` 결제에 같은 키 2건 | PortOne은 같은 서버 키로 2회 호출될 수 있음, 환불 1건·취소·재고 복구 1회 | 같은 클래스 |
+| 취소 vs 웹훅 | 두 `PAID` 결제에 같은 키 2건 | 1건 성공, 1건 `COMMON-011`, 진 쪽 결제·주문 `PAID`·이력 없음(#437 간헐 실패) | 같은 클래스 |
+| 취소 vs 웹훅 | 취소 API가 PortOne 응답을 기다리는 사이 Cancelled 웹훅이 먼저 완료 | 늦은 TX2는 멱등, 환불·재고 복구 1회 | [RefundWebhookConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/RefundWebhookConcurrencyTest.java) |
+| 취소 vs 웹훅 | 서로 다른 웹훅 2건이 같은 콘솔 전액 취소를 동시 처리 | 둘 다 `PROCESSED`, `EXTERNAL` 환불·재고 복구·주문 이력 1회 | [ExternalCancellationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/ExternalCancellationConcurrencyTest.java) |
+| 취소 vs 웹훅 | 같은 키·다른 키 마트 거절 5건, 거절 vs 수락, 거절 vs 회원 취소, 같은 취소 웹훅 2건 | `ADMIN` 환불·거절 전이·감사 1회, 진행 중 환불 1건, 한쪽만 성공 | [MartRejectionConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MartRejectionConcurrencyTest.java) |
+| 포인트 사용 vs 만료 | 만료 배치와 포인트 사용 동시 | 만료 포인트 미사용, 소멸 이력 1회, 잔액 0(음수 없음) | [PointExpirationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PointExpirationConcurrencyTest.java) |
+| 포인트 사용 vs 만료 | 두 서버의 만료 배치가 같은 회원 처리 / 포인트 행 없는 회원 동시 생성 | 한쪽만 소멸, 다른 쪽 0 / 행 1개·잔액 0 | 같은 클래스 |
+| 포인트 사용 vs 만료 | 1,000P 회원의 두 주문이 700P씩 동시 예약 | 1건 성공, 1건 `POINT-001`, 잔액·적립 건 잔량 300P | [PointReservationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PointReservationConcurrencyTest.java) |
+| 동일 회차 자동청구 | 같은 멱등 키 동시 구독, 같은 READY 동시 실행, READY 만료 vs 선점 | 이용권·회차·시도 1건, POST 1회. 진 쪽은 GET·POST 없이 `IN_PROGRESS`. 취소된 시도의 POST 0 | [MembershipChargeConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipChargeConcurrencyTest.java) |
+| 동일 회차 자동청구 | 두 스케줄러가 같은 갱신 후보, 같은 갱신 READY를 세 Worker가 실행 | 회차·시도 1개, POST 1회, 연장 1회 | [MembershipRenewalConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRenewalConcurrencyTest.java) |
+| 동일 회차 자동청구 | 같은 키 환불 5건, 실행기·웹훅·복구 스캔이 같은 성공 취소 반영, 임대 끝난 옛 실행자 | 환불 1건·취소 작업 1개, 완료·종료 1회, 추가 POST 없음, 옛 실행자는 기록을 덮어쓰지 못함 | [MembershipRefundConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRefundConcurrencyTest.java) |
+| 빌링키 등록·교체 | 같은 회원 카드 2장 동시, 같은 토큰 키 2개, 두 회원 같은 키 | `ACTIVE` 1·`REPLACED` 1 / 1건만 등록·`BILLING-007` / 1명만 통과·`BILLING-002`, 로그에 키 원문 없음 | [BillingKeyRegistrationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/BillingKeyRegistrationConcurrencyTest.java) |
+| 빌링키 등록·교체 | 키 폐기 반영 vs 새 카드 등록 | 어느 쪽이 먼저 잠가도 A `REVOKED`·B `ACTIVE` | [MembershipRenewalConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRenewalConcurrencyTest.java) |
+| 회원 탈퇴 vs 정산 | 탈퇴 스냅샷 뒤 커밋된 SYSTEM 환불·웹훅 | 잠금 읽기로 잡아 `PAYMENT-012` | [ProductPaymentSettlementConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/ProductPaymentSettlementConcurrencyTest.java) |
+| 회원 탈퇴 vs 정산 | 탈퇴가 결제를 잠근 동안 늦은 승인 환불·다른 회원 결제·웹훅 Worker | 늦은 승인 환불은 대기 후 진행, 다른 회원·Worker는 교착 없이 완료 | 같은 클래스 |
+| 회원 탈퇴 vs 정산 | 탈퇴 vs 멤버십 회차 생성 | 잠금 순서대로 한쪽 결과만 남음. 잠금 전 일반 조회는 뒤 커밋을 못 봄(전제 확인) | [MembershipPaymentQueryConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipPaymentQueryConcurrencyTest.java) |
+| 회원 탈퇴 vs 정산 | 즉시 해지 vs 갱신 접수 | 먼저 회원을 잠근 쪽 결과만 남음(0원 환불 종료 또는 `MEMBERSHIP-010`) | [MembershipRefundConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRefundConcurrencyTest.java) |
+
+**실패·복구 경로**(실제 MySQL·Redis)
+
+| 시나리오 | DB 최종 결과 | 근거 |
+| --- | --- | --- |
+| Worker 선점이 잠금 대기 초과로 실패 | 이벤트 `RECEIVED` 유지, Fallback 재등록 뒤 처리 | [PaymentRecoveryIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentRecoveryIntegrationTest.java) |
+| Worker가 선점 뒤 죽어 `PROCESSING` 잔존 | 10분 뒤 Fallback 재등록, 처리권 2번으로 완료 | 같은 클래스 |
+| 만료·SYSTEM 환불 작업이 Redis에서 사라짐 | 재조회 구간·재실행 간격 뒤 Fallback 재등록, 완료 | [PaymentExpirationFlowIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentExpirationFlowIntegrationTest.java), [SystemRefundFlowIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/SystemRefundFlowIntegrationTest.java) |
+| PortOne 취소 `FAILED`·`REJECTED` | Facade 예외 전에 TX2 커밋, 결제·주문 `PAID` 복귀·환불 `FAILED` 유지 | [PaymentCancelFacadeIntegrationTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelFacadeIntegrationTest.java) |
+| 장바구니 정리가 잠금 대기 초과 | 결제 확정 유지, 장바구니만 남음 | [PaymentCartCleanupIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentCartCleanupIntegrationTest.java) |
+
+| 검증 클래스(실제 DB) | 테스트 | 실패 | 오류 | 건너뜀 |
+| --- | --- | --- | --- | --- |
+| [PaymentConfirmConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentConfirmConcurrencyTest.java) | 2 | 0 | 0 | 0 |
+| [PaymentCancelConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelConcurrencyTest.java) | 1 | 0 | 0 | 0 |
+| [PaymentCancelAfterPayConcurrencyTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelAfterPayConcurrencyTest.java) | 3 | 0 | 0 | 0 |
+| [PaymentCancelFacadeIntegrationTest](../src/test/java/com/recipick/domain/payment/facade/PaymentCancelFacadeIntegrationTest.java) | 4 | 0 | 0 | 0 |
+| [PaymentWebhookConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PaymentWebhookConcurrencyTest.java) | 2 | 0 | 0 | 0 |
+| [RefundWebhookConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/RefundWebhookConcurrencyTest.java) | 1 | 0 | 0 | 0 |
+| [ExternalCancellationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/ExternalCancellationConcurrencyTest.java) | 1 | 0 | 0 | 0 |
+| [MartRejectionConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MartRejectionConcurrencyTest.java) | 5 | 0 | 0 | 0 |
+| [PaymentExpirationFlowIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentExpirationFlowIntegrationTest.java) | 5 | 0 | 0 | 0 |
+| [SystemRefundFlowIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/SystemRefundFlowIntegrationTest.java) | 4 | 0 | 0 | 0 |
+| [PaymentRecoveryIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentRecoveryIntegrationTest.java) | 2 | 0 | 0 | 0 |
+| [PaymentCartCleanupIntegrationTest](../src/test/java/com/recipick/domain/payment/integration/PaymentCartCleanupIntegrationTest.java) | 7 | 0 | 0 | 0 |
+| [PointExpirationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PointExpirationConcurrencyTest.java) | 3 | 0 | 0 | 0 |
+| [PointReservationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/PointReservationConcurrencyTest.java) | 2 | 0 | 0 | 0 |
+| [MembershipChargeConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipChargeConcurrencyTest.java) | 9 | 0 | 0 | 0 |
+| [MembershipRenewalConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRenewalConcurrencyTest.java) | 13 | 0 | 0 | 0 |
+| [MembershipRefundConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipRefundConcurrencyTest.java) | 8 | 0 | 0 | 0 |
+| [MembershipPaymentQueryConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/MembershipPaymentQueryConcurrencyTest.java) | 3 | 0 | 0 | 0 |
+| [BillingKeyRegistrationConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/BillingKeyRegistrationConcurrencyTest.java) | 13 | 0 | 0 | 0 |
+| [ProductPaymentSettlementConcurrencyTest](../src/test/java/com/recipick/domain/payment/integration/ProductPaymentSettlementConcurrencyTest.java) | 6 | 0 | 0 | 0 |
+| 합계 | 94 | 0 | 0 | 0 |
+
+94건 전부가 동시 요청 테스트는 아니며 순차 흐름·실패 복구 검증을 포함합니다. 결제 패키지 전체(136개 클래스 1,673건)에서 위 20개 클래스만 추렸습니다.
+
+잠금 실패 분기의 Mockito 단위 테스트는 실제 잠금 경합이 아니라 `CannotAcquireLockException`을 던지도록 고정한 분기 확인입니다. 위 합계에 넣지 않습니다.
+
+| 단위 테스트(Mockito) | 확인하는 분기 |
+| --- | --- |
+| [PaymentConfirmFacadeTest](../src/test/java/com/recipick/domain/payment/facade/PaymentConfirmFacadeTest.java) | Processor가 잠금 대기 초과로 실패하면 SYSTEM 환불 예약 없이 예외를 그대로 올림 |
+| [PaymentReconciliationFacadeTest](../src/test/java/com/recipick/domain/payment/facade/PaymentReconciliationFacadeTest.java) | 잠금 대기 초과 같은 일시적 DB 장애는 `RETRY_PENDING` |
+| [PaymentExpirationFacadeTest](../src/test/java/com/recipick/domain/payment/facade/PaymentExpirationFacadeTest.java) | 만료 Processor가 잠금 대기 초과로 실패하면 1분 뒤 다시 조회 |
+| [PaymentFallbackSchedulerTest](../src/test/java/com/recipick/domain/payment/scheduler/PaymentFallbackSchedulerTest.java)·[PaymentDelayQueueWorkerTest](../src/test/java/com/recipick/domain/payment/scheduler/PaymentDelayQueueWorkerTest.java) | 상태별 기준 시각의 재등록, 작업 종류 라우팅·작업별 예외 격리 |
+
+```bash
+./gradlew test \
+  --tests 'com.recipick.domain.payment.facade.PaymentConfirmConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.facade.PaymentCancelConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.facade.PaymentCancelAfterPayConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.facade.PaymentCancelFacadeIntegrationTest' \
+  --tests 'com.recipick.domain.payment.integration.PaymentWebhookConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.RefundWebhookConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.ExternalCancellationConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.MartRejectionConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.PaymentExpirationFlowIntegrationTest' \
+  --tests 'com.recipick.domain.payment.integration.SystemRefundFlowIntegrationTest' \
+  --tests 'com.recipick.domain.payment.integration.PaymentRecoveryIntegrationTest' \
+  --tests 'com.recipick.domain.payment.integration.PaymentCartCleanupIntegrationTest' \
+  --tests 'com.recipick.domain.payment.integration.PointExpirationConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.PointReservationConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.MembershipChargeConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.MembershipRenewalConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.MembershipRefundConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.MembershipPaymentQueryConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.BillingKeyRegistrationConcurrencyTest' \
+  --tests 'com.recipick.domain.payment.integration.ProductPaymentSettlementConcurrencyTest'
+```
+
+## 7. 다른 도메인의 작성 위치
 
 | 영역 | 담당 | 추가할 내용·현재 문서 상태 |
 | --- | --- | --- |
 | 상품·재고 | 태헌 | 작성: [상품 ADR](adr/product-domain.md) 3-4절(재고 차감·복구·관리자 조정의 잠금 대상·순서)·5절(`ProductStockConcurrencyTest` 등 검증 결과) |
 | 레시피 자동 구성 | 보민 | 5절 작성·리뷰 대기: 확정 중복·탈퇴 거절 롤백·찜·AI 한도. 실제 회원 잠금 대기와 확정·직접 담기 교차 경합은 미검증 |
 | 주문 | 준희 | 작성: [장바구니·주문 ADR](adr/cart-order.md) 3절(결정별 근거)·5절(검증 결과). 담기는 회원 행 잠금 + 조건부 UPDATE + `UNIQUE cart_item(member_id, product_id)`, 주문 생성은 회원 행 잠금 + `UNIQUE orders(member_id, idempotency_key)` + `UNIQUE orders(pending_member_id)`(결제 대기일 때만 값이 있음)로 중복 방어, 결제 결과·수락·거절·배송은 주문 행 잠금 뒤 상태로 판정, 주문 종료·재고 복구·배송완료 적립 확정은 `MANDATORY`로 같은 트랜잭션에서만 실행. 주문 도메인 34개 클래스 405개 통과(2026-11-03, `742a694`) |
-| 결제·환불·포인트 | 정윤 | 작성 대기: 승인·만료·취소·웹훅·포인트의 경합·멱등·재처리 결과 |
+| 결제·환불·포인트 | 정윤 | 작성·리뷰 대기: [결제 절](#6-결제-도메인-승인만료취소웹훅포인트)(승인 vs 만료·취소 vs 웹훅·포인트 사용 vs 만료·동일 회차 자동청구·빌링키 등록·탈퇴 vs 정산)과 [결제 정합성 ADR](adr/payment-consistency.md). 결제 행 잠금 + `PAYMENT → ORDERS → MEMBER_POINT → POINT_EARNING → 재고` + `refund.idempotency_key`·`webhook_event.webhook_id`·`portone_cancellation_id` UNIQUE + PG 호출 TX1 → TX2 분리. 결제 패키지 136개 클래스 1,673건 통과(2026-11-04, `9172f6d`, 로컬 MySQL 8.0). 알려진 간헐 실패 #437(원인 미확정) |
 
 각 담당자는 보호할 조건 → 후보·선택 이유 → 실제 잠금·제약 → 실패 처리 → 재현 명령·수치·테스트 근거 순으로 추가합니다.
 `작성 대기`는 문서 취합 상태이며 해당 기능 코드의 미구현 여부를 뜻하지 않습니다.
 
-## 7. 관련 규칙
+## 8. 관련 규칙
 
 - [요구사항](requirement.md), [트랜잭션·동시성 컨벤션](convention.md#트랜잭션동시성).
 - [회원 Repository](../src/main/java/com/recipick/domain/member/repository/MemberRepository.java), [배송지 Facade](../src/main/java/com/recipick/domain/member/facade/MemberAddressFacade.java), [멤버십 지급 Facade](../src/main/java/com/recipick/domain/member/facade/MembershipGrantFacade.java).
