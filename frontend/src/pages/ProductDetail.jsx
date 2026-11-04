@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import Countdown from '../components/Countdown';
 import PriceTag from '../components/PriceTag';
 import { ListSkeleton } from '../components/Skeleton';
 import { notifyCartChanged } from '../cartSource';
@@ -36,7 +37,7 @@ export default function ProductDetail() {
       .then((data) => {
         if (ignore) return;
         setProduct(data);
-        recordRecent(member.memberId, 'product', { id: data.productId, name: data.name });
+        recordRecent(member.memberId, 'product', { id: data.productId, name: data.name, imageUrl: data.imageUrl });
       })
       .catch((e) => !ignore && setError(e));
     return () => {
@@ -82,11 +83,14 @@ export default function ProductDetail() {
       </p>
       <div className="detail">
         <section className="card">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" style={{ width: '100%', borderRadius: 12 }} />
-          ) : (
-            <ImagePlaceholder />
-          )}
+          <div style={{ position: 'relative' }}>
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt="" style={{ width: '100%', borderRadius: 12 }} />
+            ) : (
+              <ImagePlaceholder />
+            )}
+            {product.discountRate === 50 && <span className="tile__ribbon">반값특가</span>}
+          </div>
         </section>
         <section className="card">
           <span className="tile__meta">{product.categoryName}</span>
@@ -96,6 +100,7 @@ export default function ProductDetail() {
           </p>
           <div style={{ margin: '12px 0' }}>
             <PriceTag large price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
+            {product.discountEndAt && <Countdown endAt={product.discountEndAt} />}
           </div>
           {unavailable && <span className="badge badge--warn">{product.soldOut ? '품절' : PRODUCT_STATUS[product.status]}</span>}
           {product.description && <p style={{ margin: '16px 0', whiteSpace: 'pre-line' }}>{product.description}</p>}

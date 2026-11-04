@@ -71,6 +71,7 @@ export default function Rankings({ products = false }) {
                         <Link to={products ? `/products/${item.productId}` : `/recipes/${item.recipeId}`}>
                             {item.name}
                         </Link>
+                        {products && item.discountRate === 50 && <span className="badge">반값특가</span>}
                         <p>
                             {products ? (
                                 <>
