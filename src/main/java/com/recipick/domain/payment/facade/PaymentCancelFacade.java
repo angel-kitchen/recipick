@@ -15,7 +15,10 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 // 결제 취소 API의 진입점. 트랜잭션을 걸지 않는다. ㅡ 가운데 PortOne 호출이 있기 때문
@@ -32,16 +35,23 @@ public class PaymentCancelFacade {
     // PortOne에는 클라이언트 키 대신 환불 행마다 고정된 서버 키를 보낸다. PortOne의 길이·문자 제약이 레시픽 API로 새지 않는다
     private static final String PORTONE_IDEMPOTENCY_KEY_PREFIX = "recipick-refund-";
 
+    // 잠금 실패 뒤 같은 트랜잭션을 처음부터 다시 시작하는 횟수(최초 포함). 회차마다 잠금 대기 한도(5초)를 다시 쓰므로 늘리지 않는다
+    private static final int MAX_LOCK_ATTEMPTS = 2;
+
+    // 교착 상대가 롤백·커밋을 끝낼 틈. 바로 다시 들어가면 같은 순서로 다시 부딪히기 쉽다
+    private static final long LOCK_RETRY_BACKOFF_MILLIS = 100L;
+
     private final PaymentCancelProcessor paymentCancelProcessor;
     private final PortOnePaymentClient portOnePaymentClient;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
 
+    // 재시도가 매번 새 트랜잭션이려면 바깥 트랜잭션이 없어야 한다. 누가 트랜잭션 안에서 부르면 롤백된 트랜잭션에 합류하므로 막는다
+    @Transactional(propagation = Propagation.NEVER)
     public PaymentCancelResult cancel(Long memberId, Long paymentId, String idempotencyKey, String reason) {
         validateIdempotencyKey(idempotencyKey);
 
-        PaymentCancelPreparation preparation =
-            paymentCancelProcessor.prepare(memberId, paymentId, idempotencyKey, reason);
+        PaymentCancelPreparation preparation = prepareWithRetry(memberId, paymentId, idempotencyKey, reason);
         PaymentCancelResult result = preparation.finishedResult();
 
         if (preparation.requiresPortOneCall()) {
@@ -65,6 +75,36 @@ public class PaymentCancelFacade {
             throw new BusinessException(errorCode.get());
         }
         return result;
+    }
+
+    // TX1은 PG 호출 전이라 잠금 실패로 롤백돼도 돈이 움직이지 않는다. 새 트랜잭션에서 prepare를 처음부터 다시 불러
+    // 결제 잠금·소유권·같은 키 판정·replay 검증·UNIQUE 판정을 모두 다시 거친다 — 실패한 회차의 조회 결과는 쓰지 않는다
+    private PaymentCancelPreparation prepareWithRetry(Long memberId, Long paymentId, String idempotencyKey,
+                                                      String reason) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return paymentCancelProcessor.prepare(memberId, paymentId, idempotencyKey, reason);
+            } catch (PessimisticLockingFailureException e) {
+                if (attempt >= MAX_LOCK_ATTEMPTS || !pauseBeforeRetry()) {
+                    log.warn("결제 취소 접수(TX1) 잠금 실패 — 재시도 소진: paymentId={}, attempts={}, {}",
+                        paymentId, attempt, LockFailureDetail.of(e), e);
+                    throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT, e);
+                }
+                log.warn("결제 취소 접수(TX1) 잠금 실패 — 새 트랜잭션으로 재시도: paymentId={}, attempt={}, {}",
+                    paymentId, attempt, LockFailureDetail.of(e));
+            }
+        }
+    }
+
+    // 인터럽트되면 더 기다리지 않는다. 호출자가 재시도를 멈추고 소진과 같은 길로 간다
+    private boolean pauseBeforeRetry() {
+        try {
+            Thread.sleep(LOCK_RETRY_BACKOFF_MILLIS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     // 웹훅이 같은 환불을 먼저 등록했을 수 있어 더 이른 예약은 그대로 둔다. 등록 실패로 취소 응답(202)을 바꾸지 않는다 —
