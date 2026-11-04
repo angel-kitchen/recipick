@@ -31,7 +31,7 @@ public class ProductController {
         @LoginMember Long memberId,
         @Valid @ModelAttribute ProductSearchRequest request,
         Pageable pageable
-        ){
+        ) {
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
             productFacade.searchProducts(memberId, request, pageable)));
     }
@@ -40,7 +40,7 @@ public class ProductController {
     public ResponseEntity<ApiResponse<ProductDetailResponse>> getProduct(
         @LoginMember Long memberId,
         @PathVariable Long productId
-    ){
+    ) {
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
             productFacade.getProduct(memberId, productId)));
     }
@@ -50,7 +50,7 @@ public class ProductController {
         @LoginMember Long memberId,
         @RequestParam(defaultValue = "WEEKLY") RankingPeriod period,
         Pageable pageable
-        ){
+        ) {
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
             productFacade.findBestProducts(memberId, period, pageable)));
     }

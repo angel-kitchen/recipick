@@ -44,7 +44,8 @@ class MembershipBillingConflictIntegrationTest extends IntegrationTestSupport {
 
     private Membership paid(Member owner, LocalDateTime start, LocalDateTime end) {
         return memberships.saveAndFlush(Membership.builder().member(owner).type(MembershipType.PAID)
-                .source(MembershipSource.SUBSCRIBE).startAt(start).activatedAt(start).endAt(end).autoRenew(false).build());
+                .source(MembershipSource.SUBSCRIBE).startAt(start).activatedAt(start).endAt(end).autoRenew(false)
+                .build());
     }
 
     private void createdAt(Membership value, LocalDateTime at) {
@@ -84,7 +85,8 @@ class MembershipBillingConflictIntegrationTest extends IntegrationTestSupport {
         createdAt(other, CREATED.minusDays(1));
         memberService.lockActiveMember(owner.getId());
         // when, then
-        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW)).isEqualTo(expected);
+        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW))
+                .isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -100,7 +102,8 @@ class MembershipBillingConflictIntegrationTest extends IntegrationTestSupport {
         memberService.lockActiveMember(owner.getId());
         // when, then
         assertThat(laterId.getId()).isGreaterThan(target.getId());
-        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW)).isEqualTo(expected);
+        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW))
+                .isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -116,7 +119,8 @@ class MembershipBillingConflictIntegrationTest extends IntegrationTestSupport {
         memberService.lockActiveMember(owner.getId());
         // when, then
         assertThat(smallerId.getId()).isLessThan(target.getId());
-        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW)).isEqualTo(expected);
+        assertThat(billing.existsConflictingMembershipForBilling(owner.getId(), target.getId(), NOW))
+                .isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -169,7 +173,8 @@ class MembershipBillingConflictIntegrationTest extends IntegrationTestSupport {
         for (Long id : new Long[]{-1L, foreign.getId()}) {
             assertThatThrownBy(() -> billing.existsConflictingMembershipForBilling(owner.getId(), id, NOW))
                     .isInstanceOfSatisfying(BusinessException.class,
-                            error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
+                            error -> assertThat(error.getErrorCode())
+                                    .isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
         }
     }
 

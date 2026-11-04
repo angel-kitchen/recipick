@@ -126,8 +126,8 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
                 now.minusDays(1), now.plusDays(29));
         terminated.terminateAfterRefund(now);
         memberships.saveAndFlush(terminated);
-        Membership grant = memberships.saveAndFlush(membership(member, MembershipType.PAID, MembershipSource.ADMIN_GRANT,
-                now.minusDays(1), now.plusDays(29)));
+        Membership grant = memberships.saveAndFlush(membership(member, MembershipType.PAID,
+                MembershipSource.ADMIN_GRANT, now.minusDays(1), now.plusDays(29)));
         memberships.saveAndFlush(membership(other, MembershipType.PAID, MembershipSource.ADMIN_GRANT,
                 now.minusDays(1), now.plusDays(29)));
         // when
@@ -158,8 +158,8 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
     void paginatesWithStableTieBreaker() throws Exception {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
-        Membership first = memberships.saveAndFlush(membership(member, MembershipType.PAID, MembershipSource.ADMIN_GRANT,
-                now.minusDays(1), now.plusDays(1)));
+        Membership first = memberships.saveAndFlush(membership(member, MembershipType.PAID,
+                MembershipSource.ADMIN_GRANT, now.minusDays(1), now.plusDays(1)));
         Membership second = memberships.saveAndFlush(membership(member, MembershipType.TRIAL, MembershipSource.TRIAL,
                 now.minusDays(10), now.minusDays(3)));
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> entityManager.createNativeQuery(

@@ -3,6 +3,9 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import ErrorNotice from '../../components/ErrorNotice';
 import { useAdmin } from '../AdminContext';
 
+// 발표회 시연용 삼청 마트 관리자(#442). 체험 회원의 배송지 마트와 같게 맞췄고, 번들에 공개되므로 발표 뒤 비밀번호를 바꾼다
+const DEMO_ADMIN = { loginId: 'samcheong01', password: 'Admin1234!' };
+
 export default function AdminLogin() {
   const { admin, loading, login } = useAdmin();
   const navigate = useNavigate();
@@ -56,6 +59,9 @@ export default function AdminLogin() {
         </label>
         <button type="submit" className="btn btn--large btn--block" disabled={submitting}>
           {submitting ? '로그인 중...' : '로그인'}
+        </button>
+        <button type="button" className="btn btn--outline btn--block" onClick={() => setForm(DEMO_ADMIN)}>
+          체험 계정으로 채우기
         </button>
         <p className="field__hint" style={{ textAlign: 'center' }}>
           <Link to="/login">회원 로그인으로 이동</Link>

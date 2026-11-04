@@ -76,7 +76,8 @@ class MemberWithdrawalFacadeTest {
             com.recipick.domain.member.service.WithdrawalPaymentMethodPreparation.Status.class,
             names = {"PENDING", "REVIEW_REQUIRED"})
     @DisplayName("카드 정리 대기·운영 확인은 최종 탈퇴와 세션 삭제 없이 준비 결과 오류를 반환한다")
-    void refusesPendingPreparation(com.recipick.domain.member.service.WithdrawalPaymentMethodPreparation.Status status) {
+    void refusesPendingPreparation(
+            com.recipick.domain.member.service.WithdrawalPaymentMethodPreparation.Status status) {
         // given
         var error = com.recipick.domain.payment.exception.BillingKeyDeletionErrorCode.CLEANUP_PENDING;
         given(preparation.isEnabled()).willReturn(true);
@@ -87,7 +88,8 @@ class MemberWithdrawalFacadeTest {
                 .isInstanceOfSatisfying(com.recipick.global.exception.BusinessException.class,
                         e -> org.assertj.core.api.Assertions.assertThat(e.getErrorCode()).isEqualTo(error));
         verifyNoInteractions(service);
-        org.mockito.Mockito.verify(sessions, org.mockito.Mockito.never()).deleteSessions(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(sessions, org.mockito.Mockito.never())
+                .deleteSessions(org.mockito.ArgumentMatchers.any());
     }
 
 }

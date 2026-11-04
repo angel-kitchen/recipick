@@ -94,7 +94,7 @@ public class ProductStockService {
             .filter(p -> !p.isDeleted())
             .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
-        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+        if (role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)) {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
 
@@ -116,14 +116,14 @@ public class ProductStockService {
                 .filter(p -> !p.isDeleted())
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
 
-        if(role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)){
+        if (role == AdminRole.MART_ADMIN && !product.getMart().getId().equals(adminMartId)) {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
 
         int quantity = request.quantity();
         int beforeQuantity = product.getTotalQuantity();
 
-        if(request.type() == StockAdjustmentType.INCREASE){
+        if (request.type() == StockAdjustmentType.INCREASE) {
             product.increaseStock(quantity);
         } else {
             if (quantity > beforeQuantity) {
@@ -140,7 +140,9 @@ public class ProductStockService {
             .adminId(adminId)
             .build());
 
-        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.STOCK_ADJUST, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.TOTAL_QUANTITY, new AdminAuditChange(beforeQuantity, product.getTotalQuantity()))));
-        return new StockAdjustmentResponse(beforeQuantity,product.getTotalQuantity());
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.STOCK_ADJUST, product.getId(),
+            product.getMart().getId(),
+            Map.of(AdminAuditField.TOTAL_QUANTITY, new AdminAuditChange(beforeQuantity, product.getTotalQuantity()))));
+        return new StockAdjustmentResponse(beforeQuantity, product.getTotalQuantity());
         }
     }

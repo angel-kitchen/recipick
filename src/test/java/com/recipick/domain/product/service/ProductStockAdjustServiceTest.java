@@ -66,7 +66,7 @@ class ProductStockAdjustServiceTest {
         return product;
     }
 
-    private StockAdjustmentRequest request(StockAdjustmentType type, int quantity){
+    private StockAdjustmentRequest request(StockAdjustmentType type, int quantity) {
         return new StockAdjustmentRequest(type, quantity, "사유");
     }
 

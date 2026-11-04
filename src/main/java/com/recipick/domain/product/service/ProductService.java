@@ -104,7 +104,9 @@ public class ProductService {
         var beforeStatus = product.getStatus();
         product.changeStatus(request.status());
         if (beforeStatus != product.getStatus()) {
-            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_STATUS_CHANGE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.STATUS, new AdminAuditChange(beforeStatus, product.getStatus()))));
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_STATUS_CHANGE, product.getId(),
+                product.getMart().getId(),
+                Map.of(AdminAuditField.STATUS, new AdminAuditChange(beforeStatus, product.getStatus()))));
         }
         return ProductStatusResponse.from(product);
     }
@@ -120,7 +122,8 @@ public class ProductService {
         }
 
         product.delete();
-        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_DELETE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.DELETED, new AdminAuditChange(false, true))));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_DELETE, product.getId(),
+            product.getMart().getId(), Map.of(AdminAuditField.DELETED, new AdminAuditChange(false, true))));
     }
 
     // 장바구니처럼 여러 상품을 한 화면에 그리는 곳에서 쓰므로 IN 쿼리 한 번으로 조회한다. 없는 ID는 결과에서 빠진다.
@@ -201,7 +204,8 @@ public class ProductService {
             .price(request.price())
             .build();
         Product saved = productRepository.save(product);
-        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_CREATE, saved.getId(), mart.getId(), Map.of()));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_CREATE, saved.getId(), mart.getId(),
+            Map.of()));
         return new ProductIdResponse(saved.getId());
     }
 
@@ -266,7 +270,9 @@ public class ProductService {
         Long beforePrice = product.getPrice();
         product.changePrice(request.price());
         if (!Objects.equals(beforePrice, product.getPrice())) {
-            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_PRICE_CHANGE, product.getId(), product.getMart().getId(), Map.of(AdminAuditField.PRICE, new AdminAuditChange(beforePrice, product.getPrice()))));
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_PRICE_CHANGE, product.getId(),
+                product.getMart().getId(),
+                Map.of(AdminAuditField.PRICE, new AdminAuditChange(beforePrice, product.getPrice()))));
         }
         return ProductPriceResponse.from(product);
     }
@@ -324,20 +330,21 @@ public class ProductService {
     // 같은 값 재요청은 제외하되 문자열 원문은 감사 details에 저장하지 않는다.
     private List<Object> auditValues(Product product) {
         return Arrays.asList(product.getCategory().getId(), product.getIngredientId(), product.getName(),
-                product.getBrand(), product.getDescription(), product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
+                product.getBrand(), product.getDescription(),
+                product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
                 product.getSaleUnit(), product.getImageUrl());
     }
 
     // 순위 ID는 주문 도메인이 정한다. 삭제·다른 마트 상품을 먼저 거른 목록을 기준으로 페이지를 잘라서
     // 페이지가 덜 차거나 전체 개수가 실제보다 커지지 않는다
-    public PageResponse<ProductSearchResponse> findBestProducts(Long martId, List<Long> rankedIds, Pageable pageable){
+    public PageResponse<ProductSearchResponse> findBestProducts(Long martId, List<Long> rankedIds, Pageable pageable) {
         List<ProductSearchResponse> ranked = List.of();
-        if (!rankedIds.isEmpty()){
+        if (!rankedIds.isEmpty()) {
             Map<Long, Product> productById = productRepository
                 .findAllByIdInAndMartIdAndDeletedFalse(rankedIds, martId).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
             ranked = rankedIds.stream()
-                .map(productById :: get)
+                .map(productById::get)
                 .filter(Objects::nonNull)
                 .map(ProductSearchResponse::from)
                 .toList();

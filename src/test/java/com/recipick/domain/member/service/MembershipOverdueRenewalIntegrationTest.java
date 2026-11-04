@@ -35,7 +35,8 @@ class MembershipOverdueRenewalIntegrationTest extends IntegrationTestSupport {
 
     private Member member() {
         String suffix = UUID.randomUUID().toString().substring(0, 20);
-        return members.saveAndFlush(Member.builder().email(suffix + "@overdue.test").phone(suffix).passwordHash("hash").build());
+        return members.saveAndFlush(Member.builder().email(suffix + "@overdue.test").phone(suffix).passwordHash("hash")
+                .build());
     }
 
     private Membership paid(Member member) {
@@ -139,7 +140,8 @@ class MembershipOverdueRenewalIntegrationTest extends IntegrationTestSupport {
         var targets = billing.findOverdueRenewalTargets(NOW, eligible.getId() - 1, 20);
         // then
         assertThat(targets).extracting(row -> row.membershipId()).contains(eligible.getId())
-                .doesNotContain(stopped.getId(), reserved.getId(), terminated.getId(), pending.getId(), noGrace.getId(), trial.getId());
+                .doesNotContain(stopped.getId(), reserved.getId(), terminated.getId(), pending.getId(), noGrace.getId(),
+                        trial.getId());
     }
 
     @Test

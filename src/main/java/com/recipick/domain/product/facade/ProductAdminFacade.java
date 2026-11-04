@@ -19,7 +19,7 @@ public class ProductAdminFacade {
     private final ProductService productService;
 
     @Transactional
-    public ProductIdResponse createProduct(AdminRole role, Long adminMartId, ProductCreateRequest request){
+    public ProductIdResponse createProduct(AdminRole role, Long adminMartId, ProductCreateRequest request) {
         SaleUnit ingredientUnit = request.ingredientId() == null
             ? null
             : ingredientService.getIngredient(request.ingredientId()).getUnit();
@@ -28,7 +28,7 @@ public class ProductAdminFacade {
 
     @Transactional
     public ProductIdResponse updateProduct(AdminRole role, Long adminMartId, Long productId,
-                                           ProductUpdateRequest request){
+                                           ProductUpdateRequest request) {
         SaleUnit ingredientUnit = request.ingredientId() == null
             ? null
             : ingredientService.getIngredient(request.ingredientId()).getUnit();

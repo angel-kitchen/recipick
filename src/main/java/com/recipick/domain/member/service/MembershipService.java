@@ -7,6 +7,7 @@ import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
+import com.recipick.domain.member.repository.TrialBlockRepository;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import java.time.Clock;
@@ -25,7 +26,8 @@ public class MembershipService {
     private final MembershipRepository membershipRepository;
     private final MemberRepository memberRepository;
     private final Clock clock;
-    private final TrialBlockService trialBlockService;
+    private final TrialBlockRepository trialBlockRepository;
+    private final TrialPhoneHasher trialPhoneHasher;
 
     public MembershipMeResponse getMe(Long memberId) {
         validateMember(memberId);
@@ -36,7 +38,8 @@ public class MembershipService {
                 value.isAutoRenew(), value.getBillingAnchorDate(), value.getCancelReservedAt())).orElse(null);
         MembershipMeResponse.Pending pending = current == null
                 ? membershipRepository.findPendingMemberships(memberId, now, PageRequest.of(0, 1)).stream()
-                        .findFirst().map(value -> new MembershipMeResponse.Pending(value.getId(), value.getType().name(),
+                        .findFirst()
+                        .map(value -> new MembershipMeResponse.Pending(value.getId(), value.getType().name(),
                                 value.getSource().name(), value.getStatus(now).orElseThrow().name(), value.getStartAt(),
                                 value.getEndAt(), value.isAutoRenew(), value.getCancelReservedAt())).orElse(null)
                 : null;
@@ -78,7 +81,8 @@ public class MembershipService {
             return false;
         }
         return memberRepository.findById(memberId).filter(member -> !member.isWithdrawn())
-                .map(member -> !trialBlockService.isBlocked(member.getPhone()))
+                .map(member -> !trialBlockRepository.existsByPhoneHashAndExpiresAtAfter(
+                        trialPhoneHasher.hash(member.getPhone()), LocalDateTime.now(clock)))
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
     }
 

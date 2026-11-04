@@ -30,27 +30,27 @@ public class Category extends BaseTimeEntity {
     private boolean deleted;
 
     @Builder
-    private Category(String name){
+    private Category(String name) {
         this.name = name;
     }
 
-    public void rename(String newName){
+    public void rename(String newName) {
         validateNotDeleted();
         this.name = newName;
     }
 
-    public void delete(){
+    public void delete() {
         validateNotDeleted();
         this.deleted = true;
     }
 
-    private void validateNotDeleted(){
-        if(deleted){
+    private void validateNotDeleted() {
+        if (deleted) {
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
     }
 
-    public void restore(){
+    public void restore() {
         this.deleted = false;
     }
 }

@@ -138,7 +138,7 @@ public class MartServiceTest {
         verify(martRepository, never()).save(any());
     }
 
-    private Mart mart(Long id, Long regionId, String name){
+    private Mart mart(Long id, Long regionId, String name) {
         Mart mart = Mart.builder()
             .regionId(regionId)
             .name(name)
@@ -152,40 +152,40 @@ public class MartServiceTest {
 
     @Test
     @DisplayName("목록 : SUPER_ADMIN은 운영 상태와 관계없이 모든 마트를 조회한다.")
-    void getMarts_superAdmin(){
+    void getMarts_superAdmin() {
         Mart open = mart(1L, 31L, "삼청동 마트");
         Mart closed = mart(2L, 32L, "혜화동 마트");
         ReflectionTestUtils.setField(closed, "status", MartStatus.CLOSED);
-        given(martRepository.findAll()).willReturn(List.of(open,closed));
+        given(martRepository.findAll()).willReturn(List.of(open, closed));
 
-        List<MartResponse> result = martService.getMarts(AdminRole.SUPER_ADMIN, null);
-        assertThat(result).extracting(MartResponse :: martId).containsExactly(1L,2L);
-        assertThat(result).extracting(MartResponse :: status).containsExactly(MartStatus.OPEN, MartStatus.CLOSED);
+        List<MartResponse> result = martService.findMarts(AdminRole.SUPER_ADMIN, null);
+        assertThat(result).extracting(MartResponse::martId).containsExactly(1L, 2L);
+        assertThat(result).extracting(MartResponse::status).containsExactly(MartStatus.OPEN, MartStatus.CLOSED);
     }
 
     @Test
     @DisplayName("목록 : SUPER_ADMIN은 마트가 없으면 빈 목록")
-    void getMarts_superAdmin_empty(){
+    void getMarts_superAdmin_empty() {
         given(martRepository.findAll()).willReturn(List.of());
 
-        assertThat(martService.getMarts(AdminRole.SUPER_ADMIN, null)).isEmpty();
+        assertThat(martService.findMarts(AdminRole.SUPER_ADMIN, null)).isEmpty();
     }
 
     @Test
     @DisplayName("목록: MART_ADMIN은 본인 마트 하나만 조회한다")
-    void getMarts_martAdmin(){
+    void getMarts_martAdmin() {
         given(martRepository.findById(1L)).willReturn(Optional.of(mart(1L, 31L, "삼청동 마트")));
 
-        List<MartResponse> result = martService.getMarts(AdminRole.MART_ADMIN, 1L);
-        assertThat(result).extracting(MartResponse :: martId).containsExactly(1L);
+        List<MartResponse> result = martService.findMarts(AdminRole.MART_ADMIN, 1L);
+        assertThat(result).extracting(MartResponse::martId).containsExactly(1L);
         verify(martRepository, never()).findAll();
     }
 
     @Test
     @DisplayName("목록 : MART_ADMIN의 마트가 없으면 빈 목록")
-    void getMarts_martAdmin_empty(){
+    void getMarts_martAdmin_empty() {
         given(martRepository.findById(99L)).willReturn(Optional.empty());
-        assertThat(martService.getMarts(AdminRole.MART_ADMIN, 99L)).isEmpty();
+        assertThat(martService.findMarts(AdminRole.MART_ADMIN, 99L)).isEmpty();
 
     }
 

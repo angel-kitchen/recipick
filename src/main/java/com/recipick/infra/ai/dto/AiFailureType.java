@@ -5,5 +5,6 @@ public enum AiFailureType {
     RATE_LIMITED,
     UNAVAILABLE,
     REFUSED,
-    INVALID_RESPONSE
+    INVALID_RESPONSE,
+    TOOL_LIMIT_EXCEEDED
 }

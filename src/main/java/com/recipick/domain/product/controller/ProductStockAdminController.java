@@ -33,7 +33,7 @@ public class ProductStockAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId,
         @Valid @RequestBody StockAdjustmentRequest request
-        ){
+        ) {
         StockAdjustmentResponse response = productStockService.adjustStock(
             AdminRole.valueOf(principal.role()), principal.martId(), principal.id(), productId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -45,7 +45,7 @@ public class ProductStockAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId,
         Pageable pageable
-    ){
+    ) {
         PageResponse<StockAdjustmentHistoryResponse> response = productStockService.getStockAdjustments(
             AdminRole.valueOf(principal.role()), principal.martId(), productId, pageable);
             return ResponseEntity.ok(ApiResponse.success("조회되었습니다.", response));

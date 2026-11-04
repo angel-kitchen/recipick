@@ -3,10 +3,14 @@ package com.recipick.domain.recipe.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult;
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.FridgeRecipe;
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.IngredientRef;
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
@@ -19,6 +23,7 @@ import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.entity.RecipeStep;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
 import com.recipick.domain.recipe.repository.RecipeBookmarkCount;
+import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
@@ -34,6 +39,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.LongStream;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +68,9 @@ class RecipeServiceTest {
     @Mock
     private RecipeBookmarkRepository recipeBookmarkRepository;
 
+    @Mock
+    private IngredientRepository ingredientRepository;
+
     // 기준 시각을 고정해 기간 계산과 updated_at 값을 비교한다. 2026-11-03 09:00 (KST)
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-03T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
@@ -70,7 +79,7 @@ class RecipeServiceTest {
     @BeforeEach
     void setUp() {
         recipeService = new RecipeService(
-            recipeRepository, recipeIngredientRepository, recipeBookmarkRepository, clock);
+            recipeRepository, recipeIngredientRepository, ingredientRepository, recipeBookmarkRepository, clock);
     }
 
     private Recipe recipe(Long id, String name) {
@@ -312,5 +321,95 @@ class RecipeServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(RecipeErrorCode.INVALID_SERVINGS);
+    }
+
+    @Test
+    @DisplayName("냉장고 파먹기: 띄어쓰기만 다른 이름도 같은 재료로 보고, 가진 재료를 많이 쓰는 레시피부터 돌려준다")
+    void findRecipesByOwnedIngredients_sortsByOwnedIngredients() {
+        // given
+        Ingredient kimchi = ingredient(1L, "김치");
+        Ingredient tofu = ingredient(2L, "두부");
+        Ingredient pork = ingredient(3L, "돼지고기 앞다리살");
+        Ingredient egg = ingredient(4L, "계란");
+        Ingredient salt = ingredient(5L, "소금");
+        Recipe kimchiStew = recipe(10L, "김치찌개");
+        Recipe tofuStew = recipe(11L, "두부조림");
+        Recipe eggRoll = recipe(12L, "계란말이");
+        given(ingredientRepository.findAll()).willReturn(List.of(kimchi, tofu, pork, egg, salt));
+        given(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE))
+            .willReturn(List.of(kimchiStew, tofuStew, eggRoll));
+        given(recipeIngredientRepository.findAllWithIngredientByRecipeIds(List.of(10L, 11L, 12L))).willReturn(List.of(
+            recipeIngredient(kimchiStew, kimchi, true),
+            recipeIngredient(kimchiStew, tofu, true),
+            recipeIngredient(kimchiStew, pork, true),
+            recipeIngredient(tofuStew, tofu, true),
+            recipeIngredient(tofuStew, salt, false),
+            recipeIngredient(eggRoll, egg, true)));
+
+        // when
+        FridgeRecipeSearchResult result =
+            recipeService.findRecipesByOwnedIngredients(List.of("김치", "두 부", "용과", " "));
+
+        // then
+        assertThat(result.unknownIngredientNames()).containsExactly("용과");
+        assertThat(result.recipes()).extracting(FridgeRecipe::name).containsExactly("김치찌개", "두부조림");
+        FridgeRecipe stew = result.recipes().get(0);
+        assertThat(stew.ownedIngredients()).extracting(IngredientRef::name).containsExactly("김치", "두부");
+        assertThat(stew.missingIngredients()).containsExactly(new IngredientRef(3L, "돼지고기 앞다리살"));
+        assertThat(result.recipes().get(1).missingIngredients()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("냉장고 파먹기: 아는 재료가 하나도 없으면 레시피를 조회하지 않고 모르는 재료만 돌려준다")
+    void findRecipesByOwnedIngredients_returnsOnlyUnknownNamesWhenNoKnownIngredient() {
+        // given
+        given(ingredientRepository.findAll()).willReturn(List.of(ingredient(1L, "김치")));
+
+        // when
+        FridgeRecipeSearchResult result = recipeService.findRecipesByOwnedIngredients(List.of("용과"));
+
+        // then
+        assertThat(result.unknownIngredientNames()).containsExactly("용과");
+        assertThat(result.recipes()).isEmpty();
+        verify(recipeIngredientRepository, never()).findAllWithIngredientByRecipeIds(anyCollection());
+    }
+
+    @Test
+    @DisplayName("냉장고 파먹기: 겹치는 레시피가 많아도 10개까지만 돌려준다")
+    void findRecipesByOwnedIngredients_limitsToTenRecipes() {
+        // given
+        Ingredient egg = ingredient(4L, "계란");
+        List<Recipe> recipes = LongStream.rangeClosed(1, 12)
+            .mapToObj(id -> recipe(id, "계란 요리 " + id))
+            .toList();
+        given(ingredientRepository.findAll()).willReturn(List.of(egg));
+        given(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE)).willReturn(recipes);
+        given(recipeIngredientRepository.findAllWithIngredientByRecipeIds(anyCollection()))
+            .willReturn(recipes.stream().map(recipe -> recipeIngredient(recipe, egg, true)).toList());
+
+        // when
+        FridgeRecipeSearchResult result = recipeService.findRecipesByOwnedIngredients(List.of("계란"));
+
+        // then
+        assertThat(result.recipes()).hasSize(10)
+            .extracting(FridgeRecipe::recipeId).startsWith(1L, 2L);
+    }
+
+    private Ingredient ingredient(Long id, String name) {
+        Ingredient ingredient = Ingredient.builder()
+            .name(name)
+            .unit(SaleUnit.G)
+            .build();
+        ReflectionTestUtils.setField(ingredient, "id", id);
+        return ingredient;
+    }
+
+    private RecipeIngredient recipeIngredient(Recipe recipe, Ingredient ingredient, boolean required) {
+        return RecipeIngredient.builder()
+            .recipe(recipe)
+            .ingredient(ingredient)
+            .amountPerServing(BigDecimal.TEN)
+            .required(required)
+            .build();
     }
 }

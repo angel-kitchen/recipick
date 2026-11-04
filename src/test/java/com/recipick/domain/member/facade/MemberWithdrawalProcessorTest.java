@@ -2,7 +2,15 @@ package com.recipick.domain.member.facade;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.dto.request.MemberWithdrawRequest;
 import com.recipick.domain.member.entity.Member;
@@ -155,7 +163,8 @@ class MemberWithdrawalProcessorTest {
         // given
         allowMember();
         WithdrawalSettlementChecker other = mock(WithdrawalSettlementChecker.class);
-        given(checker.supportedScopes()).willReturn(java.util.Set.of(WithdrawalSettlementChecker.Scope.PRODUCT_PAYMENT));
+        given(checker.supportedScopes())
+                .willReturn(java.util.Set.of(WithdrawalSettlementChecker.Scope.PRODUCT_PAYMENT));
         given(other.supportedScopes()).willReturn(null);
         // when, then
         assertThatThrownBy(() -> processor(checker, other).withdraw(1L, new MemberWithdrawRequest("password", 0L)))

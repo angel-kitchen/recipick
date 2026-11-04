@@ -230,8 +230,8 @@ class MembershipCancelReservationIntegrationTest extends IntegrationTestSupport 
     @DisplayName("자동갱신 없는 관리자 지급 이용권은 해지 예약 대상이 아니다")
     void rejectsAdminGrantedMembership() throws Exception {
         // given
-        Membership grant = memberships.saveAndFlush(membership(member, MembershipType.PAID, MembershipSource.ADMIN_GRANT,
-                now.minusDays(1), now.plusDays(29)));
+        Membership grant = memberships.saveAndFlush(membership(member, MembershipType.PAID,
+                MembershipSource.ADMIN_GRANT, now.minusDays(1), now.plusDays(29)));
         // when, then
         assertError(reserve(grant.getId()), 409, "MEMBERSHIP-007");
         assertThat(memberships.findById(grant.getId()).orElseThrow().getCancelReservedAt()).isNull();

@@ -409,7 +409,7 @@ Table AUTO_CART_ITEM {
 
 // auto_cart_request_id는 AI로 미리보기를 만든 경우에만 채운다. 7일 지난 PREVIEWED 요청을 정리할 때는
 // 같은 트랜잭션에서 이 값을 먼저 NULL로 바꾼 뒤 요청을 삭제한다(FK에 ON DELETE를 두지 않고 배치가 처리).
-// success는 AI 응답을 받아 결과에 썼는지를 뜻한다: PREVIEWED·NEEDS_SELECTION·NO_MATCH·RECOMMENDED는 true,
+// success는 AI 응답을 받아 결과에 썼는지를 뜻한다: PREVIEWED·NEEDS_SELECTION·NO_MATCH·RECOMMENDED·ANSWERED는 true,
 // FALLBACK은 false이고 failure_reason을 채운다. 성공 상태에서는 failure_reason이 NULL이다.
 // parsed_result와 토큰 수는 AI 응답을 받은 만큼만 채우고, 응답을 하나도 받지 못한 FALLBACK이면 NULL이다.
 // matched_recipe_ids는 응답에 담은 레시피 ID이며, 담은 레시피가 없으면(NO_MATCH 등) NULL이다.

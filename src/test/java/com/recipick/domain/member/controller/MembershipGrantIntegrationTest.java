@@ -89,7 +89,8 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
     private void paymentFor(Membership value, String status) {
         jdbc.update("""
                 INSERT INTO membership_payment
-                    (membership_id, amount, status, billing_date, period_start_date, period_end_date, created_at, updated_at)
+                    (membership_id, amount, status, billing_date, period_start_date, period_end_date, created_at,
+                     updated_at)
                 VALUES (?, 3900, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, value.getId(), status, value.getStartAt().toLocalDate(), value.getStartAt().toLocalDate(),
                 value.getEndAt().toLocalDate());
@@ -102,13 +103,15 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // given
         Membership old = oldMembership(terminated);
         paymentFor(old, status);
-        Long audits = jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class, admin.getId());
+        Long audits = jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class,
+                admin.getId());
         // when
         MockHttpServletResponse response = grant(member.getId(), token);
         // then
         assertError(response, 409, "MEMBERSHIP-009");
         assertThat(memberships.findIdsByMemberId(member.getId())).containsExactly(old.getId());
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class, admin.getId()))
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class,
+                admin.getId()))
                 .isEqualTo(audits);
     }
 
@@ -228,7 +231,8 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         Membership membership = Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(29))
+                .source(MembershipSource.SUBSCRIBE).startAt(now.minusDays(1)).activatedAt(now.minusDays(1))
+                .endAt(now.plusDays(29))
                 .autoRenew(true).build();
         membership.reserveCancellation(now);
         memberships.saveAndFlush(membership);

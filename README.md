@@ -31,6 +31,7 @@
 | PortOne | V2 연동 | 외부 카드 결제 조회·취소 연동 |
 | JUnit / Mockito / MockMvc / Testcontainers | Gradle 의존성 기준 | 단위 검증과 실제 MySQL·Redis 기반 통합·동시성 검증 |
 | Actuator / Micrometer Prometheus | Spring Boot 관리 버전 | 내부 관리 포트에서 상태·지표 수집 경로 제공 |
+| springdoc-openapi (Swagger UI) | 2.8.17 | 컨트롤러에서 API 명세를 생성하고 `/api/swagger-ui` 화면으로 제공 |
 | Docker Compose / GitHub Actions | 저장소 설정 기준 | 로컬 DB 실행 구성 공유 및 PR 자동 테스트 |
 
 정확한 의존성은 [build.gradle](build.gradle), 자동 검증은 [CI 설정](.github/workflows/ci.yml)을 따릅니다.
@@ -124,6 +125,7 @@ GitHub Actions는 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스�
 | 상품 검색·쿼리 개선 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [병목 개선](docs/performance/product/bottleneck.md) |
 | 캐싱 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [캐싱](docs/performance/product/caching.md) |
 | 부하 테스트 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [부하 테스트](docs/performance/product/load-test.md) |
+| 100명 혼합 예비 검증 | 로컬 단일 PC, 앱 `bbd0943`, 회원 100·상품 100,660·레시피 100 | 개선 비교 아님 | 58,199요청 실패 0, 시나리오 p95 약 72ms, 종료 정합성 통과 | [환경·API별 결과](docs/performance/local-100-users.md) |
 | 호출 제한 | 담당자 확인 대기 | 확인 대기 | 확인 대기 | [요청 수 제한](docs/performance/product/rate-limit.md) (결과 취합 대기) |
 
 측정용 데이터의 규모와 생성 방법은 [성능 시드 문서](docs/performance/product/seed-data.md)를 참고합니다.

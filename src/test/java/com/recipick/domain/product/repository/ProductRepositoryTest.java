@@ -39,7 +39,7 @@ class ProductRepositoryTest extends IntegrationTestSupport {
     Category meat;
 
     @BeforeEach
-    void setUp(){
+    void setUp() {
         martA = martRepository.save(mart(901L, "테스트 마트A"));
         martB = martRepository.save(mart(902L, "테스트 마트B"));
         vegetable = em.merge(Category.builder().name("테스트채소").build());

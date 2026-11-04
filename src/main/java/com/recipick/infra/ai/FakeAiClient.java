@@ -2,10 +2,14 @@ package com.recipick.infra.ai;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiFridgeAnswer;
+import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
+import com.recipick.infra.ai.dto.AiToolResult;
 import com.recipick.infra.ai.dto.AiUsage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -25,6 +29,7 @@ public class FakeAiClient implements AiClient {
     private static final Pattern SERVINGS = Pattern.compile("(\\d+)\\s*인분");
     private static final Pattern COOKING_MINUTES = Pattern.compile("(\\d+)\\s*분");
     private static final int MAX_RECOMMENDATIONS = 5;
+    private static final int MAX_FRIDGE_RECIPES = 3;
 
     @Override
     public AiResult<List<AiExtractedMenu>> extractMenus(String text, List<AiRecipeOption> recipes) {
@@ -55,7 +60,7 @@ public class FakeAiClient implements AiClient {
     }
 
     @Override
-    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String text, List<AiRecipeOption> candidates) {
+    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String text, List<AiRecipeCandidate> candidates) {
         if (text.contains(RECOMMEND_FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
         }
@@ -64,6 +69,25 @@ public class FakeAiClient implements AiClient {
             .map(recipe -> new AiRecommendedRecipe(recipe.id(), recipe.name() + "을(를) 추천합니다."))
             .toList();
         return AiResult.success(recommendations, new AiUsage(MODEL, 0, 0, 0, 0));
+    }
+
+    // 로컬 화면 확인용이라 문장에 들어 있는 등록 재료 이름으로만 찾고, 가장 덜 부족한 레시피부터 고른다
+    @Override
+    public AiResult<AiFridgeAnswer> answerFridgeQuestion(String text, List<String> ingredientNames,
+                                                         AiFridgeTools tools) {
+        if (text.contains(FAILURE_TRIGGER)) {
+            return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
+        }
+        List<String> owned = ingredientNames.stream().filter(text::contains).toList();
+        AiToolResult<AiFridgeRecipeSearch> search = tools.findRecipes(owned);
+        List<Long> recipeIds = search.isError() ? List.of() : search.content().recipes().stream()
+            .limit(MAX_FRIDGE_RECIPES)
+            .map(AiFridgeRecipeSearch.Recipe::recipeId)
+            .toList();
+        String answer = recipeIds.isEmpty()
+            ? "가진 재료로 만들 수 있는 레시피를 찾지 못했어요."
+            : "가진 재료로 만들 수 있는 레시피를 골랐어요.";
+        return AiResult.success(new AiFridgeAnswer(answer, recipeIds), new AiUsage(MODEL, 0, 0, 0, 0));
     }
 
     private Integer parseServings(String text) {

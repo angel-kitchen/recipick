@@ -33,7 +33,7 @@ class MartFacadeTest {
     @InjectMocks
     private MartFacade martFacade;
 
-    private MartCreateRequest request(Long regionId){
+    private MartCreateRequest request(Long regionId) {
         return new MartCreateRequest(regionId, "삼청동 마트",
             new BigDecimal("37.5860000"), new BigDecimal("126.9820000"), 2000);
     }
@@ -54,7 +54,7 @@ class MartFacadeTest {
 
     @Test
     @DisplayName("등록: 없는 지역이면 REGION_NOT_FOUND이고 마트 등록은 호출되지 않는다")
-    void createMart_regionNotFound(){
+    void createMart_regionNotFound() {
         // given
         given(regionService.existsById(99L)).willReturn(false);
 

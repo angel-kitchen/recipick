@@ -20,7 +20,7 @@ public record ProductDetailResponse(
     boolean soldOut
 ) {
 
-    public static ProductDetailResponse from(Product product){
+    public static ProductDetailResponse from(Product product) {
         return new ProductDetailResponse(
             product.getId(),
             product.getName(),

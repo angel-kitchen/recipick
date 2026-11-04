@@ -15,13 +15,14 @@ import com.recipick.domain.recipe.service.RecipeService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.ai.AiClient;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
-import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -49,14 +50,15 @@ public class AiRecipeRecommendFacade {
         }
 
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(conditionResult.content());
-        // 조건을 하나도 읽지 못했는데 전체 레시피에서 고르면 문장과 무관한 추천이 나가므로 후보를 비운다
-        List<Recipe> candidates = condition.isEmpty() ? List.of() : recipeService.findRecommendCandidates(condition);
+        // "해장용", "두부"처럼 조건으로 옮길 수 없는 문장도 추천하려고, 조건이 없으면 전체 레시피를 후보로 AI가 고른다.
+        // 레시피와 관계없는 문장은 AI가 빈 목록을 줘 NO_MATCH가 된다
+        List<Recipe> candidates = recipeService.findRecommendCandidates(condition);
         if (candidates.isEmpty()) {
             saveLog(memberId, text, AiResultStatus.NO_MATCH, conditionResult, List.of());
             return AiRecipeRecommendResponse.noMatch();
         }
 
-        AiResult<List<AiRecommendedRecipe>> pickResult = aiClient.recommendRecipes(text, toOptions(candidates));
+        AiResult<List<AiRecommendedRecipe>> pickResult = aiClient.recommendRecipes(text, toCandidates(candidates));
         // 빈 목록은 AI가 후보 중 맞는 레시피가 없다고 판단한 것이라 장애가 아닌 정상 결과다
         if (pickResult.isSuccess() && pickResult.content().isEmpty()) {
             saveLog(memberId, text, AiResultStatus.NO_MATCH,
@@ -71,7 +73,10 @@ public class AiRecipeRecommendFacade {
             AiFailureType failureType = pickResult.isSuccess()
                 ? AiFailureType.INVALID_RESPONSE
                 : pickResult.failureType();
-            List<Recommendation> fallback = AiRecipeRecommendResolver.fallback(candidates);
+            // 조건 없이 전체를 후보로 삼았을 때는 서버가 거른 후보가 아니라서 아무 레시피나 대신 줄 수 없다
+            List<Recommendation> fallback = condition.isEmpty()
+                ? List.of()
+                : AiRecipeRecommendResolver.fallback(candidates);
             saveLog(memberId, text, AiResultStatus.FALLBACK,
                 combine(conditionResult, pickResult, failureType), toRecipeIds(fallback));
             return AiRecipeRecommendResponse.fallback(fallback);
@@ -88,10 +93,25 @@ public class AiRecipeRecommendFacade {
         }
     }
 
-    private List<AiRecipeOption> toOptions(List<Recipe> candidates) {
+    private List<AiRecipeCandidate> toCandidates(List<Recipe> candidates) {
+        Map<Long, List<String>> ingredientsByRecipeId =
+            recipeService.findRequiredIngredientNames(candidates.stream().map(Recipe::getId).toList());
         return candidates.stream()
-            .map(recipe -> new AiRecipeOption(recipe.getId(), recipe.getName()))
+            .map(recipe -> new AiRecipeCandidate(
+                recipe.getId(),
+                recipe.getName(),
+                nameOrNull(recipe.getCuisine()),
+                nameOrNull(recipe.getDishType()),
+                recipe.getCookTimeMin(),
+                recipe.getSpicyLevel(),
+                nameOrNull(recipe.getDifficulty()),
+                ingredientsByRecipeId.getOrDefault(recipe.getId(), List.of())))
             .toList();
+    }
+
+    // 종류·요리 구분·난이도는 비어 있을 수 있는 컬럼이다
+    private static String nameOrNull(Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     // 두 번의 호출을 이력 한 건으로 남기려고, 분석 결과는 함께 묶고 토큰·응답 시간은 합친다

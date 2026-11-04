@@ -5,8 +5,8 @@ import com.recipick.domain.product.entity.Category;
 public record CategoryResponse (
     Long categoryId,
     String name
-){
-    public static CategoryResponse from(Category category){
+) {
+    public static CategoryResponse from(Category category) {
         return new CategoryResponse(category.getId(), category.getName());
     }
 }

@@ -11,5 +11,5 @@ public record ProductSearchRequest(
 
     @PositiveOrZero
     Long maxPrice
-    ){
+    ) {
 }

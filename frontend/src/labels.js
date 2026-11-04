@@ -143,12 +143,17 @@ export const AUDIT_ACTION = {
   POINT_HISTORY_VIEW: '포인트 이력 조회',
 };
 
-export const AI_REQUEST_TYPE = { AUTO_CART: '자동 장바구니', RECOMMENDATION: '레시피 추천' };
+export const AI_REQUEST_TYPE = {
+  AUTO_CART: '자동 장바구니',
+  RECOMMENDATION: '레시피 추천',
+  FRIDGE: '냉장고 파먹기',
+};
 export const AI_RESULT_STATUS = {
   PREVIEWED: '미리보기',
   NEEDS_SELECTION: '선택 필요',
   NO_MATCH: '일치 없음',
   RECOMMENDED: '추천 완료',
+  ANSWERED: '답변 완료',
   FALLBACK: '대체 결과',
 };
 

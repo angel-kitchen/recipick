@@ -7,7 +7,7 @@ public record ProductPriceResponse(
     Long price
 ) {
 
-    public static ProductPriceResponse from(Product product){
+    public static ProductPriceResponse from(Product product) {
         return new ProductPriceResponse(product.getId(), product.getPrice());
     }
 }

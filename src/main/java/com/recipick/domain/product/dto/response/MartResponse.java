@@ -16,7 +16,7 @@ public record MartResponse(
     MartStatus status
 ) {
 
-    public static MartResponse from(Mart mart){
+    public static MartResponse from(Mart mart) {
         return new MartResponse(
             mart.getId(),
             mart.getRegionId(),

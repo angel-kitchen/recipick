@@ -1,0 +1,8 @@
+# 로컬 성능 서버 전용. 기존 Grafana 대시보드의 job 이름을 유지한다.
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: recipick
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:28081"]

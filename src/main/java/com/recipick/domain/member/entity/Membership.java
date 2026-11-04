@@ -130,7 +130,8 @@ public class Membership extends BaseTimeEntity {
         return Membership.builder().member(member).type(MembershipType.PAID).source(source)
                 .startAt(provisionalStartAt).endAt(provisionalEndAt).autoRenew(true)
                 .billingAnchorDate(provisionalStartAt.toLocalDate()).consentedAmount(consent.consentedAmount())
-                .consentTextVersion(consent.consentTextVersion()).autopayConsentedAt(consent.autopayConsentedAt()).build();
+                .consentTextVersion(consent.consentTextVersion()).autopayConsentedAt(consent.autopayConsentedAt())
+                .build();
     }
 
     public MembershipBillingResult activateAfterFirstPayment(LocalDateTime pgPaidAt,

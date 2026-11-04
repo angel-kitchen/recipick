@@ -2,24 +2,38 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { CUISINE, DISH_TYPE, spicyText } from '../labels';
+import { CUISINE, DISH_TYPE, UNAVAILABLE_REASON, formatWon, spicyText } from '../labels';
 import ErrorNotice from './ErrorNotice';
 import ImagePlaceholder from './ImagePlaceholder';
 import MembershipInfoModal from './MembershipInfoModal';
 
-// 쓰는 법이 입력칸의 흐린 글씨만으로는 안 보여서, 누르면 입력칸에 채워지는 예시를 보여 준다
-const EXAMPLES = ['김치찌개 2인분', '김치찌개 2인분이랑 계란말이', '매운 음식 30분 이내'];
+// 쓰는 법이 입력칸의 흐린 글씨만으로는 안 보여서, 누르면 입력칸에 채워지는 예시를 보여 준다.
+// 메뉴·조건과 가진 재료는 같은 문장이 양쪽으로 읽힐 수 있어("두부랑 김치") 자동으로 나누지 않고 탭으로 고르게 한다
+const MODES = {
+  menu: {
+    label: '메뉴·조건으로 찾기',
+    placeholder: '예: 김치찌개 2인분이랑 계란말이 / 매운 음식 30분 이내',
+    examples: ['김치찌개 2인분', '김치찌개 2인분이랑 계란말이', '매운 음식 30분 이내'],
+  },
+  fridge: {
+    label: '가진 재료로 찾기',
+    placeholder: '예: 두부랑 김치 있는데 뭐 해먹지?',
+    examples: ['두부랑 김치 있는데 뭐 해먹지?', '계란이랑 밥만 있어', '감자 양파 당근 남았어'],
+  },
+};
 
 // 한 입력창으로 두 가지를 처리한다.
 // ① "김치찌개 2인분이랑 계란말이"처럼 메뉴 이름이 있으면 서버가 레시피를 찾아 자동 장바구니 미리보기를 만든다.
 //    결과는 PREVIEWED(바로 미리보기), NEEDS_SELECTION(후보 선택 필요), NO_MATCH, FALLBACK(AI 장애, 대체 목록)
 // ② 이름으로 못 찾으면(NO_MATCH) 같은 문장을 "매운음식 30분 이내" 같은 조건으로 보고 레시피를 추천받는다.
 //    결과는 RECOMMENDED, NO_MATCH, FALLBACK이고, 결과에 source: 'recommend'를 붙여 ①과 구분한다.
+// 가진 재료 탭은 냉장고 파먹기만 부르고, 결과에 source: 'fridge'를 붙인다.
 // ①이 AI 장애(FALLBACK)로 끝났을 때는 ②를 부르지 않는다. 같은 AI가 다시 실패할 가능성이 크고 호출 횟수만 쓴다.
 export default function AiAutoCartBox() {
   const navigate = useNavigate();
   const { member } = useAuth();
   const isMembership = Boolean(member?.membership?.active);
+  const [mode, setMode] = useState('menu');
   const [text, setText] = useState('');
   const [result, setResult] = useState(null);
   const [picked, setPicked] = useState({});
@@ -40,12 +54,24 @@ export default function AiAutoCartBox() {
     }
   };
 
+  const changeMode = (next) => {
+    setMode(next);
+    setResult(null);
+    setError(null);
+    setMartMissing(false);
+  };
+
   const submit = (event) => {
     event.preventDefault();
     // 새 검색이 실패해도 이전 검색의 선택 화면이 남아 있지 않게 먼저 비운다
     setResult(null);
     setMartMissing(false);
     run(async () => {
+      if (mode === 'fridge') {
+        const answered = await api.post('/api/recipes/ai-fridge-recommendations', { text });
+        setResult({ ...answered, source: 'fridge' });
+        return;
+      }
       let data;
       try {
         data = await api.post('/api/auto-carts/ai-preview', { text });
@@ -90,11 +116,23 @@ export default function AiAutoCartBox() {
   return (
     <section className="card" style={{ marginBottom: 24 }}>
       <h2 className="tile__title">먹고 싶은 걸 말해보세요</h2>
+      <div className="chips" style={{ marginTop: 12 }}>
+        {Object.entries(MODES).map(([value, { label }]) => (
+          <button
+            key={value}
+            type="button"
+            className={`chip ${mode === value ? 'chip--solid' : ''}`}
+            onClick={() => changeMode(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <form className="filters" style={{ marginTop: 12, marginBottom: 0 }} onSubmit={submit}>
         <input
           className="field__input"
           style={{ flex: 1 }}
-          placeholder="예: 김치찌개 2인분이랑 계란말이 / 매운 음식 30분 이내"
+          placeholder={MODES[mode].placeholder}
           value={text}
           maxLength={200}
           onChange={(e) => setText(e.target.value)}
@@ -105,7 +143,7 @@ export default function AiAutoCartBox() {
         </button>
       </form>
       <div className="chips" style={{ marginTop: 12 }}>
-        {EXAMPLES.map((example) => (
+        {MODES[mode].examples.map((example) => (
           <button key={example} type="button" className="chip" onClick={() => setText(example)}>
             {example}
           </button>
@@ -129,10 +167,11 @@ export default function AiAutoCartBox() {
           </p>
         )}
         {result?.source === 'recommend' && <Recommendations result={result} />}
-        {result?.source !== 'recommend' && result?.status === 'NO_MATCH' && (
+        {result?.source === 'fridge' && <FridgeAnswer result={result} />}
+        {!result?.source && result?.status === 'NO_MATCH' && (
           <p className="field__hint">맞는 레시피를 찾지 못했어요. 다른 표현으로 다시 입력해 주세요.</p>
         )}
-        {result?.source !== 'recommend' && result?.status === 'FALLBACK' && (
+        {!result?.source && result?.status === 'FALLBACK' && (
           <>
             <p className="field__hint">잘 알아듣지 못했어요. 대신 이런 레시피는 어때요?</p>
             <div className="chips">
@@ -144,7 +183,7 @@ export default function AiAutoCartBox() {
             </div>
           </>
         )}
-        {result?.source !== 'recommend' && result?.status === 'NEEDS_SELECTION' && (
+        {!result?.source && result?.status === 'NEEDS_SELECTION' && (
           <div className="stack">
             <p className="field__hint">어떤 레시피인지 골라 주세요.</p>
             {result.menus.map((menu, index) => (
@@ -225,4 +264,51 @@ function Recommendations({ result }) {
       </div>
     </>
   );
+}
+
+// 냉장고 파먹기 결과. answer는 AI가 쓴 문장이고, 부족한 재료의 상품·가격·품절은 서버가 조회한 값이다
+function FridgeAnswer({ result }) {
+  if (result.status === 'FALLBACK') {
+    return <p className="field__hint">지금은 답변을 드리기 어려워요. 아래 검색으로 레시피를 찾아 주세요.</p>;
+  }
+  return (
+    <>
+      <p className="field__hint" style={{ whiteSpace: 'pre-line' }}>
+        {result.answer}
+      </p>
+      {result.recipes.length > 0 && !result.martSelected && (
+        <p className="field__hint">
+          이용 마트가 없어 부족한 재료의 가격은 보여 드리지 못해요. <Link to="/addresses">배송지 등록하기</Link>
+        </p>
+      )}
+      <div className="grid" style={{ marginTop: 12 }}>
+        {result.recipes.map((recipe) => (
+          <Link key={recipe.recipeId} to={`/recipes/${recipe.recipeId}`} className="tile">
+            <div className="tile__body">
+              <span className="tile__title">{recipe.name}</span>
+              <span className="tile__meta">가진 재료: {recipe.ownedIngredients.join(', ')}</span>
+              {recipe.missingIngredients.length === 0 ? (
+                <span className="tile__meta">부족한 재료 없이 만들 수 있어요.</span>
+              ) : (
+                recipe.missingIngredients.map((ingredient) => (
+                  <span key={ingredient.ingredientId} className="tile__meta">
+                    {missingText(ingredient, result.martSelected)}
+                  </span>
+                ))
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function missingText(ingredient, martSelected) {
+  if (!martSelected) {
+    return `부족: ${ingredient.name}`;
+  }
+  const product = ingredient.productName ? ` · ${ingredient.productName} ${formatWon(ingredient.price)}` : '';
+  const reason = ingredient.unavailableReason ? ` (${UNAVAILABLE_REASON[ingredient.unavailableReason]})` : '';
+  return `부족: ${ingredient.name}${product}${reason}`;
 }

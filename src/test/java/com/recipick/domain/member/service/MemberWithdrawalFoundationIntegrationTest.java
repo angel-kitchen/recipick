@@ -168,7 +168,8 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
                 org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
                         principal, null, principal.authorities()));
         // given
-        MemberAdminSearchRequest request = new MemberAdminSearchRequest(member.getEmail(), null, null, null, null, 0, 20, null);
+        MemberAdminSearchRequest request = new MemberAdminSearchRequest(member.getEmail(),
+                null, null, null, null, 0, 20, null);
         assertThat(adminService.findMembers(request).totalElements()).isEqualTo(1);
         markWithdrawn();
 

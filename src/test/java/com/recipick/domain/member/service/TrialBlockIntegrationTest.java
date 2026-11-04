@@ -36,7 +36,8 @@ class TrialBlockIntegrationTest extends IntegrationTestSupport {
 
     private void history(Member member, LocalDateTime now) {
         memberships.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31))
+                .endAt(now.minusDays(1)).build());
     }
 
     @Test
@@ -61,8 +62,10 @@ class TrialBlockIntegrationTest extends IntegrationTestSupport {
         // when
         service.recordWithdrawal(member.getId(), now);
         // then
-        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()), now.plusYears(1).minusSeconds(1))).isTrue();
-        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()), now.plusYears(1))).isFalse();
+        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()),
+                now.plusYears(1).minusSeconds(1))).isTrue();
+        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()), now.plusYears(1)))
+                .isFalse();
     }
 
     @Test
@@ -93,7 +96,8 @@ class TrialBlockIntegrationTest extends IntegrationTestSupport {
         service.recordWithdrawal(member.getId(), now);
         service.recordWithdrawal(member.getId(), now.minusDays(10));
         // then
-        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()), now.plusYears(1).minusSeconds(1))).isTrue();
+        assertThat(blocks.existsByPhoneHashAndExpiresAtAfter(hasher.hash(member.getPhone()),
+                now.plusYears(1).minusSeconds(1))).isTrue();
     }
 
     @Test
@@ -119,7 +123,8 @@ class TrialBlockIntegrationTest extends IntegrationTestSupport {
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @Test
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     @DisplayName("같은 번호의 동시 저장은 한 행을 유지하고 가장 늦은 만료 시각을 보존한다")
     void concurrentUpserts() throws Exception {
         // given
