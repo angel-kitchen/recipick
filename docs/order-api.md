@@ -1,6 +1,6 @@
 # 주문 도메인 API 명세
 
-레시픽(Recipick) · 주문 도메인(장바구니 · 주문 · 관리자 주문) · 기준: `feature/order-admin-accept` 브랜치 구현(2026-10-24)
+레시픽(Recipick) · 주문 도메인(장바구니 · 주문 · 관리자 주문). 기존 1~12절은 `feature/order-admin-accept` 구현(2026-10-24) 당시 명세이며, 관리자 거절·배송 변경 13~14절과 12절의 연결 안내는 `dev` `544bee2`(2026-11-04) 코드 기준으로 보완했습니다. 기존 절 전체의 최신 구현 대조·재검증을 뜻하지 않습니다.
 
 ## 공통
 
@@ -1136,9 +1136,79 @@
 - 주문 행에 비관적 락을 잡은 뒤 상태를 확인하므로, 회원 취소와 동시에 들어와도 한쪽만 성공합니다. 회원 취소가 먼저면 ORDER-014, 수락이 먼저면 회원 취소가 거절됩니다.
 - 이력은 statusType=MART, actor=MART, changedByAdminId=처리한 관리자 ID로 남깁니다. SUPER_ADMIN이 대신 처리해도 주체는 MART이고 관리자 ID로 누가 처리했는지 구분합니다.
 - SUPER_ADMIN은 모든 마트의 주문을, MART_ADMIN은 소속 마트 주문만 수락할 수 있습니다.
-- 수락 이후의 PREPARING → SHIPPING → DELIVERED 상태 변경은 아직 구현되지 않았습니다. 마트 거절은 주문 쪽 접수 메서드(`OrderService.requestMartRejection`, RECEIVED → REJECTED 전이)까지 구현됐고, `POST /api/admin/orders/{orderId}/reject` API는 결제 Facade(ADMIN Refund) 연결 후 추가합니다.
+- 수락 이후 배송 변경은 `PATCH /api/admin/orders/{orderId}/delivery-status`로 구현됐습니다(14절). 주문 거절은 `POST /api/admin/orders/{orderId}/reject`에서 결제 `MartRejectionFacade`를 호출해 ADMIN 환불로 연결합니다(13절).
 
 ---
+
+## 13. 주문 거절·자동 환불
+
+`POST /api/admin/orders/{orderId}/reject` — SUPER_ADMIN 또는 해당 마트의 MART_ADMIN.
+
+필수 헤더는 `Authorization: Bearer {관리자 accessToken}`, `Idempotency-Key`입니다. 키는 비어 있지 않아야 하며 최대 64자입니다. 요청 본문은 다음과 같고 `reason`은 공백만으로 구성할 수 없으며 최대 500자입니다.
+
+```json
+{"reason":"마트 사정으로 주문을 처리할 수 없습니다."}
+```
+
+- 정상 결제된 접수 상태(`PAID`·`RECEIVED`) 주문을 거절합니다. 같은 요청의 재전송은 저장된 환불의 현재 결과를 반환합니다.
+- 완료 시 HTTP 200, 결제 취소 결과 확인 중이면 HTTP 202입니다. 두 응답 모두 `success: true`이며 `data`는 `MartRejectionResponse`입니다.
+
+| 응답 필드 | 의미 |
+| --- | --- |
+| orderId, paymentId | 주문·결제 ID |
+| paymentStatus, canceledAt | 현재 결제 상태·취소 시각(미완료면 null) |
+| refundId, refundStatus, refundAmount | 환불 ID·상태·금액. 0원 POINTS_ONLY 결제는 refundId·refundStatus가 null, refundAmount는 0 |
+
+| HTTP | 대표 오류 | 조건 |
+| --- | --- | --- |
+| 400 | COMMON-007·COMMON-001 | 멱등 키 누락·빈 값 또는 길이/사유 검증 실패 |
+| 403 | AUTH-005 | MART_ADMIN이 다른 마트 주문 요청 |
+| 404 | ORDER-012·PAYMENT-001 | 대상 주문·결제를 찾을 수 없음 |
+| 400 | PAYMENT-002 | 카드 결제가 PAID 상태가 아님 |
+| 409 | ORDER-015·PAYMENT-007 | 거절 불가능한 주문·결제 상태 |
+| 409 | COMMON-006·COMMON-011 | 동일 요청 처리 중 또는 같은 키로 다른 요청 |
+| 409 | PAYMENT-009 | PG가 취소 실패를 명확히 반환 |
+| 500 | COMMON-008 | PG 요청 거절을 외부 서비스 오류로 반환 |
+| 409 | COMMON-010 | DB 잠금 대기 시간 초과 |
+
+TX1에서 결제·주문을 잠그고 거절 상태·ADMIN 환불 접수·`ORDER_REJECT` 감사 로그를 함께 커밋합니다. 접수만으로 재고·포인트를 복원하지 않습니다. 외부 PG 호출은 트랜잭션 밖에서 실행하고 결과 반영 TX에서 최종 상태·재고·포인트를 처리합니다. 0원 결제는 PG 호출·환불 행 없이 내부 취소로 종료합니다. 결과 불명 건은 웹훅·복구 경로가 이어서 확인합니다.
+
+명확한 취소 실패는 결과 반영을 커밋한 뒤 오류로 응답합니다. 카드 결제의 실패 시 결제는 PAID로 복귀해도 주문은 `CANCEL_REQUESTED`·`REJECTED`를 유지합니다. 이 API는 접수 주문의 거절이며 배송완료 상품의 하자 환불 기능을 제공하는 계약이 아닙니다. 세부 정합화·재처리 규칙은 [주문·결제 연동](order-payment-integration.md)과 [결제 API](payment-api.md)를 따릅니다.
+
+## 14. 배송 상태 변경
+
+`PATCH /api/admin/orders/{orderId}/delivery-status` — SUPER_ADMIN 또는 해당 마트의 MART_ADMIN.
+
+```json
+{"status":"SHIPPING"}
+```
+
+`status`는 필수이며 이 API에서 허용하는 값은 `SHIPPING`·`DELIVERED`입니다. 수락 API가 `PREPARING`을 만들고, 이 API는 `PREPARING → SHIPPING → DELIVERED` 순서만 허용합니다. 단계 건너뛰기·역행은 거절합니다.
+
+성공은 HTTP 200, `data`는 수락과 같은 `OrderMartStatusResponse`입니다.
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "배송 상태가 변경되었습니다.",
+  "data": {"orderId":1001,"status":"PAID","martStatus":"SHIPPING"}
+}
+```
+
+| HTTP | 대표 오류 | 조건 |
+| --- | --- | --- |
+| 400 | COMMON-001·COMMON-002 | 필수 status 누락 또는 요청 형식·enum 값 오류 |
+| 403 | AUTH-005 | MART_ADMIN이 다른 마트 주문 요청 |
+| 404 | ORDER-012 | 주문 없음 또는 결제 전(NONE) 주문 |
+| 409 | ORDER-016 | 주문이 PAID가 아님(취소·환불 진행/종료 포함) |
+| 409 | ORDER-017 | SHIPPING·DELIVERED 외 값 또는 허용되지 않는 단계 전이 |
+| 409 | COMMON-010 | DB 잠금 대기 시간 초과 |
+
+- 같은 배송 상태로 재요청하면 주문이 PAID인지 먼저 확인한 뒤 현재 상태를 반환하며 주문 이력·감사 로그를 추가하지 않습니다.
+- `OrderDeliveryFacade`의 한 트랜잭션에서 주문 잠금·상태 변경·이력·`ORDER_DELIVERY_CHANGE` 감사 로그를 저장합니다.
+- DELIVERED 요청은 `PointCommandService.confirmEarning`까지 같은 트랜잭션에서 처리합니다. 같은 상태 재요청도 포인트 확정 계약은 호출하며, 이미 확정된 건은 중복 적립되지 않습니다.
+- 결제 상태는 바꾸지 않으므로 PAYMENT를 잠그지 않고 `ORDERS → MEMBER_POINT → POINT_EARNING` 순서로 처리합니다.
 
 ## 부록. 주문 도메인 에러 코드
 

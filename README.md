@@ -3,7 +3,7 @@
 레시피에 필요한 재료를 이용 마트의 상품으로 구성해 장바구니와 주문으로 연결하는 지역 기반 장보기 서비스입니다.
 배송지의 법정동으로 이용 마트를 정하고, 상품의 판매 단위·가격·재고를 기준으로 구매 수량을 계산합니다.
 
-이 저장소는 Spring Boot 백엔드입니다. 기능 범위는 [요구사항](docs/requirement.md), 상세 근거와 검증 자료는
+이 저장소는 Spring Boot 백엔드와 `frontend/`의 React·Vite 화면을 포함합니다. 기능 범위는 [요구사항](docs/requirement.md), 상세 근거와 검증 자료는
 [문서 목차](docs/README.md)에서 확인할 수 있습니다. 요구사항의 1·2·3차 구분은 구현 계획이며, 완료 여부는 병합된 코드·PR과 검증 결과를 기준으로 기록합니다.
 
 ## 주요 기능과 담당
@@ -26,7 +26,7 @@
 | Spring Data JPA / Hibernate | Spring Boot 관리 버전 | 엔티티와 트랜잭션으로 상태 변경을 처리하고 필요한 행에 비관적 잠금 적용 |
 | QueryDSL | 5.1.0 Jakarta | 검색 조건·필터·정렬 조합을 타입이 있는 쿼리로 작성 |
 | MySQL | 8.4 | 주문·결제·재고의 관계·UNIQUE 제약·동일 DB 트랜잭션 관리 |
-| Redis | 7.4 | 리프레시 세션과 로그인 실패·잠금 정보의 만료 및 원자적 갱신 |
+| Redis | 7.4 | 인증 세션·실패 제한의 원자적 처리, 조회 캐시, 결제 복구 지연 큐 |
 | Spring Security / JJWT | JJWT 0.13.0 | JWT 인증과 회원·관리자·마트 권한 검사 |
 | PortOne | V2 연동 | 외부 카드 결제 조회·취소 연동 |
 | JUnit / Mockito / MockMvc / Testcontainers | Gradle 의존성 기준 | 단위 검증과 실제 MySQL·Redis 기반 통합·동시성 검증 |
@@ -38,7 +38,7 @@
 현재 상태·지표 공개 규칙은 [모니터링 문서](docs/monitoring.md)에 정리되어 있습니다.
 배포의 [선택 근거](docs/deploy-strategy.md)·[구현 기록](docs/deploy-implementation.md)·[운영 절차](deploy/README.md),
 성능의 [부하 테스트](docs/performance/product/load-test.md)·[병목 개선](docs/performance/product/bottleneck.md)·[캐싱](docs/performance/product/caching.md)·[요청 수 제한](docs/performance/product/rate-limit.md) 보고서가 있습니다. 전체 목차는 [성능 보고서 목차](docs/performance/README.md)에 있습니다.
-프론트 연동·HTTPS 검증 결과와 제출용 성능 수치 요약은 담당자 확인 후 갱신합니다.
+기록된 프론트·HTTPS 검증은 [배포 구현 기록](docs/deploy-implementation.md), 로컬 혼합 검증은 [100명 보고서](docs/performance/local-100-users.md)에서 실행 시점과 범위를 구분해 확인합니다.
 
 ## 구조
 
@@ -103,8 +103,11 @@ curl -i http://localhost:8080/api/categories
 [data.sql](src/main/resources/data.sql), 로컬 관리자 시드는 [data-admin-local.sql](src/main/resources/data-admin-local.sql)을 참고합니다.
 운영 관리자·환경변수·배포용 DB 변경은 [운영 절차](deploy/README.md)를 확인하고 배포 담당자와 적용 범위를 맞춥니다.
 
-프론트를 별도 로컬 출처에서 실행할 때는 `CORS_ALLOWED_ORIGINS`에 해당 출처를 지정합니다.
-실제 배포 주소·쿠키 정책·프론트 실행법은 담당자 합의 후 추가합니다.
+프론트는 [실행 안내](frontend/README.md)에 따라 `frontend/`에서 `npm install` 후 `npm run dev`로 실행합니다.
+Vite의 `/api` 프록시를 사용하면 브라우저는 같은 출처로 요청합니다. 프록시 없이 별도 출처의 API를 직접 호출할 때는
+`CORS_ALLOWED_ORIGINS`와 쿠키 조건을 함께 확인합니다. 배포 주소는 `https://recipick.shop`이며, 쿠키 정책은
+[인증 근거](docs/adr/authentication.md#3-5-쿠키cors와-브라우저-경계), 배포 설정은 [운영 절차](deploy/README.md)를 따릅니다.
+이는 문서·코드 기준 안내이며 이번 문서 갱신에서 운영 접속을 재검증한 것은 아닙니다.
 
 ### 4. 테스트
 
@@ -118,14 +121,14 @@ GitHub Actions는 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스�
 
 ## 성능 결과 요약
 
-측정 후 환경·커밋·보고서 링크와 함께 채웁니다. 목표와 실제 측정값은 구분합니다.
+아래 상품 검색 수치는 기존 개선 보고서의 기록을 요약한 값이며, 이번 문서 정리에서 재측정하지 않았습니다. 로컬 혼합 검증과는 시나리오·실행 시점이 달라 직접 비교하지 않습니다. 세부 환경·측정 조건·한계는 각 보고서를 따릅니다.
 
 | 주제 | 환경·데이터 | Before | After | 결과 근거 |
 | --- | --- | --- | --- | --- |
-| 상품 검색·쿼리 개선 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [병목 개선](docs/performance/product/bottleneck.md) |
-| 캐싱 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [캐싱](docs/performance/product/caching.md) |
-| 부하 테스트 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [부하 테스트](docs/performance/product/load-test.md) |
-| 100명 혼합 예비 검증 | 로컬 단일 PC, 앱 `bbd0943`, 회원 100·상품 100,660·레시피 100 | 개선 비교 아님 | 58,199요청 실패 0, 시나리오 p95 약 72ms, 종료 정합성 통과 | [환경·API별 결과](docs/performance/local-100-users.md) |
+| 상품 검색·쿼리 개선 | 기존 로컬 상품 검색·모니터링 ON, After 3회 중앙값 | p95 2.66s, DB 대기 최대 69 | 인덱스 후 p95 264ms, DB 대기 최대 23 | [당시 조건·측정 기록](docs/performance/product/bottleneck.md) |
+| 캐싱 | 기존 로컬 상품 검색, After 3회 중앙값 | 인덱스 후 p95 264ms | 캐시 후 p95 19.8ms, DB 대기 최대 0. 제한된 검색어에 따른 적중률 편향 있음 | [당시 조건·측정 기록](docs/performance/product/caching.md) |
+| 상품 검색 Before | 2026-10-27 로컬·100 VU·상품 검색 중심 | HTTP 8,069건, 실패 0%, p95 2.66s | 이후 인덱스·캐시 보고서에서 비교 | [기준 측정](docs/performance/product/load-test.md) |
+| 100명 혼합 예비 검증 | 로컬 단일 PC, 앱 `bbd0943`, 회원 100·상품 100,660·레시피 100 | 개선 비교 아님 | 11/3: 58,199건·실패 0·p95 72.45ms. 11/4 Grafana 연결: 59,899건·실패 0·p95 22.39ms. 두 회차 종료 정합성 통과, 개선율 비교 아님 | [환경·API별 결과·캡처](docs/performance/local-100-users.md) |
 | 호출 제한 | 담당자 확인 대기 | 확인 대기 | 확인 대기 | [요청 수 제한](docs/performance/product/rate-limit.md) (결과 취합 대기) |
 
 측정용 데이터의 규모와 생성 방법은 [성능 시드 문서](docs/performance/product/seed-data.md)를 참고합니다.
@@ -135,7 +138,7 @@ GitHub Actions는 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스�
 
 | 자료 | 링크·상태 |
 | --- | --- |
-| 서비스·프론트 접속 주소 | 배포 후 작성 |
+| 서비스·프론트 접속 주소 | https://recipick.shop · [배포 기록](docs/deploy-implementation.md) 기준, 최신 운영 기능 검증과 구분 |
 | API 명세·팀 노션 | 팀 공유 링크 입력 대기 |
 | SA·배포 구성도 | 팀 공유 링크 입력 대기 |
 | PPT | 작성 대기 |

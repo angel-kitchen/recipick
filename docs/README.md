@@ -37,39 +37,48 @@
 | --- | --- | --- | --- |
 | 계층형 아키텍처 | [선택 근거](adr/layered-architecture.md) | 채빈 | 검증·리뷰: 전체 도메인 책임·계층·협력 구조와 실제 사례 확인 |
 | 인증·인가 | [선택 근거·검증](adr/authentication.md) | 채빈 | 검증·리뷰: 인증·비밀번호 변경·탈퇴 12개 클래스·177건 및 지급·체험·구독 API 3개 클래스·57건의 기존 실행 근거. C-17·체험/구독 진입점·멤버십 정산 Checker 반영 |
-| 동시성 | [전략·검증 결과](concurrency.md) | 각 도메인, 회원 부분 채빈, 레시피 부분 보민, 결제 부분 정윤 | 회원 부분 검증·리뷰: 인증·기존 경합·추가 멤버십 32개 클래스·366건의 기존 실행 근거. 체험 API 동시 요청·구독 멱등·정산 잠금·충돌 계약 반영. 실제 전체 정산·다른 도메인 취합 대기 |
+| 동시성 | [전략·검증 결과](concurrency.md) | 각 도메인, 회원 부분 채빈, 레시피 부분 보민, 결제 부분 정윤 | 회원 부분 검증·리뷰: 인증·기존 경합·추가 멤버십 32개 클래스·366건의 기존 실행 근거. 체험 API 동시 요청·구독 멱등·정산 잠금·충돌 계약 반영. 회원·상품·레시피·주문·결제 근거 연결. 실제 전체 정산·운영 성공 검증과 과거 실행 기록은 구분 |
 | 결제·웹훅·환불 정합성 | [선택 근거](adr/payment-consistency.md) · [동시성 결제 절](concurrency.md#6-결제-도메인-승인만료취소웹훅포인트) · [결제 API 명세](payment-api.md) · [회원·멤버십 ↔ 결제 연동](member-payment-integration.md) · [결제 추적성 검토](payment-observability.md) | 정윤, 주문 연동 준희 | 검증·리뷰: 웹훅 재조회·지연 큐와 Fallback·PG 호출과 트랜잭션 분리·잠금/UNIQUE/멱등 키 역할·늦은 승인과 SYSTEM 환불·자동청구 선점. 결제 패키지 136개 클래스·1,673건 통과(2026-11-04 `9172f6d`, 작성자 작업 환경의 로컬 MySQL 8.0 실행, CI는 Testcontainers MySQL 8.4. 근거·재현 명령은 [동시성 6-5절](concurrency.md#6-5-실제-동시-요청실패-결과)). 추적성 개선은 도입 검토 단계 |
-| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v3 재평가 완료. Tool Calling 등 고도화 남음 |
+| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v4 및 냉장고 파먹기 Tool Calling v5 평가 기록 반영. SDK Tool로 구현됐으며 과제 문구의 `@Tool` 해석 확인은 ADR에 남김 |
 | 상품 조회·성능·재고·순위 | [선택 근거·검증](adr/product-domain.md) | 태헌, 레시피 순위 보민 확인 | 작성: 검색 인덱스·캐시·요청 수 제한·재고 잠금·순위 집계·모니터링 공개 규칙. 순위 인덱스 EXPLAIN과 요청 수 제한 부하 수치는 측정 예정 |
 | 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [로컬 100명 결과](performance/local-100-users.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 로컬 100명 혼합 검증·API별 지연·정합성 결과 추가. 기존 병목·캐싱 보고서는 유지하며 운영 측정·제출 수치는 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
 | 트러블슈팅 | [로컬 k6 타임아웃](troubleshooting/k6-docker-host-timeout.md) · [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) | 문제를 해결한 담당자 | 로컬 k6 실행 경로 분리·임시 대응과 레시피·AI 사례 작성. Docker 내부 원인은 미확정으로 구분 |
 
-위 표는 문서 분담과 작성 위치 제안입니다. 실제 담당·측정 범위가 정해지면 갱신합니다.
+위 표는 현재 문서 위치와 기록된 검증 범위를 안내합니다. 담당·측정 범위가 달라지면 갱신합니다.
 개별 기술 선택 문서는 해당 양식을 쓰고, 여러 도메인의 동시성 결과는 공통 문서의 도메인별 절로 모읍니다.
 
-2026-11-03 추가한 [로컬 검증 결과](performance/local-100-users.md#4-사전-기능-검증과-남은-항목)는 앱 `bbd0943` 자동 테스트 3,384건 및 당시 로컬 화면 점검을 구분합니다. 아래 회원 기능 표는 2026-11-02의 기존 스냅샷으로 유지하며, 최신 dev 전체 E2E 완료로 읽지 않습니다. 멤버십 화면 연결·탈퇴 성공·실제 PG 등 남은 검증은 추가 보고서를 따릅니다.
+2026-11-03 추가한 [로컬 검증 결과](performance/local-100-users.md#4-사전-기능-검증과-남은-항목)는 앱 `bbd0943` 자동 테스트 3,384건 및 당시 로컬 화면 점검을 구분합니다. 아래 회원 기능 표의 구현 상태는 2026-11-04 `544bee2`에서 확인했으며, 과거 수치를 최신 dev 전체 E2E 완료로 읽지 않습니다. 멤버십 화면 연결·탈퇴 성공·실제 PG 등 남은 검증은 추가 보고서를 따릅니다.
 
 ## 회원 기능 문서 반영 상태
 
-2026-11-02 `dev`의 `84c4c0b`(구독 #382·결제 정합화 #380 병합) 기준입니다. 테스트 근거는 #382의 `434ea0f` 전체 실행 3,091건·실패 0·오류 0·실제 AI 평가 건너뜀 2건의 XML입니다. #380 병합 후 최신 dev 전체 테스트를 다시 실행한 결과는 아니며, 문서 작성·코드 구현·실 운영 검증 상태를 구분합니다.
+구현 상태는 2026-11-04 `dev` `544bee2` 기준으로 대조했습니다. 기존 #382의 `434ea0f` 전체 실행 3,091건·실패 0·오류 0·실제 AI 평가 건너뜀 2건과 이후 `bbd0943` 로컬 검증 기록은 각각 당시 실행의 근거입니다. 이번 문서 갱신에서 최신 dev 전체 테스트를 재실행한 것은 아니며, 코드 연결·기본 OFF 설정·운영 성공 검증을 구분합니다.
 
 | 항목 | 현재 상태·다음 반영 |
 | --- | --- |
 | 비밀번호 변경 | 인증 근거·API 참고 계약 반영, 전체 리프레시 무효화·기존 액세스 유지·경합·롤백 검증 기록 |
-| 회원 탈퇴·체험 차단 | API·상태 차단·개인정보 정리·체험 차단 기반 및 PRODUCT_PAYMENT·POINTS·MEMBERSHIP_PAYMENT 실제 Checker 연결. AUTO_BILLING·카드 정리 준비 계약을 [회원 탈퇴 API](api/member-withdrawal.md)에 연결. 기존 기본 OFF 스위치로 탈퇴 성공 차단 유지. 장바구니 삭제·담기 이력 유지는 연결됐고 찜은 탈퇴 제한 조건이 아니며 삭제는 이번 범위에서 제외 |
-| 관리자 감사 기록 | 기록·조회·만료 정리와 기존 상품·레시피·주문 API 호출 연결. 결제의 MartRejectionProcessor에도 ORDER_REJECT 호출이 있으며 멤버십 결제 목록·상세·재조회 감사 호출도 #380에서 연결. 환불 관련 추가 기록은 구현 시 연결 |
-| 3차 멤버십 | 해지 예약·관리자 이력 API, 활성화·유예 판정, 결제 반영·소유 회원 매핑 계약, [체험 시작 API](api/membership-trial-start.md)와 활성 카드·C-17 검사, 관리자 지급 C-17 연결 반영. [유료 구독 API](api/membership-subscribe.md) 연결 반영. [즉시 해지 API](api/membership-terminate.md) 연결 반영. 탈퇴 최종 연결은 남음 |
+| 회원 탈퇴·체험 차단 | API·상태 차단·개인정보 정리·체험 차단 기반 및 PRODUCT_PAYMENT·POINTS·MEMBERSHIP_PAYMENT 실제 Checker 연결. AUTO_BILLING·카드 정리 준비 계약을 [회원 탈퇴 API](api/member-withdrawal.md)에 연결. AUTO_BILLING 실제 Checker도 구현됐으며 카드 정리 스위치 2개가 모두 true일 때 영역을 선언. 기본 OFF 설정에서는 MEMBER-008로 차단. 장바구니 삭제·담기 이력 유지는 연결됐고 찜은 탈퇴 제한 조건이 아니며 삭제는 이번 범위에서 제외 |
+| 관리자 감사 기록 | 기록·조회·만료 정리와 기존 상품·레시피·주문 API 호출 연결. 결제의 MartRejectionProcessor에도 ORDER_REJECT 호출이 있으며 멤버십 결제 목록·상세·재조회 감사 호출도 #380에서 연결. 멤버십 환불 재조회·재실행 감사 기록도 연결 |
+| 3차 멤버십 | 해지 예약·관리자 이력 API, 활성화·유예 판정, 결제 반영·소유 회원 매핑 계약, [체험 시작 API](api/membership-trial-start.md)와 활성 카드·C-17 검사, 관리자 지급 C-17 연결 반영. [유료 구독 API](api/membership-subscribe.md) 연결 반영. [즉시 해지 API](api/membership-terminate.md) 연결 반영. 탈퇴 준비·최종 처리 연결 완료. 실제 원격 카드 정리와 정상 탈퇴 성공 검증은 별도 |
 | API 명세·SA·AI 활용 기록 | 팀 노션에서 갱신. 저장소 문서 수정만으로 노션 반영 완료 처리하지 않음 |
 
 ## 구현된 API의 저장소 참고 계약
 
+- [주문 API 명세](order-api.md): 장바구니·주문 조회/생성·관리자 수락·거절·배송 변경. [주문 연동](order-payment-integration.md)과 함께 확인합니다.
+- [즉시 해지](api/membership-terminate.md) · [회원 탈퇴](api/member-withdrawal.md): 환불·카드 정리의 비동기 상태와 활성화 경계.
 - [무료체험 시작](api/membership-trial-start.md): 활성 카드·C-17 확인과 7일 체험 생성.
 - [유료 구독 시작](api/membership-subscribe.md): 동의·멱등 키·결제 상태 응답과 C-11 호출 경계.
 - [멤버십 결제 정합화](api/membership-reconciliation.md): 결제 담당의 관리자 조회·재조회·웹훅·복구·정산 Checker 계약.
 - [결제 API 명세](payment-api.md): 결제·취소·웹훅·빌링키·포인트·관리자 결제 21개 API의 요청·응답·오류 코드·멱등 규칙.
 - [회원·멤버십 ↔ 결제 연동 기준](member-payment-integration.md): 구독·체험 전환·갱신·즉시 해지 환불·탈퇴 정산의 호출 책임과 트랜잭션 경계.
 - [회원 비밀번호 변경](api/member-password-change.md): 요청·오류·전체 리프레시 세션 무효화·DB 컬럼 반영. 팀 노션 API 명세와 함께 확인합니다.
+
+## 추가 설계·문제 해결 기록
+
+- 주문: [설계 결정·검증](adr/cart-order.md) · [추적성 도입 검토](order-observability.md).
+- AI·데이터: [초기 Spring AI 설계 검토](ai-design-review.md)(과거 제안) · [유튜브 레시피 적재 계획](recipe-youtube-import.md)(데이터 작업 계획). 현재 AI 구현·평가는 [AI ADR](adr/recipe-ai.md) 기준입니다.
+- 주문 트러블슈팅: [회원 잠금 테스트 오판](troubleshooting/order-member-lock-test-false-pass.md) · [잠금 전 선조회](troubleshooting/order-stale-entity-before-lock.md) · [결제 후 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md).
+- 결제 트러블슈팅: [지연 큐 복구](troubleshooting/payment-delay-queue-recovery.md) · [포인트 gap lock 교착](troubleshooting/payment-point-gap-lock-deadlock.md) · [스케줄러 자동 설정](troubleshooting/payment-scheduler-autoconfiguration.md).
 
 ## 팀 노션·프론트·제출 자료
 
