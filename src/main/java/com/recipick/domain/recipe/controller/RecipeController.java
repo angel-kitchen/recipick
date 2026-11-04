@@ -1,11 +1,14 @@
 package com.recipick.domain.recipe.controller;
 
+import com.recipick.domain.recipe.dto.request.AiFridgeRecommendRequest;
 import com.recipick.domain.recipe.dto.request.AiRecipeRecommendRequest;
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
+import com.recipick.domain.recipe.dto.response.AiFridgeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
+import com.recipick.domain.recipe.facade.AiFridgeRecommendFacade;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
 import com.recipick.domain.recipe.facade.RecipeFacade;
 import com.recipick.domain.recipe.service.RecipeService;
@@ -34,6 +37,7 @@ public class RecipeController {
     private final RecipeService recipeService;
     private final RecipeFacade recipeFacade;
     private final AiRecipeRecommendFacade aiRecipeRecommendFacade;
+    private final AiFridgeRecommendFacade aiFridgeRecommendFacade;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<RecipeSummaryResponse>>> searchRecipes(
@@ -68,6 +72,14 @@ public class RecipeController {
         @Valid @RequestBody AiRecipeRecommendRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(aiRecipeRecommendFacade.recommend(memberId, request.text())));
+    }
+
+    @PostMapping("/ai-fridge-recommendations")
+    public ResponseEntity<ApiResponse<AiFridgeRecommendResponse>> recommendByFridge(
+        @LoginMember Long memberId,
+        @Valid @RequestBody AiFridgeRecommendRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(aiFridgeRecommendFacade.recommend(memberId, request.text())));
     }
 
     @GetMapping("/most-viewed")

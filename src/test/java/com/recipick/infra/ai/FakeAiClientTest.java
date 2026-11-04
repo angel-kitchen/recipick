@@ -4,12 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiFridgeAnswer;
+import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
+import com.recipick.infra.ai.dto.AiIngredientPrice;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
+import com.recipick.infra.ai.dto.AiToolResult;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -117,5 +123,35 @@ class FakeAiClientTest {
         // then
         assertThat(conditions.isSuccess()).isTrue();
         assertThat(picks.failureType()).isEqualTo(AiFailureType.UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("냉장고 파먹기는 문장에 든 등록 재료로 레시피 찾기 Tool을 부르고, 찾은 레시피를 3개까지 고른다")
+    void answerFridgeQuestion_picksRecipesFoundByTool() {
+        // given
+        List<List<String>> searched = new ArrayList<>();
+        AiFridgeTools tools = new AiFridgeTools() {
+            @Override
+            public AiToolResult<AiFridgeRecipeSearch> findRecipes(List<String> ingredientNames) {
+                searched.add(ingredientNames);
+                List<AiFridgeRecipeSearch.Recipe> recipes = LongStream.rangeClosed(1, 4)
+                    .mapToObj(id -> new AiFridgeRecipeSearch.Recipe(id, "레시피" + id, List.of(), List.of()))
+                    .toList();
+                return AiToolResult.success(new AiFridgeRecipeSearch(List.of(), recipes));
+            }
+
+            @Override
+            public AiToolResult<List<AiIngredientPrice>> findIngredientPrices(List<Long> ingredientIds) {
+                return AiToolResult.success(List.of());
+            }
+        };
+
+        // when
+        AiResult<AiFridgeAnswer> result =
+            fakeAiClient.answerFridgeQuestion("두부랑 김치 있어", List.of("김치", "두부", "계란"), tools);
+
+        // then
+        assertThat(searched).containsExactly(List.of("김치", "두부"));
+        assertThat(result.content().recipeIds()).containsExactly(1L, 2L, 3L);
     }
 }

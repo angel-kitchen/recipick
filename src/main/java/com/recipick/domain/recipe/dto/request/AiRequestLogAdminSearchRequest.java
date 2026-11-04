@@ -15,7 +15,7 @@ import org.springframework.data.domain.Sort;
 // 요청 유형·기간을 String으로 받아, 변환 실패가 바인딩 오류(COMMON-002)가 아니라 입력 검증(COMMON-001)으로 모이게 한다
 public record AiRequestLogAdminSearchRequest(
 
-    @Pattern(regexp = "AUTO_CART|RECOMMENDATION", message = "지원하지 않는 AI 요청 유형입니다.")
+    @Pattern(regexp = "AUTO_CART|RECOMMENDATION|FRIDGE", message = "지원하지 않는 AI 요청 유형입니다.")
     String requestType,
 
     Boolean success,
