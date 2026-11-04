@@ -7,7 +7,7 @@
   --green-light: #d4e9e2;
   --green-wash: #eef6f2; /* 홈 소개 구간처럼 넓은 면에 까는 아주 연한 초록 */
 
-  --canvas: #f2f0eb; /* 쇼핑 화면 바탕(순백 대신 따뜻한 크림) */
+  --canvas: #ffffff; /* 회원·쇼핑·관리자 화면의 기본 흰색 바탕 */
   --ceramic: #edebe9;
   --white: #ffffff;
   --text: rgba(0, 0, 0, 0.87);
