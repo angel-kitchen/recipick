@@ -1,0 +1,890 @@
+/* 홈(와이어프레임): 흰 바탕에 얇은 선과 검정 강조, 얇은 세리프 느낌의 영문 라벨 */
+.hm-notice {
+  padding: 8px var(--space-3);
+  background: var(--tint);
+  color: var(--ink);
+  font-size: 14px;
+  text-align: center;
+}
+
+.hm-eyebrow {
+  margin-bottom: var(--space-2);
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+}
+
+.hm-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.hm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 24px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.hm-btn:hover {
+  transform: translateY(-1px);
+}
+
+.hm-btn--fill {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.hm-btn--fill:hover {
+  background: var(--accent-deep);
+}
+
+.hm-btn--line {
+  background: var(--white);
+  color: var(--ink);
+}
+
+.hm-features {
+  background: var(--white);
+  border-bottom: 1px solid var(--line);
+}
+
+.hm-features__inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+
+.hm-feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--ink);
+  word-break: keep-all;
+}
+
+.hm-feature .icon {
+  padding: 12px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: var(--tint);
+}
+
+.hm-feature span {
+  font-size: 14px;
+  color: rgba(29, 29, 31, 0.7);
+}
+
+.hm-section {
+  padding: var(--space-9) 0 var(--space-4);
+}
+
+.hm-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.hm-head--center {
+  justify-content: center;
+  text-align: center;
+}
+
+.hm-head__side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hm-title {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.hm-lead {
+  margin-top: var(--space-2);
+  color: rgba(29, 29, 31, 0.7);
+  font-size: 16px;
+}
+
+.hm-more {
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: underline;
+  text-decoration-color: var(--forest);
+  text-underline-offset: 4px;
+}
+
+.hm-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.hm-chip {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--white);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.hm-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent);
+  font-weight: 600;
+}
+
+.hm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4) var(--space-3);
+}
+
+.hm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink);
+}
+
+.hm-card__image {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--tint);
+  transition: transform 0.25s;
+}
+
+.hm-card:hover .hm-card__image {
+  transform: translateY(-3px);
+}
+
+.hm-card__image img,
+.hm-card__image .tile__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.hm-card__badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--white);
+  font-size: 13px;
+}
+
+.hm-card__meta {
+  margin-top: var(--space-2);
+  font-size: 13px;
+  color: rgba(29, 29, 31, 0.65);
+}
+
+.hm-card__name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hm-card__price {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 헤더 검색창과 하단 줄 */
+.header--shop {
+  box-shadow: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.header__search {
+  display: flex;
+  align-items: center;
+  flex: 0 1 340px;
+  min-width: 160px;
+  height: 40px;
+  padding: 0 6px 0 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--white);
+}
+
+.header__search:focus-within {
+  border-color: var(--accent);
+}
+
+.header__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+}
+
+.header__search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.header__search button:hover {
+  background: var(--tint);
+}
+
+@media (max-width: 900px) {
+    .hm-features__inner,
+  .hm-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+        .header__search {
+    display: none;
+  }
+}
+
+/* 화면 폭 끝까지 이어지는 띠 배너 */
+.hm-band {
+  position: relative;
+  height: 400px;
+  overflow: hidden;
+}
+
+.hm-band__slide {
+  background: #0d4c3c;
+  color: #ffffff;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.7s ease;
+}
+
+.hm-band__slide.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hm-band__inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.hm-band__text {
+  max-width: 460px;
+  color: var(--ink);
+  word-break: keep-all;
+}
+
+.hm-band__kicker {
+  margin-bottom: var(--space-2);
+  font-size: 17px;
+}
+
+.hm-band__title {
+  margin-bottom: var(--space-2);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: pre-line;
+}
+
+.hm-band__sub {
+  margin-bottom: var(--space-4);
+  font-size: 16px;
+  color: rgba(29, 29, 31, 0.8);
+}
+
+.hm-band__arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.hm-band__arrow:hover {
+  background: var(--accent-deep);
+}
+
+.hm-band__arrow--prev {
+  left: max(16px, 4vw);
+}
+
+.hm-band__arrow--next {
+  right: max(16px, 4vw);
+}
+
+.hm-band__ctrl {
+  position: absolute;
+  right: max(72px, 8vw);
+  bottom: 22px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.hm-band__ctrl button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* 실시간 인기랭킹: 찜 많은 순 카드가 가로로 늘어서고 오른쪽 화살표로 넘긴다 */
+.hm-rank .hm-head {
+  margin-bottom: var(--space-3);
+}
+
+.hm-chips--center {
+  justify-content: center;
+  margin-top: var(--space-3);
+}
+
+.hm-rank__wrap {
+  position: relative;
+}
+
+.hm-rank__list {
+  display: flex;
+  gap: var(--space-3);
+  padding: 4px 4px var(--space-2);
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.hm-rank__list::-webkit-scrollbar {
+  display: none;
+}
+
+.hm-rank__item {
+  flex: 0 0 calc((100% - 4 * var(--space-3)) / 5);
+  min-width: 190px;
+  scroll-snap-align: start;
+}
+
+.hm-rank__card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--tint-soft);
+  color: var(--ink);
+}
+
+.hm-rank__image {
+  display: block;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--tint);
+}
+
+.hm-rank__image img,
+.hm-rank__image .tile__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: transform 0.3s;
+}
+
+.hm-rank__card:hover .hm-rank__image img {
+  transform: scale(1.04);
+}
+
+.hm-rank__body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 6px;
+}
+
+.hm-rank__no {
+  min-width: 26px;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: inset 0 -3px 0 var(--accent);
+  text-align: center;
+}
+
+.hm-rank__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hm-rank__info strong {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hm-rank__info small {
+  font-size: 13px;
+  color: rgba(29, 29, 31, 0.65);
+}
+
+.hm-rank__likes {
+  margin: 6px 14px 14px;
+  padding: 7px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  font-size: 14px;
+  text-align: center;
+}
+
+.hm-rank__next {
+  position: absolute;
+  top: 38%;
+  right: -22px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.hm-rank__next:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.hm-rank__all {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-5);
+}
+
+.hm-btn--wide {
+  min-width: 280px;
+  border-radius: 6px;
+  border-color: var(--line);
+}
+
+@media (max-width: 900px) {
+  .hm-band {
+    height: 340px;
+  }
+
+  .hm-band__title {
+    font-size: 28px;
+  }
+
+  .hm-band__arrow {
+    display: none;
+  }
+
+  .hm-band__ctrl {
+    right: 16px;
+  }
+
+  .hm-rank__next {
+    display: none;
+  }
+
+  .hm-rank__item {
+    flex-basis: 70%;
+  }
+}
+
+/* 멤버십 안내 타일: Apple 문법. 풀 블리드·가운데 정렬·타이트한 600 제목·알약 버튼·제품 렌더 하나에만 그림자 */
+.hm-apple {
+  margin-top: 80px;
+  padding: 80px 0;
+  background: var(--tint-soft);
+  color: var(--ink);
+  text-align: center;
+}
+
+.hm-apple__tag {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.19;
+  letter-spacing: 0.231px;
+}
+
+.hm-apple__title {
+  margin: 12px 0 16px;
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.hm-apple__lead {
+  font-size: 21px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--forest);
+  word-break: keep-all;
+}
+
+.hm-apple__cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.hm-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.374px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.hm-pill:active {
+  transform: scale(0.95);
+}
+
+.hm-pill:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.hm-pill--fill {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.hm-pill--ghost {
+  border-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+/* 제품 렌더 자리: 자동 담기 결과를 그린 카드. 이 타일에서 그림자는 여기에만 쓴다 */
+.hm-apple__render {
+  width: min(360px, 100%);
+  margin: 56px auto 0;
+  padding: 24px;
+  border-radius: 18px;
+  background: var(--white);
+  box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0;
+  text-align: left;
+}
+
+.hm-apple__recipe {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hm-apple__recipe b {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.hm-apple__recipe small {
+  font-size: 14px;
+  color: rgba(110, 110, 115, 0.7);
+}
+
+.hm-apple__render ul {
+  margin: 8px 0 16px;
+  list-style: none;
+}
+
+.hm-apple__render li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 17px;
+  letter-spacing: -0.374px;
+}
+
+.hm-apple__render li span {
+  flex: 1;
+}
+
+.hm-apple__render li.is-off {
+  color: rgba(110, 110, 115, 0.7);
+}
+
+.hm-apple__check {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.hm-apple__check::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.hm-apple__check--off {
+  background: transparent;
+  border: 1.5px solid var(--line);
+}
+
+.hm-apple__check--off::after {
+  display: none;
+}
+
+.hm-apple__bar {
+  padding: 11px 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  text-align: center;
+}
+
+/* 단계 카드: 하얀 유틸 카드(18px 반경, 1px 헤어라인, 그림자 없음) */
+.hm-apple__steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  max-width: 980px;
+  margin: 56px auto 0;
+  list-style: none;
+  text-align: left;
+}
+
+.hm-apple__steps li {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+}
+
+.hm-apple__steps span {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  box-shadow: inset 0 -3px 0 var(--accent);
+  width: fit-content;
+}
+
+.hm-apple__steps strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.374px;
+}
+
+.hm-apple__steps p {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.43;
+  letter-spacing: -0.224px;
+  color: var(--forest);
+  word-break: keep-all;
+}
+
+@media (max-width: 1068px) {
+  .hm-apple__title {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 833px) {
+  .hm-apple {
+    padding: 48px 0;
+  }
+
+  .hm-apple__title {
+    font-size: 34px;
+  }
+
+  .hm-apple__lead {
+    font-size: 17px;
+  }
+
+  .hm-apple__steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 정글 그린 면 위의 글자는 흰색 */
+.hm-btn--fill,
+.hm-btn--fill:hover,
+.hm-chip.is-on,
+.hm-pill--fill,
+.hm-apple__bar,
+.hm-rank__next:hover {
+  color: #ffffff;
+}
+
+/* 면 색이 모두 흰색이라 구역은 얇은 선으로 나눈다 */
+.hm-notice,
+.hm-band {
+  border-bottom: 1px solid var(--line);
+}
+
+.hm-apple {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.hm-rank__card,
+.hm-card__image,
+.hm-rank__image {
+  border: 1px solid var(--line);
+}
+
+/* 띠 배너: 정글 그린 바탕 위에 흰 글자, 포인트는 리프 그린 */
+.hm-band__text,
+.hm-band__title {
+  color: #ffffff;
+}
+
+.hm-band__kicker,
+.hm-band__sub {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hm-band .hm-btn--fill {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--jungle);
+}
+
+.hm-band .hm-btn--fill:hover {
+  border-color: var(--leaf);
+  background: var(--leaf);
+  color: #ffffff;
+}
+
+.hm-band__arrow,
+.hm-band__ctrl {
+  background: var(--leaf);
+  color: var(--jungle);
+}
+
+.hm-band__arrow:hover {
+  background: #ffffff;
+}
+
+/* 리프 그린 포인트 */
+.hm-eyebrow::before {
+  background: var(--leaf);
+}
+
+.hm-rank__no,
+.hm-apple__steps span {
+  box-shadow: inset 0 -3px 0 var(--leaf);
+}
+
+.hm-apple__check {
+  background: var(--leaf);
+}
+
+.hm-apple__check::after {
+  border-color: #ffffff;
+}
+
+.hm-more {
+  text-decoration-color: var(--leaf);
+}
+
+/* 지도 범례: 빨강은 가맹 마트, 회색은 준비 중 마트(점 색은 .map-dot--closed 와 같다) */
+.map-legend {
+  gap: var(--space-4);
+}
+
+.map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.map-legend .map-legend__closed {
+  background: #8e8e8e;
+}
