@@ -1,0 +1,145 @@
+/* 색은 다크 정글 그린 #0D4C3C와 리프 그린 #7BA05B, 그리고 흰 바탕이다. 연한 면은 리프 그린을 흰색에 섞어 쓴다.
+   되돌리려면 main.jsx의 이 파일 import 한 줄을 지운다. 관리자 화면은 원래 초록을 유지한다 */
+:root {
+  --jungle: #0d4c3c; /* 글자·주요 버튼·배너·로고 */
+  --leaf: #7ba05b; /* 포인트: 밑줄·체크·아이콘 강조 */
+  --tint: color-mix(in srgb, #7ba05b 13%, #ffffff); /* 연한 면: 상단 바·타일·푸터 */
+  --tint-soft: color-mix(in srgb, #7ba05b 6%, #ffffff);
+  --accent: var(--jungle); /* 버튼·체크 면 */
+  --accent-deep: color-mix(in srgb, #0d4c3c 82%, #7ba05b); /* 버튼 위에 마우스를 올릴 때 */
+  --forest: color-mix(in srgb, #0d4c3c 72%, #ffffff); /* 보조 글자 */
+  --ink: var(--jungle);
+  --line: color-mix(in srgb, #7ba05b 32%, #ffffff); /* 면을 나누는 얇은 선 */
+
+  --green-brand: var(--ink);
+  --green-accent: var(--accent);
+  --green-house: var(--tint);
+  --green-uplift: var(--leaf);
+  --green-light: var(--tint);
+  --green-wash: var(--tint-soft);
+  --ceramic: var(--tint-soft);
+  --text-on-dark: var(--ink);
+  --text-on-dark-soft: var(--forest);
+}
+
+.admin {
+  --green-brand: #006241;
+  --green-accent: #00754a;
+  --green-house: #1e3932;
+  --green-uplift: #2b5148;
+  --green-light: #d4e9e2;
+  --green-wash: #eef6f2;
+  --ceramic: #edebe9;
+  --text-on-dark: #ffffff;
+  --text-on-dark-soft: rgba(255, 255, 255, 0.7);
+}
+
+/* 정글 그린 면 위에는 흰 글자 */
+.btn:not(.btn--outline):not(.btn--muted),
+.tbtn--primary,
+.chip--solid,
+.steps__number,
+.header__count,
+.promo__ribbon,
+.mock__button {
+  color: #ffffff;
+}
+
+.btn:not(.btn--outline):not(.btn--muted):hover:not(:disabled),
+.tbtn--primary:hover {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.btn--outline {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.auth-card__footer a,
+.auth-card__footer button,
+.sort-bar__item.is-on,
+.chip,
+.mock__stepper i,
+.header__address::before {
+  color: var(--ink);
+}
+
+.auth-card__footer a,
+.auth-card__footer button {
+  text-decoration: underline;
+  text-decoration-color: var(--leaf);
+  text-underline-offset: 3px;
+}
+
+.badge,
+.notice--info,
+.start__available,
+.promo__art,
+.empty__icon,
+.side-list__item.is-active,
+.toast {
+  border: 1px solid var(--line);
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+}
+
+/* 맨 위 헤더: 연한 초록 바에 정글 그린 로고·아이콘, 지금 보는 메뉴는 흰 알약에 리프 그린 밑줄 */
+.header--shop {
+  background: var(--tint);
+  border-bottom: 1px solid var(--line);
+}
+
+.header__logo {
+  color: var(--jungle);
+  letter-spacing: -0.02em;
+}
+
+.header__nav .header__item {
+  color: var(--ink);
+  border-radius: 12px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.header__item .icon {
+  color: var(--jungle);
+  transition: color 0.2s, transform 0.2s;
+}
+
+.header__nav a.header__item:hover,
+.header__menu > summary.header__item:hover {
+  background: var(--white);
+}
+
+.header__item:hover .icon,
+.header__item.active .icon {
+  color: var(--leaf);
+  transform: translateY(-1px);
+}
+
+.header__nav a.header__item.active {
+  background: var(--white);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--leaf);
+}
+
+.header__search {
+  border-color: var(--line);
+  background: var(--white);
+}
+
+.header__menu-list {
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.hm-feature .icon {
+  color: var(--jungle);
+}
+
+/* 선택된 칩은 정글 그린 면이라 .chip 의 진한 글자색을 덮어써서 흰 글자로 둔다 */
+.chip.chip--solid {
+  color: #ffffff;
+}
