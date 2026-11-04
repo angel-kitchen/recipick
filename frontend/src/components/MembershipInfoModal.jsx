@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 // 멤버십이 무엇인지 처음 보는 사람에게 설명하는 안내 창. 가입·결제는 여기서 하지 않고 내 멤버십 화면으로 안내한다
-export default function MembershipInfoModal({ onClose }) {
+// onHideToday를 넘긴 곳(로그인 직후 안내)에서만 오늘 하루 보지 않기 버튼을 보여 준다
+export default function MembershipInfoModal({ onClose, onHideToday }) {
   useEffect(() => {
     const onKey = (event) => event.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -38,14 +39,31 @@ export default function MembershipInfoModal({ onClose }) {
             않으면 첫 결제가 진행되고, 결제가 되면 월 3,900원 멤버십으로 바뀌어요.
           </dd>
         </dl>
-        <div className="row-actions">
-          <Link to="/membership" className="btn btn--large" onClick={onClose}>
-            내 멤버십 보기
-          </Link>
-          <button type="button" className="btn btn--large btn--outline" onClick={onClose}>
-            닫기
-          </button>
-        </div>
+        {onHideToday ? (
+          // 로그인 안내: 왼쪽에 오늘 하루 보지 않기, 오른쪽 아래에 이동·닫기를 한 줄로 둔다
+          <div className="row-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <button type="button" className="btn btn--muted" style={{ fontSize: 13 }} onClick={onHideToday}>
+              오늘 하루 보지 않기
+            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link to="/membership" className="btn" onClick={onClose}>
+                내 멤버십 보기
+              </Link>
+              <button type="button" className="btn btn--outline" onClick={onClose}>
+                닫기
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="row-actions">
+            <Link to="/membership" className="btn btn--large" onClick={onClose}>
+              내 멤버십 보기
+            </Link>
+            <button type="button" className="btn btn--large btn--outline" onClick={onClose}>
+              닫기
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
