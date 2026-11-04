@@ -145,7 +145,7 @@ function ProductForm({ product, marts, categories, ingredients, isSuper, martId,
         )}
         <label className="field">
           <span className="field__label">이미지 주소</span>
-          <input className="field__input" value={form.imageUrl} onChange={change('imageUrl')} maxLength={255} placeholder="/images/products/egg.jpg" />
+          <input className="field__input" value={form.imageUrl} onChange={change('imageUrl')} maxLength={255} placeholder="/images/products/ingredient-019.webp" />
         </label>
       </div>
       <label className="field">

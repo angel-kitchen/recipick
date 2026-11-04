@@ -21,7 +21,7 @@ import java.util.Set;
  *
  * <p>CSV 컬럼
  * <br>ingredients.csv: name, unit(G/ML/EA), category
- * <br>products.csv: ingredient, name, brand, sale_unit_amount, sale_unit, price, image_url(없으면 빈 칸)
+ * <br>products.csv: ingredient, name, brand, sale_unit_amount, sale_unit, price, image_url(없으면 빈 칸), previous_brand(기존 시드 갱신용)
  * <br>recipe-ingredients.csv: recipe, ingredient, amount_per_serving(1인분 기준), required(T/F)
  * <br>모든 상품은 시연 마트 두 곳에 똑같이 들어간다. 값에 쉼표가 들어가면 안 된다.
  */
@@ -45,7 +45,7 @@ public class GenerateProductSeed {
     private record Ingredient(String name, String unit, String category) {}
 
     private record Product(String ingredient, String name, String brand, String amount, String unit,
-                           String price, String image) {}
+                           String price, String image, String previousBrand) {}
 
     private record RecipeIngredient(String recipe, String ingredient, String amount, boolean required) {}
 
@@ -55,8 +55,8 @@ public class GenerateProductSeed {
             ingredients.add(new Ingredient(f[0], f[1], f[2]));
         }
         List<Product> products = new ArrayList<>();
-        for (String[] f : read("products.csv", 7)) {
-            products.add(new Product(f[0], f[1], f[2], f[3], f[4], f[5], f[6]));
+        for (String[] f : read("products.csv", 8)) {
+            products.add(new Product(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7]));
         }
         List<RecipeIngredient> recipeIngredients = new ArrayList<>();
         for (String[] f : read("recipe-ingredients.csv", 4)) {
@@ -105,6 +105,27 @@ public class GenerateProductSeed {
         sb.append('\n');
 
         String martNames = String.join(", ", MARTS.stream().map(GenerateProductSeed::q).toList());
+        // 자체 브랜드로 통일하면서 중복되는 4,500원 스파게티면은 이력을 남기고 숨긴다.
+        sb.append("-- 중복 시연 상품 정리: 스파게티면 500g은 2,900원 상품만 유지한다.\n")
+                .append("UPDATE product p JOIN ingredient i ON i.id = p.ingredient_id JOIN mart m ON m.id = p.mart_id\n")
+                .append("SET p.deleted = TRUE, p.updated_at = NOW()\n")
+                .append("WHERE m.id IN (1, 2) AND m.name IN (").append(martNames).append(")\n")
+                .append("  AND i.name = '스파게티면' AND p.name = '스파게티면 500g' AND p.brand = '데체코'\n")
+                .append("  AND p.sale_unit_amount = 500 AND p.sale_unit = 'G' AND p.price = 4500 AND p.deleted = FALSE;\n\n");
+
+        // 브랜드를 먼저 갱신해 INSERT가 기존 상품을 새 상품으로 오인하지 않게 한다.
+        sb.append("-- 기존 시연 상품의 브랜드를 갱신한다. 상품 ID·상품명·용량·가격·재고는 유지한다.\n");
+        for (Product p : products) {
+            sb.append("UPDATE product p JOIN ingredient i ON i.id = p.ingredient_id JOIN mart m ON m.id = p.mart_id\n")
+                    .append("SET p.brand = ").append(q(p.brand())).append(", p.updated_at = NOW()\n")
+                    .append("WHERE m.id IN (1, 2) AND m.name IN (").append(martNames).append(")\n")
+                    .append("  AND i.name = ").append(q(p.ingredient())).append(" AND p.name = ").append(q(p.name()))
+                    .append(" AND p.brand = ").append(q(p.previousBrand()))
+                    .append(" AND p.sale_unit_amount = ").append(p.amount()).append(" AND p.sale_unit = ").append(q(p.unit()))
+                    .append(" AND p.brand <> ").append(q(p.brand())).append(";\n");
+        }
+        sb.append('\n');
+
         for (Product p : products) {
             Ingredient i = byName.get(p.ingredient());
             String image = p.image().isEmpty() ? "NULL" : q(p.image());
@@ -118,6 +139,19 @@ public class GenerateProductSeed {
                     .append("WHERE m.id IN (1, 2) AND m.name IN (").append(martNames).append(")\n")
                     .append("  AND NOT EXISTS (SELECT 1 FROM product p WHERE p.mart_id = m.id AND p.name = ").append(q(p.name()))
                     .append(" AND p.brand = ").append(q(p.brand())).append(");\n");
+        }
+        sb.append('\n');
+
+        // 기존 시드 상품도 새 이미지로 갱신한다. 재료 ID 대신 이름·상품명·브랜드로 연결한다.
+        sb.append("-- 기존 시연 상품의 이미지를 갱신한다. 가격·재고·판매 상태는 변경하지 않는다.\n");
+        for (Product p : products) {
+            String image = p.image().isEmpty() ? "NULL" : q(p.image());
+            sb.append("UPDATE product p JOIN ingredient i ON i.id = p.ingredient_id JOIN mart m ON m.id = p.mart_id\n")
+                    .append("SET p.image_url = ").append(image).append(", p.updated_at = NOW()\n")
+                    .append("WHERE m.id IN (1, 2) AND m.name IN (").append(martNames).append(")\n")
+                    .append("  AND i.name = ").append(q(p.ingredient())).append(" AND p.name = ").append(q(p.name()))
+                    .append(" AND p.brand = ").append(q(p.brand()))
+                    .append(" AND NOT (p.image_url <=> ").append(image).append(");\n");
         }
         sb.append('\n');
 
