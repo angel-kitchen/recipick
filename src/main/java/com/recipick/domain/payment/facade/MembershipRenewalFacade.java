@@ -163,7 +163,7 @@ public class MembershipRenewalFacade {
                 }
             }
         } catch (RuntimeException e) {
-            log.warn("카드 등록 뒤 갱신 재개 대상 조회 실패(다음 실행에서 재확인): memberId={}, cause={}", memberId,
+            PaymentTaskFailureLogger.log(log, e, "카드 등록 뒤 갱신 재개 대상 조회 실패(다음 실행에서 재확인): memberId={}, cause={}", memberId,
                 e.getClass().getSimpleName());
         }
     }
@@ -183,7 +183,7 @@ public class MembershipRenewalFacade {
                 membershipId, paymentId);
             return;
         }
-        log.warn("{} 실패(다음 실행에서 재확인): membershipId={}, membershipPaymentId={}, cause={}", step, membershipId,
+        PaymentTaskFailureLogger.log(log, e, "{} 실패(다음 실행에서 재확인): membershipId={}, membershipPaymentId={}, cause={}", step, membershipId,
             paymentId, e.getClass().getSimpleName());
     }
 }

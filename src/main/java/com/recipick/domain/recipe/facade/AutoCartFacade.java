@@ -30,6 +30,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -93,7 +94,11 @@ public class AutoCartFacade {
         }
         validateNoPreviousMartItems(memberId, martId);
 
-        List<AutoCartLine> lines = calculate(memberId, martId, request.getMenus(), toProductSelections(body));
+        List<AutoCartLine> calculated = calculate(memberId, martId, request.getMenus(), toProductSelections(body));
+        Set<Long> excluded = excludedIngredients(body, calculated);
+        List<AutoCartLine> lines = calculated.stream()
+            .filter(line -> !excluded.contains(line.ingredient().ingredientId()))
+            .toList();
         List<AutoCartLine> purchasableLines = lines.stream().filter(AutoCartLine::purchasable).toList();
         if (purchasableLines.isEmpty()) {
             throw new BusinessException(RecipeErrorCode.NO_PURCHASABLE_INGREDIENTS);
@@ -172,6 +177,19 @@ public class AutoCartFacade {
                     throw new BusinessException(RecipeErrorCode.INVALID_PRODUCT_SELECTION);
                 }
             ));
+    }
+
+    private Set<Long> excludedIngredients(AutoCartConfirmRequest body, List<AutoCartLine> lines) {
+        if (body == null || body.excludedIngredientIds() == null) {
+            return Set.of();
+        }
+        Set<Long> excluded = new java.util.HashSet<>(body.excludedIngredientIds());
+        Set<Long> ingredients = lines.stream().map(line -> line.ingredient().ingredientId()).collect(Collectors.toSet());
+        if (!ingredients.containsAll(excluded)
+            || toProductSelections(body).keySet().stream().anyMatch(excluded::contains)) {
+            throw new BusinessException(RecipeErrorCode.INVALID_PRODUCT_SELECTION);
+        }
+        return excluded;
     }
 
     private void validateMembership(Long memberId) {

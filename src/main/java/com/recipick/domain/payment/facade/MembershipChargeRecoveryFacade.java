@@ -79,7 +79,7 @@ public class MembershipChargeRecoveryFacade {
                 try {
                     billingKeyReconciliation.recheck(ref);
                 } catch (RuntimeException e) {
-                    log.warn("빌링키 재검사 실패(다음 실행에서 재시도): billingKeyId={}, cause={}", ref.billingKeyId(),
+                    PaymentTaskFailureLogger.log(log, e, "빌링키 재검사 실패(다음 실행에서 재시도): billingKeyId={}, cause={}", ref.billingKeyId(),
                         e.getClass().getSimpleName());
                 }
             }
@@ -114,7 +114,7 @@ public class MembershipChargeRecoveryFacade {
                             e.getErrorCode().getCode());
                     }
                 } catch (RuntimeException e) {
-                    log.warn("복구 처리 실패(다음 실행에서 재시도): attemptId={}, cause={}", ref.attemptId(),
+                    PaymentTaskFailureLogger.log(log, e, "복구 처리 실패(다음 실행에서 재시도): attemptId={}, cause={}", ref.attemptId(),
                         e.getClass().getSimpleName());
                 }
             }

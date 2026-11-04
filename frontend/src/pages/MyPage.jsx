@@ -65,7 +65,12 @@ function WithdrawForm({ pointBalance, onPointChanged, onDone }) {
     } catch (e) {
       // 안내 뒤 잔액이 바뀌었다. 최신 잔액을 다시 보여 주고 다시 확인받는다
       if (e.code === 'POINT-002') onPointChanged();
-      setError(e);
+      const guidance = {
+        'BILLING-030': '저장된 카드를 정리하고 있어요. 잠시 후 다시 시도해 주세요. 카드 정리는 탈퇴가 취소되어도 되돌릴 수 없어요.',
+        'BILLING-031': '카드 정리에 운영자 확인이 필요해요. 문의 후 다시 시도해 주세요.',
+        'MEMBER-008': '탈퇴 정산 연결을 준비 중이라 현재 탈퇴할 수 없어요. 잠시 후 다시 확인해 주세요.',
+      };
+      setError(guidance[e.code] ? new Error(guidance[e.code]) : e);
       setSubmitting(false);
     }
   };
@@ -79,6 +84,8 @@ function WithdrawForm({ pointBalance, onPointChanged, onDone }) {
       }}
     >
       <ErrorNotice error={error} />
+      <p className="field__hint">탈퇴 준비 중 저장된 카드가 먼저 삭제될 수 있으며, 탈퇴가 완료되지 않아도 카드 삭제는 되돌릴 수 없어요.</p>
+      <p className="field__hint">멤버십 이용 이력이 있으면 무료체험 반복 이용 방지를 위해 휴대전화의 키 해시(HMAC-SHA-256)를 탈퇴 시점부터 1년간 보관한 뒤 삭제해요. 해당 기간에도 재가입과 유료 구독은 가능해요.</p>
       <label className="field">
         <span className="field__label">비밀번호 확인</span>
         <input className="field__input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={20} required />
@@ -90,7 +97,7 @@ function WithdrawForm({ pointBalance, onPointChanged, onDone }) {
       </div>
       {confirming && (
         <ConfirmModal title="정말 탈퇴할까요?" confirmLabel="탈퇴" cancelLabel="취소" onConfirm={withdraw} onCancel={() => setConfirming(false)}>
-          탈퇴하면 이 계정으로 더 이상 로그인할 수 없어요.
+          탈퇴하면 이 계정으로 더 이상 로그인할 수 없어요. 저장된 카드 정리는 탈퇴 완료 전에도 진행될 수 있고 되돌릴 수 없어요.
           {pointBalance > 0 && ` 남은 포인트 ${formatPoint(pointBalance)}는 모두 소멸돼요.`}
         </ConfirmModal>
       )}
@@ -131,6 +138,7 @@ export default function MyPage() {
   return (
     <div className="container page">
       <h1 className="page__title">내 정보</h1>
+      <div className="row-actions"><Link to="/payments" className="btn btn--outline">결제 내역</Link><Link to="/points/earnings" className="btn btn--outline">포인트 적립 내역</Link></div>
       <div className="stack">
         <section className="card">
           <h2 className="tile__title">기본 정보</h2>
@@ -142,14 +150,14 @@ export default function MyPage() {
             <dt>휴대전화</dt>
             <dd>{member.phone}</dd>
             <dt>이용 마트</dt>
-            <dd>{member.mart?.name ?? '배송지를 등록하면 정해져요'}</dd>
+            <dd>{member.mart?.name ?? (member.currentAddress ? '지정된 이용 마트가 없어요' : '배송지를 등록하면 정해져요')}</dd>
             <dt>현재 배송지</dt>
             <dd className="info-list__row">
               <span>
                 {member.currentAddress ? (
                   <>
                     {member.currentAddress.address} {member.currentAddress.detailAddress}{' '}
-                    {!member.currentAddress.serviceAvailable && <span className="badge badge--warn">서비스 지역 아님</span>}
+                    {!member.currentAddress.serviceAvailable && <span className="badge badge--warn">{{ MART_CLOSED: '마트 운영 중지', MART_MISMATCH: '지정 마트 불일치', OUTSIDE_SERVICE_AREA: '서비스 지역 아님' }[member.currentAddress.unavailableReason] ?? '현재 이용 불가'}</span>}
                   </>
                 ) : (
                   '등록된 배송지가 없어요'

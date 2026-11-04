@@ -1275,3 +1275,10 @@ TX1에서 결제·주문을 잠그고 거절 상태·ADMIN 환불 접수·`ORDER
 | COMMON-007 | 400 | Idempotency-Key 헤더가 필요합니다. | 주문 생성 |
 | COMMON-010 | 409 | 다른 요청이 같은 자원을 처리하고 있습니다. 잠시 후 다시 시도해 주세요. | 주문 생성, 주문 수락 |
 | COMMON-011 | 409 | 같은 Idempotency-Key로 다른 요청을 보낼 수 없습니다. | 주문 생성 |
+
+
+### 자동 구성 확정 화면 연결
+
+프론트의 자동 구성 담기는 개별 `/api/cart-items` 반복 호출 대신 `POST /api/auto-carts/{autoCartRequestId}/confirm`을 사용한다. 본문은 `productSelections: [{ingredientId, productId}]`, `excludedIngredientIds: [ingredientId]`다. 두 목록은 생략 가능하고 기존 클라이언트는 그대로 사용할 수 있다. 명시적으로 제외한 재료는 담기·확정 스냅샷·합계에서 제외하며, 미리보기에 없는 재료나 선택과 제외가 겹치면 `RECIPE-020`(INVALID_PRODUCT_SELECTION)으로 거절한다. 전부 제외하면 `RECIPE-016`(NO_PURCHASABLE_INGREDIENTS)로 거절하고 요청을 확정하지 않는다. 가격·재고·마트·회원 상태를 서버에서 다시 검증하고 AUTO_CART 담기 이력과 확정을 같은 트랜잭션으로 저장한다.
+
+레시피의 썸네일·기본 인분만 필요하면 `GET /api/recipes/{recipeId}/metadata`를 사용한다. 회원 인증이 필요하며 `{recipeId, baseServings, youtubeUrl}`을 반환하고 조회수를 증가시키지 않는다. 실제 상세 열람은 기존 상세 API를 사용한다.

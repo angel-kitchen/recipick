@@ -12,6 +12,8 @@ const ITEMS = [
   { to: '/admin/ingredients', label: '재료', roles: [SUPER] },
   { to: '/admin/categories', label: '카테고리', roles: [SUPER] },
   { to: '/admin/members', label: '회원·멤버십', roles: [SUPER] },
+  { to: '/admin/membership-payments', label: '멤버십 결제·환불', roles: [SUPER] },
+  { to: '/admin/member-points', label: '회원 포인트', roles: [SUPER] },
   { to: '/admin/payments', label: '결제', roles: [SUPER] },
   { to: '/admin/ai-requests', label: 'AI 요청', roles: [SUPER] },
   { to: '/admin/ai-prompts', label: 'AI 프롬프트', roles: [SUPER] },

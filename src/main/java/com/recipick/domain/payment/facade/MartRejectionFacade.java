@@ -10,6 +10,7 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
 import java.util.Optional;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -54,6 +55,20 @@ public class MartRejectionFacade {
         if (errorCode.isPresent()) {
             throw new BusinessException(errorCode.get());
         }
+        return result;
+    }
+
+    @Transactional(propagation = Propagation.NEVER)
+    public MartRejectionPaymentResult retry(AdminRole role, Long adminMartId, Long orderId,
+                                             Long originalRefundId, String idempotencyKey) {
+        validateIdempotencyKey(idempotencyKey);
+        if (idempotencyKey.chars().anyMatch(Character::isWhitespace)) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
+        MartRejectionPreparation preparation = martRejectionProcessor.prepareRetry(role, adminMartId, orderId,
+            originalRefundId, idempotencyKey.toLowerCase(Locale.ROOT));
+        MartRejectionPaymentResult result = preparation.requiresExecution() ? execute(preparation) : preparation.result();
+        result.outcome().errorCode().ifPresent(code -> { throw new BusinessException(code); });
         return result;
     }
 

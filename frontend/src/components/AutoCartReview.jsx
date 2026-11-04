@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, isUnknownOutcome } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { notifyCartChanged, rememberSources } from '../cartSource';
 import { UNAVAILABLE_REASON, formatAmount, formatWon } from '../labels';
@@ -12,7 +12,7 @@ const NONE = 'NONE';
 
 // 서버가 만든 미리보기(preview)를 재료별로 고쳐서 장바구니에 담는다.
 // - 체크를 빼거나 상품 목록에서 "선택 안 함"을 고르면 그 재료는 담지 않는다.
-// - 담기는 선택한 상품을 장바구니 담기 API로 하나씩 넣는다(재료를 뺄 수 있게 하려는 방식).
+// - 서버의 확정 API가 선택·제외를 검증하고 장바구니와 확정 이력을 함께 저장한다.
 export default function AutoCartReview({ preview, disabled = false }) {
   const navigate = useNavigate();
   const { member } = useAuth();
@@ -24,6 +24,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
   const [duplicates, setDuplicates] = useState(null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   // 장바구니를 읽는 중. 버튼을 연달아 눌러도 한 번만 시작하도록 ref로 먼저 막는다
   const [checking, setChecking] = useState(false);
   const busyRef = useRef(false);
@@ -76,23 +77,26 @@ export default function AutoCartReview({ preview, disabled = false }) {
   const doAdd = async (targets) => {
     setError(null);
     setSubmitting(true);
-    const done = [];
     try {
-      for (const line of targets) {
-        const res = await api.post('/api/cart-items', { productId: line.productId, quantity: line.quantity });
-        // 서버는 같은 상품을 새 줄로 만들지 않고 수량을 더한다. 합친 총 수량을 받아 두었다가 알려 준다
-        done.push({ ...line, total: res?.quantity ?? line.quantity });
-      }
+      const result = await api.post(`/api/auto-carts/${preview.autoCartRequestId}/confirm`, {
+        productSelections: targets.map((line) => ({ ingredientId: line.item.ingredientId, productId: line.productId })),
+        excludedIngredientIds: preview.items.filter((item) => choices[item.ingredientId] === NONE).map((item) => item.ingredientId),
+      });
+      const done = result.addedItems.map((item) => ({
+        ...targets.find((line) => line.productId === item.productId),
+        productId: item.productId, name: item.name, quantity: item.addedQuantity,
+        total: item.cartQuantity, price: item.linePrice,
+      }));
       rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
       notifyCartChanged();
-      setAdded({ lines: done });
+      setAdded({ lines: done, priceChanged: result.priceChanged, excluded: result.excludedItems });
     } catch (e) {
-      // 일부만 담겼을 수 있어 담긴 만큼은 기억해 장바구니에서 레시피가 보이게 한다
-      rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
-      if (done.length > 0) notifyCartChanged();
-      setError(
-        done.length > 0 ? new Error(`${e.message} (앞의 ${done.length}개는 장바구니에 담겼어요. 장바구니를 확인해 주세요.)`) : e,
-      );
+      if (isUnknownOutcome(e)) {
+        setOutcomeUnknown(true);
+        setError(new Error('확정 결과를 확인하지 못했어요. 장바구니나 자동 장보기 이력에서 반영 여부를 먼저 확인해 주세요.'));
+      } else {
+        setError(e);
+      }
     } finally {
       setSubmitting(false);
       busyRef.current = false;
@@ -138,7 +142,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
   };
 
   // 조회·확인·담기가 끝날 때까지 선택을 바꾸지 못하게 한다
-  const locked = checking || submitting || duplicates !== null;
+  const locked = checking || submitting || duplicates !== null || added !== null || outcomeUnknown || preview.status === 'CONFIRMED';
 
   const orderNow = async () => {
     setError(null);
@@ -158,6 +162,7 @@ export default function AutoCartReview({ preview, disabled = false }) {
   return (
     <div>
       <ErrorNotice error={error} />
+      {(outcomeUnknown || preview.status === 'CONFIRMED') && <p className="notice"><Link to="/cart">장바구니 확인</Link> · <Link to="/auto-carts">자동 장보기 이력</Link></p>}
       <div className="review-summary">
         <div className="summary__row">
           <span>담을 상품</span>
@@ -262,6 +267,8 @@ export default function AutoCartReview({ preview, disabled = false }) {
               ×
             </button>
             <h2 className="tile__title">장바구니에 담겼어요</h2>
+            {added.priceChanged && <p className="notice">선택 내용과 최신 가격을 반영한 최종 금액이에요.</p>}
+            {added.excluded?.map((item) => <p key={item.ingredientId} className="notice">{item.ingredientName}: {UNAVAILABLE_REASON[item.reason] ?? item.reason}</p>)}
             <p className="field__hint">
               {menuLabels.join(', ')} 재료 {added.lines.length}개
             </p>

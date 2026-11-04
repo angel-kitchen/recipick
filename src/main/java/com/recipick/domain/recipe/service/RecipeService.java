@@ -5,6 +5,7 @@ import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.FridgeRecipe;
 import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.IngredientRef;
 import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeMetadataResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Ingredient;
@@ -83,6 +84,12 @@ public class RecipeService {
         LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
         Page<Recipe> recipes = recipeBookmarkRepository.findPopularRecipes(RecipeStatus.ACTIVE, from, withoutSort(pageable));
         return toRankingPage(memberId, recipes, from);
+    }
+
+    // 썸네일·기본 인분을 읽는 내부 화면 이동은 실제 상세 열람 횟수에 포함하지 않는다.
+    public RecipeMetadataResponse getMetadata(Long recipeId) {
+        Recipe recipe = getActiveRecipe(recipeId);
+        return new RecipeMetadataResponse(recipe.getId(), recipe.getBaseServings(), recipe.getYoutubeWatchUrl());
     }
 
     public RecipeDetailResponse getRecipe(Long memberId, Long recipeId, Integer servings) {

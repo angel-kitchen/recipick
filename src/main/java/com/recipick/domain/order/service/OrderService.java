@@ -384,6 +384,16 @@ public class OrderService {
         return MartRejectRequestResult.REJECTED;
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void validateMartRefundRetry(AdminRole role, Long adminMartId, Long orderId) {
+        Order order = getOrderForUpdate(orderId);
+        verifyMartScope(role, adminMartId, order);
+        if (order.getStatus() != OrderStatus.CANCEL_REQUESTED || order.getMartStatus() != MartStatus.REJECTED
+            || order.getCancelReasonCode() != CancelReasonCode.MART_REJECTED) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_REJECTABLE);
+        }
+    }
+
     @Transactional
     public void restorePaidAfterMemberCancelFailure(Long orderId) {
         Order order = getOrderForUpdate(orderId);

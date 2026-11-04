@@ -66,7 +66,7 @@ function MembershipHistory({ member, version, onClose }) {
 }
 
 export default function AdminMembers() {
-  const [filter, setFilter] = useState({ email: '', name: '', membershipActive: '' });
+  const [filter, setFilter] = useState({ email: '', name: '', membershipActive: '', membershipType: '', membershipSource: '', sort: 'createdAt,desc' });
   const [page, setPage] = useState(0);
   const [message, setMessage] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -107,6 +107,9 @@ export default function AdminMembers() {
           <option value="true">이용 중</option>
           <option value="false">미이용</option>
         </select>
+        <select className="field__input" aria-label="멤버십 유형" value={filter.membershipType} onChange={setFilterValue('membershipType')}><option value="">유형 전체</option>{Object.entries(MEMBERSHIP_TYPE).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select>
+        <select className="field__input" aria-label="발급 경로" value={filter.membershipSource} onChange={setFilterValue('membershipSource')}><option value="">발급 경로 전체</option>{Object.entries(MEMBERSHIP_SOURCE).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select>
+        <select className="field__input" aria-label="회원 정렬" value={filter.sort} onChange={setFilterValue('sort')}><option value="createdAt,desc">최근 가입순</option><option value="createdAt,asc">오래된 가입순</option><option value="name,asc">이름순</option><option value="email,asc">이메일순</option><option value="memberId,asc">회원 ID순</option></select>
       </div>
       {message && <div className="notice notice--info">{message}</div>}
       <ErrorNotice error={error ?? actionError} />

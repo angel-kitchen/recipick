@@ -40,3 +40,8 @@
 기존 `BILLING_KEY_DELETION_ENABLED`·`BILLING_KEY_DELETION_WITHDRAWAL_ENABLED`는 모두 기본 false다. 이번 회원 연결에서 운영 설정을 변경하지 않는다. 두 값이 모두 true여야 카드 준비와 AUTO_BILLING Scope가 활성화된다. 비활성 상태에서는 기존 최종 Processor의 Scope 검사로 탈퇴를 계속 차단한다.
 
 운영 활성화는 결제·배포 담당이 원격 삭제 검증과 기존 DDL·설정 전달 절차를 확인한 뒤 별도로 진행한다. [카드 정리 계약](billing-key-cleanup.md)을 따른다. 장바구니는 삭제하고 담기 이력은 유지하며, 찜은 탈퇴 제한 조건이 아니며 이번 범위에서는 삭제하지 않는다.
+
+
+### 화면 안내
+
+탈퇴 확인 화면은 포인트 소멸, 카드 정리의 비가역성, 이용 이력이 있을 때의 휴대전화 HMAC 1년 보관을 안내한다. BILLING-030은 정리 대기 후 재요청, BILLING-031은 운영 확인 안내, MEMBER-008은 현재 기능 사용 불가 안내로 표시한다.

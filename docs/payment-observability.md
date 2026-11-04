@@ -80,7 +80,7 @@ flowchart LR
 | 멤버십 환불 미확정·운영 확인 | `membership_refund.status`, `ops_review_required_at`, `ops_review_reason` | 시도 상세의 환불 목록, `POST /api/admin/membership-refunds/{refundId}/recheck`, `/retry` |
 | 빌링키 삭제 확인 필요 | `billing_key_deletion.status = 'REVIEW_REQUIRED'`, `last_code` | 관리자 API 없음. DB 조회 |
 
-관리자 조회·재조회·재시도는 `admin_audit_log`에 남는다(`MEMBERSHIP_PAYMENT_RECHECK`, `MEMBERSHIP_REFUND_RECHECK`, `MEMBERSHIP_REFUND_RETRY` 등). 이 테이블에는 `traceId`가 없어 대상 ID와 시각으로 처리 로그와 맞춘다. `AdminAuditAction.REFUND_RETRY`는 정의만 있고 쓰는 곳이 없다.
+관리자 조회·재조회·재시도는 `admin_audit_log`에 남는다(`MEMBERSHIP_PAYMENT_RECHECK`, `MEMBERSHIP_REFUND_RECHECK`, `MEMBERSHIP_REFUND_RETRY` 등). 이 테이블에는 `traceId`가 없어 대상 ID와 시각으로 처리 로그와 맞춘다. `AdminAuditAction.REFUND_RETRY`는 실패한 마트 거절 환불의 새 재처리 접수를 기록한다. 같은 키 재전송은 중복 기록하지 않는다.
 
 ### 알 수 없는 것
 

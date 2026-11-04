@@ -1,6 +1,7 @@
 package com.recipick.domain.payment.scheduler;
 
 import com.recipick.domain.payment.facade.BillingKeyDeletionRecoveryFacade;
+import com.recipick.domain.payment.facade.PaymentTaskFailureLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -20,7 +21,7 @@ public class BillingKeyDeletionScheduledTasks {
         try {
             recovery.requestReplacedOnce();
         } catch (RuntimeException e) {
-            log.warn("교체 키 정리 스캔 실패: cause={}", e.getClass().getSimpleName());
+            PaymentTaskFailureLogger.log(log, e, "교체 키 정리 스캔 실패: cause={}", e.getClass().getSimpleName());
         }
     }
 
@@ -30,7 +31,7 @@ public class BillingKeyDeletionScheduledTasks {
         try {
             recovery.recoverOnce();
         } catch (RuntimeException e) {
-            log.warn("빌링키 삭제 복구 스캔 실패: cause={}", e.getClass().getSimpleName());
+            PaymentTaskFailureLogger.log(log, e, "빌링키 삭제 복구 스캔 실패: cause={}", e.getClass().getSimpleName());
         }
     }
 }

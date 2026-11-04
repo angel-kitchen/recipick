@@ -10,7 +10,7 @@ public record MemberMeResponse(Long memberId, String email, String name, String 
     }
 
     public record CurrentAddress(Long addressId, String label, String address, String detailAddress,
-            String legalDongCode, boolean serviceAvailable) {
+            String legalDongCode, boolean serviceAvailable, String unavailableReason) {
         @Override
         public String toString() {
             return "MemberMeResponse.CurrentAddress[REDACTED]";

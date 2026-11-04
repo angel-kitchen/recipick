@@ -14,6 +14,7 @@ import com.recipick.domain.payment.entity.enums.PaymentMethod;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
 import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundRequester;
+import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.MartRejectionOutcome;
 import com.recipick.domain.payment.service.PaymentService;
@@ -104,6 +105,42 @@ public class MartRejectionProcessor {
         // 새 거절이 실제로 접수됐을 때만 남긴다. SUPER_ADMIN은 토큰에 마트가 없으므로 주문의 마트를 쓴다.
         // 상태 전후 값은 주문 상태 이력 두 건에 이미 남고, 거절 사유는 자유 입력 원문이라 넣지 않는다
         adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.ORDER_REJECT, orderId, martId, Map.of()));
+        return MartRejectionPreparation.execute(result(MartRejectionOutcome.PENDING, payment, refund));
+    }
+
+    // 원본 실패 행은 이력으로 남기고 새 환불을 접수한다. PAYMENT 잠금이 동시 재처리를 직렬화한다.
+    @Transactional
+    public MartRejectionPreparation prepareRetry(AdminRole role, Long adminMartId, Long orderId,
+                                                  Long originalRefundId, String idempotencyKey) {
+        // 첫 DB 작업을 PAYMENT 잠금으로 두어 대기 후의 일반 조회가 최신 커밋을 보게 한다.
+        Payment payment = paymentService.getByOrderIdForUpdate(orderId);
+        Long martId = orderService.getMartIdOf(orderId);
+        if (role == AdminRole.MART_ADMIN && !martId.equals(adminMartId)) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+        String reason = "마트 거절 환불 재처리 #" + originalRefundId;
+        Optional<Refund> existing = paymentService.findRefundByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return replay(existing.get(), payment, reason);
+        }
+        if (payment.getStatus() == PaymentStatus.CANCEL_REQUESTED) {
+            throw new BusinessException(CommonErrorCode.DUPLICATE_REQUEST_IN_PROGRESS);
+        }
+        if (payment.getStatus() != PaymentStatus.PAID || payment.getPaymentMethod() == PaymentMethod.POINTS_ONLY) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        orderService.validateMartRefundRetry(role, adminMartId, orderId);
+        List<Refund> refunds = paymentService.findRefundsOf(payment.getId());
+        Refund latest = refunds.isEmpty() ? null : refunds.get(0);
+        if (latest == null || !latest.getId().equals(originalRefundId)
+            || latest.getRequestedBy() != RefundRequester.ADMIN
+            || latest.getStatus() != RefundStatus.FAILED) {
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_STATUS);
+        }
+        payment.requestCancel();
+        Refund refund = paymentService.requestAdminRefund(payment, reason, idempotencyKey);
+        adminAuditRecorder.record(new AdminAuditCommand(AdminAuditAction.REFUND_RETRY,
+            payment.getId(), martId, Map.of()));
         return MartRejectionPreparation.execute(result(MartRejectionOutcome.PENDING, payment, refund));
     }
 

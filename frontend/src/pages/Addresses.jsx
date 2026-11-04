@@ -138,8 +138,9 @@ function AddressForm({ initial, submitLabel, showSelect, onSubmit, onCancel }) {
         <LocationPickerModal
           onClose={() => setLocating(false)}
           onConfirm={({ address, legalDongCode }) => {
+            if (form.address && form.address !== address && !window.confirm('핀 위치가 입력한 주소와 달라요. 핀 기준 주소로 변경하고 상세 주소를 다시 입력할까요?')) return;
             setLocating(false);
-            setForm((prev) => ({ ...prev, address, legalDongCode }));
+            setForm((prev) => ({ ...prev, address, legalDongCode, detailAddress: prev.address === address ? prev.detailAddress : '' }));
           }}
         />
       )}

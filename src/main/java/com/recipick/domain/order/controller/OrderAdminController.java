@@ -91,6 +91,20 @@ public class OrderAdminController {
         };
     }
 
+    @PostMapping("/{orderId}/refunds/{refundId}/retry")
+    public ResponseEntity<ApiResponse<MartRejectionResponse>> retryRefund(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long orderId,
+        @PathVariable Long refundId,
+        @RequestHeader("Idempotency-Key") String idempotencyKey
+    ) {
+        MartRejectionPaymentResult result = martRejectionFacade.retry(AdminRole.valueOf(principal.role()),
+            principal.martId(), orderId, refundId, idempotencyKey);
+        return result.outcome() == com.recipick.domain.payment.service.MartRejectionOutcome.PENDING
+            ? ResponseEntity.accepted().body(ApiResponse.success("환불 결과를 확인하고 있습니다.", result.response()))
+            : ResponseEntity.ok(ApiResponse.success("환불 재처리가 완료되었습니다.", result.response()));
+    }
+
     // 배송완료는 포인트 적립 확정까지 이어져 주문·포인트를 조립하는 Facade가 처리한다
     @PatchMapping("/{orderId}/delivery-status")
     public ResponseEntity<ApiResponse<OrderMartStatusResponse>> changeDeliveryStatus(
