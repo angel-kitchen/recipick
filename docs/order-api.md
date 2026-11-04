@@ -1,6 +1,6 @@
 # 주문 도메인 API 명세
 
-레시픽(Recipick) · 주문 도메인(장바구니 · 주문 · 관리자 주문). 기존 1~12절은 `feature/order-admin-accept` 구현(2026-10-24) 당시 명세이며, 관리자 거절·배송 변경 13~14절과 12절의 연결 안내는 `dev` `544bee2`(2026-11-04) 코드 기준으로 보완했습니다. 기존 절 전체의 최신 구현 대조·재검증을 뜻하지 않습니다.
+레시픽(Recipick) · 주문 도메인(장바구니 · 주문 · 관리자 주문). 기존 1~12절은 `feature/order-admin-accept` 구현(2026-10-24) 당시 명세이며, 관리자 거절·배송 변경 13~14절과 12절의 연결 안내는 `dev` `544bee2`(2026-11-04) 코드 기준으로, 주문 생성·상세의 포인트 사용(7·9·11절), 멤버십 무료배송 기준(1·6·7절), 관리자 주문 API의 감사 기록(10~12절)은 `dev` `b343e28`(2026-11-04) 코드 기준으로 보완했습니다. 기존 절 전체의 최신 구현 대조·재검증을 뜻하지 않습니다.
 
 ## 공통
 
@@ -176,7 +176,7 @@
 | items[].stock | Integer | 현재 재고 |
 | items[].status | String | 항목 상태(아래 표) |
 | hasPreviousMartItems | Boolean | 이전 마트 상품이 하나라도 있으면 true |
-| deliveryPolicy.freeDeliveryThreshold | Long | 무료배송 기준 금액(40,000원) |
+| deliveryPolicy.freeDeliveryThreshold | Long | 무료배송 기준 금액. 이용 중인 멤버십(체험 포함)이 있으면 15,000원, 없으면 40,000원 |
 | deliveryPolicy.deliveryFee | Long | 기준 미만일 때 배송비(3,000원) |
 
 항목 상태(`status`)는 아래 순서로 판정하며, 여러 조건이 겹치면 앞선 상태가 됩니다.
@@ -528,8 +528,8 @@
 | delivery.martName | String / null | AVAILABLE이면 이용 마트 이름, OTHER_MART_AREA면 그 지역의 운영 중인 마트 이름, 서비스 지역 밖이면 null |
 | items | Array | 요청한 cartItemIds 순서. 구조 · 상태 값은 장바구니 조회의 items와 같음 |
 | productAmount | Long | AVAILABLE 상품의 lineAmount 합 |
-| deliveryFee | Long | productAmount가 40,000원 이상이면 0, 아니면 3,000. 구매 가능 상품이 없으면 0 |
-| payAmount | Long | productAmount + deliveryFee |
+| deliveryFee | Long | productAmount가 무료배송 기준(멤버십 이용 중 15,000원, 아니면 40,000원) 이상이면 0, 아니면 3,000. 구매 가능 상품이 없으면 0 |
+| payAmount | Long | productAmount + deliveryFee. 미리보기는 사용 포인트를 받지 않아 차감 전 금액 |
 | pendingOrder | Object / null | 결제 대기 중인 기존 주문. 없으면 null |
 | pendingOrder.orderId / orderNumber | Long / String | 기존 주문 |
 | pendingOrder.paymentId | Long | 기존 결제 ID |
@@ -599,7 +599,8 @@
   "receiverPhone": "01012345678",
   "address": "서울특별시 강남구 테헤란로 10",
   "detailAddress": "101동 1001호",
-  "legalDongCode": "1168010100"
+  "legalDongCode": "1168010100",
+  "usedPoint": 1000
 }
 ```
 
@@ -611,6 +612,7 @@
 | address | String | O | 기본 배송 주소, 최대 255자 |
 | detailAddress | String | X | 상세 주소, 최대 255자 |
 | legalDongCode | String | O | 배송지 법정동 코드, 숫자 10자리 |
+| usedPoint | Long | X | 사용할 포인트(원 단위, 0 이상). 생략하면 0. 상품 합계를 넘을 수 없고 배송비에는 쓸 수 없음 |
 
 ### Response `201 Created` (신규 생성) / `200 OK` (같은 Idempotency-Key 재시도)
 
@@ -626,7 +628,8 @@
     "orderName": "양파 1망",
     "productAmount": 4000,
     "deliveryFee": 3000,
-    "amount": 7000,
+    "usedPoint": 1000,
+    "amount": 6000,
     "paymentId": 2001,
     "portonePaymentId": "pay_3f9c1e2a-5b7d-4c8e-9a1f-2b3c4d5e6f70",
     "expiresAt": "2026-10-14T21:35:00+09:00",
@@ -643,10 +646,11 @@
 | status | String | 주문 상태. 신규는 PENDING_PAYMENT, 재시도 응답은 그 시점의 현재 상태 |
 | orderName | String | PortOne 결제창에 쓰는 주문명. 첫 상품명, 2개 이상이면 `첫 상품명 외 N건` |
 | productAmount / deliveryFee | Long | 서버가 확정한 상품 합계 · 배송비 |
-| amount | Long | 결제 금액(productAmount + deliveryFee) |
+| usedPoint | Long | 주문에 사용한 포인트 |
+| amount | Long | 결제 금액(productAmount + deliveryFee − usedPoint). 0이면 PG 결제 없이 생성과 함께 결제가 완료되어 status는 PAID, portonePaymentId · expiresAt은 null |
 | paymentId | Long | 결제 테이블 ID |
-| portonePaymentId | String | PortOne 결제 식별자(`pay_` + UUID) |
-| expiresAt | String | 결제 만료 시각(생성 시점 + 5분) |
+| portonePaymentId | String / null | PortOne 결제 식별자(`pay_` + UUID). 0원 결제는 null |
+| expiresAt | String / null | 결제 만료 시각(생성 시점 + 5분). 0원 결제는 null |
 | receiverName / receiverPhone | String | 주문에 저장된 수령인 이름 · 연락처 |
 
 ### 예외처리
@@ -658,6 +662,7 @@
 | 400 | ORDER-002 (DUPLICATE_ORDER_ITEM) | cartItemIds에 중복 항목 |
 | 400 | ORDER-006 (INVALID_DELIVERY_INFORMATION) | legalDongCode 누락 또는 숫자 10자리가 아님 |
 | 400 | ORDER-008 (OUTSIDE_DELIVERY_AREA) | 배송지 법정동이 이용 마트 지역과 다르거나 서비스 지역(REGION)에 없음 |
+| 400 | ORDER-019 (USED_POINT_EXCEEDS_PRODUCT_AMOUNT) | 포인트 예약을 통과한 뒤, usedPoint가 재고를 잠근 시점 가격의 상품 합계를 초과 |
 | 404 | CART-001 (CART_ITEM_NOT_FOUND) | 장바구니 항목이 없거나 다른 회원의 항목 |
 | 404 | PRODUCT-001 (PRODUCT_NOT_FOUND) | 재고 차감 시점에 상품이 삭제됐거나 이용 마트 상품이 아님 |
 | 409 | ORDER-003 (PENDING_ORDER_EXISTS) | 결제 대기 주문이 이미 있음(동시 생성으로 인한 UNIQUE 충돌 포함) |
@@ -666,6 +671,7 @@
 | 409 | CART-006 (CART_HAS_PREVIOUS_MART_ITEMS) | 선택 항목에 이전 마트 상품이 있음 |
 | 409 | PRODUCT-003 (PRODUCT_NOT_SELLING) | 판매 중이 아닌 상품이 있음 |
 | 409 | STOCK-001 (INSUFFICIENT_STOCK) | 재고가 부족한 상품이 있음 |
+| 409 | POINT-001 (INSUFFICIENT_POINT_BALANCE) | 사용 가능한 포인트가 usedPoint보다 적음. 포인트 예약이 금액 확정보다 먼저라 상품 합계 초과(ORDER-019)보다 먼저 판정 |
 | 409 | COMMON-006 (DUPLICATE_REQUEST_IN_PROGRESS) | 같은 Idempotency-Key의 첫 요청이 아직 처리 중 |
 | 409 | COMMON-011 (IDEMPOTENCY_KEY_PAYLOAD_MISMATCH) | 같은 Idempotency-Key에 다른 요청 본문 |
 | 409 | COMMON-010 (LOCK_ACQUISITION_TIMEOUT) | 주문 · 재고 락 대기 시간 초과 |
@@ -680,17 +686,21 @@
   5. 법정동 형식(ORDER-006) → 이용 마트 지역과 일치(ORDER-008)
   6. 장바구니 항목 존재 · 소유 확인(CART-001) → 상품 마트가 이용 마트와 같은지 확인(CART-006)
   7. 주문 행 저장(PENDING_PAYMENT, martStatus NONE, pending_member_id = 회원 ID) 후 즉시 flush. UNIQUE 충돌이면 멱등 키 충돌은 COMMON-006, 그 밖은 ORDER-003
-  8. 상품 ID 오름차순으로 비관적 락을 잡고 삭제 · 마트(PRODUCT-001), 판매 상태(PRODUCT-003), 재고(STOCK-001)를 검증한 뒤 실제 재고를 즉시 차감(예약 재고 없음)
-  9. 잠근 시점의 상품명 · 단가 · 판매 단위 · 수량 · 줄 금액을 ORDER_ITEM에 스냅샷으로 저장하고 금액 확정(상품 합계 40,000원 이상이면 배송비 0, 아니면 3,000원)
-  10. 결제 행 생성(IN_PROGRESS, 만료 = 생성 + 5분)
-- 하나라도 실패하면 주문 · 항목 · 재고 · 결제가 모두 롤백되고 Idempotency-Key도 저장되지 않습니다. 같은 키로 재시도하면 처음부터 다시 검증합니다.
+  8. 사용 포인트 예약(잔액 부족이면 POINT-001). 잠금 순서 MEMBER → ORDERS → MEMBER_POINT → POINT_EARNING → 재고를 지키기 위해 재고보다 먼저 예약
+  9. 상품 ID 오름차순으로 비관적 락을 잡고 삭제 · 마트(PRODUCT-001), 판매 상태(PRODUCT-003), 재고(STOCK-001)를 검증한 뒤 실제 재고를 즉시 차감(예약 재고 없음)
+  10. 잠근 시점의 상품명 · 단가 · 판매 단위 · 수량 · 줄 금액을 ORDER_ITEM에 스냅샷으로 저장하고 금액 확정. 배송비는 포인트 차감 전 상품 합계가 무료배송 기준(멤버십 이용 중 15,000원, 아니면 40,000원) 이상이면 0, 아니면 3,000원. usedPoint가 상품 합계를 넘으면 ORDER-019
+  11. 적립 예정 포인트 생성(적립률은 주문 시점 멤버십 기준으로 주문에 저장)
+  12. 결제 행 생성(IN_PROGRESS, 만료 = 생성 + 5분). 결제 금액이 0원이면 PG 없이 결제 완료(POINTS_ONLY) · 주문 PAID · 사용 포인트 확정까지 이 트랜잭션에서 처리
+- 하나라도 실패하면 주문 · 항목 · 재고 · 포인트 예약 · 결제가 모두 롤백되고 Idempotency-Key도 저장되지 않습니다. 같은 키로 재시도하면 처음부터 다시 검증합니다.
 - 금액은 서버가 계산하며 클라이언트가 보낸 금액을 받지 않습니다. 미리보기 금액과 달라졌는지는 클라이언트가 응답 금액으로 확인합니다.
 - 미리보기와 달리 구매 불가 상품이 하나라도 있으면 제외하지 않고 거절합니다. 사용자가 확인하지 않은 금액으로 결제가 만들어지지 않게 하기 위함입니다.
-- request_hash는 정렬한 cartItemIds, receiverName, receiverPhone, address, detailAddress, legalDongCode의 SHA-256(hex 64자)입니다. 항목 순서만 다른 재시도는 같은 요청으로 봅니다.
+- request_hash는 정렬한 cartItemIds, receiverName, receiverPhone, address, detailAddress, legalDongCode와 usedPoint(0보다 클 때만)를 각 값 앞에 `길이:`를 붙여 이은 문자열의 SHA-256(hex 64자)입니다. 항목 순서만 다른 재시도는 같은 요청으로, 구분자가 섞인 서로 다른 값은 다른 요청으로 봅니다.
+- 포인트를 쓰지 않는 요청은 usedPoint를 해시에 넣지 않아 포인트 도입 전과 같은 해시가 나옵니다. 배포 직전에 만든 결제 대기 주문의 같은 키 재시도가 COMMON-011이 되지 않게 하기 위함입니다. 같은 키로 usedPoint만 바꾸면 다른 결제 요청이라 COMMON-011입니다.
 - 회원당 결제 대기 주문은 1건입니다. pending_member_id는 PENDING_PAYMENT 동안 회원 ID, 그 밖의 상태에서는 null이며 UNIQUE로 동시 생성을 최종 방어합니다.
 - 주문에 저장한 수령인 · 주소 · 법정동은 이후 회원 배송지가 바뀌어도 변하지 않습니다. 주문서에서 입력한 주소는 회원 배송지 목록에 반영하지 않습니다.
 - 이후 상태 변경은 결제 도메인이 주도합니다. 결제 성공 → PAID / RECEIVED, 결제 실패 · 5분 만료 · 결제 전 취소 · 금액 불일치 → CANCELED + 재고 복구. 결제창 초기화 · 결제 확정 · 취소는 결제 API 명세를 따릅니다.
-- 사용 포인트는 1차에서 받지 않으며 0으로 저장합니다.
+- 사용 포인트는 상품 금액에만 쓸 수 있고 배송비에는 쓸 수 없습니다. 무료배송 여부도 포인트 차감 전 상품 합계로 정합니다.
+- 적립률 · 배송비 기준은 주문 생성 시점의 멤버십 이용 여부로 정해 주문에 저장하므로, 이후 멤버십이 끝나도 이미 만든 주문의 금액은 바뀌지 않습니다.
 
 ---
 
@@ -822,6 +832,7 @@
     ],
     "productAmount": 4000,
     "deliveryFee": 3000,
+    "usedPoint": 0,
     "payAmount": 7000,
     "receiverName": "홍길동",
     "receiverPhone": "01012345678",
@@ -845,7 +856,9 @@
 | items[].saleUnitAmount / saleUnit | String / String | 주문 당시 판매 단위 수치 · 단위 |
 | items[].quantity | Integer | 주문 수량 |
 | items[].lineAmount | Long | unitPrice × quantity |
-| productAmount / deliveryFee / payAmount | Long | 확정 금액 |
+| productAmount / deliveryFee | Long | 확정 상품 합계 · 배송비 |
+| usedPoint | Long | 사용 포인트(사용하지 않았으면 0) |
+| payAmount | Long | 결제 금액(productAmount + deliveryFee − usedPoint) |
 | receiverName / receiverPhone / address / detailAddress | String | 주문에 저장된 배송 정보 |
 | cancelReasonCode | String / null | 취소 사유 코드. 취소되지 않은 주문은 null |
 | cancelReasonDetail | String / null | 취소 사유 상세 |
@@ -943,6 +956,7 @@
 - 결제 전(martStatus NONE) 주문은 마트가 처리할 대상이 아니라 항상 제외합니다. `martStatus=NONE`으로 조회해도 빈 결과입니다.
 - SUPER_ADMIN이 없는 마트 ID를 지정하면 오류 없이 빈 페이지를 반환합니다.
 - 최신순(id 내림차순) 고정, sort 무시.
+- 조회와 `ORDER_LIST_VIEW` 감사 기록을 한 쓰기 트랜잭션에서 처리하고, 감사 기록이 실패하면 결과를 반환하지 않습니다. 감사의 마트 ID는 MART_ADMIN이면 소속 마트, SUPER_ADMIN이면 지정한 martId(없는 마트이거나 지정하지 않으면 null)입니다.
 
 ---
 
@@ -995,6 +1009,7 @@
     ],
     "productAmount": 4000,
     "deliveryFee": 3000,
+    "usedPoint": 0,
     "payAmount": 7000,
     "receiverName": "홍길동",
     "receiverPhone": "01012345678",
@@ -1052,7 +1067,9 @@
 | martId | Long | 처리 마트 ID |
 | orderName | String | 주문명 |
 | items | Array | 주문 상품 스냅샷. 구조는 회원 주문 상세와 같음 |
-| productAmount / deliveryFee / payAmount | Long | 확정 금액 |
+| productAmount / deliveryFee | Long | 확정 상품 합계 · 배송비 |
+| usedPoint | Long | 사용 포인트(사용하지 않았으면 0) |
+| payAmount | Long | 결제 금액(productAmount + deliveryFee − usedPoint) |
 | receiverName / receiverPhone / address / detailAddress | String | 배송 정보 |
 | cancelReasonCode / cancelReasonDetail | String / null | 취소 사유. 취소되지 않은 주문은 null |
 | histories | Array | 상태 변경 이력, 오래된 순 |
@@ -1076,6 +1093,7 @@
 - 존재 여부를 먼저 확인한 뒤 마트 범위를 검사하므로, 다른 마트의 결제 후 주문은 403입니다.
 - 결제 정보는 넣지 않습니다. 결제 관리자 API에서 조회합니다.
 - 수락 · 거절 가능 여부 필드는 없습니다. 클라이언트는 status=PAID, martStatus=RECEIVED로 판단합니다.
+- 조회와 `ORDER_DETAIL_VIEW` 감사 기록(대상 ID = orderId, 마트 ID = 주문의 마트)을 한 쓰기 트랜잭션에서 처리하고, 감사 기록이 실패하면 결과를 반환하지 않습니다. 404 · 403으로 끝난 요청은 기록하지 않습니다.
 
 ---
 
@@ -1136,6 +1154,7 @@
 - 주문 행에 비관적 락을 잡은 뒤 상태를 확인하므로, 회원 취소와 동시에 들어와도 한쪽만 성공합니다. 회원 취소가 먼저면 ORDER-014, 수락이 먼저면 회원 취소가 거절됩니다.
 - 이력은 statusType=MART, actor=MART, changedByAdminId=처리한 관리자 ID로 남깁니다. SUPER_ADMIN이 대신 처리해도 주체는 MART이고 관리자 ID로 누가 처리했는지 구분합니다.
 - SUPER_ADMIN은 모든 마트의 주문을, MART_ADMIN은 소속 마트 주문만 수락할 수 있습니다.
+- 실제로 수락했을 때만 같은 트랜잭션에서 `ORDER_ACCEPT` 감사 기록(대상 ID = orderId, 마트 처리 상태 전후 값 RECEIVED → PREPARING)을 남깁니다. 감사 기록이 실패하면 수락도 롤백됩니다. 같은 수락 재요청은 기록하지 않습니다.
 - 수락 이후 배송 변경은 `PATCH /api/admin/orders/{orderId}/delivery-status`로 구현됐습니다(14절). 주문 거절은 `POST /api/admin/orders/{orderId}/reject`에서 결제 `MartRejectionFacade`를 호출해 ADMIN 환불로 연결합니다(13절).
 
 ---
@@ -1239,6 +1258,7 @@ TX1에서 결제·주문을 잠그고 거절 상태·ADMIN 환불 접수·`ORDER
 | ORDER-016 | 409 | 허용되지 않는 주문 상태 변경입니다. | 결제 도메인 흐름(엔티티 방어) |
 | ORDER-017 | 409 | 허용되지 않는 주문의 마트 처리 상태 변경입니다. | 결제 도메인 흐름(엔티티 방어) |
 | ORDER-018 | 409 | 동시 처리 충돌로 요청을 완료하지 못했습니다. 주문 상태를 확인한 뒤 다시 시도해 주세요. | 정의만, 현재 미사용 |
+| ORDER-019 | 400 | 사용 포인트는 상품 금액을 초과할 수 없습니다. | 주문 생성 |
 
 주문 API에서 함께 쓰는 다른 도메인 · 공통 코드
 
@@ -1247,6 +1267,7 @@ TX1에서 결제·주문을 잠그고 거절 상태·ADMIN 환불 접수·`ORDER
 | PRODUCT-001 | 404 | 상품을 찾을 수 없습니다. | 장바구니 담기, 주문 생성 |
 | PRODUCT-003 | 409 | 판매 중인 상품이 아닙니다. | 주문 생성 |
 | STOCK-001 | 409 | 재고가 부족합니다. | 주문 생성 |
+| POINT-001 | 409 | 사용 가능한 포인트가 부족합니다. | 주문 생성 |
 | AUTH-005 | 403 | 소속 마트의 데이터만 처리할 수 있습니다. | 관리자 주문 목록 · 상세 · 수락 |
 | COMMON-001 | 400 | 입력값이 올바르지 않습니다. | 전체(입력 검증, `errors` 포함) |
 | COMMON-002 | 400 | 요청 형식이 올바르지 않습니다. | 전체(JSON 파싱 · 타입 오류) |
