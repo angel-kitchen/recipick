@@ -159,6 +159,22 @@ class RecipeServiceTest {
     }
 
     @Test
+    @DisplayName("메타정보 조회는 기본 인분만 읽고 조회수를 증가시키지 않는다")
+    void metadataDoesNotIncreaseViews() {
+        // given
+        Recipe recipe = recipe(12L, "된장찌개");
+        given(recipeRepository.findByIdAndStatus(12L, RecipeStatus.ACTIVE)).willReturn(Optional.of(recipe));
+
+        // when
+        var result = recipeService.getMetadata(12L);
+
+        // then
+        assertThat(result.baseServings()).isEqualTo(2);
+        verify(recipeRepository, never()).increaseViewCount(any());
+        org.mockito.Mockito.verifyNoInteractions(recipeIngredientRepository, recipeBookmarkRepository);
+    }
+
+    @Test
     @DisplayName("상세: 선택한 인분으로 재료 필요량을 환산한다")
     void getRecipe_scaled() {
         // given

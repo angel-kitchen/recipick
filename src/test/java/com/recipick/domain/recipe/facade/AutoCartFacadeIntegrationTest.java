@@ -275,6 +275,36 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("확정: 구매 가능한 재료를 제외하면 담지 않고 요청을 확정하지 않는다")
+    void confirm_excludedIngredient() {
+        // given
+        Long requestId = previewId();
+        AutoCartConfirmRequest request = new AutoCartConfirmRequest(List.of(), List.of(tofu.getId()));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, requestId, request));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.NO_PURCHASABLE_INGREDIENTS);
+        assertThat(cartItemRepository.findAll()).isEmpty();
+        assertThat(autoCartRequestRepository.findById(requestId).orElseThrow().isConfirmed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("확정: 미리보기에 없는 재료 제외를 거절한다")
+    void confirm_unknownExcludedIngredient() {
+        // given
+        Long requestId = previewId();
+        AutoCartConfirmRequest request = new AutoCartConfirmRequest(List.of(), List.of(Long.MAX_VALUE));
+
+        // when
+        Throwable thrown = catchThrowable(() -> autoCartFacade.confirm(MEMBER_ID, requestId, request));
+
+        // then
+        assertErrorCode(thrown, RecipeErrorCode.INVALID_PRODUCT_SELECTION);
+    }
+
+    @Test
     @DisplayName("확정: 회원 잠금에서 탈퇴 회원으로 거절되면 장바구니에 담지 않고 요청도 확정하지 않는다")
     void confirm_withdrawnMember() {
         // given

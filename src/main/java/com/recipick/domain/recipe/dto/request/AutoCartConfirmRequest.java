@@ -6,8 +6,13 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record AutoCartConfirmRequest(
-        List<@NotNull @Valid ProductSelection> productSelections
+        List<@NotNull @Valid ProductSelection> productSelections,
+        List<@NotNull Long> excludedIngredientIds
 ) {
+
+    public AutoCartConfirmRequest(List<ProductSelection> productSelections) {
+        this(productSelections, List.of());
+    }
 
     public record ProductSelection(
             @NotNull

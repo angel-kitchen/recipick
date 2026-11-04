@@ -133,6 +133,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(data(response).path("currentAddress").path("serviceAvailable").asBoolean()).isFalse();
+        assertThat(data(response).path("currentAddress").path("unavailableReason").asText()).isEqualTo("OUTSIDE_SERVICE_AREA");
         assertThat(data(response).path("mart").isNull()).isTrue();
     }
 
@@ -151,6 +152,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(data(response).path("currentAddress").path("serviceAvailable").asBoolean()).isFalse();
+        assertThat(data(response).path("currentAddress").path("unavailableReason").asText()).isEqualTo("MART_CLOSED");
         assertThat(data(response).path("mart").path("martId").asLong()).isEqualTo(1L);
         assertThat(data(response).path("mart").path("name").asText()).isEqualTo("삼청 마트");
         assertThat(jdbc.queryForMap("SELECT * FROM member WHERE id = ?", member.getId())).isEqualTo(before);
@@ -170,6 +172,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         assertThat(data(response).path("mart").path("martId").asLong()).isEqualTo(2L);
         assertThat(data(response).path("mart").path("name").asText()).isEqualTo("하안 마트");
         assertThat(data(response).path("currentAddress").path("serviceAvailable").asBoolean()).isFalse();
+        assertThat(data(response).path("currentAddress").path("unavailableReason").asText()).isEqualTo("MART_MISMATCH");
         assertThat(jdbc.queryForObject("SELECT mart_id FROM member WHERE id = ?", Long.class, member.getId()))
                 .isEqualTo(2L);
     }

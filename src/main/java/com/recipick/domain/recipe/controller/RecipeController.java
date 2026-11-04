@@ -6,6 +6,7 @@ import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.AiFridgeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
+import com.recipick.domain.recipe.dto.response.RecipeMetadataResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiFridgeRecommendFacade;
@@ -55,6 +56,11 @@ public class RecipeController {
         Pageable pageable
         ){
         return ResponseEntity.ok(ApiResponse.success(recipeService.findPopularRecipes(memberId, period, pageable)));
+    }
+
+    @GetMapping("/{recipeId}/metadata")
+    public ResponseEntity<ApiResponse<RecipeMetadataResponse>> getMetadata(@PathVariable Long recipeId) {
+        return ResponseEntity.ok(ApiResponse.success(recipeService.getMetadata(recipeId)));
     }
 
     @GetMapping("/{recipeId}")
