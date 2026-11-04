@@ -285,6 +285,93 @@ function StockPanel({ product, onDone, onCancel }) {
   );
 }
 
+function DiscountPanel({ product, onDone, onCancel }) {
+  const [form, setForm] = useState({
+    rate: product.discounted ? String(product.discountRate) : '',
+    endAt: product.discounted ? String(product.discountEndAt).slice(0, 16) : '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const rate = Number(form.rate);
+  const validRate = Number.isInteger(rate) && rate >= 1 && rate <= 99;
+  const preview = validRate ? Math.floor((product.price * (100 - rate)) / 100) : null;
+
+  const run = async (request) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await request();
+      onDone();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    run(() =>
+      api.patch(`/api/admin/products/${product.productId}/discount`, {
+        discountRate: rate,
+        discountEndAt: form.endAt,
+      }),
+    );
+  };
+
+  return (
+    <form className="card form admin__section" onSubmit={submit}>
+      <h2 className="tile__title">
+        할인 설정 · {product.name} (정상가 {formatWon(product.price)})
+      </h2>
+      <ErrorNotice error={error} />
+      <div className="form-grid">
+        <label className="field">
+          <span className="field__label">할인율(%)</span>
+          <input
+            className="field__input"
+            inputMode="numeric"
+            value={form.rate}
+            placeholder="1 ~ 99"
+            onChange={(e) => setForm((p) => ({ ...p, rate: e.target.value.replace(/\D/g, '').slice(0, 2) }))}
+            required
+          />
+          {preview !== null && <span className="tile__meta">판매가 {formatWon(preview)}</span>}
+        </label>
+        <label className="field">
+          <span className="field__label">할인 종료 일시</span>
+          <input
+            className="field__input"
+            type="datetime-local"
+            value={form.endAt}
+            onChange={(e) => setForm((p) => ({ ...p, endAt: e.target.value }))}
+            required
+          />
+        </label>
+      </div>
+      <div className="row-actions" style={{ marginTop: 0 }}>
+        <button type="submit" className="btn" disabled={saving || !validRate}>
+          저장
+        </button>
+        {product.discounted && (
+          <button
+            type="button"
+            className="btn btn--outline"
+            disabled={saving}
+            onClick={() => run(() => api.delete(`/api/admin/products/${product.productId}/discount`))}
+          >
+            할인 해제
+          </button>
+        )}
+        <button type="button" className="btn btn--outline" onClick={onCancel}>
+          닫기
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function AdminProducts() {
   const { admin } = useAdmin();
   const isSuper = admin.role === 'SUPER_ADMIN';
@@ -357,6 +444,17 @@ export default function AdminProducts() {
           onCancel={() => setPanel(null)}
         />
       )}
+      {panel?.type === 'discount' && (
+        <DiscountPanel
+          key={panel.product.productId}
+          product={panel.product}
+          onDone={() => {
+            setPanel(null);
+            reload();
+          }}
+          onCancel={() => setPanel(null)}
+        />
+      )}
       {panel?.type === 'stock' && (
         <StockPanel key={panel.product.productId} product={panel.product} onDone={reload} onCancel={() => setPanel(null)} />
       )}
@@ -413,7 +511,16 @@ export default function AdminProducts() {
                 <td>{product.brand ?? '-'}</td>
                 <td>{product.categoryName}</td>
                 <td>{refs.marts.find((mart) => mart.martId === product.martId)?.name ?? product.martId}</td>
-                <td>{formatWon(product.price)}</td>
+                <td>
+                  {product.discounted ? (
+                    <>
+                      <s>{formatWon(product.price)}</s> {formatWon(product.salePrice)} ({product.discountRate}% · ~
+                      {formatDateTime(product.discountEndAt)})
+                    </>
+                  ) : (
+                    formatWon(product.price)
+                  )}
+                </td>
                 <td>{product.totalQuantity}</td>
                 <td>{PRODUCT_STATUS[product.status]}</td>
                 <td>
@@ -423,6 +530,9 @@ export default function AdminProducts() {
                     </button>
                     <button type="button" className="chip" onClick={() => changePrice(product)}>
                       가격
+                    </button>
+                    <button type="button" className="chip" onClick={() => setPanel({ type: 'discount', product })}>
+                      할인
                     </button>
                     <button type="button" className="chip" onClick={() => setPanel({ type: 'stock', product })}>
                       재고

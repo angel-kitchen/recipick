@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import PriceTag from '../components/PriceTag';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
 import { CardSkeletons } from '../components/Skeleton';
@@ -12,7 +13,7 @@ import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
 import { notifyCartChanged } from '../cartSource';
 import { deliveryBlock } from '../delivery';
-import { formatAmount, formatWon } from '../labels';
+import { formatAmount } from '../labels';
 
 const PAGE_SIZE = 12;
 
@@ -184,7 +185,7 @@ export default function Products() {
                   <span className="tile__meta">
                     {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
                   </span>
-                  <span className="tile__price">{formatWon(product.price)}</span>
+                  <PriceTag price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
                   <div className="tile__actions">
                     {product.soldOut ? (
                       <span className="badge badge--warn">품절</span>

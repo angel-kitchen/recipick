@@ -73,7 +73,7 @@ export default function Rankings({ products = false }) {
                         </Link>
                         <p>
                             {products
-                                ? `${formatWon(item.price)}${item.status === 'STOPPED' ? ' · 판매 중지' : item.soldOut ? ' · 품절' : ''}`
+                                ? `${formatWon(item.salePrice ?? item.price)}${item.status === 'STOPPED' ? ' · 판매 중지' : item.soldOut ? ' · 품절' : ''}`
                                 : mode === 'popular'
                                   ? `찜 ${item.bookmarkCount}개`
                                   : `조회 ${item.viewCount}회`}
