@@ -1,3 +1,5 @@
+// Ref는 업무상 연결을 포함한다. Long ID로 참조하는 교차 도메인 필드는 JPA가 물리 FK를 생성하지 않는다.
+// 실제 FK·인덱스 생성 여부는 엔티티 매핑과 DB SHOW CREATE TABLE / SHOW INDEX로 확인한다.
 // 기존 첨부 ERD 변환 부분의 NULL/NOT NULL, 기본값, 자동 증가, 삭제/갱신 정책은 원본에 명시되지 않아 생략.
 // 새 ADMIN_AUDIT_LOG·TRIAL_BLOCK은 필수·선택 여부와 자동 증가를 명시.
 // 여러 컬럼의 UK 표시는 아래 조합의 복합 UNIQUE로 해석함 (원본에서 인덱스 그룹명 확인 불가):
@@ -302,6 +304,9 @@ Table PRODUCT {
   updated_at datetime
   indexes {
     (mart_id, ingredient_id)
+    (mart_id, category_id, deleted, price, id) [name: 'idx_product_mart_category_price']
+    (mart_id, category_id, deleted, price, id) [name: 'idx_product_mart_category_price_asc', note: 'price ASC, id DESC']
+    (mart_id, deleted, created_at, id) [name: 'idx_product_mart_created']
   }
 }
 
@@ -419,7 +424,7 @@ Table AI_REQUEST_LOG {
   member_id bigint [not null]
   auto_cart_request_id bigint [null]
   request_type varchar(20) [not null]
-  raw_text text [not null]
+  raw_text text [note: 'JPA nullable. 요청 원문이 없는 이력도 허용']
   parsed_result json [null]
   matched_recipe_ids text [null]
   result_status varchar(20) [not null]
@@ -569,7 +574,7 @@ Table MEMBERSHIP_REFUND {
     pg_store_id varchar(100)
     pg_request_reason varchar(160)
     first_dispatched_at datetime
-    claim_token bigint [not null, default: 0]
+    claim_token bigint [not null, note: '애플리케이션 생성 시 0. SQL DEFAULT 없음']
     lease_expires_at datetime
     next_check_at datetime
     ops_review_required_at datetime
@@ -593,8 +598,8 @@ Table BILLING_KEY_DELETION {
   store_id varchar(100) [not null]
   requested_at datetime [not null]
   next_check_at datetime [not null]
-  claim_token bigint [not null, default: 0]
-  claim_count int [not null, default: 0]
+  claim_token bigint [not null, note: '애플리케이션 생성 시 0. SQL DEFAULT 없음']
+  claim_count int [not null, note: '애플리케이션 생성 시 0. SQL DEFAULT 없음']
   lease_expires_at datetime
   first_dispatched_at datetime
   completed_at datetime

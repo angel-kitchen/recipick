@@ -2274,3 +2274,14 @@ PortOne 취소 · 조회 실패는 오류로 응답하지 않고 200 + `executio
 | COMMON-010 | 409 | 다른 요청이 같은 자원을 처리하고 있습니다. 잠시 후 다시 시도해 주세요. | 2, 3, 8, 19, 20, 21(락 대기 시간 초과) |
 | COMMON-011 | 409 | 같은 Idempotency-Key로 다른 요청을 보낼 수 없습니다. | 3, 주문 거절 |
 | COMMON-500 | 500 | 서버 내부 오류가 발생했습니다. | 전체(예상하지 못한 오류), 13 · 19 · 20 · 21(데이터 정합성 오류) |
+
+
+## 관리자 마트 거절 환불 재처리
+
+- `POST /api/admin/orders/{orderId}/refunds/{refundId}/retry`
+- 권한: SUPER_ADMIN, 해당 주문 마트의 MART_ADMIN. 본문 없음. `Idempotency-Key` 필수(최대 64자, 공백 불가, 소문자로 정규화).
+- 대상: 마트 거절(`CANCEL_REQUESTED`, `REJECTED`, `MART_REJECTED`) 주문의 가장 최근 `FAILED`·`ADMIN` 환불. 상품 하자·배송완료 주문의 임의 환불 API가 아니다.
+- 같은 키는 같은 주문·원본 환불에 대한 기존 결과를 반환한다. 다른 대상에 키를 재사용하면 COMMON-011. 원본 환불을 갱신하지 않고 새 ADMIN 환불을 생성한다. 원본 식별은 새 행의 서버 생성 사유(`마트 거절 환불 재처리 #원본ID`)에 남긴다.
+- 접수: 첫 DB 작업으로 PAYMENT 잠금 → 마트 권한 확인 → 같은 키 확인 → ORDER 잠금·거절 상태 확인 → 최신 실패 확인 → PAYMENT를 CANCEL_REQUESTED로 변경 + 새 REFUND + REFUND_RETRY 감사 → COMMIT.
+- 외부 PG 처리는 기존 AdminRefundExecutionFacade를 재사용하고 트랜잭션 밖에서 실행한다. 성공 시 주문 종료·재고·포인트 복원은 기존 완료 경로에서 한 번만 수행한다.
+- 완료 200, 처리 중 202. 응답은 마트 거절 API의 MartRejectionResponse와 동일하다. 환불 상태 부적합 PAYMENT-007(409), 다른 키 처리 중 COMMON-006(409), 주문 상태 부적합 ORDER-015(409), 마트 권한 AUTH-005(403). 실제 enum 코드가 우선이다.

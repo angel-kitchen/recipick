@@ -44,7 +44,7 @@
 
 - 규칙 1: 포인트 사용은 쓰기 직전 같은 소멸 코드(`PointCommandService.expireStaleLots`)로 만료분을 먼저 소멸시킨다(지연 만료). 멤버십 혜택 만료도 회원 도메인의 시각 판정으로 일어나고, 결제 쪽 정리 작업이 마감 시각에 정확히 돈다고 가정하지 않는다.
 - 규칙 2: 대상은 ID만 keyset(마지막으로 본 ID 다음부터)으로 읽는다. OFFSET은 쓰지 않는다. 포인트 만료는 적립 건이 아니라 회원 ID 단위로 읽고 회원마다 커밋한다.
-- 규칙 3: 결제 도메인은 재시도에 Redis 지연 큐를 쓴다. 결제 만료·환불 재확인·웹훅 처리는 판단할 수 없으면 큐에 다시 예약하고, 큐 예약이 사라져도 DB 상태를 보고 Fallback Sweep이 다시 넣는다. 원본은 항상 MySQL이다. 건별 실패 로그 수준은 작업마다 다르다(포인트 만료·지연 큐 Worker는 ERROR, 멤버십 자동결제 스캔은 WARN).
+- 규칙 3: 결제 도메인은 재시도에 Redis 지연 큐를 쓴다. 결제 만료·환불 재확인·웹훅 처리는 판단할 수 없으면 큐에 다시 예약하고, 큐 예약이 사라져도 DB 상태를 보고 Fallback Sweep이 다시 넣는다. 원본은 항상 MySQL이다. 예상한 업무 거절·외부 실패는 WARN, 예상하지 못한 오류는 ERROR와 스택으로 구분한다. 빌링키 삭제·멤버십 스캔의 오류 스택은 예외 타입·호출 위치만 보존하고 메시지·원인 메시지의 비밀값은 제거한다.
 - 규칙 4: 결제 만료가 PG `PAID`·`FAILED`를 보면 확정 API·웹훅과 같은 `PaymentConfirmProcessor`로 판정한다. 멤버십 결과 반영은 자기 호출 뒤 조회·복구 Sweep·웹훅·운영자 재조회가 모두 같은 `MembershipChargeResultProcessor`를 거친다.
 - 규칙 5: 멤버십 자동결제의 실제 흐름은 `접수(READY 시도와 결제 ID 저장) → COMMIT → 선점 TX(READY → DISPATCHING) → COMMIT → PortOne POST → 같은 결제 ID GET → 결과 반영 TX`다. 진입점은 `Propagation.NEVER`로 바깥 트랜잭션 안에서 호출되면 PG 요청 전에 거절한다.
 
