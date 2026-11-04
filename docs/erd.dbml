@@ -430,10 +430,26 @@ Table AI_REQUEST_LOG {
   output_tokens int [null]
   cache_read_tokens int [null]
   latency_ms int [not null]
+  prompt_versions json [null, note: '사용한 프롬프트 종류별 버전 번호. 코드 기본 지시문이면 null (예: {"CONDITION": 3, "RECOMMEND": null})']
   created_at datetime [not null]
   indexes {
     (created_at)
     (member_id, created_at)
+  }
+}
+
+Table AI_PROMPT {
+  id bigint [pk]
+  prompt_type varchar(20) [not null, note: 'MENU, CONDITION, RECOMMEND, FRIDGE']
+  version int [not null, note: '종류별 1부터 증가']
+  content text [not null, note: '지시문. 뒤에 붙는 목록과 출력 구조는 코드가 정함']
+  memo varchar(200) [null, note: '변경 이유']
+  active boolean [not null, note: '종류별로 최대 하나. 없으면 코드 기본 지시문 사용']
+  created_by_admin_id bigint [not null]
+  created_at datetime [not null]
+  updated_at datetime [not null]
+  indexes {
+    (prompt_type, version) [unique]
   }
 }
 
@@ -637,6 +653,7 @@ Ref: AUTO_CART_ITEM.ingredient_id > INGREDIENT.id
 Ref: AUTO_CART_ITEM.product_id > PRODUCT.id
 Ref: AI_REQUEST_LOG.member_id > MEMBER.id
 Ref: AI_REQUEST_LOG.auto_cart_request_id > AUTO_CART_REQUEST.id
+Ref: AI_PROMPT.created_by_admin_id > ADMIN.id
 Ref: CART_ADD_HISTORY.member_id > MEMBER.id
 Ref: CART_ADD_HISTORY.product_id > PRODUCT.id
 Ref: CART_ADD_HISTORY.auto_cart_request_id > AUTO_CART_REQUEST.id
@@ -692,6 +709,7 @@ TableGroup auto_cart_ai {
   AUTO_CART_REQUEST
   AUTO_CART_ITEM
   AI_REQUEST_LOG
+  AI_PROMPT
   CART_ADD_HISTORY
 }
 TableGroup membership_billing {
