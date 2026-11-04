@@ -33,6 +33,7 @@ import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFridgeAnswer;
 import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
 import com.recipick.infra.ai.dto.AiIngredientPrice;
+import com.recipick.infra.ai.dto.AiPlannedMeal;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
@@ -220,6 +221,32 @@ class ClaudeAiEvaluationTest {
                 conditionText + " → 후보 " + candidates.size() + "개 → " + describePicks(picks), combined));
         }
         appendSection("대충 쓴 문장 (조건 정리 → 후보 거르기 → 고르기)", rows);
+        assertThat(rows).hasSameSizeAs(cases);
+    }
+
+    @Test
+    @DisplayName("일주일 식단: 끼니 수·인분·조건을 지키고 겹치지 않게 고르는지 잰다")
+    void evaluateMealPlan() throws IOException {
+        List<MealPlanCase> cases = readCases("ai-eval/meal-plan-cases.json", new TypeReference<>() {
+        });
+        // 서버와 같이 자동 장보기 가능 레시피 전체(로컬 시드는 모두 가능)를 속성·필수 재료와 함께 넘긴다
+        List<AiRecipeCandidate> candidates = seedRecipes.stream().map(SeedRecipe::toCandidate).toList();
+        Map<Long, SeedRecipe> seedById = seedRecipes.stream()
+            .collect(Collectors.toMap(SeedRecipe::id, Function.identity()));
+        List<Row> rows = new ArrayList<>();
+        for (MealPlanCase evalCase : cases) {
+            AiResult<List<AiPlannedMeal>> result = claudeAiClient.planMeals(
+                AiPromptType.MEAL_PLAN.defaultContent(), evalCase.text(), candidates);
+            if (!result.isSuccess()) {
+                rows.add(new Row(evalCase.text(), false, "실패: " + result.failureType(), result));
+                continue;
+            }
+            List<String> problems = evalCase.problems(result.content(), seedById);
+            rows.add(new Row(evalCase.text(), problems.isEmpty(),
+                describeMeals(result.content()) + (problems.isEmpty() ? "" : " ✗ " + String.join(", ", problems)),
+                result));
+        }
+        appendSection("일주일 식단", rows);
         assertThat(rows).hasSameSizeAs(cases);
     }
 
@@ -623,6 +650,62 @@ class ClaudeAiEvaluationTest {
 
     // accept가 비어 있으면 후보 중 맞는 레시피가 없는 문장이라 빈 목록이어야 정답이다.
     // 그 밖에는 하나 이상 골라야 하고, 고른 레시피가 모두 accept 안에 있어야 정답이다(후보 밖 ID도 틀림)
+    private static String describeMeals(List<AiPlannedMeal> meals) {
+        if (meals.isEmpty()) {
+            return "빈 목록";
+        }
+        return meals.stream()
+            .map(meal -> nameById.getOrDefault(meal.recipeId(), "없는 ID " + meal.recipeId())
+                + (meal.servings() == null ? "" : " " + meal.servings() + "인분"))
+            .collect(Collectors.joining(", "));
+    }
+
+    // 정답 레시피를 하나로 정할 수 없어, 개수·중복·목록 밖 ID·인분과 문장의 조건을 지켰는지로 채점한다
+    record MealPlanCase(String text, int count, Integer servings, Integer maxSpicy, Integer maxMinutes,
+                        String cuisine, String dishType, String excluded, boolean distinctDishType) {
+
+        List<String> problems(List<AiPlannedMeal> meals, Map<Long, SeedRecipe> seedById) {
+            List<String> problems = new ArrayList<>();
+            if (meals.size() != count) {
+                problems.add("개수 " + meals.size() + "≠" + count);
+            }
+            if (meals.stream().map(AiPlannedMeal::recipeId).distinct().count() != meals.size()) {
+                problems.add("중복");
+            }
+            List<SeedRecipe> recipes = meals.stream().map(meal -> seedById.get(meal.recipeId())).toList();
+            if (recipes.contains(null)) {
+                problems.add("목록 밖 ID");
+                return problems;
+            }
+            if (meals.stream().anyMatch(meal -> !Objects.equals(meal.servings(), servings))) {
+                problems.add("인분");
+            }
+            if (meals.stream().anyMatch(meal -> meal.reason() == null || meal.reason().isBlank())) {
+                problems.add("이유 없음");
+            }
+            if (maxSpicy != null && recipes.stream().anyMatch(r -> r.recipe().getSpicyLevel() > maxSpicy)) {
+                problems.add("맵기");
+            }
+            if (maxMinutes != null && recipes.stream().anyMatch(r -> r.recipe().getCookTimeMin() > maxMinutes)) {
+                problems.add("조리 시간");
+            }
+            if (cuisine != null && recipes.stream().anyMatch(r -> !r.recipe().getCuisine().name().equals(cuisine))) {
+                problems.add("종류");
+            }
+            if (dishType != null && recipes.stream().anyMatch(r -> !r.recipe().getDishType().name().equals(dishType))) {
+                problems.add("요리 구분");
+            }
+            if (excluded != null && recipes.stream().anyMatch(r -> r.contains(excluded))) {
+                problems.add("뺄 재료 포함");
+            }
+            if (distinctDishType
+                && recipes.stream().map(r -> r.recipe().getDishType()).distinct().count() != recipes.size()) {
+                problems.add("요리 구분 겹침");
+            }
+            return problems;
+        }
+    }
+
     record PickCase(String text, List<String> candidates, List<String> accept) {
 
         boolean matches(List<AiRecommendedRecipe> picks, Map<Long, String> nameById) {

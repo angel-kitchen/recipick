@@ -440,7 +440,7 @@ Table AI_REQUEST_LOG {
 
 Table AI_PROMPT {
   id bigint [pk]
-  prompt_type varchar(20) [not null, note: 'MENU, CONDITION, RECOMMEND, FRIDGE']
+  prompt_type varchar(20) [not null, note: 'MENU, CONDITION, RECOMMEND, FRIDGE, MEAL_PLAN']
   version int [not null, note: '종류별 1부터 증가']
   content text [not null, note: '지시문. 뒤에 붙는 목록과 출력 구조는 코드가 정함']
   memo varchar(200) [null, note: '변경 이유']

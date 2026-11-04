@@ -4,6 +4,7 @@ import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
 import com.recipick.infra.ai.dto.AiFridgeAnswer;
 import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
+import com.recipick.infra.ai.dto.AiPlannedMeal;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
@@ -31,6 +32,9 @@ public class FakeAiClient implements AiClient {
     private static final Pattern COOKING_MINUTES = Pattern.compile("(\\d+)\\s*분");
     private static final int MAX_RECOMMENDATIONS = 5;
     private static final int MAX_FRIDGE_RECIPES = 3;
+    private static final Pattern MEAL_COUNT = Pattern.compile("(\\d+)\\s*(일|끼|개|가지)");
+    private static final int DEFAULT_MEALS = 3;
+    private static final int MAX_MEALS = 5;
 
     @Override
     public AiResult<List<AiExtractedMenu>> extractMenus(String instruction, String text, List<AiRecipeOption> recipes) {
@@ -95,5 +99,22 @@ public class FakeAiClient implements AiClient {
     private Integer parseServings(String text) {
         Matcher matcher = SERVINGS.matcher(text);
         return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    // 로컬 화면 확인용이라 "N일·N끼"로 개수(기본 3, 최대 5)와 "N인분"만 읽고, 목록 앞에서부터 고른다
+    @Override
+    public AiResult<List<AiPlannedMeal>> planMeals(String instruction, String text,
+                                                   List<AiRecipeCandidate> candidates) {
+        if (text.contains(FAILURE_TRIGGER)) {
+            return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
+        }
+        Matcher matcher = MEAL_COUNT.matcher(text);
+        int count = matcher.find() ? Math.min(Integer.parseInt(matcher.group(1)), MAX_MEALS) : DEFAULT_MEALS;
+        Integer servings = parseServings(text);
+        List<AiPlannedMeal> meals = candidates.stream()
+            .limit(count)
+            .map(recipe -> new AiPlannedMeal(recipe.id(), servings, recipe.name() + "을(를) 식단에 넣었습니다."))
+            .toList();
+        return AiResult.success(meals, new AiUsage(MODEL, 0, 0, 0, 0));
     }
 }

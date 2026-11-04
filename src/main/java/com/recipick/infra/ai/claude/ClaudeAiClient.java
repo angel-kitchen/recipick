@@ -24,6 +24,7 @@ import com.recipick.infra.ai.AiFridgeTools;
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
 import com.recipick.infra.ai.dto.AiFridgeAnswer;
+import com.recipick.infra.ai.dto.AiPlannedMeal;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
@@ -127,6 +128,27 @@ public class ClaudeAiClient implements AiClient {
             .map(item -> new AiRecommendedRecipe(item.recipeId(), item.reason()))
             .toList();
         return AiResult.success(recommendations, result.usage());
+    }
+
+    // 자동 장보기 가능 레시피 목록은 요청마다 같아 조건 추천의 전체 후보처럼 캐시한다
+    @Override
+    public AiResult<List<AiPlannedMeal>> planMeals(String instruction, String text,
+                                                   List<AiRecipeCandidate> candidates) {
+        AiResult<List<MealPlanOutput>> result =
+            call(MealPlanOutput.class, instruction + candidateCatalog(candidates), true, text, "식단 구성");
+        if (!result.isSuccess()) {
+            return AiResult.failure(result.failureType(), result.usage());
+        }
+        // 응답 블록이 없으면 "식단과 관계없는 문장"(빈 목록)과 구분할 수 없으므로, 빈 식단으로 성공 처리하지 않는다
+        if (result.content().isEmpty()) {
+            log.warn("Claude 식단 구성 응답에 결과가 없음: model={}", result.usage().model());
+            return AiResult.failure(AiFailureType.INVALID_RESPONSE, result.usage());
+        }
+        List<AiPlannedMeal> meals = result.content().stream()
+            .flatMap(output -> output.meals().stream())
+            .map(MealItem::toPlannedMeal)
+            .toList();
+        return AiResult.success(meals, result.usage());
     }
 
     // AI가 Tool을 고르면 서버가 실행해 결과를 돌려주고, AI가 답변을 낼 때까지 반복한다.
@@ -378,6 +400,16 @@ public class ClaudeAiClient implements AiClient {
     }
 
     record RecommendItem(Long recipeId, String reason) {
+    }
+
+    record MealPlanOutput(List<MealItem> meals) {
+    }
+
+    record MealItem(Long recipeId, int servings, String reason) {
+
+        AiPlannedMeal toPlannedMeal() {
+            return new AiPlannedMeal(recipeId, servings > 0 ? servings : null, reason);
+        }
     }
 
     record FridgeOutput(String answer, List<Long> recipeIds) {

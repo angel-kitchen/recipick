@@ -7,6 +7,7 @@ import com.recipick.infra.ai.dto.AiFailureType;
 import com.recipick.infra.ai.dto.AiFridgeAnswer;
 import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
 import com.recipick.infra.ai.dto.AiIngredientPrice;
+import com.recipick.infra.ai.dto.AiPlannedMeal;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
@@ -126,6 +127,20 @@ class FakeAiClientTest {
         // then
         assertThat(conditions.isSuccess()).isTrue();
         assertThat(picks.failureType()).isEqualTo(AiFailureType.UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("식단은 'N일치'만큼(최대 5개, 기본 3개) 앞에서부터 고르고 인분을 함께 넣는다")
+    void planMeals_picksRequestedCount() {
+        // when
+        AiResult<List<AiPlannedMeal>> twoDays = fakeAiClient.planMeals(INSTRUCTION, "저녁 2일치 2인분", candidates);
+        AiResult<List<AiPlannedMeal>> unspecified = fakeAiClient.planMeals(INSTRUCTION, "이번 주 식단", candidates);
+
+        // then
+        assertThat(twoDays.content()).extracting(AiPlannedMeal::recipeId).containsExactly(1L, 2L);
+        assertThat(twoDays.content()).extracting(AiPlannedMeal::servings).containsOnly(2);
+        assertThat(unspecified.content()).extracting(AiPlannedMeal::recipeId).containsExactly(1L, 2L, 3L);
+        assertThat(unspecified.content()).extracting(AiPlannedMeal::servings).containsOnlyNulls();
     }
 
     @Test

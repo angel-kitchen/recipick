@@ -2,6 +2,7 @@ package com.recipick.infra.ai;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFridgeAnswer;
+import com.recipick.infra.ai.dto.AiPlannedMeal;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
@@ -23,4 +24,6 @@ public interface AiClient {
 
     AiResult<AiFridgeAnswer> answerFridgeQuestion(String instruction, String text, List<String> ingredientNames,
                                                   AiFridgeTools tools);
+
+    AiResult<List<AiPlannedMeal>> planMeals(String instruction, String text, List<AiRecipeCandidate> candidates);
 }
