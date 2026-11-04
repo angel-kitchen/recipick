@@ -157,6 +157,51 @@ class ClaudeAiClientTest {
     }
 
     @Test
+    @DisplayName("식단: 인분을 말하지 않아 0으로 온 값은 null로 바꿔 서버가 기본 인분을 쓰게 한다")
+    void mealItem_convertsZeroServingsToNull() {
+        // when
+        AiPlannedMeal unspecified = new ClaudeAiClient.MealItem(1L, 0, "든든해요.").toPlannedMeal();
+        AiPlannedMeal twoServings = new ClaudeAiClient.MealItem(2L, 2, "가벼워요.").toPlannedMeal();
+
+        // then
+        assertThat(unspecified).isEqualTo(new AiPlannedMeal(1L, null, "든든해요."));
+        assertThat(twoServings.servings()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("식단: 레시피 목록을 지시문 뒤에 붙여 캐시하고, 응답 블록이 없으면 빈 식단이 아니라 실패로 돌려준다")
+    @SuppressWarnings("unchecked")
+    void planMeals_cachesCatalogAndFailsWhenNoResponseBlock() {
+        // given
+        StructuredMessage<ClaudeAiClient.MealPlanOutput> message = mock(StructuredMessage.class);
+        Usage usage = mock(Usage.class);
+        when(usage.inputTokens()).thenReturn(900L);
+        when(usage.outputTokens()).thenReturn(10L);
+        when(usage.cacheReadInputTokens()).thenReturn(Optional.empty());
+        when(message.usage()).thenReturn(usage);
+        when(message.model()).thenReturn(Model.of("claude-opus-5-5"));
+        when(message.stopReason()).thenReturn(Optional.of(StopReason.END_TURN));
+        when(message.content()).thenReturn(List.of());
+        when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+
+        // when
+        AiResult<List<AiPlannedMeal>> result =
+            claudeAiClient.planMeals(INSTRUCTION, "이번 주 저녁 3일치", List.of(kimchiStewCandidate()));
+
+        // then
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.failureType()).isEqualTo(AiFailureType.INVALID_RESPONSE);
+        ArgumentCaptor<StructuredMessageCreateParams<ClaudeAiClient.MealPlanOutput>> params =
+            ArgumentCaptor.forClass(StructuredMessageCreateParams.class);
+        verify(client.messages()).create(params.capture());
+        TextBlockParam system = params.getValue().rawParams().system().orElseThrow()
+            .asTextBlockParams().get(0);
+        assertThat(system.text()).startsWith(INSTRUCTION)
+            .contains("1: 김치찌개 | KOREAN STEW | 30분 | 맵기 2 | EASY | 김치, 두부");
+        assertThat(system.cacheControl()).isPresent();
+    }
+
+    @Test
     @DisplayName("냉장고 파먹기: AI가 고른 Tool을 실행해 결과를 돌려주고, 답변이 나오면 여러 호출의 사용량을 합쳐 준다")
     @SuppressWarnings("unchecked")
     void answerFridgeQuestion_runsToolsUntilAnswer() {
