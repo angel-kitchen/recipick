@@ -39,7 +39,9 @@ public enum AdminAuditAction {
     MEMBERSHIP_REFUND_RETRY(AdminAuditTarget.MEMBERSHIP_REFUND, false, false, false),
     POINT_BALANCE_VIEW(AdminAuditTarget.MEMBER, false, false, false),
     POINT_HISTORY_VIEW(AdminAuditTarget.MEMBER, false, false, false),
-    AI_REQUEST_LIST_VIEW(AdminAuditTarget.AI_REQUEST, true, false, false);
+    AI_REQUEST_LIST_VIEW(AdminAuditTarget.AI_REQUEST, true, false, false),
+    AI_PROMPT_CREATE(AdminAuditTarget.AI_PROMPT, false, false, false),
+    AI_PROMPT_ACTIVE_CHANGE(AdminAuditTarget.AI_PROMPT, false, false, false);
 
     private final AdminAuditTarget target;
     private final boolean targetOptional;

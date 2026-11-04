@@ -20,6 +20,7 @@ public enum AdminAuditField {
     CATEGORY_ID("categoryId", Kind.NUMBER),
     REFUND_AMOUNT("refundAmount", Kind.NUMBER),
     ATTEMPT_COUNT("attemptCount", Kind.NUMBER),
+    VERSION("version", Kind.NUMBER),
     REQUIRED("required", Kind.FLAG),
     AUTO_CART_AVAILABLE("autoCartAvailable", Kind.FLAG),
     DELETED("deleted", Kind.FLAG),
@@ -58,7 +59,9 @@ public enum AdminAuditField {
                     target == AdminAuditTarget.RECIPE;
             case INGREDIENT_ID -> target == AdminAuditTarget.PRODUCT || target == AdminAuditTarget.RECIPE;
             case REFUND_AMOUNT, ATTEMPT_COUNT -> target == AdminAuditTarget.PAYMENT;
-            case AUTO_RENEW, TYPE, SOURCE, START_AT, END_AT -> target == AdminAuditTarget.MEMBERSHIP;
+            case AUTO_RENEW, SOURCE, START_AT, END_AT -> target == AdminAuditTarget.MEMBERSHIP;
+            case TYPE -> target == AdminAuditTarget.MEMBERSHIP || target == AdminAuditTarget.AI_PROMPT;
+            case VERSION -> target == AdminAuditTarget.AI_PROMPT;
             case ACTIVE -> target == AdminAuditTarget.RECIPE || target == AdminAuditTarget.PRODUCT;
             case STATUS -> target == AdminAuditTarget.MART || target == AdminAuditTarget.PRODUCT
                     || target == AdminAuditTarget.RECIPE || target == AdminAuditTarget.ORDER
