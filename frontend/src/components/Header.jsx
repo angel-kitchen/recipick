@@ -9,18 +9,9 @@ export default function Header() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef(null);
-  const isHome = pathname === '/';
-
-  // 홈에서는 영상 위에 떠 있다가 스크롤하면 흰 바탕이 된다(테슬라 방식)
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   useEffect(() => {
     setOpen(false);
@@ -51,7 +42,11 @@ export default function Header() {
     };
   }, [member, pathname]);
 
-  const overHero = isHome && !scrolled && !open;
+  // 레시피 목록의 검색어(keyword)로 넘긴다. 레시피 API는 회원만 쓸 수 있어 로그인했을 때만 검색창을 둔다
+  const handleSearch = (event) => {
+    event.preventDefault();
+    navigate(`/recipes?keyword=${encodeURIComponent(keyword.trim())}`);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -59,7 +54,7 @@ export default function Header() {
   };
 
   return (
-    <header className={`header ${overHero ? 'header--over-hero' : ''} ${isHome ? '' : 'header--shop'}`}>
+    <header className="header header--shop">
       <div className="header__inner container">
         <Link to="/" className="header__logo">
           Recipick
@@ -68,6 +63,20 @@ export default function Header() {
           <Link to="/addresses" className="header__address" title="배송지 변경">
             {member.currentAddress.address}
           </Link>
+        )}
+        {member && (
+          <form className="header__search" role="search" onSubmit={handleSearch}>
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="오늘 저녁, 무엇을 만들까요?"
+              aria-label="레시피 검색"
+            />
+            <button type="submit" aria-label="검색">
+              <Icon name="search" size={18} />
+            </button>
+          </form>
         )}
         <button
           type="button"
@@ -90,6 +99,10 @@ export default function Header() {
               <NavLink to="/products" className="header__item">
                 <Icon name="product" />
                 <span>상품</span>
+              </NavLink>
+              <NavLink to="/membership-info" className="header__item">
+                <Icon name="membership" />
+                <span>멤버십</span>
               </NavLink>
             </>
           )}

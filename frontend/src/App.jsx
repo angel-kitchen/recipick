@@ -31,6 +31,7 @@ import Checkout from './pages/Checkout';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Membership from './pages/Membership';
+import MembershipIntro from './pages/MembershipIntro';
 import MyPage from './pages/MyPage';
 import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/Orders';
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/start" element={<Start />} />
+        <Route path="/membership-info" element={<MembershipIntro />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/recipes/rankings" element={<Rankings />} />
           <Route path="/auto-carts/new" element={<AutoCartBuilder />} />
