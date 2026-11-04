@@ -50,7 +50,7 @@ public class TrialConversionFacade {
                         executor.execute(target.memberId(), receipt.attemptId());
                     }
                 } catch (RuntimeException e) {
-                    log.warn("체험 전환 처리 실패(다음 실행에서 재확인): memberId={}, membershipId={}, cause={}",
+                    PaymentTaskFailureLogger.log(log, e, "체험 전환 처리 실패(다음 실행에서 재확인): memberId={}, membershipId={}, cause={}",
                         target.memberId(), target.membershipId(), e.getClass().getSimpleName());
                 }
             }

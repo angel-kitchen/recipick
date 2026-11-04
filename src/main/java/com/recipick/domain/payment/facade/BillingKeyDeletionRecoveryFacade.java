@@ -52,7 +52,7 @@ public class BillingKeyDeletionRecoveryFacade {
                         accepted++;
                     }
                 } catch (RuntimeException e) {
-                    log.warn("빌링키 정리 접수 실패: billingKeyId={}, cause={}", candidate.billingKeyId(),
+                    PaymentTaskFailureLogger.log(log, e, "빌링키 정리 접수 실패: billingKeyId={}, cause={}", candidate.billingKeyId(),
                         e.getClass().getSimpleName());
                 }
             }
@@ -76,7 +76,7 @@ public class BillingKeyDeletionRecoveryFacade {
                 attempted++;
             } catch (RuntimeException e) {
                 // 임대가 끝난 뒤 동일 DB 요청을 다시 집는다. 새 요청·새 키를 만들지 않는다.
-                log.warn("빌링키 삭제 실행 실패: deletionId={}, cause={}", id, e.getClass().getSimpleName());
+                PaymentTaskFailureLogger.log(log, e, "빌링키 삭제 실행 실패: deletionId={}, cause={}", id, e.getClass().getSimpleName());
             }
         }
         return attempted;

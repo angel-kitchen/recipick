@@ -53,7 +53,7 @@ public class MembershipRefundRecoveryFacade {
                     MembershipRefundExecutionResult result = executionFacade.execute(refundId);
                     log.info("멤버십 환불 복구 실행: refundId={}, result={}", refundId, result);
                 } catch (RuntimeException e) {
-                    log.warn("멤버십 환불 복구 실패(다음 실행에서 재시도): refundId={}, cause={}", refundId,
+                    PaymentTaskFailureLogger.log(log, e, "멤버십 환불 복구 실패(다음 실행에서 재시도): refundId={}, cause={}", refundId,
                         e.getClass().getSimpleName());
                 }
             }
@@ -76,7 +76,7 @@ public class MembershipRefundRecoveryFacade {
                     clock.instant());
             }
         } catch (RuntimeException e) {
-            log.warn("SYSTEM 환불 실행 예약 실패(DB 복구가 받는다): attemptId={}, cause={}", attemptId,
+            PaymentTaskFailureLogger.log(log, e, "SYSTEM 환불 실행 예약 실패(DB 복구가 받는다): attemptId={}, cause={}", attemptId,
                 e.getClass().getSimpleName());
         }
     }
@@ -99,7 +99,7 @@ public class MembershipRefundRecoveryFacade {
                         paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.webhookProcess(eventId), clock.instant());
                     }
                 } catch (RuntimeException e) {
-                    log.warn("보류 취소 웹훅 재개 실패(다음 실행에서 재시도): webhookEventId={}, cause={}", eventId,
+                    PaymentTaskFailureLogger.log(log, e, "보류 취소 웹훅 재개 실패(다음 실행에서 재시도): webhookEventId={}, cause={}", eventId,
                         e.getClass().getSimpleName());
                 }
             }

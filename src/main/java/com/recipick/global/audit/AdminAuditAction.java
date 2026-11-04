@@ -29,7 +29,7 @@ public enum AdminAuditAction {
     ORDER_DELIVERY_CHANGE(AdminAuditTarget.ORDER, false, true, true),
     ORDER_LIST_VIEW(AdminAuditTarget.ORDER, true, false, true),
     ORDER_DETAIL_VIEW(AdminAuditTarget.ORDER, false, true, true),
-    REFUND_RETRY(AdminAuditTarget.PAYMENT, false, true, false),
+    REFUND_RETRY(AdminAuditTarget.PAYMENT, false, true, true),
     PAYMENT_LIST_VIEW(AdminAuditTarget.PAYMENT, true, false, false),
     PAYMENT_DETAIL_VIEW(AdminAuditTarget.PAYMENT, false, true, false),
     MEMBERSHIP_PAYMENT_LIST_VIEW(AdminAuditTarget.MEMBERSHIP_PAYMENT, true, false, false),

@@ -36,6 +36,8 @@ import java.util.concurrent.Callable;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -213,6 +215,49 @@ class MartRejectionConcurrencyTest extends PaymentFlowIntegrationSupport {
         assertThat(orderStatusHistoryRepository.findAllByOrderId(flow.orderId()))
             .filteredOn(history -> OrderStatus.REFUNDED.name().equals(history.getToStatus()))
             .hasSize(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("실패한 거절 환불 동시 재처리는 새 환불 한 건만 만들고 완료 반영도 한 번이다")
+    void retryFailedRefundConcurrently(boolean sameKey) throws Exception {
+        // given
+        Flow flow = paidPaymentWithStock();
+        Long martId = orderOf(flow).getMartId();
+        MartRejectionPreparation original = martRejectionProcessor.prepare(AdminRole.MART_ADMIN, martId, ADMIN_ID,
+            flow.orderId(), "original-" + flow.orderId(), REJECT_REASON);
+        martRejectionProcessor.apply(flow.paymentId(), original.refundId(), new PortOneCancelResult(
+            PortOneCancelOutcome.REJECTED, null, null, "요청 거절"));
+        List<Callable<Object>> tasks = IntStream.range(0, 5).mapToObj(i -> (Callable<Object>) () -> {
+            try {
+                martRejectionProcessor.prepareRetry(AdminRole.MART_ADMIN, martId, flow.orderId(), original.refundId(),
+                    "retry-" + flow.orderId() + (sameKey ? "" : "-" + i));
+                return EXECUTE;
+            } catch (BusinessException e) {
+                return e.getErrorCode();
+            }
+        }).toList();
+
+        // when
+        List<Object> results = runConcurrently(tasks);
+
+        // then
+        assertThat(results).filteredOn(EXECUTE::equals).hasSize(sameKey ? 5 : 1);
+        if (!sameKey) {
+            assertThat(results).filteredOn(CommonErrorCode.DUPLICATE_REQUEST_IN_PROGRESS::equals).hasSize(4);
+        }
+        List<Refund> refunds = refundsOf(flow);
+        assertThat(refunds).hasSize(2);
+        Refund retry = refunds.stream().filter(r -> r.getStatus() == RefundStatus.REQUESTED).findFirst().orElseThrow();
+        verify(adminAuditRecorder, times(2)).record(any(AdminAuditCommand.class));
+        PortOneCancelResult completed = new PortOneCancelResult(PortOneCancelOutcome.SUCCEEDED,
+            "retry-cancel-" + flow.orderId(), flow.paidAt().plusMinutes(1), "성공");
+        martRejectionProcessor.apply(flow.paymentId(), retry.getId(), completed);
+        martRejectionProcessor.apply(flow.paymentId(), retry.getId(), completed);
+        assertThat(orderOf(flow).getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(stockOf(flow)).isEqualTo(STOCK_AFTER_ORDER + ORDER_QUANTITY);
+        assertThat(orderStatusHistoryRepository.findAllByOrderId(flow.orderId()))
+            .filteredOn(history -> OrderStatus.REFUNDED.name().equals(history.getToStatus())).hasSize(1);
     }
 
     // ---------- helpers ----------
