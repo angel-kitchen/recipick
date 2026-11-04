@@ -38,25 +38,26 @@ function sortRecipes(recipes, sort, order) {
   });
 }
 
-// 분류·종류처럼 고르는 값이 적은 필터는 눌러서 바로 고르게 한다. 같은 칩을 다시 누르면 전체로 돌아간다
-function ChipRow({ label, value, options, onSelect }) {
+// 분류·종류는 상품 목록처럼 왼쪽 목록에서 고른다. "전체"를 누르면 그 조건이 풀린다
+function SideFilter({ title, value, options, onSelect }) {
   return (
-    <div className="chip-row" role="group" aria-label={label}>
-      <span className="chip-row__label">{label}</span>
-      <span className="chips">
+    <section className="side-group">
+      <h2 className="side-group__title">{title}</h2>
+      <ul className="side-list">
         {[['', '전체'], ...Object.entries(options)].map(([key, text]) => (
-          <button
-            key={key}
-            type="button"
-            className={`chip ${value === key ? 'chip--solid' : ''}`}
-            aria-pressed={value === key}
-            onClick={() => onSelect(value === key ? '' : key)}
-          >
-            {text}
-          </button>
+          <li key={key || 'all'}>
+            <button
+              type="button"
+              className={`side-list__item${value === key ? ' is-active' : ''}`}
+              aria-pressed={value === key}
+              onClick={() => onSelect(key)}
+            >
+              {text}
+            </button>
+          </li>
         ))}
-      </span>
-    </div>
+      </ul>
+    </section>
   );
 }
 
@@ -225,7 +226,7 @@ export default function Recipes() {
       <div className="row-actions"><Link to="/recipes/rankings" className="btn btn--outline">레시피 순위</Link><Link to="/auto-carts/new" className="btn btn--outline">여러 메뉴로 장보기</Link></div>
       <AiAutoCartBox />
       <RecentViews type="recipe" title="최근 본 레시피" toPath={(id) => `/recipes/${id}`} />
-      <div className="filters filters--end">
+      <div className="filters">
         <input
           className="field__input"
           placeholder="레시피 이름 검색"
@@ -239,66 +240,82 @@ export default function Recipes() {
           maxLength={50}
         />
       </div>
-      <ChipRow label="분류" value={filters.cuisineType} options={CUISINE} onSelect={(value) => update({ ...current, cuisineType: value, page: '' }, true)} />
-      <ChipRow label="종류" value={filters.dishType} options={DISH_TYPE} onSelect={(value) => update({ ...current, dishType: value, page: '' }, true)} />
 
-      <div className="sort-bar" role="group" aria-label="정렬">
-        <button type="button" className={`sort-bar__item ${sort ? '' : 'is-on'}`} aria-pressed={!sort} onClick={() => update(filters, true)}>
-          {sort ? '' : '✓ '}이름순
-        </button>
-        {SORTS.map((item) => {
-          const on = sort?.key === item.key;
-          return (
-            <button key={item.key} type="button" className={`sort-bar__item ${on ? 'is-on' : ''}`} aria-pressed={on} onClick={() => cycleSort(item)}>
-              {on ? `✓ ${item.label} ${order === 'asc' ? item.asc : item.desc}` : `${item.label}순`}
-            </button>
-          );
-        })}
-      </div>
-
-      <ErrorNotice error={error} />
-      {!view && !error && <CardSkeletons />}
-      {view?.content.length === 0 && (
-        <EmptyState icon="recipe" title="조건에 맞는 레시피가 없어요" hint="검색어나 분류를 바꿔 보세요." actions={[{ to: '/recipes', label: '조건 지우기' }]} />
-      )}
-
-      <div className="grid">
-        {view?.content.map((recipe) => (
-          <div key={recipe.recipeId} className="tile-wrap tile-wrap--quick">
-          <Link to={`/recipes/${recipe.recipeId}`} className="tile">
-            {recipe.thumbnailUrl ? (
-              <img className="tile__image" src={recipe.thumbnailUrl} alt="" loading="lazy" />
-            ) : (
-              <ImagePlaceholder />
-            )}
-            <div className="tile__body">
-              <span className="tile__title">{recipe.name}</span>
-              <span className="tile__meta">
-                {CUISINE[recipe.cuisineType]} · {DISH_TYPE[recipe.dishType]}
-              </span>
-              <span className="tile__meta">
-                {[
-                  recipe.cookingTimeMinutes ? `${recipe.cookingTimeMinutes}분` : null,
-                  recipe.difficulty ? DIFFICULTY[recipe.difficulty] : null,
-                  recipe.spicyLevel != null ? spicyText(recipe.spicyLevel) : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-              {recipe.autoCartAvailable && <span className="badge tile__badge">자동 담기 가능</span>}
-            </div>
-          </Link>
-          <BookmarkButton
-            recipeId={recipe.recipeId}
-            bookmarked={recipe.bookmarked}
-            onChange={(next) => setBookmarked(recipe.recipeId, next)}
-            onError={setError}
+      <div className="catalog">
+        <aside className="catalog__side" aria-label="레시피 조건">
+          <SideFilter
+            title="분류"
+            value={filters.cuisineType}
+            options={CUISINE}
+            onSelect={(value) => update({ ...current, cuisineType: value, page: '' }, true)}
           />
-          <QuickAdd recipe={recipe} />
+          <SideFilter
+            title="종류"
+            value={filters.dishType}
+            options={DISH_TYPE}
+            onSelect={(value) => update({ ...current, dishType: value, page: '' }, true)}
+          />
+        </aside>
+        <div className="catalog__main">
+          <div className="sort-bar" role="group" aria-label="정렬">
+            <button type="button" className={`sort-bar__item ${sort ? '' : 'is-on'}`} aria-pressed={!sort} onClick={() => update(filters, true)}>
+              {sort ? '' : '✓ '}이름순
+            </button>
+            {SORTS.map((item) => {
+              const on = sort?.key === item.key;
+              return (
+                <button key={item.key} type="button" className={`sort-bar__item ${on ? 'is-on' : ''}`} aria-pressed={on} onClick={() => cycleSort(item)}>
+                  {on ? `✓ ${item.label} ${order === 'asc' ? item.asc : item.desc}` : `${item.label}순`}
+                </button>
+              );
+            })}
           </div>
-        ))}
+
+          <ErrorNotice error={error} />
+          {!view && !error && <CardSkeletons />}
+          {view?.content.length === 0 && (
+            <EmptyState icon="recipe" title="조건에 맞는 레시피가 없어요" hint="검색어나 분류를 바꿔 보세요." actions={[{ to: '/recipes', label: '조건 지우기' }]} />
+          )}
+
+          <div className="grid">
+            {view?.content.map((recipe) => (
+              <div key={recipe.recipeId} className="tile-wrap tile-wrap--quick">
+              <Link to={`/recipes/${recipe.recipeId}`} className="tile">
+                {recipe.thumbnailUrl ? (
+                  <img className="tile__image" src={recipe.thumbnailUrl} alt="" loading="lazy" />
+                ) : (
+                  <ImagePlaceholder />
+                )}
+                <div className="tile__body">
+                  <span className="tile__title">{recipe.name}</span>
+                  <span className="tile__meta">
+                    {CUISINE[recipe.cuisineType]} · {DISH_TYPE[recipe.dishType]}
+                  </span>
+                  <span className="tile__meta">
+                    {[
+                      recipe.cookingTimeMinutes ? `${recipe.cookingTimeMinutes}분` : null,
+                      recipe.difficulty ? DIFFICULTY[recipe.difficulty] : null,
+                      recipe.spicyLevel != null ? spicyText(recipe.spicyLevel) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {recipe.autoCartAvailable && <span className="badge tile__badge">자동 담기 가능</span>}
+                </div>
+              </Link>
+              <BookmarkButton
+                recipeId={recipe.recipeId}
+                bookmarked={recipe.bookmarked}
+                onChange={(next) => setBookmarked(recipe.recipeId, next)}
+                onError={setError}
+              />
+              <QuickAdd recipe={recipe} />
+              </div>
+            ))}
+          </div>
+          {view && <Pager page={view.page} totalPages={view.totalPages} onChange={setPage} />}
+        </div>
       </div>
-      {view && <Pager page={view.page} totalPages={view.totalPages} onChange={setPage} />}
     </div>
   );
 }
