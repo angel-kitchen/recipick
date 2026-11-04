@@ -5,6 +5,7 @@ import com.recipick.domain.payment.dto.RefundSummary;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundRequester;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.entity.enums.WebhookEventStatus;
 import com.recipick.domain.payment.exception.PaymentErrorCode;
@@ -225,6 +226,19 @@ public class PaymentService {
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(CommonErrorCode.IDEMPOTENCY_KEY_PAYLOAD_MISMATCH, e);
         }
+    }
+
+    // 회원 취소 TX2가 잠금 실패로 끝났을 때 PortOne 거절 사실만 남긴다. TX2와 별개인 새 트랜잭션이다(Facade에는 트랜잭션이 없다).
+    // 환불 행만 잠그고 결제·주문은 잠그지 않는다 — TX2를 막은 잠금과 엮이지 않게 하기 위해서다.
+    // 이미 끝난 환불이면 그 결과를 덮어쓰지 않고 그대로 둔다
+    @Transactional
+    public void recordPendingMemberRefundRejection(Long refundId) {
+        Refund refund = refundRepository.findByIdForUpdate(refundId)
+            .orElseThrow(() -> new IllegalStateException("환불 행이 없습니다. refundId=" + refundId));
+        if (refund.getRequestedBy() != RefundRequester.MEMBER || refund.getStatus() != RefundStatus.REQUESTED) {
+            return;
+        }
+        refund.recordPendingRejection();
     }
 
     // 마트 거절 환불. 회원 환불과 같은 이유로 바깥 트랜잭션(TX1)을 강제하고 즉시 flush한다 — PAYMENT·ORDER의 거절 접수와

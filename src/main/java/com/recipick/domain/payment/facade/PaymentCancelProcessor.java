@@ -131,6 +131,39 @@ public class PaymentCancelProcessor {
         };
     }
 
+    // TX2를 끝내 반영하지 못했을 때 응답을 만든다. 잠금 없이 읽으므로 TX2를 막은 잠금을 기다리지 않는다.
+    // 정상 전이로 생길 수 있는 결제·환불 조합만 결과로 돌려준다. 그 밖의 조합은 어느 결과로도 답하지 않는다
+    @Transactional(readOnly = true)
+    public PaymentCancelResult getCurrentResult(Long paymentId, Long refundId) {
+        Payment payment = paymentService.getById(paymentId);
+        Refund refund = paymentService.getRefundById(refundId);
+        if (refund.getRequestedBy() != RefundRequester.MEMBER
+            || !refund.getPayment().getId().equals(payment.getId())) {
+            throw stateMismatch(payment, refund);
+        }
+        PaymentStatus paymentStatus = payment.getStatus();
+        return switch (refund.getStatus()) {
+            case COMPLETED -> {
+                if (paymentStatus != PaymentStatus.CANCELED) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(PaymentCancelOutcome.CANCELED, payment, refund);
+            }
+            case REQUESTED -> {
+                if (paymentStatus != PaymentStatus.CANCEL_REQUESTED) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(PaymentCancelOutcome.PENDING, payment, refund);
+            }
+            case FAILED -> {
+                if (paymentStatus != PaymentStatus.PAID) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(failureOutcome(refund), payment, refund);
+            }
+        };
+    }
+
     private PaymentCancelPreparation cancelBeforePay(Payment payment, String reason) {
         payment.fail(PaymentFailureReason.CANCELED_BEFORE_PAY, null);
         List<StockQuantity> items =
@@ -198,12 +231,18 @@ public class PaymentCancelProcessor {
             case COMPLETED ->
                 PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.CANCELED, payment, refund));
             case FAILED -> PaymentCancelPreparation.finished(afterPay(failureOutcome(refund), payment, refund));
-            // 취소 ID가 없으면 PortOne에 닿았는지 모른다. 멱등 보장 시간 안이면 같은 서버 키로 다시 물어도 이중 취소가 아니다.
-            // ID가 있거나 시간이 지났으면 재호출 대신 웹훅·재조회에 맡긴다
-            case REQUESTED -> canRetryPortOne(refund)
-                ? PaymentCancelPreparation.callPortOne(
-                refund.getId(), payment.getPortonePaymentId(), payment.getAmount())
-                : PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.PENDING, payment, refund));
+            case REQUESTED -> {
+                // PortOne이 이미 거절했는데 TX2가 반영하지 못했다. 다시 부르지 않고 재확인이 FAILED로 확정할 때까지 기다리게 한다
+                if (refund.hasPendingRejection()) {
+                    throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+                }
+                // 취소 ID가 없으면 PortOne에 닿았는지 모른다. 멱등 보장 시간 안이면 같은 서버 키로 다시 물어도 이중 취소가 아니다.
+                // ID가 있거나 시간이 지났으면 재호출 대신 웹훅·재조회에 맡긴다
+                yield canRetryPortOne(refund)
+                    ? PaymentCancelPreparation.callPortOne(
+                    refund.getId(), payment.getPortonePaymentId(), payment.getAmount())
+                    : PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.PENDING, payment, refund));
+            }
         };
     }
 
@@ -251,6 +290,13 @@ public class PaymentCancelProcessor {
             case PG_FAILED -> PaymentCancelOutcome.PG_FAILED;
             case REQUEST_REJECTED -> PaymentCancelOutcome.REQUEST_REJECTED;
         };
+    }
+
+    private BusinessException stateMismatch(Payment payment, Refund refund) {
+        log.error("회원 환불과 결제 상태가 맞지 않음 — 운영 확인 필요: paymentId={}, refundId={}, paymentStatus={}, "
+                + "refundStatus={}, requestedBy={}", payment.getId(), refund.getId(), payment.getStatus(),
+            refund.getStatus(), refund.getRequestedBy());
+        return new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
     }
 
     private boolean isCanceledBeforePay(Payment payment) {

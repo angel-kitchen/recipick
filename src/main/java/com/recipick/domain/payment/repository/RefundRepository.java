@@ -30,6 +30,11 @@ public interface RefundRepository extends JpaRepository<Refund, Long> {
             """)
     Optional<Refund> findSystemRefundByPaymentId(@Param("paymentId") Long paymentId);
 
+    // 회원 취소 TX2가 반영하지 못한 거절을 환불 행에만 남길 때. 잠금 조회라 이름으로 구분한다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Refund r WHERE r.id = :id")
+    Optional<Refund> findByIdForUpdate(@Param("id") Long id);
+
     // 결제 후 취소의 같은 키 재요청. idempotency_key가 UNIQUE라 최대 한 건이다
     Optional<Refund> findByIdempotencyKey(String idempotencyKey);
 

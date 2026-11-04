@@ -5,17 +5,22 @@ import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
+import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
 import com.recipick.infra.portone.PortOnePaymentClient;
+import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import java.time.Clock;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 // 결제 취소 API의 진입점. 트랜잭션을 걸지 않는다. ㅡ 가운데 PortOne 호출이 있기 때문
@@ -32,16 +37,24 @@ public class PaymentCancelFacade {
     // PortOne에는 클라이언트 키 대신 환불 행마다 고정된 서버 키를 보낸다. PortOne의 길이·문자 제약이 레시픽 API로 새지 않는다
     private static final String PORTONE_IDEMPOTENCY_KEY_PREFIX = "recipick-refund-";
 
+    // 잠금 실패 뒤 같은 트랜잭션을 처음부터 다시 시작하는 횟수(최초 포함). 회차마다 잠금 대기 한도(5초)를 다시 쓰므로 늘리지 않는다
+    private static final int MAX_LOCK_ATTEMPTS = 2;
+
+    // 교착 상대가 롤백·커밋을 끝낼 틈. 바로 다시 들어가면 같은 순서로 다시 부딪히기 쉽다
+    private static final long LOCK_RETRY_BACKOFF_MILLIS = 100L;
+
     private final PaymentCancelProcessor paymentCancelProcessor;
+    private final PaymentService paymentService;
     private final PortOnePaymentClient portOnePaymentClient;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
 
+    // 재시도가 매번 새 트랜잭션이려면 바깥 트랜잭션이 없어야 한다. 누가 트랜잭션 안에서 부르면 롤백된 트랜잭션에 합류하므로 막는다
+    @Transactional(propagation = Propagation.NEVER)
     public PaymentCancelResult cancel(Long memberId, Long paymentId, String idempotencyKey, String reason) {
         validateIdempotencyKey(idempotencyKey);
 
-        PaymentCancelPreparation preparation =
-            paymentCancelProcessor.prepare(memberId, paymentId, idempotencyKey, reason);
+        PaymentCancelPreparation preparation = prepareWithRetry(memberId, paymentId, idempotencyKey, reason);
         PaymentCancelResult result = preparation.finishedResult();
 
         if (preparation.requiresPortOneCall()) {
@@ -51,12 +64,7 @@ public class PaymentCancelFacade {
                 PORTONE_IDEMPOTENCY_KEY_PREFIX + preparation.refundId(),
                 reason,
                 preparation.amount());
-            result = paymentCancelProcessor.apply(paymentId, preparation.refundId(), portOneResult);
-            // 결과를 확정하지 못했다. 웹훅만 기다리지 않고 환불 재확인을 예약한다.
-            // TX2를 거치지 않은 같은 키 재요청(PENDING 재현)은 첫 요청이 이미 예약했고, 놓쳤어도 Fallback이 다시 넣는다
-            if (result.outcome() == PaymentCancelOutcome.PENDING) {
-                scheduleRefundReconcile(preparation.refundId());
-            }
+            result = applyWithRetry(paymentId, preparation.refundId(), portOneResult);
         }
 
         // 여기 도달했으면 TX2는 이미 커밋됐다. 지금 던져도 PAID 복귀·REFUND FAILED는 남는다
@@ -67,6 +75,115 @@ public class PaymentCancelFacade {
         return result;
     }
 
+    // TX1은 PG 호출 전이라 잠금 실패로 롤백돼도 돈이 움직이지 않는다. 새 트랜잭션에서 prepare를 처음부터 다시 불러
+    // 결제 잠금·소유권·같은 키 판정·replay 검증·UNIQUE 판정을 모두 다시 거친다 — 실패한 회차의 조회 결과는 쓰지 않는다
+    private PaymentCancelPreparation prepareWithRetry(Long memberId, Long paymentId, String idempotencyKey,
+                                                      String reason) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return paymentCancelProcessor.prepare(memberId, paymentId, idempotencyKey, reason);
+            } catch (PessimisticLockingFailureException e) {
+                if (attempt >= MAX_LOCK_ATTEMPTS || !pauseBeforeRetry()) {
+                    log.warn("결제 취소 접수(TX1) 잠금 실패 — 재시도 소진: paymentId={}, attempts={}, {}",
+                        paymentId, attempt, LockFailureDetail.of(e), e);
+                    throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT, e);
+                }
+                log.warn("결제 취소 접수(TX1) 잠금 실패 — 새 트랜잭션으로 재시도: paymentId={}, attempt={}, {}",
+                    paymentId, attempt, LockFailureDetail.of(e));
+            }
+        }
+    }
+
+    // TX2만 다시 시도한다. PortOne 취소는 이미 한 번 불렀고 그 결과(portOneResult)를 그대로 다시 반영할 뿐이다 — POST는 다시 보내지 않는다.
+    // 실패한 회차는 결제·주문·포인트·재고까지 전부 롤백됐고, 다른 경로가 먼저 끝냈으면 apply가 그 결과를 그대로 돌려준다
+    private PaymentCancelResult applyWithRetry(Long paymentId, Long refundId, PortOneCancelResult portOneResult) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                PaymentCancelResult result = paymentCancelProcessor.apply(paymentId, refundId, portOneResult);
+                // 결과를 확정하지 못했다. 웹훅만 기다리지 않고 환불 재확인을 예약한다.
+                // TX2를 거치지 않은 같은 키 재요청(PENDING 재현)은 첫 요청이 이미 예약했고, 놓쳤어도 Fallback이 다시 넣는다
+                if (result.outcome() == PaymentCancelOutcome.PENDING) {
+                    scheduleRefundReconcile(refundId);
+                }
+                return result;
+            } catch (PessimisticLockingFailureException e) {
+                if (attempt >= MAX_LOCK_ATTEMPTS || !pauseBeforeRetry()) {
+                    log.error("결제 취소 반영(TX2) 잠금 실패 — 재시도 소진: paymentId={}, refundId={}, attempts={}, "
+                            + "portOneOutcome={}, {}", paymentId, refundId, attempt, portOneResult.outcome(),
+                        LockFailureDetail.of(e), e);
+                    return handleApplyExhausted(paymentId, refundId, portOneResult);
+                }
+                log.warn("결제 취소 반영(TX2) 잠금 실패 — 재시도: paymentId={}, refundId={}, attempt={}, {}",
+                    paymentId, refundId, attempt, LockFailureDetail.of(e));
+            }
+        }
+    }
+
+    // TX2를 끝내 반영하지 못했다. DB에는 TX1이 남긴 CANCEL_REQUESTED·REFUND REQUESTED가 그대로 있다.
+    // PortOne 결과 종류에 따라 후속 복구를 남기고 답한다. 409 COMMON-010은 PG가 거절했다는 뜻이 아니라
+    // 이번 요청이 DB 반영을 끝내지 못했다는 뜻이다 — FAILED·REJECTED도 실패 결과는 아직 DB에 반영되지 않았다
+    private PaymentCancelResult handleApplyExhausted(Long paymentId, Long refundId, PortOneCancelResult portOneResult) {
+        return switch (portOneResult.outcome()) {
+            // 재확인이 PortOne 조회로 취소 내역을 찾아 마무리한다. 응답은 지금 DB 상태로 만든다
+            case SUCCEEDED, REQUESTED, MISMATCH, UNCONFIRMED -> {
+                scheduleRefundReconcileNow(refundId);
+                yield currentResult(paymentId, refundId, portOneResult);
+            }
+            // PortOne이 남긴 FAILED 취소 내역을 재확인이 조회로 찾아 PAID 복귀까지 반영한다
+            case FAILED -> {
+                scheduleRefundReconcileNow(refundId);
+                throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+            }
+            // 거절 응답에는 취소 내역이 없어 PortOne 조회로는 확인할 수 없다. 거절 사실을 환불 행에 남겨
+            // 재확인이 PortOne을 다시 부르지 않고 그 기록으로 PAID 복귀·FAILED를 확정하게 한다
+            case REJECTED -> {
+                recordPendingRejection(paymentId, refundId);
+                scheduleRefundReconcileNow(refundId);
+                throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+            }
+        };
+    }
+
+    // 기록마저 못 남기면 재확인은 PortOne 조회에서 취소 내역을 찾지 못해 끝내 확정하지 못한다. 자동 복구를 기대하지 않고 운영에 넘긴다
+    private void recordPendingRejection(Long paymentId, Long refundId) {
+        try {
+            paymentService.recordPendingMemberRefundRejection(refundId);
+        } catch (DataAccessException e) {
+            log.error("PortOne 거절 기록 실패 — 자동 복구 불가, 운영 확인 필요: paymentId={}, refundId={}, cause={}, {}",
+                paymentId, refundId, e.getClass().getSimpleName(), LockFailureDetail.of(e));
+        }
+    }
+
+    // 잠금 없이 읽은 지금 상태로 답한다. 웹훅·재확인이 먼저 끝냈으면 그 결과가 나온다.
+    // 단 PortOne은 취소 성공을 알렸는데 DB는 실패로 끝났다면 두 증거가 충돌한다. 어느 쪽으로도 확정하지 않는다
+    private PaymentCancelResult currentResult(Long paymentId, Long refundId, PortOneCancelResult portOneResult) {
+        PaymentCancelResult current;
+        try {
+            current = paymentCancelProcessor.getCurrentResult(paymentId, refundId);
+        } catch (PessimisticLockingFailureException e) {
+            log.error("결제 취소 현재 상태 조회 잠금 실패: paymentId={}, refundId={}, {}",
+                paymentId, refundId, LockFailureDetail.of(e), e);
+            throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT, e);
+        }
+        if (portOneResult.outcome() == PortOneCancelOutcome.SUCCEEDED && current.outcome().errorCode().isPresent()) {
+            log.error("PortOne 취소는 성공했지만 회원 환불이 실패 상태로 끝남 — 운영 확인 필요: paymentId={}, refundId={}, "
+                + "outcome={}", paymentId, refundId, current.outcome());
+            throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+        }
+        return current;
+    }
+
+    // 인터럽트되면 더 기다리지 않는다. 호출자가 재시도를 멈추고 소진과 같은 길로 간다
+    private boolean pauseBeforeRetry() {
+        try {
+            Thread.sleep(LOCK_RETRY_BACKOFF_MILLIS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     // 웹훅이 같은 환불을 먼저 등록했을 수 있어 더 이른 예약은 그대로 둔다. 등록 실패로 취소 응답(202)을 바꾸지 않는다 —
     // 환불이 REQUESTED로 남아 Fallback이 다시 등록한다
     private void scheduleRefundReconcile(Long refundId) {
@@ -75,6 +192,17 @@ public class PaymentCancelFacade {
                 clock.instant().plus(RefundReconciliationFacade.INITIAL_DELAY));
         } catch (DataAccessException e) {
             log.error("환불 재확인 예약 실패: refundId={}", refundId, e);
+        }
+    }
+
+    // TX2를 끝내 반영하지 못했을 때. 정상 PENDING처럼 5분을 기다리지 않고 바로 재확인하게 한다.
+    // 예약에 실패해도 환불이 REQUESTED로 남아 Fallback이 다시 등록한다
+    private void scheduleRefundReconcileNow(Long refundId) {
+        try {
+            paymentDelayQueue.enqueueIfEarlier(PaymentDelayTask.refundReconcile(refundId), clock.instant());
+            log.info("환불 재확인 즉시 예약: refundId={}", refundId);
+        } catch (DataAccessException e) {
+            log.error("환불 재확인 즉시 예약 실패: refundId={}", refundId, e);
         }
     }
 

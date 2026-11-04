@@ -31,6 +31,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Refund extends BaseTimeEntity {
 
+    // 회원 취소 TX2가 반영하지 못한 PortOne 거절의 표시. 거절 응답 원문이 아니라 이 값만 남긴다
+    public static final String PENDING_REJECTION_REASON = "PG_REQUEST_REJECTED";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -194,6 +197,30 @@ public class Refund extends BaseTimeEntity {
         applyCancellationId(portoneCancellationId);
         this.status = RefundStatus.COMPLETED;
         this.completedAt = completedAt;
+        // 완료된 환불에 반영 대기 중이던 거절 표시가 남으면 실패처럼 읽힌다
+        this.failureType = null;
+        this.failureReason = null;
+    }
+
+    // 회원 취소 TX2가 잠금 실패로 롤백돼 PortOne의 처리 전 거절(400·401·403)을 반영하지 못했다. 거절 응답에는 취소 내역이 없어
+    // PortOne 재조회로는 이 사실을 되살릴 수 없으므로 환불 행에 남긴다. 상태는 REQUESTED 그대로다 —
+    // PAID 복귀와 FAILED 확정은 재확인이 PAYMENT 잠금 아래에서 이 기록을 보고 한다
+    public void recordPendingRejection() {
+        requireRequested();
+        // 거절 응답에는 cancellation 객체가 없다. ID가 생긴 환불은 PortOne을 다시 부르지 않으므로 거절 응답 자체가 올 수 없다
+        if (this.portoneCancellationId != null) {
+            throw new IllegalStateException("PortOne 취소 ID가 있는 환불은 거절 기록을 남길 수 없습니다.");
+        }
+        if (this.failureType != null && this.failureType != RefundFailureType.REQUEST_REJECTED) {
+            throw new IllegalStateException("다른 실패 기록이 있는 환불입니다. failureType=" + this.failureType);
+        }
+        this.failureType = RefundFailureType.REQUEST_REJECTED;
+        this.failureReason = PENDING_REJECTION_REASON;
+    }
+
+    // PortOne 거절을 받았지만 아직 FAILED로 확정하지 못한 환불
+    public boolean hasPendingRejection() {
+        return this.status == RefundStatus.REQUESTED && this.failureType == RefundFailureType.REQUEST_REJECTED;
     }
 
     // PG가 처리 전에 거절(400·401·403)한 경우는 cancellation 객체가 없어 portoneCancellationId가 null이다
