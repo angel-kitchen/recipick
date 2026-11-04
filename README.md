@@ -101,6 +101,16 @@ curl -i http://localhost:8080/api/categories
 
 로컬 프로필은 예시 설정의 `ddl-auto: update`와 초기 SQL을 사용합니다. 초기 지역·마트는
 [data.sql](src/main/resources/data.sql), 로컬 관리자 시드는 [data-admin-local.sql](src/main/resources/data-admin-local.sql)을 참고합니다.
+공용 시연 회원은 [data-member-demo.sql](src/main/resources/data-member-demo.sql)로 로컬·운영 시연 서버 기동 시 생성합니다.
+
+| 구분 | 로그인 이메일 | 비밀번호 | 초기 상태 |
+| --- | --- | --- | --- |
+| 일반 회원 | `test01@reci.pick` | `test1234` | 멤버십 없음 |
+| 멤버십 회원 | `test02@reci.pick` | `test1234` | 자동결제 없는 30일 멤버십 |
+
+두 계정은 삼청 마트와 시연 배송지가 연결됩니다. 재기동으로 기존 비밀번호·탈퇴 상태·이용권 기간을 초기화하지 않습니다.
+멤버십 기간은 최초 생성일부터 30일이며, 재기동해도 연장되지 않습니다. 공용 비밀번호는 시연 계정에만 사용합니다.
+
 운영 관리자·환경변수·배포용 DB 변경은 [운영 절차](deploy/README.md)를 확인하고 배포 담당자와 적용 범위를 맞춥니다.
 
 프론트는 [실행 안내](frontend/README.md)에 따라 `frontend/`에서 `npm install` 후 `npm run dev`로 실행합니다.
