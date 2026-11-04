@@ -25,7 +25,6 @@ import com.recipick.infra.ai.dto.AiResult;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -102,24 +101,8 @@ public class AiRecipeRecommendFacade {
     }
 
     private List<AiRecipeCandidate> toCandidates(List<Recipe> candidates) {
-        Map<Long, List<String>> ingredientsByRecipeId =
-            recipeService.findRequiredIngredientNames(candidates.stream().map(Recipe::getId).toList());
-        return candidates.stream()
-            .map(recipe -> new AiRecipeCandidate(
-                recipe.getId(),
-                recipe.getName(),
-                nameOrNull(recipe.getCuisine()),
-                nameOrNull(recipe.getDishType()),
-                recipe.getCookTimeMin(),
-                recipe.getSpicyLevel(),
-                nameOrNull(recipe.getDifficulty()),
-                ingredientsByRecipeId.getOrDefault(recipe.getId(), List.of())))
-            .toList();
-    }
-
-    // 종류·요리 구분·난이도는 비어 있을 수 있는 컬럼이다
-    private static String nameOrNull(Enum<?> value) {
-        return value == null ? null : value.name();
+        return AiRecipeCandidates.of(candidates,
+            recipeService.findRequiredIngredientNames(candidates.stream().map(Recipe::getId).toList()));
     }
 
     // 두 번의 호출을 이력 한 건으로 남기려고, 분석 결과는 함께 묶고 토큰·응답 시간은 합친다
