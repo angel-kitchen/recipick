@@ -1,34 +1,58 @@
 package com.recipick.infra.ai.claude;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult;
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.FridgeRecipe;
+import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.IngredientRef;
 import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.Difficulty;
 import com.recipick.domain.recipe.entity.DishType;
+import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
+import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.entity.RecipeStatus;
+import com.recipick.domain.recipe.repository.IngredientRepository;
+import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
+import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
+import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.domain.recipe.service.RecipeRecommendCondition;
+import com.recipick.domain.recipe.service.RecipeService;
+import com.recipick.global.common.SaleUnit;
+import com.recipick.infra.ai.AiFridgeTools;
 import com.recipick.infra.ai.dto.AiExtractedMenu;
+import com.recipick.infra.ai.dto.AiFridgeAnswer;
+import com.recipick.infra.ai.dto.AiFridgeRecipeSearch;
+import com.recipick.infra.ai.dto.AiIngredientPrice;
 import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
+import com.recipick.infra.ai.dto.AiToolResult;
 import com.recipick.infra.ai.dto.AiUsage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +66,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.data.domain.Sort;
+import org.springframework.test.util.ReflectionTestUtils;
 
 // 실제 Claude API를 불러 평가 문장의 정답률·응답 시간·토큰을 잰다. 호출마다 비용이 들므로 평소 테스트와 CI에서는 건너뛰고,
 // AI_EVAL=true와 ANTHROPIC_API_KEY를 넣었을 때만 돈다. 모델은 AI_EVAL_MODEL로 바꿔 같은 문장으로 비교한다.
@@ -59,6 +85,12 @@ class ClaudeAiEvaluationTest {
     private static final Pattern SEED_RECIPE_INGREDIENT = Pattern.compile(
         "SELECT r\\.id, i\\.id, [\\d.]+, (TRUE|FALSE)\\s+FROM recipe r JOIN ingredient i ON i\\.name = '([^']+)'"
             + "\\s+WHERE r\\.name = '([^']+)'");
+
+    private static final Pattern SEED_INGREDIENT =
+        Pattern.compile("INSERT INTO ingredient \\(name, unit\\)\\s+SELECT '([^']+)', '([A-Z]+)'");
+    // 냉장고 파먹기 평가에서 품절로 두는 재료. 이 재료가 부족한 레시피를 추천하면 답변에서 품절을 알려야 정답이다
+    private static final String SOLD_OUT_INGREDIENT = "돼지고기 앞다리살";
+    private static final Pattern WON = Pattern.compile("(\\d{1,3}(?:,\\d{3})+|\\d+)\\s*원");
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final List<String> report = new ArrayList<>();
@@ -207,6 +239,77 @@ class ClaudeAiEvaluationTest {
         assertThat(rows).hasSameSizeAs(cases);
     }
 
+    @Test
+    @DisplayName("냉장고 파먹기: Tool을 불러 가진 재료로 만들 레시피를 고르고, 가격·품절·마트 미설정을 Tool 결과대로 안내하는지 잰다")
+    void evaluateFridge() throws IOException {
+        List<FridgeCase> cases = readCases("ai-eval/fridge-cases.json", new TypeReference<>() {
+        });
+        RecipeService recipeService = seedRecipeService();
+        List<String> ingredientNames = recipeService.findIngredientNames();
+        List<Row> rows = new ArrayList<>();
+        for (FridgeCase evalCase : cases) {
+            SeedFridgeTools tools = new SeedFridgeTools(recipeService, evalCase.martSelected() != Boolean.FALSE);
+            AiResult<AiFridgeAnswer> result =
+                claudeAiClient.answerFridgeQuestion(evalCase.text(), ingredientNames, tools);
+            if (!result.isSuccess()) {
+                rows.add(new Row(evalCase.text(), false, tools.describeCalls() + " → 실패: " + result.failureType(),
+                    result));
+                continue;
+            }
+            // 서버도 레시피 찾기가 돌려주지 않은 ID는 버리고 3개까지만 남긴다
+            List<FridgeRecipe> picks = result.content().recipeIds().stream().distinct()
+                .map(tools.found::get).filter(Objects::nonNull).limit(3).toList();
+            List<String> problems = evalCase.problems(result.content(), picks, tools);
+            String names = picks.stream().map(FridgeRecipe::name).collect(Collectors.joining(", "));
+            String answer = result.content().answer().replace("\n", " ");
+            rows.add(new Row(evalCase.text(), problems.isEmpty(), tools.describeCalls() + " → "
+                + (names.isEmpty() ? "(빈 목록)" : names) + " → " + answer
+                + (problems.isEmpty() ? "" : " **[" + String.join(", ", problems) + "]**"), result));
+        }
+        appendSection("냉장고 파먹기 (Tool Calling)", rows);
+        assertThat(rows).hasSameSizeAs(cases);
+    }
+
+    // 서버의 레시피 찾기를 그대로 쓰려고 실제 RecipeService에 시드 SQL의 재료·레시피를 넣은 저장소를 붙인다.
+    // 재료·레시피 ID는 빈 DB에 시드를 넣은 순서(1부터)다
+    private static RecipeService seedRecipeService() throws IOException {
+        String productSql = readResource("/data-product-local.sql");
+        Map<String, Ingredient> ingredients = new LinkedHashMap<>();
+        Matcher ingredientMatcher = SEED_INGREDIENT.matcher(productSql);
+        while (ingredientMatcher.find()) {
+            Ingredient ingredient = Ingredient.builder()
+                .name(ingredientMatcher.group(1))
+                .unit(SaleUnit.valueOf(ingredientMatcher.group(2)))
+                .build();
+            ReflectionTestUtils.setField(ingredient, "id", (long) ingredients.size() + 1);
+            ingredients.put(ingredient.getName(), ingredient);
+        }
+        Map<String, Recipe> recipes = new LinkedHashMap<>();
+        seedRecipes.forEach(seed -> {
+            ReflectionTestUtils.setField(seed.recipe(), "id", seed.id());
+            recipes.put(seed.recipe().getName(), seed.recipe());
+        });
+        List<RecipeIngredient> recipeIngredients = new ArrayList<>();
+        Matcher matcher = SEED_RECIPE_INGREDIENT.matcher(productSql);
+        while (matcher.find()) {
+            recipeIngredients.add(RecipeIngredient.builder()
+                .recipe(recipes.get(matcher.group(3)))
+                .ingredient(ingredients.get(matcher.group(2)))
+                .amountPerServing(BigDecimal.ONE)
+                .required(matcher.group(1).equals("TRUE"))
+                .build());
+        }
+        IngredientRepository ingredientRepository = mock(IngredientRepository.class);
+        when(ingredientRepository.findAll()).thenReturn(List.copyOf(ingredients.values()));
+        when(ingredientRepository.findAll(any(Sort.class))).thenReturn(List.copyOf(ingredients.values()));
+        RecipeRepository recipeRepository = mock(RecipeRepository.class);
+        when(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE)).thenReturn(List.copyOf(recipes.values()));
+        RecipeIngredientRepository recipeIngredientRepository = mock(RecipeIngredientRepository.class);
+        when(recipeIngredientRepository.findAllWithIngredientByRecipeIds(anyCollection())).thenReturn(recipeIngredients);
+        return new RecipeService(recipeRepository, recipeIngredientRepository, ingredientRepository,
+            mock(RecipeBookmarkRepository.class), Clock.systemDefaultZone());
+    }
+
     private static List<AiRecipeOption> loadCatalog() throws IOException {
         try (InputStream in = ClaudeAiEvaluationTest.class.getResourceAsStream("/data-recipe-local.sql")) {
             Matcher matcher = SEED_RECIPE_NAME.matcher(new String(in.readAllBytes(), StandardCharsets.UTF_8));
@@ -348,6 +451,115 @@ class ClaudeAiEvaluationTest {
             return new AiRecipeCandidate(id, recipe.getName(), recipe.getCuisine().name(),
                 recipe.getDishType().name(), recipe.getCookTimeMin(), recipe.getSpicyLevel(),
                 recipe.getDifficulty().name(), requiredIngredients);
+        }
+    }
+
+    // 서버의 Tool 실행기(AiFridgeToolExecutor)와 같이 레시피 찾기가 돌려준 재료 ID만 가격을 조회한다.
+    // 가격은 재료마다 다르게(1,000원 + ID×10) 줘서, 답변의 금액이 Tool 결과에서 온 것인지 확인한다
+    static class SeedFridgeTools implements AiFridgeTools {
+
+        private final RecipeService recipeService;
+        private final boolean martSelected;
+        private final Map<Long, FridgeRecipe> found = new HashMap<>();
+        private final Map<Long, String> foundIngredientNames = new HashMap<>();
+        private final List<Long> returnedPrices = new ArrayList<>();
+        private int recipeCalls;
+        private int priceCalls;
+
+        SeedFridgeTools(RecipeService recipeService, boolean martSelected) {
+            this.recipeService = recipeService;
+            this.martSelected = martSelected;
+        }
+
+        @Override
+        public AiToolResult<AiFridgeRecipeSearch> findRecipes(List<String> ingredientNames) {
+            recipeCalls++;
+            FridgeRecipeSearchResult result = recipeService.findRecipesByOwnedIngredients(ingredientNames);
+            result.recipes().forEach(recipe -> {
+                found.put(recipe.recipeId(), recipe);
+                recipe.missingIngredients()
+                    .forEach(ingredient -> foundIngredientNames.put(ingredient.ingredientId(), ingredient.name()));
+            });
+            return AiToolResult.success(new AiFridgeRecipeSearch(result.unknownIngredientNames(),
+                result.recipes().stream().map(recipe -> new AiFridgeRecipeSearch.Recipe(recipe.recipeId(),
+                    recipe.name(), toAi(recipe.ownedIngredients()), toAi(recipe.missingIngredients()))).toList()));
+        }
+
+        @Override
+        public AiToolResult<List<AiIngredientPrice>> findIngredientPrices(List<Long> ingredientIds) {
+            priceCalls++;
+            List<Long> requested = ingredientIds.stream().distinct().filter(foundIngredientNames::containsKey).toList();
+            if (requested.isEmpty()) {
+                return AiToolResult.error("find_recipes_by_ingredients가 돌려준 부족한 재료 ID로 다시 호출하세요.");
+            }
+            if (!martSelected) {
+                return AiToolResult.error("이용 마트가 설정되지 않아 가격·재고를 조회할 수 없습니다. 이용 마트를 먼저 설정하도록 안내하세요.");
+            }
+            return AiToolResult.success(requested.stream().map(id -> {
+                long price = 1000 + id * 10;
+                returnedPrices.add(price);
+                String name = foundIngredientNames.get(id);
+                return new AiIngredientPrice(id, name + " 상품", price, "1EA",
+                    SOLD_OUT_INGREDIENT.equals(name) ? "SOLD_OUT" : null);
+            }).toList());
+        }
+
+        String describeCalls() {
+            return "[찾기 " + recipeCalls + "·가격 " + priceCalls + "]";
+        }
+
+        // 답변의 금액은 Tool이 준 가격 하나이거나 그 합계여야 한다(여러 재료를 더해 말할 수 있다)
+        boolean pricesFromTools(String answer) {
+            Set<Long> allowed = new HashSet<>(List.of(0L));
+            for (Long price : returnedPrices) {
+                Set<Long> next = new HashSet<>(allowed);
+                allowed.forEach(sum -> next.add(sum + price));
+                allowed = next;
+            }
+            Matcher matcher = WON.matcher(answer);
+            while (matcher.find()) {
+                if (!allowed.contains(Long.parseLong(matcher.group(1).replace(",", "")))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static List<AiFridgeRecipeSearch.Ingredient> toAi(List<IngredientRef> ingredients) {
+            return ingredients.stream()
+                .map(ingredient -> new AiFridgeRecipeSearch.Ingredient(ingredient.ingredientId(), ingredient.name()))
+                .toList();
+        }
+    }
+
+    // accept가 비어 있으면 만들 레시피가 없는 문장이라 빈 목록이어야 정답이다. 그 밖에는 첫 번째(가장 추천하는) 레시피가 accept 안에
+    // 있어야 한다. 최대 3개를 고르면 나머지는 가진 재료를 덜 쓰는 대안이라 정답 목록으로 막지 않는다.
+    // 추가로 안내해야 할 말(mustMention), 품절 안내, 가격 조회, Tool에 없는 금액을 함께 확인한다
+    record FridgeCase(String text, List<String> accept, Boolean martSelected, List<String> mustMention) {
+
+        List<String> problems(AiFridgeAnswer answer, List<FridgeRecipe> picks, SeedFridgeTools tools) {
+            List<String> problems = new ArrayList<>();
+            List<String> names = picks.stream().map(FridgeRecipe::name).toList();
+            if (accept.isEmpty() ? !answer.recipeIds().isEmpty() : names.isEmpty() || !accept.contains(names.get(0))) {
+                problems.add("레시피");
+            }
+            if (mustMention != null && !mustMention.stream().allMatch(answer.answer()::contains)) {
+                problems.add("안내 누락 " + mustMention);
+            }
+            boolean hasMissing = picks.stream().anyMatch(recipe -> !recipe.missingIngredients().isEmpty());
+            if (martSelected != Boolean.FALSE && hasMissing && tools.priceCalls == 0) {
+                problems.add("가격 미조회");
+            }
+            boolean needsSoldOut = martSelected != Boolean.FALSE && picks.stream()
+                .flatMap(recipe -> recipe.missingIngredients().stream())
+                .anyMatch(ingredient -> ingredient.name().equals(SOLD_OUT_INGREDIENT));
+            if (needsSoldOut && !answer.answer().contains("품절")) {
+                problems.add("품절 안내 누락");
+            }
+            if (!tools.pricesFromTools(answer.answer())) {
+                problems.add("Tool에 없는 금액");
+            }
+            return problems;
         }
     }
 
