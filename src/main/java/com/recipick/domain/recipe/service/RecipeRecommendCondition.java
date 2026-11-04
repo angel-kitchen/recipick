@@ -14,13 +14,17 @@ public record RecipeRecommendCondition(
     DishType dishType,
     Integer maxCookingMinutes,
     Integer maxSpicyLevel,
-    List<String> excludedIngredients
+    List<String> excludedIngredients,
+    Integer maxBudget,
+    Integer servings
 ) {
 
     private static final int MIN_SPICY_LEVEL = 0;
     private static final int MAX_SPICY_LEVEL = 3;
     private static final int MAX_EXCLUDED_INGREDIENTS = 5;
     private static final int MAX_INGREDIENT_NAME_LENGTH = 50;
+    private static final int MIN_BUDGET = 1_000;
+    private static final int MAX_BUDGET = 1_000_000;
 
     public static RecipeRecommendCondition from(AiRecipeConditions conditions) {
         return new RecipeRecommendCondition(
@@ -28,9 +32,12 @@ public record RecipeRecommendCondition(
             toEnum(DishType.class, conditions.dishType()),
             positiveOrNull(conditions.maxCookingMinutes()),
             spicyLevelOrNull(conditions.maxSpicyLevel()),
-            cleanIngredients(conditions.excludedIngredients()));
+            cleanIngredients(conditions.excludedIngredients()),
+            inRangeOrNull(conditions.maxBudget(), MIN_BUDGET, MAX_BUDGET),
+            inRangeOrNull(conditions.servings(), Recipe.MIN_SERVINGS, Recipe.MAX_SERVINGS));
     }
 
+    // 예산·인분은 레시피 속성으로 거르는 조건이 아니라 금액 계산에 쓰므로, 비었는지 판단할 때는 보지 않는다
     public boolean isEmpty() {
         return cuisineType == null && dishType == null && maxCookingMinutes == null
             && maxSpicyLevel == null && excludedIngredients.isEmpty();
@@ -58,6 +65,10 @@ public record RecipeRecommendCondition(
 
     private static Integer positiveOrNull(Integer value) {
         return value != null && value > 0 ? value : null;
+    }
+
+    private static Integer inRangeOrNull(Integer value, int min, int max) {
+        return value != null && value >= min && value <= max ? value : null;
     }
 
     private static Integer spicyLevelOrNull(Integer value) {

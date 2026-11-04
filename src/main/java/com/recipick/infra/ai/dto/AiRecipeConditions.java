@@ -8,6 +8,8 @@ public record AiRecipeConditions(
     String dishType,
     Integer maxCookingMinutes,
     Integer maxSpicyLevel,
-    List<String> excludedIngredients
+    List<String> excludedIngredients,
+    Integer maxBudget,
+    Integer servings
 ) {
 }
