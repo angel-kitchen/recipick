@@ -2,6 +2,7 @@ package com.recipick.infra.ai;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
@@ -55,7 +56,7 @@ public class FakeAiClient implements AiClient {
     }
 
     @Override
-    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String text, List<AiRecipeOption> candidates) {
+    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String text, List<AiRecipeCandidate> candidates) {
         if (text.contains(RECOMMEND_FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
         }
