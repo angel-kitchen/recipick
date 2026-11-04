@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recipick ERD</title>
+<style>
+:root {
+  --bg: #eef2ee;
+  --grid: rgba(120, 140, 125, .16);
+  --ink: #1d2320;
+  --muted: #5d6a63;
+  --line: #3b4540;
+  --card: #ffffff;
+  --card-line: #6f7a74;
+  --group-line: rgba(80, 100, 88, .45);
+  --c-member: #f3e4a6; --c-order: #dcdcd8; --c-payment: #f2c3cb; --c-point: #f2c9b9;
+  --c-product: #d2ccf3; --c-mart: #b9e2ef; --c-recipe: #c9e9ca; --c-auto: #c3e7d3;
+  --c-ai: #f7d3a3; --c-billing: #f2c3cb;
+  --new: #d6381f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171c19; --grid: rgba(190, 210, 195, .07); --ink: #e9efeb; --muted: #9baba2;
+    --line: #8fa097; --card: #222a26; --card-line: #6c7a72; --group-line: rgba(180, 200, 188, .35);
+    --c-member: #5d5428; --c-order: #46484a; --c-payment: #62343c; --c-point: #62402f;
+    --c-product: #403a68; --c-mart: #284f5e; --c-recipe: #335a37; --c-auto: #2f5a45;
+    --c-ai: #6a4a22; --c-billing: #62343c; --new: #ff7a63;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+}
+#canvas { position: relative; padding: 56px 56px 56px; width: max-content; min-width: 100%; }
+#lines { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+#lines path { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-linejoin: miter; opacity: .72; transition: opacity .15s; }
+#lines.dim path { opacity: .08; }
+#lines.dim path.hit { opacity: 1; stroke-width: 1.8; }
+body.no-lines #lines { display: none; }
+.rows { display: grid; gap: 28px; }
+.row1 { grid-template-columns: repeat(7, 304px); gap: 28px 104px; align-items: start; }
+.group {
+  border: 1.5px dashed var(--group-line); border-radius: 14px; padding: 36px 12px 6px; position: relative;
+  background: rgba(255, 255, 255, .22);
+}
+@media (prefers-color-scheme: dark) { .group { background: rgba(255, 255, 255, .03); } }
+.group-title { position: absolute; left: 14px; top: 10px; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.row2 .group { width: max-content; }
+.row2 .tables { display: flex; flex-wrap: wrap; gap: 0 84px; align-items: flex-start; }
+.row2 .table { width: 350px; }
+.table {
+  position: relative; z-index: 1; background: var(--card); border: 1.4px solid var(--card-line);
+  border-radius: 9px; overflow: hidden; margin-bottom: 30px; box-shadow: 0 1px 0 rgba(0, 0, 0, .06);
+}
+.thead { padding: 7px 10px; font-weight: 800; font-size: 12.5px; display: flex; justify-content: space-between; gap: 6px; }
+.badge { font-size: 10px; font-weight: 700; color: var(--new); display: none; align-self: center; }
+body.show-changes .table.is-new .badge { display: inline; }
+.col, .idx { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 6px; padding: 2px 10px; font-size: 11px; line-height: 1.55; }
+.col .k { color: var(--muted); font-size: 9.5px; font-weight: 700; align-self: center; letter-spacing: .02em; }
+.col .n { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-wrap: anywhere; }
+.col .t { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: var(--muted); text-align: right; font-size: 10.5px; white-space: nowrap; }
+.idx { color: var(--muted); border-top: 1px dashed var(--card-line); grid-template-columns: 42px minmax(0, 1fr); }
+.idx + .idx { border-top: 0; }
+.idx .n { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; }
+body.show-changes .col.is-new .n { color: var(--new); font-weight: 700; }
+body.show-changes .col.is-new { background: rgba(214, 56, 31, .09); }
+.g-member .thead { background: var(--c-member); } .g-order .thead { background: var(--c-order); }
+.g-payment .thead { background: var(--c-payment); } .g-point .thead { background: var(--c-point); }
+.g-product .thead { background: var(--c-product); } .g-recipe .thead { background: var(--c-recipe); }
+.g-auto .thead { background: var(--c-auto); } .g-billing .thead { background: var(--c-billing); }
+.table[data-name="MART"] .thead { background: var(--c-mart); }
+.table[data-name="AI_REQUEST_LOG"] .thead { background: var(--c-ai); }
+#tools {
+  position: fixed; right: 14px; top: 12px; z-index: 5; display: flex; gap: 14px; align-items: center;
+  background: var(--card); border: 1px solid var(--card-line); border-radius: 10px; padding: 7px 12px;
+  font-size: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+#tools label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+#tools .hint { color: var(--muted); }
+body.capture #tools { display: none; }
+</style>
+</head>
+<body class="show-lines">
+<div id="tools">
+  <label><input type="checkbox" id="t-lines" checked> 관계선</label>
+  <label><input type="checkbox" id="t-changes"> 변경 표시</label>
+  <span class="hint">H 키: 도구 숨기기/보이기</span>
+</div>
+<div id="canvas">
+  <svg id="lines"></svg>
+  <div class="rows row1" id="row1"></div>
+  <div class="rows row2" id="row2" style="margin-top:90px"></div>
+</div>
+<script>
+const DATA = {"groups": [{"id": "member_admin_membership", "title": "회원·관리자·멤버십 (채빈)", "color": "member", "tables": [{"name": "REGION", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "legal_dong_code", "type": "varchar(10)", "key": "UK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "MEMBER", "comment": "withdrawn_at이 NULL이면 이용 중이며, 탈퇴 시 기존 이메일·이름·휴대전화를 고유한 대체값으로 교체한다.", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "email", "type": "varchar(50)", "key": "UK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "phone", "type": "varchar(20)", "key": "UK", "note": ""}, {"name": "password_hash", "type": "varchar(255)", "key": "", "note": ""}, {"name": "refresh_token_version", "type": "bigint", "key": "", "note": "회원 리프레시 토큰 전체 무효화 버전. 액세스 토큰에는 적용하지 않음"}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "selected_address_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "location_agreed_at", "type": "datetime", "key": "", "note": ""}, {"name": "terms_agreed_at", "type": "datetime", "key": "", "note": ""}, {"name": "privacy_agreed_at", "type": "datetime", "key": "", "note": ""}, {"name": "withdrawn_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": ["refresh_token_version", "withdrawn_at"]}, {"name": "MEMBER_ADDRESS", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "label", "type": "varchar(30)", "key": "", "note": ""}, {"name": "address", "type": "varchar(255)", "key": "", "note": ""}, {"name": "detail_address", "type": "varchar(255)", "key": "", "note": ""}, {"name": "legal_dong_code", "type": "varchar(10)", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "ADMIN", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "login_id", "type": "varchar(50)", "key": "UK", "note": ""}, {"name": "password_hash", "type": "varchar(255)", "key": "", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "role", "type": "varchar(20)", "key": "", "note": ""}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "active", "type": "boolean", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "ADMIN_AUDIT_LOG", "comment": "감사 기록은 갱신하지 않으며, 1년이 지난 기록만 내부 배치로 삭제한다. 대상이 여러 종류이므로 target_id는 특정 테이블의 FK가 아니다. 개인정보·비밀정보는 details에 넣지 않는다.", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "admin_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "action", "type": "varchar(64)", "key": "", "note": ""}, {"name": "target_type", "type": "varchar(32)", "key": "", "note": ""}, {"name": "target_id", "type": "bigint", "key": "", "note": ""}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "details", "type": "json", "key": "", "note": ""}, {"name": "ip_address", "type": "varchar(45)", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": ["created_at"], "isNew": true, "newCols": []}, {"name": "MEMBERSHIP", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "granted_by_admin_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "type", "type": "varchar(20)", "key": "", "note": ""}, {"name": "source", "type": "varchar(20)", "key": "", "note": ""}, {"name": "start_at", "type": "datetime", "key": "", "note": ""}, {"name": "end_at", "type": "datetime", "key": "", "note": ""}, {"name": "activated_at", "type": "datetime", "key": "", "note": "활성화 시각. NULL이면 혜택 없음. 판정 변경 배포 전 기존 체험·관리자 지급 백필 필요"}, {"name": "grace_end_at", "type": "datetime", "key": "", "note": "유예 종료 시각. NULL이면 end_at으로 혜택 종료 판정"}, {"name": "auto_renew", "type": "boolean", "key": "", "note": ""}, {"name": "billing_anchor_date", "type": "date", "key": "", "note": ""}, {"name": "consented_amount", "type": "bigint", "key": "", "note": ""}, {"name": "consent_text_version", "type": "varchar(20)", "key": "", "note": ""}, {"name": "autopay_consented_at", "type": "datetime", "key": "", "note": ""}, {"name": "cancel_reserved_at", "type": "datetime", "key": "", "note": ""}, {"name": "terminated_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": ["activated_at", "grace_end_at"]}, {"name": "TRIAL_BLOCK", "comment": "정규화한 휴대전화의 HMAC-SHA-256을 hex 64자로 저장한다. 멤버십 이용 이력이 있는 탈퇴 회원만 대상이다. 재탈퇴 정책에 따라 expires_at을 연장할 수 있다. updated_at은 없으며, 만료 기록은 내부 배치로 삭제한다.", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "phone_hash", "type": "varchar(64)", "key": "UK", "note": ""}, {"name": "expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": true, "newCols": []}]}, {"id": "cart_order", "title": "장바구니·주문 (준희)", "color": "order", "tables": [{"name": "CART_ITEM", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "product_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "quantity", "type": "int", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "ORDERS", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "order_number", "type": "varchar(30)", "key": "UK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "pending_member_id", "type": "bigint", "key": "UK", "note": ""}, {"name": "idempotency_key", "type": "varchar(64)", "key": "UK", "note": ""}, {"name": "request_hash", "type": "varchar(64)", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "mart_status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "product_amount", "type": "bigint", "key": "", "note": ""}, {"name": "delivery_fee", "type": "bigint", "key": "", "note": ""}, {"name": "used_point", "type": "bigint", "key": "", "note": ""}, {"name": "pay_amount", "type": "bigint", "key": "", "note": ""}, {"name": "point_rate", "type": "decimal(5,4)", "key": "", "note": ""}, {"name": "receiver_name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "receiver_phone", "type": "varchar(20)", "key": "", "note": ""}, {"name": "address", "type": "varchar(255)", "key": "", "note": ""}, {"name": "detail_address", "type": "varchar(255)", "key": "", "note": ""}, {"name": "region_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}, {"name": "paid_at", "type": "datetime", "key": "", "note": ""}, {"name": "canceled_at", "type": "datetime", "key": "", "note": ""}, {"name": "cancel_reason_code", "type": "varchar(30)", "key": "", "note": ""}, {"name": "cancel_reason_detail", "type": "varchar(500)", "key": "", "note": ""}], "idx": ["member_id", "mart_id, mart_status", "mart_id, status, paid_at"], "isNew": false, "newCols": []}, {"name": "ORDER_ITEM", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "product_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "product_name", "type": "varchar(100)", "key": "", "note": ""}, {"name": "unit_price", "type": "bigint", "key": "", "note": ""}, {"name": "sale_unit_amount", "type": "decimal(10,2)", "key": "", "note": ""}, {"name": "sale_unit", "type": "varchar(10)", "key": "", "note": ""}, {"name": "line_amount", "type": "bigint", "key": "", "note": ""}, {"name": "quantity", "type": "int", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "ORDER_STATUS_HISTORY", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "status_type", "type": "varchar(20)", "key": "", "note": ""}, {"name": "from_status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "to_status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "actor", "type": "varchar(20)", "key": "", "note": ""}, {"name": "changed_by_admin_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}]}, {"id": "payment_refund", "title": "결제·환불 (정윤)", "color": "payment", "tables": [{"name": "PAYMENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "payment_method", "type": "varchar(20)", "key": "", "note": ""}, {"name": "portone_payment_id", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "portone_transaction_id", "type": "varchar(255)", "key": "", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "paid_at", "type": "datetime", "key": "", "note": ""}, {"name": "canceled_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "WEBHOOK_EVENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "webhook_id", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "type", "type": "varchar(50)", "key": "", "note": ""}, {"name": "portone_payment_id", "type": "varchar(255)", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "payload", "type": "text", "key": "", "note": ""}, {"name": "attempt_count", "type": "int", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "finished_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["portone_payment_id, status"], "isNew": false, "newCols": []}, {"name": "REFUND", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "payment_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "requested_by", "type": "varchar(20)", "key": "", "note": ""}, {"name": "idempotency_key", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "portone_cancellation_id", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "failure_type", "type": "varchar(30)", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "requested_at", "type": "datetime", "key": "", "note": ""}, {"name": "completed_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}]}, {"id": "point", "title": "포인트 (정윤)", "color": "point", "tables": [{"name": "POINT_EARNING", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "remaining_amount", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "confirmed_at", "type": "datetime", "key": "", "note": ""}, {"name": "expires_on", "type": "date", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["member_id, status", "status, member_id, expires_on"], "isNew": false, "newCols": []}, {"name": "POINT_USAGE", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "point_earning_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "reserved_at", "type": "datetime", "key": "", "note": ""}, {"name": "confirmed_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["order_id"], "isNew": false, "newCols": []}, {"name": "POINT_HISTORY", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "point_earning_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "order_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "type", "type": "varchar(30)", "key": "", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": ["member_id, created_at", "member_id, order_id, created_at"], "isNew": false, "newCols": []}, {"name": "MEMBER_POINT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "balance", "type": "bigint", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}]}, {"id": "product_stock_mart", "title": "상품·재고·마트 (태헌)", "color": "product", "tables": [{"name": "CATEGORY", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "UK", "note": ""}, {"name": "deleted", "type": "boolean", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "PRODUCT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "category_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "ingredient_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "brand", "type": "varchar(50)", "key": "", "note": ""}, {"name": "description", "type": "text", "key": "", "note": ""}, {"name": "sale_unit_amount", "type": "decimal(10,2)", "key": "", "note": ""}, {"name": "sale_unit", "type": "varchar(10)", "key": "", "note": ""}, {"name": "image_url", "type": "varchar(255)", "key": "", "note": ""}, {"name": "price", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "total_quantity", "type": "int", "key": "", "note": ""}, {"name": "deleted", "type": "boolean", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["mart_id, ingredient_id"], "isNew": false, "newCols": []}, {"name": "STOCK_ADJUSTMENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "product_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "type", "type": "varchar(20)", "key": "", "note": ""}, {"name": "quantity", "type": "int", "key": "", "note": ""}, {"name": "before_quantity", "type": "int", "key": "", "note": ""}, {"name": "reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "admin_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "MART", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "region_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "latitude", "type": "decimal(10,7)", "key": "", "note": ""}, {"name": "longitude", "type": "decimal(10,7)", "key": "", "note": ""}, {"name": "service_radius_m", "type": "int", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}]}, {"id": "recipe_ingredient", "title": "레시피·재료 (보민)", "color": "recipe", "tables": [{"name": "INGREDIENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "UK", "note": ""}, {"name": "unit", "type": "varchar(10)", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "RECIPE_INGREDIENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "recipe_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "ingredient_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "amount_per_serving", "type": "decimal(10,2)", "key": "", "note": ""}, {"name": "required", "type": "boolean", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "RECIPE", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "name", "type": "varchar(50)", "key": "", "note": ""}, {"name": "cuisine", "type": "varchar(20)", "key": "", "note": ""}, {"name": "dish_type", "type": "varchar(20)", "key": "", "note": ""}, {"name": "base_servings", "type": "int", "key": "", "note": ""}, {"name": "cook_time_min", "type": "int", "key": "", "note": ""}, {"name": "difficulty", "type": "varchar(20)", "key": "", "note": ""}, {"name": "spicy_level", "type": "int", "key": "", "note": ""}, {"name": "steps", "type": "json", "key": "", "note": ""}, {"name": "youtube_video_id", "type": "varchar(20)", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "auto_cart_enabled", "type": "boolean", "key": "", "note": ""}, {"name": "view_count", "type": "int", "key": "", "note": "상세 조회 누적 횟수(전체 기간)"}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": ["view_count"]}, {"name": "RECIPE_BOOKMARK", "comment": "", "cols": [{"name": "member_id", "type": "bigint", "key": "PK-FK", "note": ""}, {"name": "recipe_id", "type": "bigint", "key": "PK-FK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": ["created_at, recipe_id"], "isNew": false, "newCols": []}]}, {"id": "auto_cart_ai", "title": "자동 장바구니·AI (보민, 공동)", "color": "auto", "tables": [{"name": "AUTO_CART_REQUEST", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "mart_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "menus", "type": "json", "key": "", "note": ""}, {"name": "total_price", "type": "bigint", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "confirmed_at", "type": "datetime", "key": "", "note": ""}], "idx": ["status, created_at", "member_id, created_at"], "isNew": false, "newCols": []}, {"name": "AUTO_CART_ITEM", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "auto_cart_request_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "ingredient_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "product_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "product_name", "type": "varchar(100)", "key": "", "note": ""}, {"name": "sale_unit_amount", "type": "decimal(10,2)", "key": "", "note": ""}, {"name": "unit_price", "type": "bigint", "key": "", "note": ""}, {"name": "required_amount", "type": "decimal(10,2)", "key": "", "note": ""}, {"name": "purchase_quantity", "type": "int", "key": "", "note": ""}, {"name": "line_price", "type": "bigint", "key": "", "note": ""}, {"name": "unavailable_reason", "type": "varchar(20)", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "AI_REQUEST_LOG", "comment": "auto_cart_request_id는 AI로 미리보기를 만든 경우에만 채운다. 7일 지난 PREVIEWED 요청을 정리할 때는 같은 트랜잭션에서 이 값을 먼저 NULL로 바꾼 뒤 요청을 삭제한다(FK에 ON DELETE를 두지 않고 배치가 처리). success는 AI 응답을 받아 결과에 썼는지를 뜻한다: PREVIEWED·NEEDS_SELECTION·NO_MATCH·RECOMMENDED·ANSWERED는 true, FALLBACK은 false이고 failure_reason을 채운다. 성공 상태에서는 failure_reason이 NULL이다. parsed_result와 토큰 수는 AI 응답을 받은 만큼만 채우고, 응답을 하나도 받지 못한 FALLBACK이면 NULL이다. matched_recipe_ids는 응답에 담은 레시피 ID이며, 담은 레시피가 없으면(NO_MATCH 등) NULL이다. model과 latency_ms는 실패해도 호출한 모델과 실패까지 걸린 시간을 남긴다.", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "auto_cart_request_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "request_type", "type": "varchar(20)", "key": "", "note": ""}, {"name": "raw_text", "type": "text", "key": "", "note": ""}, {"name": "parsed_result", "type": "json", "key": "", "note": ""}, {"name": "matched_recipe_ids", "type": "text", "key": "", "note": ""}, {"name": "result_status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "success", "type": "boolean", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "model", "type": "varchar(50)", "key": "", "note": ""}, {"name": "input_tokens", "type": "int", "key": "", "note": ""}, {"name": "output_tokens", "type": "int", "key": "", "note": ""}, {"name": "cache_read_tokens", "type": "int", "key": "", "note": ""}, {"name": "latency_ms", "type": "int", "key": "", "note": ""}, {"name": "prompt_versions", "type": "json", "key": "", "note": "사용한 프롬프트 종류별 버전 번호. 코드 기본 지시문이면 null (예: {\"CONDITION\": 3, \"RECOMMEND\": null})"}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": ["created_at", "member_id, created_at"], "isNew": false, "newCols": ["request_type", "result_status", "model", "input_tokens", "output_tokens", "cache_read_tokens", "latency_ms"]}, {"name": "AI_PROMPT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "prompt_type", "type": "varchar(20)", "key": "UK", "note": "MENU, CONDITION, RECOMMEND, FRIDGE"}, {"name": "version", "type": "int", "key": "UK", "note": "종류별 1부터 증가"}, {"name": "content", "type": "text", "key": "", "note": "지시문. 뒤에 붙는 목록과 출력 구조는 코드가 정함"}, {"name": "memo", "type": "varchar(200)", "key": "", "note": "변경 이유"}, {"name": "active", "type": "boolean", "key": "", "note": "종류별로 최대 하나. 없으면 코드 기본 지시문 사용"}, {"name": "created_by_admin_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": false, "newCols": []}, {"name": "CART_ADD_HISTORY", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "product_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "source", "type": "varchar(20)", "key": "", "note": ""}, {"name": "auto_cart_request_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "quantity", "type": "int", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}], "idx": ["auto_cart_request_id"], "isNew": false, "newCols": []}]}, {"id": "membership_billing", "title": "멤버십 구독 결제 (정윤)", "color": "billing", "tables": [{"name": "BILLING_KEY", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "portone_billing_key", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "issued_at", "type": "datetime", "key": "", "note": ""}, {"name": "delete_requested_at", "type": "datetime", "key": "", "note": ""}, {"name": "deleted_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["member_id, status"], "isNew": false, "newCols": ["delete_requested_at", "deleted_at"]}, {"name": "BILLING_KEY_ISSUE_REQUEST", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "member_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "issue_id", "type": "varchar(64)", "key": "UK", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "used_at", "type": "datetime", "key": "", "note": ""}, {"name": "billing_key_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": [], "isNew": true, "newCols": []}, {"name": "MEMBERSHIP_PAYMENT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "membership_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "idempotency_key", "type": "varchar(100)", "key": "UK", "note": ""}, {"name": "request_hash", "type": "varchar(64)", "key": "", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(30)", "key": "", "note": ""}, {"name": "billing_date", "type": "date", "key": "", "note": ""}, {"name": "period_start_date", "type": "date", "key": "UK", "note": ""}, {"name": "period_end_date", "type": "date", "key": "", "note": ""}, {"name": "grace_deadline_at", "type": "datetime", "key": "", "note": ""}, {"name": "next_retry_at", "type": "datetime", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "paid_at", "type": "datetime", "key": "", "note": ""}, {"name": "membership_applied_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["membership_id, status", "status, next_retry_at, id", "status, grace_deadline_at, id"], "isNew": false, "newCols": ["idempotency_key", "request_hash", "grace_deadline_at", "membership_applied_at"]}, {"name": "MEMBERSHIP_PAYMENT_ATTEMPT", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "membership_payment_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "attempt_no", "type": "int", "key": "UK", "note": ""}, {"name": "billing_key_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "portone_payment_id", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "requested_at", "type": "datetime", "key": "", "note": ""}, {"name": "lease_expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "dispatched_at", "type": "datetime", "key": "", "note": ""}, {"name": "completed_at", "type": "datetime", "key": "", "note": ""}, {"name": "pg_paid_at", "type": "datetime", "key": "", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "ops_review_required_at", "type": "datetime", "key": "", "note": ""}, {"name": "ops_review_reason", "type": "varchar(40)", "key": "", "note": ""}, {"name": "refund_required_at", "type": "datetime", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["membership_payment_id, status", "billing_key_id, status", "status, lease_expires_at, id", "status, dispatched_at, id"], "isNew": true, "newCols": []}, {"name": "MEMBERSHIP_REFUND", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "membership_payment_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "membership_payment_attempt_id", "type": "bigint", "key": "FK", "note": ""}, {"name": "amount", "type": "bigint", "key": "", "note": ""}, {"name": "used_days", "type": "int", "key": "", "note": ""}, {"name": "used_day_fee", "type": "bigint", "key": "", "note": ""}, {"name": "penalty_amount", "type": "bigint", "key": "", "note": ""}, {"name": "status", "type": "varchar(20)", "key": "", "note": ""}, {"name": "reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "requested_by", "type": "varchar(20)", "key": "", "note": ""}, {"name": "idempotency_key", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "portone_cancellation_id", "type": "varchar(255)", "key": "UK", "note": ""}, {"name": "failure_reason", "type": "varchar(500)", "key": "", "note": ""}, {"name": "requested_at", "type": "datetime", "key": "", "note": ""}, {"name": "completed_at", "type": "datetime", "key": "", "note": ""}, {"name": "paid_amount_snapshot", "type": "bigint", "key": "", "note": ""}, {"name": "period_start_at", "type": "datetime", "key": "", "note": ""}, {"name": "period_end_at", "type": "datetime", "key": "", "note": ""}, {"name": "period_days", "type": "int", "key": "", "note": ""}, {"name": "request_hash", "type": "varchar(64)", "key": "", "note": ""}, {"name": "pg_idempotency_key", "type": "varchar(80)", "key": "UK", "note": ""}, {"name": "pg_store_id", "type": "varchar(100)", "key": "", "note": ""}, {"name": "pg_request_reason", "type": "varchar(160)", "key": "", "note": ""}, {"name": "first_dispatched_at", "type": "datetime", "key": "", "note": ""}, {"name": "claim_token", "type": "bigint", "key": "", "note": ""}, {"name": "lease_expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "next_check_at", "type": "datetime", "key": "", "note": ""}, {"name": "ops_review_required_at", "type": "datetime", "key": "", "note": ""}, {"name": "ops_review_reason", "type": "varchar(64)", "key": "", "note": ""}, {"name": "pg_cancelled_at", "type": "datetime", "key": "", "note": ""}, {"name": "retry_of_refund_id", "type": "bigint", "key": "UK", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["membership_payment_id, status", "membership_payment_attempt_id, requested_by, status", "status, next_check_at, id"], "isNew": false, "newCols": ["membership_payment_attempt_id", "paid_amount_snapshot", "period_start_at", "period_end_at", "period_days", "request_hash", "pg_idempotency_key", "pg_store_id", "pg_request_reason", "first_dispatched_at", "claim_token", "lease_expires_at", "next_check_at", "ops_review_required_at", "ops_review_reason", "pg_cancelled_at", "retry_of_refund_id"]}, {"name": "BILLING_KEY_DELETION", "comment": "", "cols": [{"name": "id", "type": "bigint", "key": "PK", "note": ""}, {"name": "billing_key_id", "type": "bigint", "key": "FK-UK", "note": ""}, {"name": "status", "type": "varchar(24)", "key": "", "note": ""}, {"name": "reason", "type": "varchar(24)", "key": "", "note": ""}, {"name": "store_id", "type": "varchar(100)", "key": "", "note": ""}, {"name": "requested_at", "type": "datetime", "key": "", "note": ""}, {"name": "next_check_at", "type": "datetime", "key": "", "note": ""}, {"name": "claim_token", "type": "bigint", "key": "", "note": ""}, {"name": "claim_count", "type": "int", "key": "", "note": ""}, {"name": "lease_expires_at", "type": "datetime", "key": "", "note": ""}, {"name": "first_dispatched_at", "type": "datetime", "key": "", "note": ""}, {"name": "completed_at", "type": "datetime", "key": "", "note": ""}, {"name": "review_required_at", "type": "datetime", "key": "", "note": ""}, {"name": "identity_verified_at", "type": "datetime", "key": "", "note": ""}, {"name": "last_code", "type": "varchar(40)", "key": "", "note": ""}, {"name": "created_at", "type": "datetime", "key": "", "note": ""}, {"name": "updated_at", "type": "datetime", "key": "", "note": ""}], "idx": ["status, next_check_at, id"], "isNew": true, "newCols": []}]}], "refs": [{"fk": "MEMBER.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "MEMBER.selected_address_id", "pk": "MEMBER_ADDRESS.id", "rel": "many"}, {"fk": "MEMBER_ADDRESS.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "ADMIN.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "ADMIN_AUDIT_LOG.admin_id", "pk": "ADMIN.id", "rel": "many"}, {"fk": "ADMIN_AUDIT_LOG.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "MEMBERSHIP.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "MEMBERSHIP.granted_by_admin_id", "pk": "ADMIN.id", "rel": "many"}, {"fk": "CART_ITEM.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "CART_ITEM.product_id", "pk": "PRODUCT.id", "rel": "many"}, {"fk": "ORDERS.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "ORDERS.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "ORDERS.region_id", "pk": "REGION.id", "rel": "many"}, {"fk": "ORDER_ITEM.order_id", "pk": "ORDERS.id", "rel": "many"}, {"fk": "ORDER_ITEM.product_id", "pk": "PRODUCT.id", "rel": "many"}, {"fk": "ORDER_STATUS_HISTORY.order_id", "pk": "ORDERS.id", "rel": "many"}, {"fk": "ORDER_STATUS_HISTORY.changed_by_admin_id", "pk": "ADMIN.id", "rel": "many"}, {"fk": "PAYMENT.order_id", "pk": "ORDERS.id", "rel": "one"}, {"fk": "REFUND.payment_id", "pk": "PAYMENT.id", "rel": "many"}, {"fk": "POINT_EARNING.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "POINT_EARNING.order_id", "pk": "ORDERS.id", "rel": "one"}, {"fk": "POINT_USAGE.point_earning_id", "pk": "POINT_EARNING.id", "rel": "many"}, {"fk": "POINT_USAGE.order_id", "pk": "ORDERS.id", "rel": "many"}, {"fk": "POINT_HISTORY.point_earning_id", "pk": "POINT_EARNING.id", "rel": "many"}, {"fk": "POINT_HISTORY.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "POINT_HISTORY.order_id", "pk": "ORDERS.id", "rel": "many"}, {"fk": "MEMBER_POINT.member_id", "pk": "MEMBER.id", "rel": "one"}, {"fk": "PRODUCT.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "PRODUCT.category_id", "pk": "CATEGORY.id", "rel": "many"}, {"fk": "PRODUCT.ingredient_id", "pk": "INGREDIENT.id", "rel": "many"}, {"fk": "STOCK_ADJUSTMENT.product_id", "pk": "PRODUCT.id", "rel": "many"}, {"fk": "STOCK_ADJUSTMENT.admin_id", "pk": "ADMIN.id", "rel": "many"}, {"fk": "MART.region_id", "pk": "REGION.id", "rel": "one"}, {"fk": "RECIPE_INGREDIENT.recipe_id", "pk": "RECIPE.id", "rel": "many"}, {"fk": "RECIPE_INGREDIENT.ingredient_id", "pk": "INGREDIENT.id", "rel": "many"}, {"fk": "RECIPE_BOOKMARK.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "RECIPE_BOOKMARK.recipe_id", "pk": "RECIPE.id", "rel": "many"}, {"fk": "AUTO_CART_REQUEST.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "AUTO_CART_REQUEST.mart_id", "pk": "MART.id", "rel": "many"}, {"fk": "AUTO_CART_ITEM.auto_cart_request_id", "pk": "AUTO_CART_REQUEST.id", "rel": "many"}, {"fk": "AUTO_CART_ITEM.ingredient_id", "pk": "INGREDIENT.id", "rel": "many"}, {"fk": "AUTO_CART_ITEM.product_id", "pk": "PRODUCT.id", "rel": "many"}, {"fk": "AI_REQUEST_LOG.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "AI_REQUEST_LOG.auto_cart_request_id", "pk": "AUTO_CART_REQUEST.id", "rel": "many"}, {"fk": "AI_PROMPT.created_by_admin_id", "pk": "ADMIN.id", "rel": "many"}, {"fk": "CART_ADD_HISTORY.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "CART_ADD_HISTORY.product_id", "pk": "PRODUCT.id", "rel": "many"}, {"fk": "CART_ADD_HISTORY.auto_cart_request_id", "pk": "AUTO_CART_REQUEST.id", "rel": "many"}, {"fk": "BILLING_KEY.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "BILLING_KEY_ISSUE_REQUEST.member_id", "pk": "MEMBER.id", "rel": "many"}, {"fk": "BILLING_KEY_ISSUE_REQUEST.billing_key_id", "pk": "BILLING_KEY.id", "rel": "many"}, {"fk": "MEMBERSHIP_PAYMENT.membership_id", "pk": "MEMBERSHIP.id", "rel": "many"}, {"fk": "MEMBERSHIP_PAYMENT_ATTEMPT.membership_payment_id", "pk": "MEMBERSHIP_PAYMENT.id", "rel": "many"}, {"fk": "MEMBERSHIP_PAYMENT_ATTEMPT.billing_key_id", "pk": "BILLING_KEY.id", "rel": "many"}, {"fk": "MEMBERSHIP_REFUND.membership_payment_id", "pk": "MEMBERSHIP_PAYMENT.id", "rel": "many"}, {"fk": "MEMBERSHIP_REFUND.membership_payment_attempt_id", "pk": "MEMBERSHIP_PAYMENT_ATTEMPT.id", "rel": "many"}, {"fk": "BILLING_KEY_DELETION.billing_key_id", "pk": "BILLING_KEY.id", "rel": "many"}]};
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function render() {
+  DATA.groups.forEach((g, gi) => {
+    const group = el('section', 'group g-' + g.color);
+    group.appendChild(el('div', 'group-title', g.title));
+    const wrap = el('div', 'tables');
+    g.tables.forEach(t => {
+      const table = el('div', 'table' + (t.isNew ? ' is-new' : ''));
+      table.dataset.name = t.name;
+      const head = el('div', 'thead');
+      const name = el('span', '', t.name);
+      if (t.comment) name.title = t.comment;
+      head.appendChild(name);
+      head.appendChild(el('span', 'badge', '신규'));
+      table.appendChild(head);
+      t.cols.forEach(c => {
+        const row = el('div', 'col' + (t.newCols.includes(c.name) ? ' is-new' : ''));
+        row.dataset.col = t.name + '.' + c.name;
+        if (c.note) row.title = c.note;
+        row.appendChild(el('span', 'k', c.key));
+        row.appendChild(el('span', 'n', c.name));
+        row.appendChild(el('span', 't', c.type));
+        table.appendChild(row);
+      });
+      t.idx.forEach(cols => {
+        const row = el('div', 'idx');
+        row.appendChild(el('span', 'k', 'IDX'));
+        row.appendChild(el('span', 'n', 'INDEX(' + cols + ')'));
+        table.appendChild(row);
+      });
+      table.addEventListener('mouseenter', () => focusTable(t.name));
+      table.addEventListener('mouseleave', () => focusTable(null));
+      wrap.appendChild(table);
+    });
+    group.appendChild(wrap);
+    document.getElementById(gi < 7 ? 'row1' : 'row2').appendChild(group);
+  });
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function anchor(colEl, tableEl, side, canvasRect) {
+  const r = colEl.getBoundingClientRect();
+  const t = tableEl.getBoundingClientRect();
+  return {
+    x: (side > 0 ? t.right : t.left) - canvasRect.left,
+    y: r.top + r.height / 2 - canvasRect.top,
+  };
+}
+
+function foot(d, x, y, dir, many) {
+  // dir: 선이 테이블 밖으로 나가는 방향(+1 오른쪽, -1 왼쪽)
+  if (many) {
+    d.push(`M${x + dir * 11},${y} L${x},${y - 5} M${x + dir * 11},${y} L${x},${y} M${x + dir * 11},${y} L${x},${y + 5}`);
+  } else {
+    d.push(`M${x + dir * 9},${y - 5} L${x + dir * 9},${y + 5}`);
+  }
+}
+
+// ---- 직각 배선: 표를 장애물로 두고 꺾임·겹침·교차에 비용을 주는 A* 로 경로를 찾는다 ----
+const CELL = 5;
+const BEND = 6, OVERLAP = 14, CROSS = 2, NEAR = 3;
+const DX = [1, -1, 0, 0], DY = [0, 0, 1, -1];
+
+class MinHeap {
+  constructor() { this.f = []; this.v = []; }
+  get size() { return this.f.length; }
+  push(f, v) {
+    const F = this.f, V = this.v;
+    let i = F.length;
+    F.push(f); V.push(v);
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (F[p] <= F[i]) break;
+      [F[p], F[i]] = [F[i], F[p]]; [V[p], V[i]] = [V[i], V[p]];
+      i = p;
+    }
+  }
+  pop() {
+    const F = this.f, V = this.v;
+    const top = V[0];
+    const lf = F.pop(), lv = V.pop();
+    if (F.length) {
+      F[0] = lf; V[0] = lv;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < F.length && F[l] < F[m]) m = l;
+        if (r < F.length && F[r] < F[m]) m = r;
+        if (m === i) break;
+        [F[m], F[i]] = [F[i], F[m]]; [V[m], V[i]] = [V[i], V[m]];
+        i = m;
+      }
+    }
+    return top;
+  }
+}
+
+function makeRouter(width, height, blocked) {
+  const W = width, H = height;
+  const hUse = new Uint8Array(W * H), vUse = new Uint8Array(W * H);
+  // 이미 놓인 선 바로 옆 칸: 선끼리 한 칸쯤 띄워 놓도록 약한 비용을 준다
+  const hNear = new Uint8Array(W * H), vNear = new Uint8Array(W * H);
+  const g = new Float32Array(W * H * 4), parent = new Int32Array(W * H * 4);
+  return function route(sx, sy, sdir, ex, ey) {
+    g.fill(Infinity); parent.fill(-1);
+    const heap = new MinHeap();
+    const start = (sy * W + sx) * 4 + sdir;
+    g[start] = 0;
+    heap.push(Math.abs(sx - ex) + Math.abs(sy - ey), start);
+    let goal = -1;
+    while (heap.size) {
+      const cur = heap.pop();
+      const d = cur & 3, cell = cur >> 2;
+      const x = cell % W, y = (cell / W) | 0;
+      if (x === ex && y === ey) { goal = cur; break; }
+      const base = g[cur];
+      for (let nd = 0; nd < 4; nd++) {
+        if ((nd ^ 1) === d) continue; // 되돌아가기 금지
+        const nx = x + DX[nd], ny = y + DY[nd];
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const ncell = ny * W + nx;
+        if (blocked[ncell] && !(nx === ex && ny === ey)) continue;
+        const horizontal = nd < 2;
+        let cost = 1 + (nd !== d ? BEND : 0);
+        cost += horizontal
+          ? hUse[ncell] * OVERLAP + vUse[ncell] * CROSS + (hNear[ncell] ? NEAR : 0)
+          : vUse[ncell] * OVERLAP + hUse[ncell] * CROSS + (vNear[ncell] ? NEAR : 0);
+        const ng = base + cost;
+        const nstate = ncell * 4 + nd;
+        if (ng < g[nstate]) {
+          g[nstate] = ng; parent[nstate] = cur;
+          heap.push(ng + Math.abs(nx - ex) + Math.abs(ny - ey), nstate);
+        }
+      }
+    }
+    if (goal < 0) return null;
+    const cells = [];
+    for (let s = goal; s !== -1; s = parent[s]) cells.push([(s >> 2) % W, ((s >> 2) / W) | 0]);
+    cells.reverse();
+    for (let i = 1; i < cells.length; i++) {
+      const [x0, y0] = cells[i - 1], [x1, y1] = cells[i];
+      const a = y0 * W + x0, b = y1 * W + x1;
+      if (y0 === y1) {
+        hUse[a] = Math.min(255, hUse[a] + 1); hUse[b] = Math.min(255, hUse[b] + 1);
+        for (const dy of [-1, 1]) {
+          if (y0 + dy >= 0 && y0 + dy < H) { hNear[a + dy * W] = 1; hNear[b + dy * W] = 1; }
+        }
+      } else {
+        vUse[a] = Math.min(255, vUse[a] + 1); vUse[b] = Math.min(255, vUse[b] + 1);
+        for (const dx of [-1, 1]) {
+          if (x0 + dx >= 0 && x0 + dx < W) { vNear[a + dx] = 1; vNear[b + dx] = 1; }
+        }
+      }
+    }
+    return cells;
+  };
+}
+
+function corners(cells) {
+  const out = [cells[0]];
+  for (let i = 1; i < cells.length - 1; i++) {
+    const a = cells[i - 1], b = cells[i], c = cells[i + 1];
+    if ((b[0] - a[0]) !== (c[0] - b[0]) || (b[1] - a[1]) !== (c[1] - b[1])) out.push(b);
+  }
+  out.push(cells[cells.length - 1]);
+  return out;
+}
+
+function drawLines() {
+  const svg = document.getElementById('lines');
+  const canvas = document.getElementById('canvas');
+  const cr = canvas.getBoundingClientRect();
+  const pxW = canvas.scrollWidth, pxH = canvas.scrollHeight;
+  svg.setAttribute('width', pxW);
+  svg.setAttribute('height', pxH);
+  svg.innerHTML = '';
+
+  const W = Math.ceil(pxW / CELL) + 4, H = Math.ceil(pxH / CELL) + 4;
+  const blocked = new Uint8Array(W * H);
+  document.querySelectorAll('.table, .group-title').forEach(t => {
+    const r = t.getBoundingClientRect();
+    const x0 = Math.floor((r.left - cr.left) / CELL) - 1, x1 = Math.ceil((r.right - cr.left) / CELL);
+    const y0 = Math.floor((r.top - cr.top) / CELL) - 1, y1 = Math.ceil((r.bottom - cr.top) / CELL);
+    for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) {
+      for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) blocked[y * W + x] = 1;
+    }
+  });
+  const route = makeRouter(W, H, blocked);
+
+  const jobs = [];
+  DATA.refs.forEach(ref => {
+    const fkEl = document.querySelector(`[data-col="${ref.fk}"]`);
+    const pkEl = document.querySelector(`[data-col="${ref.pk}"]`);
+    if (!fkEl || !pkEl) return;
+    const fkTable = fkEl.closest('.table'), pkTable = pkEl.closest('.table');
+    const fr = fkTable.getBoundingClientRect(), pr = pkTable.getBoundingClientRect();
+    const fc = (fr.left + fr.right) / 2, pc = (pr.left + pr.right) / 2;
+    const sameColumn = Math.abs(fc - pc) < 40;
+    const gutterSide = fc > cr.left + pxW * 0.6 ? -1 : 1;
+    const fkSide = sameColumn ? gutterSide : (pc > fc ? 1 : -1);
+    const pkSide = sameColumn ? gutterSide : -fkSide;
+    const a = anchor(fkEl, fkTable, fkSide, cr);
+    const b = anchor(pkEl, pkTable, pkSide, cr);
+    jobs.push({ ref, fkTable, pkTable, fkSide, pkSide, a, b, dist: Math.abs(a.x - b.x) + Math.abs(a.y - b.y) });
+  });
+  jobs.sort((p, q) => p.dist - q.dist); // 가까운 연결부터 놓고 먼 연결이 돌아가게 한다
+
+  const stubCell = (x, side) => side > 0 ? Math.ceil(x / CELL) + 1 : Math.floor(x / CELL) - 2;
+  jobs.forEach(job => {
+    const { ref, fkTable, pkTable, fkSide, pkSide, a, b } = job;
+    const s = [stubCell(a.x, fkSide), Math.round(a.y / CELL)];
+    const e = [stubCell(b.x, pkSide), Math.round(b.y / CELL)];
+    const cells = route(s[0], s[1], fkSide > 0 ? 0 : 1, e[0], e[1]);
+    let pts;
+    if (cells) {
+      const cs = corners(cells);
+      pts = cs.map(c => ({ x: c[0] * CELL + CELL / 2, y: c[1] * CELL + CELL / 2, cx: c[0], cy: c[1] }));
+      // 표 옆 가로 구간은 컬럼 행의 정확한 높이에 맞춘다
+      for (let i = 0; i < pts.length && pts[i].cy === s[1]; i++) pts[i].y = a.y;
+      for (let i = pts.length - 1; i >= 0 && pts[i].cy === e[1]; i--) pts[i].y = b.y;
+    } else {
+      const mx = (a.x + b.x) / 2;
+      pts = [{ x: a.x + fkSide * 10, y: a.y }, { x: mx, y: a.y }, { x: mx, y: b.y }, { x: b.x + pkSide * 10, y: b.y }];
+    }
+    const all = [{ x: a.x, y: a.y }, ...pts, { x: b.x, y: b.y }];
+    const d = [all.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ')];
+    foot(d, a.x, a.y, fkSide, ref.rel === 'many');
+    foot(d, b.x, b.y, pkSide, false);
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d.join(' '));
+    p.dataset.tables = fkTable.dataset.name + ',' + pkTable.dataset.name;
+    svg.appendChild(p);
+  });
+}
+
+function focusTable(name) {
+  const svg = document.getElementById('lines');
+  svg.classList.toggle('dim', !!name);
+  svg.querySelectorAll('path').forEach(p => {
+    p.classList.toggle('hit', !!name && p.dataset.tables.split(',').includes(name));
+  });
+}
+
+document.getElementById('t-lines').addEventListener('change', e => {
+  document.body.classList.toggle('no-lines', !e.target.checked);
+});
+document.getElementById('t-changes').addEventListener('change', e => {
+  document.body.classList.toggle('show-changes', e.target.checked);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('capture');
+});
+
+// ?capture 로 열면 도구 막대 없이, ?changes 를 붙이면 변경 표시를 켠 채로 열린다
+if (/[?&]capture/.test(location.search)) document.body.classList.add('capture');
+if (/[?&]changes/.test(location.search)) {
+  document.body.classList.add('show-changes');
+  document.getElementById('t-changes').checked = true;
+}
+
+render();
+let redrawTimer = null;
+const redraw = () => {
+  clearTimeout(redrawTimer);
+  redrawTimer = setTimeout(() => {
+    const t0 = performance.now();
+    drawLines();
+    const canvas = document.getElementById('canvas');
+    document.documentElement.dataset.size = canvas.scrollWidth + 'x' + canvas.scrollHeight;
+    document.documentElement.dataset.routed = Math.round(performance.now() - t0) + 'ms';
+  }, 80);
+};
+window.addEventListener('load', redraw);
+window.addEventListener('resize', redraw);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+redraw();
+</script>
+</body>
+</html>
