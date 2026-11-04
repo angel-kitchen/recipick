@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AdminLayout from './admin/AdminLayout';
 import AdminShell from './admin/AdminShell';
+import AdminAiPrompts from './admin/pages/AdminAiPrompts';
 import AdminAiRequests from './admin/pages/AdminAiRequests';
 import AdminAudit from './admin/pages/AdminAudit';
 import AdminCategories from './admin/pages/AdminCategories';
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="members" element={<AdminMembers />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="ai-requests" element={<AdminAiRequests />} />
+          <Route path="ai-prompts" element={<AdminAiPrompts />} />
           <Route path="audit" element={<AdminAudit />} />
         </Route>
       </Route>
