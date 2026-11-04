@@ -119,7 +119,7 @@ export default function AiAutoCartBox() {
         const recipeId = Number(picked[index] ?? menu.candidates[0]?.recipeId);
         if (!recipeId) continue;
         // 인분이 없으면 레시피 기본 인분을 쓰므로 상세에서 읽어 온다
-        const servings = menu.servings ?? (await api.get(`/api/recipes/${recipeId}`)).baseServings;
+        const servings = menu.servings ?? (await api.get(`/api/recipes/${recipeId}/metadata`)).baseServings;
         menus.push({ recipeId, servings, optionalIngredientIds: [] });
       }
       if (menus.length === 0) {

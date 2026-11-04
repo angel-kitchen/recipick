@@ -172,7 +172,8 @@ export default function LocationPickerModal({ onConfirm, onClose }) {
     } catch (e) {
       if (run !== runRef.current) return;
       setError(e);
-      setConfirming(false);
+    } finally {
+      if (run === runRef.current) setConfirming(false);
     }
   };
 

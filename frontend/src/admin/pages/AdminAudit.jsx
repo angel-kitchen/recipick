@@ -18,10 +18,11 @@ function AuditDetail({ id }) {
 }
 
 export default function AdminAudit() {
-  const [targetType, setTargetType] = useState('');
+  const [filter, setFilter] = useState({ targetType: '', adminId: '', action: '', from: '', to: '' });
+  const change = (key) => (e) => { setPage(0); setFilter((prev) => ({ ...prev, [key]: e.target.value })); };
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState(null);
-  const { data, error } = useLoad(() => api.get('/api/admin/audit-logs', { targetType, page, size: 20 }), [targetType, page]);
+  const { data, error } = useLoad(() => api.get('/api/admin/audit-logs', { ...filter, page, size: 20 }), [filter, page]);
 
   return (
     <>
@@ -31,11 +32,8 @@ export default function AdminAudit() {
       <div className="filters">
         <select
           className="field__input"
-          value={targetType}
-          onChange={(e) => {
-            setPage(0);
-            setTargetType(e.target.value);
-          }}
+          value={filter.targetType}
+          onChange={change('targetType')}
         >
           <option value="">대상 전체</option>
           {Object.entries(AUDIT_TARGET).map(([value, label]) => (
@@ -44,6 +42,10 @@ export default function AdminAudit() {
             </option>
           ))}
         </select>
+        <input className="field__input" aria-label="시작 시각" type="datetime-local" value={filter.from} onChange={change('from')} />
+        <input className="field__input" aria-label="종료 시각" type="datetime-local" value={filter.to} onChange={change('to')} />
+        <input className="field__input" type="number" min="1" placeholder="관리자 ID" value={filter.adminId} onChange={change('adminId')} />
+        <select className="field__input" aria-label="작업 종류" value={filter.action} onChange={change('action')}><option value="">작업 전체</option>{Object.entries(AUDIT_ACTION).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select>
       </div>
       <ErrorNotice error={error} />
       {selected && <AuditDetail key={selected} id={selected} />}

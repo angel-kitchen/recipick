@@ -222,6 +222,7 @@ export default function Recipes() {
   return (
     <div className="container page">
       <h1 className="page__title">레시피</h1>
+      <div className="row-actions"><Link to="/recipes/rankings" className="btn btn--outline">레시피 순위</Link><Link to="/auto-carts/new" className="btn btn--outline">여러 메뉴로 장보기</Link></div>
       <AiAutoCartBox />
       <RecentViews type="recipe" title="최근 본 레시피" toPath={(id) => `/recipes/${id}`} />
       <div className="filters filters--end">

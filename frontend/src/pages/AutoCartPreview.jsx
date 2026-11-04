@@ -28,7 +28,7 @@ export default function AutoCartPreview() {
     Promise.all(
       ids.map((id) =>
         api
-          .get(`/api/recipes/${id}`)
+          .get(`/api/recipes/${id}/metadata`)
           .then((recipe) => [id, youtubeThumbnail(recipe.youtubeUrl)])
           .catch(() => [id, null]),
       ),

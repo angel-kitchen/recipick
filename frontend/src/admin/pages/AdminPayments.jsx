@@ -1,17 +1,39 @@
-import { useState } from 'react';
-import { api } from '../../api/client';
+import { useRef, useState } from 'react';
+import { api, isUnknownOutcome } from '../../api/client';
 import ErrorNotice from '../../components/ErrorNotice';
 import Pager from '../../components/Pager';
 import { PAYMENT_STATUS, formatDateTime, formatWon } from '../../labels';
 import useLoad from '../useLoad';
 
 function PaymentDetail({ paymentId }) {
-  const { data, error } = useLoad(() => api.get(`/api/admin/payments/${paymentId}`), [paymentId]);
+  const { data, error, reload } = useLoad(() => api.get(`/api/admin/payments/${paymentId}`), [paymentId]);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState(null);
+  const [notice, setNotice] = useState('');
+  const keys = useRef({});
+  const retry = async (refundId) => {
+    if (busy || !window.confirm('실패한 마트 거절 환불을 다시 처리할까요?')) return;
+    setBusy(true); setActionError(null);
+    keys.current[refundId] ??= crypto.randomUUID();
+    try {
+      const result = await api.post(`/api/admin/orders/${data.orderId}/refunds/${refundId}/retry`, undefined, { 'Idempotency-Key': keys.current[refundId] });
+      setNotice(result.refundStatus === 'COMPLETED' ? '환불이 완료되었습니다.' : '환불 결과를 확인하고 있습니다.');
+      reload();
+    } catch (e) {
+      if (!isUnknownOutcome(e)) delete keys.current[refundId];
+      reload();
+      setActionError(e);
+    } finally { setBusy(false); }
+  };
   if (error) return <ErrorNotice error={error} />;
   if (!data) return <p className="state-message">불러오는 중입니다.</p>;
   return (
     <section className="card admin__section">
       <h2 className="tile__title">결제 {paymentId} 상세</h2>
+      <ErrorNotice error={actionError} />
+      <button className="chip" disabled={busy} onClick={reload}>상세 새로고침</button>
+      {notice && <p role="status">{notice}</p>}
+      {data.paymentStatus === 'PAID' && data.refunds?.[0]?.requestedBy === 'ADMIN' && data.refunds[0].status === 'FAILED' && <button className="btn btn--outline" disabled={busy} onClick={() => retry(data.refunds[0].refundId)}>실패한 마트 거절 환불 재처리</button>}
       <pre className="json">{JSON.stringify(data, null, 2)}</pre>
     </section>
   );

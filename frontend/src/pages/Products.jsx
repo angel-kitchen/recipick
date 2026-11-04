@@ -30,6 +30,7 @@ export default function Products() {
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState([]);
   const [priceKey, setPriceKey] = useState('');
+  const [sort, setSort] = useState('createdAt,desc');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
@@ -61,13 +62,14 @@ export default function Products() {
         maxPrice: priceRange?.maxPrice,
         page,
         size: PAGE_SIZE,
+        sort,
       })
       .then((data) => !ignore && setResult(data))
       .catch((e) => !ignore && setError(e));
     return () => {
       ignore = true;
     };
-  }, [keyword, categoryId, priceRange, page]);
+  }, [keyword, categoryId, priceRange, page, sort]);
 
   const addToCart = async (product) => {
     setError(null);
@@ -90,11 +92,12 @@ export default function Products() {
     setSearchParams({});
   };
 
-  const visible = result?.content.filter((product) => !onlyAvailable || !product.soldOut);
+  const visible = result?.content.filter((product) => !onlyAvailable || (!product.soldOut && product.status !== 'STOPPED'));
 
   return (
     <div className="container page">
       <h1 className="page__title">상품</h1>
+      <div className="row-actions"><Link to="/products/best" className="btn btn--outline">베스트 상품</Link><select className="field__input" aria-label="상품 정렬" value={sort} onChange={(e) => { setSort(e.target.value); setPage(0); }}><option value="createdAt,desc">최신순</option><option value="price,asc">낮은 가격순</option><option value="price,desc">높은 가격순</option></select></div>
       {member.mart && <p className="page__sub">이용 마트: {member.mart.name}</p>}
       <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
       <div className="filters">
@@ -189,8 +192,8 @@ export default function Products() {
                       <button
                         type="button"
                         className="btn btn--outline"
-                        disabled={Boolean(block)}
-                        title={block?.text}
+                        disabled={Boolean(block) || product.status === 'STOPPED'}
+                        title={product.status === 'STOPPED' ? '판매 중지 상품이에요' : block?.text}
                         onClick={() => guard(() => addToCart(product))}
                       >
                         담기

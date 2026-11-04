@@ -1,4 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import AccountHistory from './pages/AccountHistory';
+import Rankings from './pages/Rankings';
+import AutoCartBuilder from './pages/AutoCartBuilder';
 import AdminLayout from './admin/AdminLayout';
 import AdminShell from './admin/AdminShell';
 import AdminAiPrompts from './admin/pages/AdminAiPrompts';
@@ -11,6 +14,8 @@ import AdminMarts from './admin/pages/AdminMarts';
 import AdminMembers from './admin/pages/AdminMembers';
 import AdminOrders from './admin/pages/AdminOrders';
 import AdminPayments from './admin/pages/AdminPayments';
+import AdminMembershipPayments from './admin/pages/AdminMembershipPayments';
+import AdminMemberPoints from './admin/pages/AdminMemberPoints';
 import AdminProducts from './admin/pages/AdminProducts';
 import AdminRecipes from './admin/pages/AdminRecipes';
 import EmptyState from './components/EmptyState';
@@ -51,6 +56,8 @@ export default function App() {
           <Route path="categories" element={<AdminCategories />} />
           <Route path="members" element={<AdminMembers />} />
           <Route path="payments" element={<AdminPayments />} />
+          <Route path="membership-payments" element={<AdminMembershipPayments />} />
+          <Route path="member-points" element={<AdminMemberPoints />} />
           <Route path="ai-requests" element={<AdminAiRequests />} />
           <Route path="ai-prompts" element={<AdminAiPrompts />} />
           <Route path="audit" element={<AdminAudit />} />
@@ -62,6 +69,10 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/start" element={<Start />} />
         <Route element={<ProtectedRoute />}>
+          <Route path="/recipes/rankings" element={<Rankings />} />
+          <Route path="/auto-carts/new" element={<AutoCartBuilder />} />
+          <Route path="/payments" element={<AccountHistory kind="payments" />} />
+          <Route path="/points/earnings" element={<AccountHistory kind="earnings" />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/auto-carts" element={<AutoCartHistory />} />
@@ -71,6 +82,7 @@ export default function App() {
           <Route path="/membership" element={<Membership />} />
           <Route path="/addresses" element={<Addresses />} />
           <Route element={<RequireDelivery />}>
+            <Route path="/products/best" element={<Rankings products />} />
             <Route path="/products" element={<Products />} />
             <Route path="/products/:productId" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />

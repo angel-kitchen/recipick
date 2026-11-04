@@ -185,3 +185,9 @@ export const MEMBERSHIP_STATUS = {
   PAYMENT_PENDING: '결제 대기',
   CONVERSION_PENDING: '유료 전환 대기',
 };
+
+export const POINT_HISTORY_TYPE = {
+  EARN_PENDING: '적립 예정', EARN_COMPLETED: '적립 완료', EARN_CANCELED: '적립 취소',
+  USE_RESERVED: '사용 예약', USE_CONFIRMED: '사용 확정', RESTORED: '사용 복원',
+  EXPIRED: '유효기간 만료', WITHDRAWAL_FORFEITED: '탈퇴 소멸',
+};

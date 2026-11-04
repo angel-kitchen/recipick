@@ -6,7 +6,7 @@ import { confirmClosedPayment, confirmPayment, customerOf, payOrder } from '../a
 import { useAuth } from '../auth/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorNotice from '../components/ErrorNotice';
-import { ORDER_STATUS, formatDateTime, formatPoint, formatWon } from '../labels';
+import { ORDER_STATUS, ORDER_MART_STATUS, PAYMENT_STATUS, formatDateTime, formatPoint, formatWon } from '../labels';
 
 const PAYMENT_NOTICE = {
   PAID: { text: '결제가 완료되었습니다.', info: true },
@@ -60,7 +60,7 @@ export default function OrderDetail() {
       const data = await api.get(`/api/orders/${orderId}`);
       setOrder(data);
       // 다시 결제할 때 쓰는 PortOne 결제 ID와 만료 시각은 결제 정보에 있다
-      setPayment(data.status === 'PENDING_PAYMENT' ? await api.get(`/api/payments/orders/${orderId}`) : null);
+      setPayment(await api.get(`/api/payments/orders/${orderId}`));
       setEarning(await findEarning(orderId).catch(() => null));
     } catch (e) {
       setError(e);
@@ -201,6 +201,21 @@ export default function OrderDetail() {
           </div>
         </div>
       )}
+      <section className="card" style={{ marginBottom: 16 }}>
+        <h2 className="tile__title">처리·결제 정보</h2>
+        <dl className="info-list">
+          <dt>마트 처리</dt><dd>{ORDER_MART_STATUS[order.martStatus] ?? order.martStatus}</dd>
+          {order.cancelReasonCode && <><dt>취소 사유</dt><dd>{order.cancelReasonCode}{order.cancelReasonDetail ? ` · ${order.cancelReasonDetail}` : ''}</dd></>}
+          {payment && <>
+            <dt>결제 수단</dt><dd>{payment.paymentMethod === 'POINTS_ONLY' ? '포인트 전액 결제' : '카드'}</dd>
+            <dt>결제 상태</dt><dd>{PAYMENT_STATUS[payment.paymentStatus] ?? payment.paymentStatus}</dd>
+            <dt>결제 시각</dt><dd>{formatDateTime(payment.paidAt)}</dd>
+            {payment.failureReason && <><dt>실패 사유</dt><dd>{payment.failureReason}</dd></>}
+            <dt>완료 환불 금액</dt><dd>{formatWon(payment.completedRefundAmount ?? 0)}</dd>
+            <dt>환불 상태</dt><dd>{payment.latestRefundStatus ?? '-'}</dd>
+          </>}
+        </dl>
+      </section>
       <section className="card">
         <p className="page__sub">
           주문번호 {order.orderNumber} · <span className="badge">{ORDER_STATUS[order.status]}</span>

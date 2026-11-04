@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, isUnknownOutcome } from '../api/client';
 import { cancelPendingOrder, findPendingOrder } from '../api/orders';
 import { customerOf, payOrder } from '../api/payments';
@@ -218,6 +218,7 @@ export default function Checkout() {
               {preview.unorderableReasons.map((reason) => (
                 <div key={reason} className="notice">
                   {UNORDERABLE_REASON[reason] ?? reason}
+                  {reason === 'DELIVERY_UNAVAILABLE' && preview.delivery.status === 'OTHER_MART_AREA' && <Link to="/addresses">현재 배송지 변경</Link>}
                 </div>
               ))}
               <ul className="list-plain">

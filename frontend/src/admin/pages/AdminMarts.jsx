@@ -6,6 +6,8 @@ import { useAdmin } from '../AdminContext';
 import useLoad from '../useLoad';
 
 function MartForm({ mart, onDone, onCancel }) {
+  const { admin } = useAdmin();
+  const canEditLocation = admin.role === 'SUPER_ADMIN';
   const [form, setForm] = useState({
     latitude: String(mart.latitude),
     longitude: String(mart.longitude),
@@ -20,9 +22,11 @@ function MartForm({ mart, onDone, onCancel }) {
     setError(null);
     try {
       await api.patch(`/api/admin/marts/${mart.martId}`, {
-        latitude: form.latitude,
-        longitude: form.longitude,
-        serviceRadiusM: form.serviceRadiusM ? Number(form.serviceRadiusM) : null,
+        ...(canEditLocation ? {
+          latitude: form.latitude,
+          longitude: form.longitude,
+          serviceRadiusM: form.serviceRadiusM ? Number(form.serviceRadiusM) : null,
+        } : {}),
         status: form.status,
       });
       onDone();
@@ -38,15 +42,15 @@ function MartForm({ mart, onDone, onCancel }) {
       <div className="form-grid">
         <label className="field">
           <span className="field__label">위도</span>
-          <input className="field__input" value={form.latitude} onChange={change('latitude')} required />
+          <input className="field__input" value={form.latitude} onChange={change('latitude')} readOnly={!canEditLocation} required />
         </label>
         <label className="field">
           <span className="field__label">경도</span>
-          <input className="field__input" value={form.longitude} onChange={change('longitude')} required />
+          <input className="field__input" value={form.longitude} onChange={change('longitude')} readOnly={!canEditLocation} required />
         </label>
         <label className="field">
           <span className="field__label">서비스 반경(m)</span>
-          <input className="field__input" inputMode="numeric" value={form.serviceRadiusM} onChange={change('serviceRadiusM')} />
+          <input className="field__input" inputMode="numeric" value={form.serviceRadiusM} onChange={change('serviceRadiusM')} readOnly={!canEditLocation} />
           <span className="field__hint">지도 표시용 값입니다. 배송 가능 여부는 지역(법정동)으로 판정합니다.</span>
         </label>
         <label className="field">
