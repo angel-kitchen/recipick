@@ -627,10 +627,10 @@ class ClaudeAiEvaluationTest {
     }
 
     record ExpectedConditions(String cuisineType, String dishType, Integer maxCookingMinutes, Integer maxSpicyLevel,
-                              List<String> excludedIngredients) {
+                              List<String> excludedIngredients, Integer maxBudget, Integer servings) {
     }
 
-    // 다섯 조건이 모두 같아야 정답이다. 말하지 않은 조건을 채우거나(예: 맵기를 마음대로 정함) 빠뜨리면 틀린 것으로 본다
+    // 일곱 조건(예산·인분 포함)이 모두 같아야 정답이다. 말하지 않은 조건을 채우거나(예: 맵기를 마음대로 정함) 빠뜨리면 틀린 것으로 본다
     record ConditionCase(String text, ExpectedConditions expected) {
 
         boolean matches(AiRecipeConditions actual) {
@@ -638,7 +638,9 @@ class ClaudeAiEvaluationTest {
                 && Objects.equals(expected.dishType(), actual.dishType())
                 && Objects.equals(expected.maxCookingMinutes(), actual.maxCookingMinutes())
                 && Objects.equals(expected.maxSpicyLevel(), actual.maxSpicyLevel())
-                && toSet(expected.excludedIngredients()).equals(toSet(actual.excludedIngredients()));
+                && toSet(expected.excludedIngredients()).equals(toSet(actual.excludedIngredients()))
+                && Objects.equals(expected.maxBudget(), actual.maxBudget())
+                && Objects.equals(expected.servings(), actual.servings());
         }
 
         private static Set<String> toSet(List<String> names) {
