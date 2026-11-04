@@ -20,6 +20,11 @@ const MODES = {
     placeholder: '예: 두부랑 김치 있는데 뭐 해먹지?',
     examples: ['두부랑 김치 있는데 뭐 해먹지?', '계란이랑 밥만 있어', '감자 양파 당근 남았어'],
   },
+  mealPlan: {
+    label: '식단 짜기',
+    placeholder: '예: 이번 주 저녁 5일치, 겹치지 않게',
+    examples: ['이번 주 저녁 5일치, 겹치지 않게', '2인 가족 3일치 저녁', '안 매운 걸로 4일치'],
+  },
 };
 
 // 한 입력창으로 두 가지를 처리한다.
@@ -28,6 +33,7 @@ const MODES = {
 // ② 이름으로 못 찾으면(NO_MATCH) 같은 문장을 "매운음식 30분 이내" 같은 조건으로 보고 레시피를 추천받는다.
 //    결과는 RECOMMENDED, NO_MATCH, FALLBACK이고, 결과에 source: 'recommend'를 붙여 ①과 구분한다.
 // 가진 재료 탭은 냉장고 파먹기만 부르고, 결과에 source: 'fridge'를 붙인다.
+// 식단 짜기 탭은 일주일 식단만 부르고, 결과에 source: 'mealPlan'을 붙인다.
 // ①이 AI 장애(FALLBACK)로 끝났을 때는 ②를 부르지 않는다. 같은 AI가 다시 실패할 가능성이 크고 호출 횟수만 쓴다.
 export default function AiAutoCartBox() {
   const navigate = useNavigate();
@@ -70,6 +76,17 @@ export default function AiAutoCartBox() {
       if (mode === 'fridge') {
         const answered = await api.post('/api/recipes/ai-fridge-recommendations', { text });
         setResult({ ...answered, source: 'fridge' });
+        return;
+      }
+      if (mode === 'mealPlan') {
+        try {
+          const planned = await api.post('/api/auto-carts/ai-meal-plans', { text });
+          setResult({ ...planned, source: 'mealPlan' });
+        } catch (e) {
+          // 식단은 장바구니 미리보기를 만드는 기능이라 이용 마트가 없으면 대신 보여 줄 결과가 없다
+          if (e.code !== 'ORDER-004') throw e;
+          setMartMissing(true);
+        }
         return;
       }
       let data;
@@ -162,12 +179,15 @@ export default function AiAutoCartBox() {
         <ErrorNotice error={error} />
         {martMissing && (
           <p className="field__hint">
-            이용 마트가 없어 재료 담기 미리보기는 쓸 수 없어요. 조건에 맞는 레시피만 보여 드려요.{' '}
+            {mode === 'mealPlan'
+              ? '이용 마트가 있어야 식단 재료를 장바구니 미리보기로 만들 수 있어요.'
+              : '이용 마트가 없어 재료 담기 미리보기는 쓸 수 없어요. 조건에 맞는 레시피만 보여 드려요.'}{' '}
             <Link to="/addresses">배송지 등록하기</Link>
           </p>
         )}
         {result?.source === 'recommend' && <Recommendations result={result} />}
         {result?.source === 'fridge' && <FridgeAnswer result={result} />}
+        {result?.source === 'mealPlan' && <MealPlan result={result} onOpen={(id) => navigate(`/auto-carts/${id}`)} />}
         {!result?.source && result?.status === 'NO_MATCH' && (
           <p className="field__hint">맞는 레시피를 찾지 못했어요. 다른 표현으로 다시 입력해 주세요.</p>
         )}
@@ -311,4 +331,42 @@ function missingText(ingredient, martSelected) {
   const product = ingredient.productName ? ` · ${ingredient.productName} ${formatWon(ingredient.price)}` : '';
   const reason = ingredient.unavailableReason ? ` (${UNAVAILABLE_REASON[ingredient.unavailableReason]})` : '';
   return `부족: ${ingredient.name}${product}${reason}`;
+}
+
+// 일주일 식단 결과. 고른 이유는 미리보기 화면에 없어서, 바로 넘기지 않고 한 번 보여 준 뒤 버튼으로 이동한다
+function MealPlan({ result, onOpen }) {
+  if (result.status === 'NO_MATCH') {
+    return <p className="field__hint">식단을 짜지 못했어요. "이번 주 저녁 3일치"처럼 다시 입력해 주세요.</p>;
+  }
+  if (result.status === 'FALLBACK') {
+    return <p className="field__hint">지금은 식단을 짜기 어려워요. 아래 검색으로 레시피를 찾아 주세요.</p>;
+  }
+  return (
+    <>
+      <p className="field__hint">
+        {result.meals.length}가지로 식단을 짰어요. 재료 예상 금액 {formatWon(result.preview.totalPrice)}
+      </p>
+      <div className="grid" style={{ marginTop: 12 }}>
+        {result.meals.map((meal) => (
+          <Link key={meal.recipeId} to={`/recipes/${meal.recipeId}`} className="tile">
+            {meal.thumbnailUrl ? (
+              <img className="tile__image" src={meal.thumbnailUrl} alt="" loading="lazy" />
+            ) : (
+              <ImagePlaceholder />
+            )}
+            <div className="tile__body">
+              <span className="tile__title">{meal.name}</span>
+              <span className="tile__meta">{meal.servings}인분</span>
+              {meal.reason && <span className="tile__meta">{meal.reason}</span>}
+            </div>
+          </Link>
+        ))}
+      </div>
+      <div className="row-actions">
+        <button type="button" className="btn" onClick={() => onOpen(result.preview.autoCartRequestId)}>
+          장바구니 미리보기
+        </button>
+      </div>
+    </>
+  );
 }

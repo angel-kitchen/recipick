@@ -152,6 +152,7 @@ export const AI_REQUEST_TYPE = {
   AUTO_CART: '자동 장바구니',
   RECOMMENDATION: '레시피 추천',
   FRIDGE: '냉장고 파먹기',
+  MEAL_PLAN: '일주일 식단',
 };
 export const AI_RESULT_STATUS = {
   PREVIEWED: '미리보기',
@@ -167,6 +168,7 @@ export const AI_PROMPT_TYPE = {
   CONDITION: '조건 추천 ① 조건 분석',
   RECOMMEND: '조건 추천 ② 고르기',
   FRIDGE: '냉장고 파먹기',
+  MEAL_PLAN: '일주일 식단',
 };
 
 export const MEMBERSHIP_SOURCE = {
