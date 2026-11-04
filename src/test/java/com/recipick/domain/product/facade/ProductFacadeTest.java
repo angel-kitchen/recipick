@@ -76,7 +76,7 @@ class ProductFacadeTest {
     void getProduct() {
         // given
         ProductDetailResponse expected = new ProductDetailResponse(
-            5L, "애호박", null, null, "채소", null, null, null, 1500L, null, false);
+            5L, "애호박", null, null, "채소", null, null, null, 1500L, null, false, 1500L, 0, null);
         given(memberService.getMartId(7L)).willReturn(Optional.of(1L));
         given(productService.getProduct(1L, 5L)).willReturn(expected);
 

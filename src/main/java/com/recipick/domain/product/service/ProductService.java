@@ -1,5 +1,7 @@
 package com.recipick.domain.product.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import com.recipick.global.audit.AdminAuditAction;
 import com.recipick.global.audit.AdminAuditChange;
@@ -9,7 +11,9 @@ import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
 import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.request.ProductDiscountUpdateRequest;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.response.ProductDiscountResponse;
 import com.recipick.domain.product.dto.response.ProductIdResponse;
 import com.recipick.domain.product.dto.response.ProductPriceResponse;
 import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
@@ -60,7 +64,7 @@ public class ProductService {
     public static final int BEST_PRODUCT_LIMIT = 100;
 
     private final AdminAuditRecorder auditRecorder;
-
+    private final Clock clock;
     private final ProductRepository productRepository;
     private final MartRepository martRepository;
     private final CategoryRepository categoryRepository;
@@ -80,9 +84,10 @@ public class ProductService {
             request.status()
         );
 
+        LocalDateTime now = LocalDateTime.now(clock);
         return PageResponse.from(
             productRepository.searchAdminProducts(scoped, pageable)
-                .map(AdminProductResponse::from)
+                .map(product -> AdminProductResponse.from(product, now))
         );
     }
 
@@ -131,8 +136,9 @@ public class ProductService {
         if (productIds.isEmpty()) {
             return List.of();
         }
+        LocalDateTime now = LocalDateTime.now(clock);
         return productRepository.findAllById(productIds).stream()
-            .map(ProductSummary::from)
+            .map(p-> ProductSummary.from(p, now))
             .toList();
     }
 
@@ -277,6 +283,42 @@ public class ProductService {
         return ProductPriceResponse.from(product);
     }
 
+    @Transactional
+    public ProductDiscountResponse updateDiscount(
+        AdminRole role,
+        Long adminMartId,
+        Long productId,
+        ProductDiscountUpdateRequest request
+    ) {
+        Product product = getProductForUpdate(role, adminMartId, productId);
+        int beforeRate = product.getDiscountRate();
+        LocalDateTime beforeEndAt = product.getDiscountEndAt();
+        LocalDateTime now = LocalDateTime.now(clock);
+        product.changeDiscount(request.discountRate(), request.discountEndAt(), now);
+        recordDiscountChange(product, beforeRate, beforeEndAt);
+        return ProductDiscountResponse.from(product, now);
+    }
+
+    @Transactional
+    public ProductDiscountResponse clearDiscount(AdminRole role, Long adminMartId, Long productId) {
+        Product product = getProductForUpdate(role, adminMartId, productId);
+        int beforeRate = product.getDiscountRate();
+        LocalDateTime beforeEndAt = product.getDiscountEndAt();
+        product.clearDiscount();
+        recordDiscountChange(product, beforeRate, beforeEndAt);
+        return ProductDiscountResponse.from(product, LocalDateTime.now(clock));
+    }
+
+    private void recordDiscountChange(Product product, int beforeRate, LocalDateTime beforeEndAt) {
+        if (beforeRate == product.getDiscountRate() && Objects.equals(beforeEndAt, product.getDiscountEndAt())) {
+            return;
+        }
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.PRODUCT_DISCOUNT_CHANGE, product.getId(),
+            product.getMart().getId(), Map.of(
+            AdminAuditField.DISCOUNT_RATE, new AdminAuditChange(beforeRate, product.getDiscountRate()),
+            AdminAuditField.DISCOUNT_END_AT, new AdminAuditChange(beforeEndAt, product.getDiscountEndAt()))));
+    }
+
     private Product getProductForUpdate(AdminRole role, Long adminMartId, Long productId) {
         Product product = productRepository.findByIdForUpdate(productId)
             .filter(p -> !p.isDeleted())
@@ -313,11 +355,12 @@ public class ProductService {
             }
         }
 
+        LocalDateTime now = LocalDateTime.now(clock);
         MemberProductSearchCondition condition = new MemberProductSearchCondition(
-            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice());
+            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice(), now);
         return PageResponse.from(
             productRepository.searchMemberProducts(condition, pageable)
-                .map(ProductSearchResponse::from)
+                .map(product -> ProductSearchResponse.from(product, now))
         );
     }
 
@@ -325,7 +368,7 @@ public class ProductService {
         Product product = productRepository.findById(productId)
             .filter(p -> !p.isDeleted() && p.getMart().getId().equals(martId))
             .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        return ProductDetailResponse.from(product);
+        return ProductDetailResponse.from(product, LocalDateTime.now(clock));
     }
     // 같은 값 재요청은 제외하되 문자열 원문은 감사 details에 저장하지 않는다.
     private List<Object> auditValues(Product product) {
@@ -339,6 +382,7 @@ public class ProductService {
     // 페이지가 덜 차거나 전체 개수가 실제보다 커지지 않는다
     public PageResponse<ProductSearchResponse> findBestProducts(Long martId, List<Long> rankedIds, Pageable pageable) {
         List<ProductSearchResponse> ranked = List.of();
+        LocalDateTime now = LocalDateTime.now(clock);
         if (!rankedIds.isEmpty()) {
             Map<Long, Product> productById = productRepository
                 .findAllByIdInAndMartIdAndDeletedFalse(rankedIds, martId).stream()
@@ -346,7 +390,7 @@ public class ProductService {
             ranked = rankedIds.stream()
                 .map(productById::get)
                 .filter(Objects::nonNull)
-                .map(ProductSearchResponse::from)
+                .map(product -> ProductSearchResponse.from(product, now))
                 .toList();
         }
         int from = (int) Math.min(pageable.getOffset(), ranked.size());

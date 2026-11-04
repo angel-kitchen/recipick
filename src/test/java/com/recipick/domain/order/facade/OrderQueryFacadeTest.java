@@ -431,7 +431,8 @@ class OrderQueryFacadeTest {
     }
 
     private ProductSummary product(Long productId, Long martId, ProductStatus status, int stock, Long price) {
-        return new ProductSummary(productId, martId, "상품" + productId, null, price, null, null, status, stock, false);
+        return new ProductSummary(productId, martId, "상품" + productId, null, price, price, 0, null, null,
+            status, stock, false);
     }
     @Test
     @DisplayName("관리자 주문 목록 감사 기록이 실패하면 조회 결과를 반환하지 않는다")

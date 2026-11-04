@@ -13,6 +13,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
@@ -32,6 +36,9 @@ public class ProductStockServiceTest {
 
     @Mock
     private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-11-05T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     @InjectMocks
     private ProductStockService productStockService;

@@ -20,6 +20,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Transactional
 class ProductRepositoryTest extends IntegrationTestSupport {
@@ -273,7 +274,7 @@ class ProductRepositoryTest extends IntegrationTestSupport {
     void searchMemberProducts_martAndDeleted() {
         // given
         MemberProductSearchCondition condition =
-            new MemberProductSearchCondition(martA.getId(), null, null, null, null);
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, LocalDateTime.now());
 
         // when
         Page<Product> result = productRepository.searchMemberProducts(condition, PageRequest.of(0, 20));
@@ -294,11 +295,14 @@ class ProductRepositoryTest extends IntegrationTestSupport {
 
         // when
         Page<Product> byKeyword = productRepository.searchMemberProducts(
-            new MemberProductSearchCondition(martA.getId(), "호박", null, null, null), PageRequest.of(0, 20));
+            new MemberProductSearchCondition(martA.getId(), "호박", null, null, null, LocalDateTime.now()),
+            PageRequest.of(0, 20));
         Page<Product> byCategory = productRepository.searchMemberProducts(
-            new MemberProductSearchCondition(martA.getId(), null, meat.getId(), null, null), PageRequest.of(0, 20));
+            new MemberProductSearchCondition(martA.getId(), null, meat.getId(), null, null, LocalDateTime.now()),
+            PageRequest.of(0, 20));
         Page<Product> byPrice = productRepository.searchMemberProducts(
-            new MemberProductSearchCondition(martA.getId(), null, null, 1500L, 2500L), PageRequest.of(0, 20));
+            new MemberProductSearchCondition(martA.getId(), null, null, 1500L, 2500L, LocalDateTime.now()),
+            PageRequest.of(0, 20));
 
         // then
         assertThat(byKeyword.getContent()).extracting(Product::getName).containsExactly("애호박");
@@ -314,7 +318,7 @@ class ProductRepositoryTest extends IntegrationTestSupport {
         changePrice("청양고추", 1000L);
         changePrice("삼겹살", 2000L);
         MemberProductSearchCondition condition =
-            new MemberProductSearchCondition(martA.getId(), null, null, null, null);
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, LocalDateTime.now());
 
         // when
         Page<Product> asc = productRepository.searchMemberProducts(
@@ -330,5 +334,44 @@ class ProductRepositoryTest extends IntegrationTestSupport {
             .containsExactly("애호박", "삼겹살", "청양고추");
         assertThat(latest.getContent()).extracting(Product::getName)
             .containsExactly("삼겹살", "청양고추", "애호박");
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 할인 중인 상품은 판매가 기준으로 정렬·범위가 적용되고 종료된 할인은 정상가다")
+    void searchMemberProducts_salePrice() {
+        // given
+        LocalDateTime now = LocalDateTime.of(2026, 11, 5, 9, 0);
+        changePrice("애호박", 3000L);
+        changePrice("청양고추", 1000L);
+        changePrice("삼겹살", 2000L);
+        productRepository.findAll().forEach(p -> {
+            if (p.getName().equals("애호박")) {
+                p.changeDiscount(50, now.plusDays(1), now.minusDays(1));
+            }
+            if (p.getName().equals("삼겹살")) {
+                p.changeDiscount(50, now.plusSeconds(1), now.minusDays(1));
+            }
+        });
+        em.flush();
+        em.clear();
+        LocalDateTime later = now.plusDays(2);
+
+        // when
+        // now 기준: 애호박 1500(할인), 청양고추 1000, 삼겹살 1000(할인)
+        Page<Product> sortedNow = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, now),
+            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "price")));
+        Page<Product> rangeNow = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, 1200L, 2000L, now), PageRequest.of(0, 20));
+        // later 기준: 할인이 모두 끝나 정상가
+        Page<Product> sortedLater = productRepository.searchMemberProducts(
+            new MemberProductSearchCondition(martA.getId(), null, null, null, null, later),
+            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "price")));
+
+        // then
+        assertThat(sortedNow.getContent()).extracting(Product::getName).first().isEqualTo("애호박");
+        assertThat(rangeNow.getContent()).extracting(Product::getName).containsExactly("애호박");
+        assertThat(sortedLater.getContent()).extracting(Product::getName)
+            .containsExactly("애호박", "삼겹살", "청양고추");
     }
 }

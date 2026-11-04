@@ -386,6 +386,6 @@ class CartFacadeTest {
     }
 
     private ProductSummary product(Long productId, Long martId, ProductStatus status, int stock, boolean deleted) {
-        return new ProductSummary(productId, martId, "애호박", null, 1500L, null, null, status, stock, deleted);
+        return new ProductSummary(productId, martId, "애호박", null, 1500L, 1500L, 0, null, null, status, stock, deleted);
     }
 }

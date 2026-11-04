@@ -4,6 +4,8 @@ import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.response.AdminProductResponse;
 import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
 import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.request.ProductDiscountUpdateRequest;
+import com.recipick.domain.product.dto.response.ProductDiscountResponse;
 import com.recipick.domain.product.dto.response.ProductIdResponse;
 import com.recipick.domain.product.dto.response.ProductPriceResponse;
 import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
@@ -82,6 +84,27 @@ public class ProductAdminController {
         ProductPriceResponse response = productService.updatePrice(
             AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
         return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
+    }
+
+    @PatchMapping("/{productId}/discount")
+    public ResponseEntity<ApiResponse<ProductDiscountResponse>> updateDiscount(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long productId,
+        @Valid @RequestBody ProductDiscountUpdateRequest request
+    ) {
+        ProductDiscountResponse response = productService.updateDiscount(
+            AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
+        return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
+    }
+
+    @DeleteMapping("/{productId}/discount")
+    public ResponseEntity<ApiResponse<ProductDiscountResponse>> clearDiscount(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long productId
+    ) {
+        ProductDiscountResponse response = productService.clearDiscount(
+            AdminRole.valueOf(principal.role()), principal.martId(), productId);
+        return ResponseEntity.ok(ApiResponse.success("해제되었습니다.", response));
     }
 
     @PatchMapping("/{productId}/status")

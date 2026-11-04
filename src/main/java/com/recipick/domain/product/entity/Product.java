@@ -19,6 +19,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -85,6 +86,11 @@ public class Product extends BaseTimeEntity {
     private String imageUrl;
 
     private Long price;
+
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int discountRate;
+
+    private LocalDateTime discountEndAt;
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")
@@ -170,6 +176,34 @@ public class Product extends BaseTimeEntity {
             throw new BusinessException(ProductErrorCode.INVALID_PRICE);
         }
         this.price = price;
+    }
+
+    public void changeDiscount(int rate, LocalDateTime endAt, LocalDateTime now) {
+        if (rate < 1 || rate > 99) {
+            throw new BusinessException(ProductErrorCode.INVALID_DISCOUNT_RATE);
+        }
+        if (endAt == null || !endAt.isAfter(now)) {
+            throw new BusinessException(ProductErrorCode.INVALID_DISCOUNT_END_AT);
+        }
+        this.discountRate = rate;
+        this.discountEndAt = endAt;
+    }
+
+    public void clearDiscount() {
+        this.discountRate = 0;
+        this.discountEndAt = null;
+    }
+
+    public boolean isDiscounted(LocalDateTime now) {
+        return discountRate > 0 && discountEndAt != null && now.isBefore(discountEndAt);
+    }
+
+    // 원 단위 정수 나눗셈이라 소수점 이하는 내림된다
+    public Long getSalePrice(LocalDateTime now) {
+        if (price == null || !isDiscounted(now)) {
+            return price;
+        }
+        return price * (100 - discountRate) / 100;
     }
 
     public void delete() {

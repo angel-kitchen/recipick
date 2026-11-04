@@ -5,6 +5,7 @@ import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.global.common.SaleUnit;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public record ProductSummary(
     Long productId,
@@ -12,6 +13,8 @@ public record ProductSummary(
     String name,
     String imageUrl,
     Long price,
+    Long originalPrice,
+    int discountRate,
     BigDecimal saleUnitAmount,
     SaleUnit saleUnit,
     ProductStatus status,
@@ -19,13 +22,16 @@ public record ProductSummary(
     boolean deleted
 ) {
 
-    public static ProductSummary from(Product product) {
+    public static ProductSummary from(Product product, LocalDateTime now) {
+        boolean discounted = product.isDiscounted(now);
         return new ProductSummary(
             product.getId(),
             product.getMart().getId(),
             product.getName(),
             product.getImageUrl(),
+            product.getSalePrice(now),
             product.getPrice(),
+            discounted ? product.getDiscountRate() : 0,
             product.getSaleUnitAmount(),
             product.getSaleUnit(),
             product.getStatus(),

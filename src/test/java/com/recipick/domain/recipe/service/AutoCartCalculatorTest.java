@@ -29,7 +29,7 @@ class AutoCartCalculatorTest {
 
     private ProductSummary product(
         Long id, String name, String saleUnitAmount, long price, int stock, ProductStatus status) {
-        return new ProductSummary(id, 1L, name, null, price, new BigDecimal(saleUnitAmount), SaleUnit.G,
+        return new ProductSummary(id, 1L, name, null, price, price, 0, new BigDecimal(saleUnitAmount), SaleUnit.G,
             status, stock, false);
     }
 
@@ -132,7 +132,7 @@ class AutoCartCalculatorTest {
     @DisplayName("삭제된 상품은 판매 중·재고가 있어도 후보에서 빠진다")
     void calculate_excludeDeletedProduct() {
         // given
-        ProductSummary deleted = new ProductSummary(1001L, 1L, "삭제된 두부", null, 1000L, new BigDecimal("300"),
+        ProductSummary deleted = new ProductSummary(1001L, 1L, "삭제된 두부", null, 1000L, 1000L, 0, new BigDecimal("300"),
             SaleUnit.G, ProductStatus.SELLING, 10, true);
 
         // when

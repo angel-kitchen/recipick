@@ -5,6 +5,7 @@ import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.global.common.SaleUnit;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public record ProductDetailResponse(
     Long productId,
@@ -17,10 +18,14 @@ public record ProductDetailResponse(
     SaleUnit saleUnit,
     Long price,
     ProductStatus status,
-    boolean soldOut
+    boolean soldOut,
+    Long salePrice,
+    int discountRate,
+    LocalDateTime discountEndAt
 ) {
 
-    public static ProductDetailResponse from(Product product) {
+    public static ProductDetailResponse from(Product product, LocalDateTime now) {
+        boolean discounted = product.isDiscounted(now);
         return new ProductDetailResponse(
             product.getId(),
             product.getName(),
@@ -32,7 +37,10 @@ public record ProductDetailResponse(
             product.getSaleUnit(),
             product.getPrice(),
             product.getStatus(),
-            product.getTotalQuantity() <= 0
+            product.getTotalQuantity() <= 0,
+            product.getSalePrice(now),
+            discounted ? product.getDiscountRate() : 0,
+            discounted ? product.getDiscountEndAt() : null
         );
     }
 }

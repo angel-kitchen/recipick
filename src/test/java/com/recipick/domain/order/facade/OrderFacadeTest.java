@@ -361,7 +361,7 @@ class OrderFacadeTest {
     }
 
     private static ProductSummary product(long price) {
-        return new ProductSummary(PRODUCT_ID, MART_ID, "애호박", null, price, BigDecimal.ONE, SaleUnit.EA,
+        return new ProductSummary(PRODUCT_ID, MART_ID, "애호박", null, price, price, 0, BigDecimal.ONE, SaleUnit.EA,
             ProductStatus.SELLING, 8, false);
     }
 

@@ -26,6 +26,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +40,7 @@ import java.util.stream.Collectors;
 public class ProductStockService {
 
     private final AdminAuditRecorder auditRecorder;
+    private final Clock clock;
 
     private final ProductRepository productRepository;
 
@@ -48,6 +51,7 @@ public class ProductStockService {
     public List<ProductSummary> decreaseStocks(Long martId, List<StockQuantity> items) {
         Map<Long, Product> products = lockProducts(items);
         List<ProductSummary> decreased = new ArrayList<>(items.size());
+        LocalDateTime now = LocalDateTime.now(clock);
         for (StockQuantity item : items) {
             Product product = products.get(item.productId());
             if (product == null || product.isDeleted()
@@ -59,7 +63,7 @@ public class ProductStockService {
                 throw new BusinessException(ProductErrorCode.PRODUCT_NOT_SELLING);
             }
             product.decreaseStock(item.quantity());
-            decreased.add(ProductSummary.from(product));
+            decreased.add(ProductSummary.from(product, now));
         }
         return decreased;
     }

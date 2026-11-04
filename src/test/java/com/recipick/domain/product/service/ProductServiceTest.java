@@ -45,6 +45,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
+import com.recipick.domain.product.dto.request.ProductDiscountUpdateRequest;
+import com.recipick.domain.product.dto.response.ProductDiscountResponse;
+import com.recipick.global.audit.AdminAuditCommand;
+import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -69,6 +77,9 @@ public class ProductServiceTest {
 
     @Mock
     private com.recipick.global.audit.AdminAuditRecorder auditRecorder;
+
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-11-05T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     @InjectMocks
     private ProductService productService;
@@ -878,6 +889,84 @@ public class ProductServiceTest {
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.INVALID_PRICE);
         assertThat(product.getPrice()).isEqualTo(1500L);
+    }
+
+    @Test
+    @DisplayName("할인 지정 : 할인율과 종료 시각이 저장되고 응답에 판매가가 담기며 감사 로그를 남긴다")
+    void updateDiscount() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        LocalDateTime endAt = LocalDateTime.of(2026, 11, 10, 0, 0);
+
+        // when
+        ProductDiscountResponse result = productService.updateDiscount(
+            AdminRole.MART_ADMIN, 1L, 1L, new ProductDiscountUpdateRequest(20, endAt));
+
+        // then
+        assertThat(result.price()).isEqualTo(1500L);
+        assertThat(result.salePrice()).isEqualTo(1200L);
+        assertThat(result.discountRate()).isEqualTo(20);
+        assertThat(result.discountEndAt()).isEqualTo(endAt);
+        verify(auditRecorder).record(any(AdminAuditCommand.class));
+    }
+
+    @Test
+    @DisplayName("할인 지정 : 종료 시각이 지났으면 INVALID_DISCOUNT_END_AT이고 감사 로그를 남기지 않는다")
+    void updateDiscount_pastEndAt() {
+        // given
+        Product product = product(1L, 1L);
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+        ProductDiscountUpdateRequest request =
+            new ProductDiscountUpdateRequest(20, LocalDateTime.of(2026, 11, 5, 8, 0));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateDiscount(AdminRole.MART_ADMIN, 1L, 1L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(ProductErrorCode.INVALID_DISCOUNT_END_AT);
+        verify(auditRecorder, never()).record(any(AdminAuditCommand.class));
+    }
+
+    @Test
+    @DisplayName("할인 지정 : MART_ADMIN이 다른 마트 상품이면 MART_ACCESS_DENIED이다")
+    void updateDiscount_denied() {
+        // given
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product(1L, 2L)));
+        ProductDiscountUpdateRequest request =
+            new ProductDiscountUpdateRequest(20, LocalDateTime.of(2026, 11, 10, 0, 0));
+
+        // when
+        Throwable thrown = catchThrowable(
+            () -> productService.updateDiscount(AdminRole.MART_ADMIN, 1L, 1L, request));
+
+        // then
+        assertThat(thrown)
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("할인 해제 : 할인이 지워지고 판매가가 정상가로 돌아온다")
+    void clearDiscount() {
+        // given
+        Product product = product(1L, 1L);
+        product.changeDiscount(20, LocalDateTime.of(2026, 11, 10, 0, 0), LocalDateTime.of(2026, 11, 5, 9, 0));
+        given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
+
+        // when
+        ProductDiscountResponse result = productService.clearDiscount(AdminRole.MART_ADMIN, 1L, 1L);
+
+        // then
+        assertThat(result.salePrice()).isEqualTo(1500L);
+        assertThat(result.discountRate()).isZero();
+        assertThat(result.discountEndAt()).isNull();
+        verify(auditRecorder).record(any(AdminAuditCommand.class));
     }
 
     @Test
