@@ -34,7 +34,7 @@ public class CategoryService {
 
     @Cacheable(cacheNames = CacheConfig.CATEGORIES)
     @Transactional(readOnly = true)
-    public List<CategoryResponse> findCategories(){
+    public List<CategoryResponse> findCategories() {
         return categoryRepository.findAllByDeletedFalse().stream()
             .map(CategoryResponse::from)
             .toList();
@@ -50,7 +50,8 @@ public class CategoryService {
                 throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
             }
             category.restore();
-            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_CREATE, category.getId(), null, Map.of()));
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_CREATE, category.getId(), null,
+                Map.of()));
             return new CategoryIdResponse(category.getId());
         }
         Category category = Category.builder()
@@ -63,31 +64,32 @@ public class CategoryService {
 
     @Transactional
     @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
-    public CategoryIdResponse updateCategory(Long categoryId, CategoryUpdateRequest request){
+    public CategoryIdResponse updateCategory(Long categoryId, CategoryUpdateRequest request) {
         Category category = categoryRepository.findByIdForUpdate(categoryId)
             .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
-        if(category.isDeleted()){
+        if (category.isDeleted()) {
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
-        if(!category.getName().equals(request.name())){
-            if(categoryRepository.existsByName(request.name())){
+        if (!category.getName().equals(request.name())) {
+            if (categoryRepository.existsByName(request.name())) {
                 throw new BusinessException(ProductErrorCode.CATEGORY_NAME_DUPLICATED);
             }
             category.rename(request.name());
-            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_UPDATE, category.getId(), null, Map.of()));
+            auditRecorder.record(new AdminAuditCommand(AdminAuditAction.CATEGORY_UPDATE, category.getId(), null,
+                Map.of()));
         }
         return new CategoryIdResponse(category.getId());
     }
 
     @Transactional
     @CacheEvict(cacheNames = CacheConfig.CATEGORIES, allEntries = true)
-    public void delete(Long categoryId){
+    public void delete(Long categoryId) {
         Category category = categoryRepository.findByIdForUpdate(categoryId)
             .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
-        if(category.isDeleted()){
+        if (category.isDeleted()) {
             throw new BusinessException(ProductErrorCode.CATEGORY_ALREADY_DELETED);
         }
-        if(productRepository.existsByCategoryIdAndDeletedFalse(categoryId)){
+        if (productRepository.existsByCategoryIdAndDeletedFalse(categoryId)) {
             throw new BusinessException(ProductErrorCode.CATEGORY_HAS_PRODUCTS);
         }
         category.delete();

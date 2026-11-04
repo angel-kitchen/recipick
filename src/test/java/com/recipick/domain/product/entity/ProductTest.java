@@ -59,7 +59,7 @@ public class ProductTest {
 
     @Test
     @DisplayName("재고 증가 : int 범위를 넘으면 INVALID_INPUT이고 재고는 그대로다")
-    void increaseStocks_overflow(){
+    void increaseStocks_overflow() {
         // given
         Product product = Product.builder().name("애호박").totalQuantity(50).build();
 

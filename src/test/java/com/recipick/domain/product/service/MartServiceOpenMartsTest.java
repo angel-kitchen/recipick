@@ -29,7 +29,7 @@ public class MartServiceOpenMartsTest {
     @InjectMocks
     private MartService martService;
 
-    private Mart mart(Long id, Long regionId, String name){
+    private Mart mart(Long id, Long regionId, String name) {
         Mart mart = Mart.builder()
             .regionId(regionId)
             .name(name)
@@ -43,19 +43,19 @@ public class MartServiceOpenMartsTest {
 
     @Test
     @DisplayName("전체: 운영 중 마트를 응답으로 바꿔 돌려준다")
-    void findOpenMarts(){
+    void findOpenMarts() {
         given(martRepository.findAllByStatusOrderByIdAsc(MartStatus.OPEN))
-            .willReturn(List.of(mart(1L,31L,"삼청동 마트"), mart(2L,32L, "혜화동 마트")));
+            .willReturn(List.of(mart(1L, 31L, "삼청동 마트"), mart(2L, 32L, "혜화동 마트")));
 
         List<OpenMartData> result = martService.findOpenMarts();
 
-        assertThat(result).extracting(OpenMartData::martId).containsExactly(1L,2L);
+        assertThat(result).extracting(OpenMartData::martId).containsExactly(1L, 2L);
         assertThat(result).extracting(OpenMartData::name).containsExactly("삼청동 마트", "혜화동 마트");
     }
 
     @Test
     @DisplayName("지역 : 그 지역의 운영 중 마트만 돌려준다")
-    void findOpenMarts_byRegion(){
+    void findOpenMarts_byRegion() {
         given(martRepository.findAllByRegionIdAndStatusOrderByIdAsc(31L, MartStatus.OPEN))
             .willReturn(List.of(mart(1L, 31L, "삼청동 마트")));
 
@@ -67,7 +67,7 @@ public class MartServiceOpenMartsTest {
 
     @Test
     @DisplayName("지역: 마트가 없거나 모두 CLOSED면 예외 없이 빈 목록")
-    void findOpenMarts_byRegion_empty(){
+    void findOpenMarts_byRegion_empty() {
         given(martRepository.findAllByRegionIdAndStatusOrderByIdAsc(99L, MartStatus.OPEN))
             .willReturn(List.of());
 
@@ -76,7 +76,7 @@ public class MartServiceOpenMartsTest {
 
     @Test
     @DisplayName("지도용: 위도나 경도가 없는 마트는 제외하고 ID 순서를 유지한다")
-    void findMartsForMap_excludesMartWithoutCoordinates(){
+    void findMartsForMap_excludesMartWithoutCoordinates() {
         Mart noLatitude = Mart.builder()
             .regionId(33L)
             .name("위도 없는 마트")

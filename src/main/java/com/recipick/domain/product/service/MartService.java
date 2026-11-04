@@ -45,14 +45,14 @@ public class MartService {
 
     @CacheEvict(cacheNames = CacheConfig.OPEN_MARTS, allEntries = true)
     @Transactional
-    public MartIdResponse createMart(MartCreateRequest request){
+    public MartIdResponse createMart(MartCreateRequest request) {
         int radius = request.serviceRadiusM() != null
             ? request.serviceRadiusM()
             : PolicyConstants.MART_SERVICE_RADIUS_METERS;
 
         validateArea(request.latitude(), request.longitude(), radius);
 
-        if(martRepository.existsByRegionId(request.regionId())){
+        if (martRepository.existsByRegionId(request.regionId())) {
             throw new BusinessException(ProductErrorCode.MART_REGION_DUPLICATED);
         }
 
@@ -64,19 +64,20 @@ public class MartService {
             .serviceRadiusM(radius)
             .build();
         Mart saved = martRepository.save(mart);
-        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.MART_CREATE, saved.getId(), saved.getId(), Map.of()));
+        auditRecorder.record(new AdminAuditCommand(AdminAuditAction.MART_CREATE, saved.getId(), saved.getId(),
+            Map.of()));
         return new MartIdResponse(saved.getId());
     }
 
     @CacheEvict(cacheNames = CacheConfig.OPEN_MARTS, allEntries = true)
     @Transactional
-    public MartIdResponse updateMart(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
+    public MartIdResponse updateMart(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request) {
         validateUpdatePermission(role, adminMartId, martId, request);
 
         Mart mart = martRepository.findByIdForUpdate(martId)
             .orElseThrow(() -> new BusinessException(ProductErrorCode.MART_NOT_FOUND));
 
-        if((request.latitude() == null) != (request.longitude() == null)){
+        if ((request.latitude() == null) != (request.longitude() == null)) {
             throw new BusinessException(ProductErrorCode.INVALID_MART_AREA);
         }
         BigDecimal latitude = request.latitude() != null ? request.latitude() : mart.getLatitude();
@@ -103,29 +104,29 @@ public class MartService {
         return new MartIdResponse(mart.getId());
     }
 
-    private void validateUpdatePermission(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request){
-        if (role != AdminRole.MART_ADMIN){
+    private void validateUpdatePermission(AdminRole role, Long adminMartId, Long martId, MartUpdateRequest request) {
+        if (role != AdminRole.MART_ADMIN) {
             return;
         }
-        if(!martId.equals(adminMartId)){
+        if (!martId.equals(adminMartId)) {
             throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
         }
-        if(request.latitude() != null || request.longitude() != null || request.serviceRadiusM() != null){
+        if (request.latitude() != null || request.longitude() != null || request.serviceRadiusM() != null) {
             throw new BusinessException(AuthErrorCode.SUPER_ADMIN_ONLY);
         }
     }
 
-    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius){
-        if(latitude.abs().compareTo(MAX_LATITUDE)>0
-            || longitude.abs().compareTo(MAX_LONGITUDE)>0
-            || radius <= 0){
+    private void validateArea(BigDecimal latitude, BigDecimal longitude, int radius) {
+        if (latitude.abs().compareTo(MAX_LATITUDE) > 0
+            || longitude.abs().compareTo(MAX_LONGITUDE) > 0
+            || radius <= 0) {
             throw new BusinessException(ProductErrorCode.INVALID_MART_AREA);
         }
     }
 
     @Transactional(readOnly = true)
-    public List<MartResponse> findMarts(AdminRole role, Long adminMartId){
-        if(role == AdminRole.SUPER_ADMIN){
+    public List<MartResponse> findMarts(AdminRole role, Long adminMartId) {
+        if (role == AdminRole.SUPER_ADMIN) {
             return martRepository.findAll().stream()
                 .map(MartResponse::from)
                 .toList();
@@ -156,7 +157,7 @@ public class MartService {
     }
 
     @Transactional(readOnly = true)
-    public List<MartMapResponse> findMartsForMap(){
+    public List<MartMapResponse> findMartsForMap() {
         return martRepository.findAllByOrderByIdAsc().stream()
             .filter(mart -> mart.getLatitude() != null && mart.getLongitude() != null)
             .map(MartMapResponse::from)

@@ -18,7 +18,7 @@ public record ProductSearchResponse(
     boolean soldOut
 ) {
 
-    public static ProductSearchResponse from(Product product){
+    public static ProductSearchResponse from(Product product) {
         return new ProductSearchResponse(
             product.getId(),
             product.getName(),

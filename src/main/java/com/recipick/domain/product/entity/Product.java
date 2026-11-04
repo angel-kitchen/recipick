@@ -150,7 +150,7 @@ public class Product extends BaseTimeEntity {
         BigDecimal saleUnitAmount,
         SaleUnit saleUnit,
         String imageUrl
-    ){
+    ) {
             this.category = category;
             this.ingredientId = ingredientId;
             this.name = name;
@@ -162,23 +162,23 @@ public class Product extends BaseTimeEntity {
 
     }
 
-    public void changePrice(Long price){
-        if(price == null){
+    public void changePrice(Long price) {
+        if (price == null) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
         }
-        if(price < 0){
+        if (price < 0) {
             throw new BusinessException(ProductErrorCode.INVALID_PRICE);
         }
         this.price = price;
     }
 
-    public void delete(){
+    public void delete() {
         this.deleted = true;
     }
 
     public void increaseStock(int quantity) {
         validatePositive(quantity);
-            if(quantity > Integer.MAX_VALUE - totalQuantity){
+            if (quantity > Integer.MAX_VALUE - totalQuantity) {
                 throw new BusinessException(CommonErrorCode.INVALID_INPUT);
             }
         this.totalQuantity += quantity;

@@ -7,6 +7,6 @@ public record CategoryUpdateRequest(
     @NotBlank
     @Size(max = 50)
     String name
-){
+) {
 
 }

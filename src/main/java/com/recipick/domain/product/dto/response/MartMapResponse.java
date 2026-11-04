@@ -14,7 +14,7 @@ public record MartMapResponse(
     MartStatus status
 ) {
 
-    public static MartMapResponse from(Mart mart){
+    public static MartMapResponse from(Mart mart) {
         return new MartMapResponse(
             mart.getId(),
             mart.getName(),

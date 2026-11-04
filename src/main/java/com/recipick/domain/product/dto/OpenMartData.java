@@ -8,7 +8,7 @@ public record OpenMartData(
     Long regionId
 ) {
 
-    public static OpenMartData from(Mart mart){
+    public static OpenMartData from(Mart mart) {
         return new OpenMartData(
             mart.getId(),
             mart.getName(),

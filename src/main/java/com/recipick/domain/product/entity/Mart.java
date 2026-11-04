@@ -72,15 +72,15 @@ public class Mart extends BaseTimeEntity {
     public void update(BigDecimal latitude,
                        BigDecimal longitude,
                        Integer serviceRadiusM,
-                       MartStatus status){
-        if (latitude != null){
+                       MartStatus status) {
+        if (latitude != null) {
             this.latitude = latitude;
             this.longitude = longitude;
         }
-        if (serviceRadiusM != null){
+        if (serviceRadiusM != null) {
             this.serviceRadiusM = serviceRadiusM;
         }
-        if (status != null){
+        if (status != null) {
             this.status = status;
         }
     }

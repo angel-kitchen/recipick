@@ -29,7 +29,7 @@ public class CategoryAdminController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<CategoryIdResponse>> createCategory(
-        @Valid @RequestBody CategoryCreateRequest request){
+        @Valid @RequestBody CategoryCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.success(categoryService.createCategory(request)));
     }
@@ -37,12 +37,12 @@ public class CategoryAdminController {
     @PatchMapping("/{categoryId}")
     public ResponseEntity<ApiResponse<CategoryIdResponse>> updateCategory(
         @PathVariable Long categoryId,
-        @Valid @RequestBody CategoryUpdateRequest request){
+        @Valid @RequestBody CategoryUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.updateCategory(categoryId, request)));
     }
 
     @DeleteMapping("/{categoryId}")
-    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long categoryId){
+    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long categoryId) {
         categoryService.delete(categoryId);
         return ResponseEntity.ok(ApiResponse.success());
     }

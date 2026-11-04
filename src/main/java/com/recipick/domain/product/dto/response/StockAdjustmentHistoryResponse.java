@@ -14,7 +14,7 @@ public record StockAdjustmentHistoryResponse(
     LocalDateTime createdAt
 ) {
 
-    public static StockAdjustmentHistoryResponse from(StockAdjustment adjustment){
+    public static StockAdjustmentHistoryResponse from(StockAdjustment adjustment) {
         return new StockAdjustmentHistoryResponse(
             adjustment.getType(),
             adjustment.getQuantity(),

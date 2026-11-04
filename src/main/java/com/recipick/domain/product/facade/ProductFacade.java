@@ -33,24 +33,24 @@ public class ProductFacade {
         Long memberId,
         ProductSearchRequest request,
         Pageable pageable
-    ){
+    ) {
         return productService.searchProducts(findMartId(memberId), request, pageable);
     }
 
     @Transactional(readOnly = true)
-    public ProductDetailResponse getProduct(Long memberId, Long productId){
+    public ProductDetailResponse getProduct(Long memberId, Long productId) {
         return productService.getProduct(findMartId(memberId), productId);
     }
 
-    private Long findMartId(Long memberId){
+    private Long findMartId(Long memberId) {
         return memberService.getMartId(memberId)
-            .orElseThrow(()-> new BusinessException(ProductErrorCode.MART_NOT_SELECTED));
+            .orElseThrow(() -> new BusinessException(ProductErrorCode.MART_NOT_SELECTED));
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ProductSearchResponse> findBestProducts(
         Long memberId, RankingPeriod period, Pageable pageable
-    ){
+    ) {
         Long martId = findMartId(memberId);
         LocalDateTime from = period.startFrom(LocalDateTime.now(clock));
         List<Long> rankedIds = orderSalesService.findBestSellingProductIds(
