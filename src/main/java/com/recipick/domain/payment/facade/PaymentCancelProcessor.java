@@ -131,6 +131,39 @@ public class PaymentCancelProcessor {
         };
     }
 
+    // TX2를 끝내 반영하지 못했을 때 응답을 만든다. 잠금 없이 읽으므로 TX2를 막은 잠금을 기다리지 않는다.
+    // 정상 전이로 생길 수 있는 결제·환불 조합만 결과로 돌려준다. 그 밖의 조합은 어느 결과로도 답하지 않는다
+    @Transactional(readOnly = true)
+    public PaymentCancelResult getCurrentResult(Long paymentId, Long refundId) {
+        Payment payment = paymentService.getById(paymentId);
+        Refund refund = paymentService.getRefundById(refundId);
+        if (refund.getRequestedBy() != RefundRequester.MEMBER
+            || !refund.getPayment().getId().equals(payment.getId())) {
+            throw stateMismatch(payment, refund);
+        }
+        PaymentStatus paymentStatus = payment.getStatus();
+        return switch (refund.getStatus()) {
+            case COMPLETED -> {
+                if (paymentStatus != PaymentStatus.CANCELED) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(PaymentCancelOutcome.CANCELED, payment, refund);
+            }
+            case REQUESTED -> {
+                if (paymentStatus != PaymentStatus.CANCEL_REQUESTED) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(PaymentCancelOutcome.PENDING, payment, refund);
+            }
+            case FAILED -> {
+                if (paymentStatus != PaymentStatus.PAID) {
+                    throw stateMismatch(payment, refund);
+                }
+                yield afterPay(failureOutcome(refund), payment, refund);
+            }
+        };
+    }
+
     private PaymentCancelPreparation cancelBeforePay(Payment payment, String reason) {
         payment.fail(PaymentFailureReason.CANCELED_BEFORE_PAY, null);
         List<StockQuantity> items =
@@ -251,6 +284,13 @@ public class PaymentCancelProcessor {
             case PG_FAILED -> PaymentCancelOutcome.PG_FAILED;
             case REQUEST_REJECTED -> PaymentCancelOutcome.REQUEST_REJECTED;
         };
+    }
+
+    private BusinessException stateMismatch(Payment payment, Refund refund) {
+        log.error("회원 환불과 결제 상태가 맞지 않음 — 운영 확인 필요: paymentId={}, refundId={}, paymentStatus={}, "
+                + "refundStatus={}, requestedBy={}", payment.getId(), refund.getId(), payment.getStatus(),
+            refund.getStatus(), refund.getRequestedBy());
+        return new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
     }
 
     private boolean isCanceledBeforePay(Payment payment) {

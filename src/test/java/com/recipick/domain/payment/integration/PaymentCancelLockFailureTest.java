@@ -17,15 +17,18 @@ import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.entity.Payment;
 import com.recipick.domain.payment.entity.Refund;
 import com.recipick.domain.payment.entity.enums.PaymentStatus;
+import com.recipick.domain.payment.entity.enums.RefundFailureType;
 import com.recipick.domain.payment.entity.enums.RefundStatus;
 import com.recipick.domain.payment.facade.PaymentCancelFacade;
 import com.recipick.domain.payment.facade.PaymentCancelProcessor;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
+import com.recipick.domain.payment.service.PaymentDelayTask;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
+import com.recipick.infra.portone.dto.PortOneCancellationStatus;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -148,6 +151,109 @@ class PaymentCancelLockFailureTest extends PaymentFlowIntegrationSupport {
         assertThat(onlyRefund(other).getIdempotencyKey()).isEqualTo(sharedKey);
     }
 
+    @Test
+    @DisplayName("TX2가 첫 회차에 잠금을 못 얻으면 PortOne을 다시 부르지 않고 반영만 한 번 더 해 취소를 끝내며 재고는 한 번만 돌아온다")
+    void tx2RetrySucceedsAfterLockFailure() throws Exception {
+        // given — PortOne 응답을 돌려주기 직전에 다른 트랜잭션이 결제 행을 잠근다. 잠금을 잡은 것을 확인한 뒤에 응답한다
+        Flow flow = paidPaymentWithStock();
+        AtomicInteger applyCalls = new AtomicInteger();
+        PaymentCancelResult result;
+        try (RowLockHolder holder = new RowLockHolder(transactionTemplate)) {
+            given(portOnePaymentClient.cancelPayment(anyString(), anyString(), anyString(), anyLong()))
+                .willAnswer(invocation -> {
+                    holder.hold(() -> lockPayment(flow));
+                    return succeeded(flow);
+                });
+            // 두 번째 반영이 시작될 때 잠금을 푼다. 첫 회차는 이미 잠금 대기 초과로 롤백된 뒤다
+            willAnswer(invocation -> {
+                if (applyCalls.incrementAndGet() == 2) {
+                    holder.release();
+                }
+                return invocation.callRealMethod();
+            }).given(spyOf(paymentCancelProcessor)).apply(anyLong(), anyLong(), any(PortOneCancelResult.class));
+
+            // when
+            result = paymentCancelFacade.cancel(flow.memberId(), flow.paymentId(), keyOf(flow), CANCEL_REASON);
+        }
+
+        // then
+        assertThat(applyCalls).hasValue(2);
+        assertThat(result.outcome()).isEqualTo(PaymentCancelOutcome.CANCELED);
+        verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
+        assertCanceledOnce(flow);
+    }
+
+    @Test
+    @DisplayName("TX2 재시도를 다 써도 PortOne이 SUCCEEDED였다면 202 PENDING으로 답하고 즉시 재확인을 예약하며, 재확인이 한 번만 완료한다")
+    void tx2ExhaustedAfterSucceeded() throws Exception {
+        // given
+        Flow flow = paidPaymentWithStock();
+        PaymentCancelResult result;
+        try (RowLockHolder holder = new RowLockHolder(transactionTemplate)) {
+            given(portOnePaymentClient.cancelPayment(anyString(), anyString(), anyString(), anyLong()))
+                .willAnswer(invocation -> {
+                    holder.hold(() -> lockPayment(flow));
+                    return succeeded(flow);
+                });
+
+            // when
+            result = paymentCancelFacade.cancel(flow.memberId(), flow.paymentId(), keyOf(flow), CANCEL_REASON);
+
+            // then — TX1의 접수 상태가 그대로이고 재확인이 지금 시각으로 잡혔다
+            assertThat(result.outcome()).isEqualTo(PaymentCancelOutcome.PENDING);
+            assertPendingWithImmediateReconcile(flow);
+        }
+        verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
+
+        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 서버가 요청한 SUCCEEDED 취소가 보인다
+        given(portOnePaymentClient.getPayment(flow.portonePaymentId()))
+            .willReturn(portOneWithCancellation(flow, cancellationIdOf(flow), PortOneCancellationStatus.SUCCEEDED));
+        pollOnly(PaymentDelayTask.refundReconcile(onlyRefund(flow).getId()));
+
+        // then — 취소 POST는 처음 한 번뿐이고, 재고·주문 이력은 한 번만 반영됐다
+        verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
+        assertCanceledOnce(flow);
+        assertThat(onlyRefund(flow).getPortoneCancellationId()).isEqualTo(cancellationIdOf(flow));
+    }
+
+    @Test
+    @DisplayName("TX2 재시도를 다 썼고 PortOne이 FAILED였다면 COMMON-010으로 답하고 즉시 재확인을 예약하며, 재확인이 조회한 FAILED 취소로 PAID를 되돌린다")
+    void tx2ExhaustedAfterFailed() throws Exception {
+        // given
+        Flow flow = paidPaymentWithStock();
+        BusinessException thrown;
+        try (RowLockHolder holder = new RowLockHolder(transactionTemplate)) {
+            given(portOnePaymentClient.cancelPayment(anyString(), anyString(), anyString(), anyLong()))
+                .willAnswer(invocation -> {
+                    holder.hold(() -> lockPayment(flow));
+                    return new PortOneCancelResult(PortOneCancelOutcome.FAILED, cancellationIdOf(flow), null,
+                        "cancellation FAILED");
+                });
+
+            // when
+            thrown = catchThrowableOfType(BusinessException.class,
+                () -> paymentCancelFacade.cancel(flow.memberId(), flow.paymentId(), keyOf(flow), CANCEL_REASON));
+
+            // then — 실패 결과는 아직 DB에 반영되지 않았다
+            assertThat(thrown.getErrorCode()).isEqualTo(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+            assertPendingWithImmediateReconcile(flow);
+            assertThat(onlyRefund(flow).getFailureType()).isNull();
+        }
+
+        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 같은 ID의 FAILED 취소 내역이 있다
+        given(portOnePaymentClient.getPayment(flow.portonePaymentId()))
+            .willReturn(portOneWithCancellation(flow, cancellationIdOf(flow), PortOneCancellationStatus.FAILED));
+        pollOnly(PaymentDelayTask.refundReconcile(onlyRefund(flow).getId()));
+
+        // then — 조회로 찾은 바로 그 취소로 실패를 확정했다
+        Refund refund = onlyRefund(flow);
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.FAILED);
+        assertThat(refund.getFailureType()).isEqualTo(RefundFailureType.PG_FAILED);
+        assertThat(refund.getPortoneCancellationId()).isEqualTo(cancellationIdOf(flow));
+        assertPaidRestored(flow);
+        verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
+    }
+
     // ---------- helpers ----------
 
     // spy는 트랜잭션 프록시 뒤에 있다. 프록시로 스텁을 걸면 트랜잭션 경계(MANDATORY 등)를 먼저 지나므로 spy에 직접 건다
@@ -175,6 +281,35 @@ class PaymentCancelLockFailureTest extends PaymentFlowIntegrationSupport {
     private Refund onlyRefund(Flow flow) {
         assertThat(refundsOf(flow)).hasSize(1);
         return refundsOf(flow).get(0);
+    }
+
+    // TX2가 반영하지 못한 상태: TX1이 남긴 CANCEL_REQUESTED·REQUESTED 그대로이고 재확인이 지금 이전 시각으로 잡혀 있다
+    private void assertPendingWithImmediateReconcile(Flow flow) {
+        Refund refund = onlyRefund(flow);
+        assertThat(refund.getStatus()).isEqualTo(RefundStatus.REQUESTED);
+        assertThat(refund.getPortoneCancellationId()).isNull();
+        assertThat(paymentOf(flow).getStatus()).isEqualTo(PaymentStatus.CANCEL_REQUESTED);
+        assertThat(orderOf(flow).getStatus()).isEqualTo(OrderStatus.CANCEL_REQUESTED);
+        assertThat(stockOf(flow)).isEqualTo(STOCK_AFTER_ORDER);
+        Double executeAt = scoreOf(PaymentDelayTask.refundReconcile(refund.getId()));
+        assertThat(executeAt).isNotNull();
+        assertThat(executeAt.longValue()).isLessThanOrEqualTo(clock.instant().toEpochMilli());
+    }
+
+    // 취소가 정확히 한 번 반영됐다: 결제 CANCELED, 주문 REFUNDED, 재고 한 번 복구, 이력 PAID → CANCEL_REQUESTED → REFUNDED
+    private void assertCanceledOnce(Flow flow) {
+        assertThat(onlyRefund(flow).getStatus()).isEqualTo(RefundStatus.COMPLETED);
+        assertThat(paymentOf(flow).getStatus()).isEqualTo(PaymentStatus.CANCELED);
+        assertThat(orderOf(flow).getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(stockOf(flow)).isEqualTo(STOCK_AFTER_ORDER + ORDER_QUANTITY);
+        assertThat(orderStatusHistoryRepository.findAllByOrderId(flow.orderId())).hasSize(2);
+    }
+
+    // PG 실패 확정 뒤: 결제·주문이 PAID로 돌아왔고 재고는 그대로다
+    private void assertPaidRestored(Flow flow) {
+        assertThat(paymentOf(flow).getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(orderOf(flow).getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(stockOf(flow)).isEqualTo(STOCK_AFTER_ORDER);
     }
 
     // TX1이 통째로 롤백된 흔적: 환불 행·주문 전이·이력이 없고 재고도 그대로다
