@@ -36,7 +36,9 @@ import lombok.NoArgsConstructor;
     // 목록은 id 내림차순으로 읽는다. 보조 인덱스 끝에 PK가 붙어 정렬까지 인덱스 순서로 해결된다
     indexes = {
         @Index(name = "idx_orders_member_id", columnList = "member_id"),
-        @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status")
+        @Index(name = "idx_orders_mart_id_mart_status", columnList = "mart_id, mart_status"),
+        // 베스트 상품 집계가 마트의 결제 완료 주문을 결제 시각 범위로 좁혀 읽는다
+        @Index(name = "idx_orders_mart_id_status_paid_at", columnList = "mart_id, status, paid_at")
     }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

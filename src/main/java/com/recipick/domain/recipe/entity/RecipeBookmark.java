@@ -5,6 +5,7 @@ import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
@@ -21,7 +22,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "recipe_bookmark")
+// 기간별 찜 순위가 기간 조건으로 범위를 좁힌 뒤 레시피별로 세므로 created_at을 앞에 둔다
+@Table(
+    name = "recipe_bookmark",
+    indexes = @Index(name = "idx_recipe_bookmark_created_at_recipe_id", columnList = "created_at, recipe_id")
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecipeBookmark implements Persistable<RecipeBookmarkId> {
 

@@ -6,7 +6,7 @@ import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.order.dto.response.CartItemAddResponse;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
-import com.recipick.domain.product.dto.MartResponse;
+import com.recipick.domain.product.dto.response.MartResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.service.MartService;

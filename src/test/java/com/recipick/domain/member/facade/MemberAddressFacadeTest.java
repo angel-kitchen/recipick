@@ -10,7 +10,7 @@ import com.recipick.domain.member.dto.MemberAddressData;
 import com.recipick.domain.member.dto.response.MemberAddressListResponse;
 import com.recipick.domain.member.service.MemberAddressService;
 import com.recipick.domain.member.service.MemberService;
-import com.recipick.domain.product.dto.OpenMartResponse;
+import com.recipick.domain.product.dto.OpenMartData;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -41,7 +41,7 @@ class MemberAddressFacadeTest {
                 new MemberAddressData(10L, "집", "주소", "1호", "1111014000"),
                 new MemberAddressData(11L, "회사", "주소", "2호", "1111014000")));
         given(serviceAreaFacade.findAvailableMart("1111014000"))
-                .willReturn(Optional.of(new OpenMartResponse(1L, "삼청 마트", 1L)))
+                .willReturn(Optional.of(new OpenMartData(1L, "삼청 마트", 1L)))
                 .willReturn(Optional.empty());
 
         // when

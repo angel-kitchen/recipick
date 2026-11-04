@@ -1,12 +1,10 @@
 package com.recipick.domain.product.entity;
 
-import com.recipick.domain.product.dto.ProductStatusResponse;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.entity.BaseTimeEntity;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
-import com.recipick.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

@@ -49,6 +49,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(EndpointRequest.to("health", "prometheus")).permitAll()
+                        .requestMatchers("/api/docs", "/api/docs/**", "/api/swagger-ui", "/api/swagger-ui/**")
+                        .permitAll()
                         .requestMatchers(SecurityRequestMatchers.PUBLIC).permitAll()
                         .requestMatchers("/api/auth/logout").authenticated()
                         .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "MART_ADMIN")

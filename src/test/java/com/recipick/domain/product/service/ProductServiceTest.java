@@ -11,18 +11,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.AdminProductResponse;
-import com.recipick.domain.product.dto.ProductCreateRequest;
-import com.recipick.domain.product.dto.ProductDetailResponse;
-import com.recipick.domain.product.dto.ProductIdResponse;
-import com.recipick.domain.product.dto.ProductPriceResponse;
-import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
-import com.recipick.domain.product.dto.ProductSearchRequest;
-import com.recipick.domain.product.dto.ProductSearchResponse;
-import com.recipick.domain.product.dto.ProductStatusResponse;
-import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.response.AdminProductResponse;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
+import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.response.ProductIdResponse;
+import com.recipick.domain.product.dto.response.ProductPriceResponse;
+import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductStatusResponse;
+import com.recipick.domain.product.dto.request.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductSummary;
-import com.recipick.domain.product.dto.ProductUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -101,8 +102,8 @@ public class ProductServiceTest {
         return product;
     }
 
-    private AdminProductSearchCondition conditionOf(Long martId){
-        return new AdminProductSearchCondition(martId, null,null,null,null);
+    private AdminProductSearchRequest requestOf(Long martId){
+        return new AdminProductSearchRequest(martId, null,null,null,null);
     }
 
     @Test
@@ -114,7 +115,7 @@ public class ProductServiceTest {
 
         // when
         PageResponse<AdminProductResponse> result =
-            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, conditionOf(null), pageable);
+            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, requestOf(null), pageable);
 
         // then
         ArgumentCaptor<AdminProductSearchCondition> captor =
@@ -135,7 +136,7 @@ public class ProductServiceTest {
 
         // when
         PageResponse<AdminProductResponse> result =
-            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, conditionOf(null), pageable);
+            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, requestOf(null), pageable);
 
         // then
         assertThat(result.content().get(0).description()).isEqualTo("신선한 애호박");
@@ -145,11 +146,11 @@ public class ProductServiceTest {
     @DisplayName("마트 관리자가 다른 마트를 지정하면 접근이 거부된다")
     void martAdminOtherMartDenied() {
         // given
-        AdminProductSearchCondition condition = conditionOf(2L);
+        AdminProductSearchRequest request = requestOf(2L);
 
         // when & then
         assertThatThrownBy(() ->
-            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, condition, pageable))
+            productService.getAdminProducts(AdminRole.MART_ADMIN, 1L, request, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(AuthErrorCode.MART_ACCESS_DENIED);
@@ -164,7 +165,7 @@ public class ProductServiceTest {
             .willReturn(new PageImpl<>(List.of(), pageable, 0));
 
         // when
-        productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, conditionOf(null), pageable);
+        productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, requestOf(null), pageable);
 
         // then
         ArgumentCaptor<AdminProductSearchCondition> captor =
@@ -178,11 +179,11 @@ public class ProductServiceTest {
     void superAdminMartNotFound() {
         // given
         given(martRepository.existsById(99L)).willReturn(false);
-        AdminProductSearchCondition condition = conditionOf(99L);
+        AdminProductSearchRequest request = requestOf(99L);
 
         // when & then
         assertThatThrownBy(() ->
-            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, condition, pageable))
+            productService.getAdminProducts(AdminRole.SUPER_ADMIN, null, request, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.MART_NOT_FOUND);
@@ -1020,5 +1021,53 @@ public class ProductServiceTest {
         assertThat(otherMart).isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(ProductErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("베스트: 순위 순서를 유지하고 조회되지 않은(삭제·다른 마트) 상품은 건너뛴다")
+    void findBestProducts_keepsRankOrder() {
+        // given
+        List<Long> rankedIds = List.of(3L, 2L, 1L);
+        given(productRepository.findAllByIdInAndMartIdAndDeletedFalse(rankedIds, 1L))
+            .willReturn(List.of(product(1L, 1L), product(3L, 1L)));
+
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, rankedIds, pageable);
+
+        // then
+        assertThat(result.content()).extracting(ProductSearchResponse::productId).containsExactly(3L, 1L);
+        assertThat(result.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("베스트: 삭제 상품을 거른 목록 기준으로 페이지를 잘라 빈 칸 없이 채운다")
+    void findBestProducts_pagesAfterFiltering() {
+        // given
+        List<Long> rankedIds = List.of(5L, 4L, 3L, 2L, 1L);
+        given(productRepository.findAllByIdInAndMartIdAndDeletedFalse(rankedIds, 1L))
+            .willReturn(List.of(product(5L, 1L), product(3L, 1L), product(2L, 1L), product(1L, 1L)));
+
+        // when
+        PageResponse<ProductSearchResponse> first = productService.findBestProducts(1L, rankedIds, PageRequest.of(0, 2));
+        PageResponse<ProductSearchResponse> second = productService.findBestProducts(1L, rankedIds, PageRequest.of(1, 2));
+        PageResponse<ProductSearchResponse> beyond = productService.findBestProducts(1L, rankedIds, PageRequest.of(5, 2));
+
+        // then
+        assertThat(first.content()).extracting(ProductSearchResponse::productId).containsExactly(5L, 3L);
+        assertThat(second.content()).extracting(ProductSearchResponse::productId).containsExactly(2L, 1L);
+        assertThat(first.totalElements()).isEqualTo(4);
+        assertThat(first.totalPages()).isEqualTo(2);
+        assertThat(beyond.content()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("베스트: 순위가 비어 있으면 상품을 조회하지 않고 빈 페이지를 돌려준다")
+    void findBestProducts_empty() {
+        // when
+        PageResponse<ProductSearchResponse> result = productService.findBestProducts(1L, List.of(), pageable);
+
+        // then
+        assertThat(result.content()).isEmpty();
+        verifyNoInteractions(productRepository);
     }
 }

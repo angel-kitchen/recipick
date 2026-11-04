@@ -1,7 +1,6 @@
 package com.recipick.domain.recipe.repository;
 
 import com.recipick.domain.recipe.entity.RecipeIngredient;
-import jakarta.persistence.criteria.From;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

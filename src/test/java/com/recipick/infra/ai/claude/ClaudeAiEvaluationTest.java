@@ -6,9 +6,16 @@ import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.domain.recipe.entity.CuisineType;
+import com.recipick.domain.recipe.entity.Difficulty;
+import com.recipick.domain.recipe.entity.DishType;
+import com.recipick.domain.recipe.entity.Recipe;
+import com.recipick.domain.recipe.service.RecipeRecommendCondition;
 import com.recipick.infra.ai.dto.AiExtractedMenu;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
+import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
 import com.recipick.infra.ai.dto.AiUsage;
 import java.io.IOException;
@@ -20,6 +27,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,10 +49,16 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 @EnabledIfEnvironmentVariable(named = "AI_EVAL", matches = "true")
 class ClaudeAiEvaluationTest {
 
-    private static final String DEFAULT_MODEL = "claude-opus-5-5";
+    private static final String DEFAULT_MODEL = "claude-sonnet-5-5";
     // 로컬 시드와 같은 100개 목록을 쓰려고 시드 SQL에서 레시피 이름을 순서대로 읽는다. ID는 시드 순서(1부터)다
     private static final Pattern SEED_RECIPE_NAME =
         Pattern.compile("^SELECT '([^']+)', '(?:KOREAN|WESTERN)'", Pattern.MULTILINE);
+    // 전체 흐름 평가에서 서버와 같은 조건으로 거르려고 레시피 속성과 재료도 시드 SQL에서 읽는다
+    private static final Pattern SEED_RECIPE = Pattern.compile(
+        "^SELECT '([^']+)', '(KOREAN|WESTERN)', '([A-Z_]+)', (\\d+), (\\d+), '([A-Z]+)', (\\d+),", Pattern.MULTILINE);
+    private static final Pattern SEED_RECIPE_INGREDIENT = Pattern.compile(
+        "SELECT r\\.id, i\\.id, [\\d.]+, (TRUE|FALSE)\\s+FROM recipe r JOIN ingredient i ON i\\.name = '([^']+)'"
+            + "\\s+WHERE r\\.name = '([^']+)'");
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final List<String> report = new ArrayList<>();
@@ -52,12 +66,16 @@ class ClaudeAiEvaluationTest {
     private static AnthropicClient anthropicClient;
     private static ClaudeAiClient claudeAiClient;
     private static String model;
+    // 같은 모델로 프롬프트만 바꿔 비교할 때 결과 파일을 구분하려고 붙이는 이름(예: recommend-v1)
+    private static String label;
     private static List<AiRecipeOption> catalog;
     private static Map<Long, String> nameById;
+    private static List<SeedRecipe> seedRecipes;
 
     @BeforeAll
     static void setUp() throws IOException {
         model = System.getenv().getOrDefault("AI_EVAL_MODEL", DEFAULT_MODEL);
+        label = System.getenv().getOrDefault("AI_EVAL_LABEL", "");
         // 평가 결과로 운영 모델을 고르므로 타임아웃·재시도·최대 토큰은 ClaudeProperties 기본값과 같게 둔다
         ClaudeProperties properties = new ClaudeProperties(
             System.getenv("ANTHROPIC_API_KEY"), model, Duration.ofSeconds(15), 2, 4096);
@@ -69,7 +87,8 @@ class ClaudeAiEvaluationTest {
         claudeAiClient = new ClaudeAiClient(anthropicClient, properties);
         catalog = loadCatalog();
         nameById = catalog.stream().collect(Collectors.toMap(AiRecipeOption::id, AiRecipeOption::name));
-        report.add("# AI 평가 결과: " + model);
+        seedRecipes = loadSeedRecipes();
+        report.add("# AI 평가 결과: " + model + (label.isBlank() ? "" : " (" + label + ")"));
         report.add("");
         report.add("- 실행 시각: " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         report.add("- 레시피 목록: " + catalog.size() + "개");
@@ -81,7 +100,7 @@ class ClaudeAiEvaluationTest {
         Path dir = Path.of("build", "ai-eval");
         Files.createDirectories(dir);
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-        Path file = dir.resolve(model + "-" + stamp + ".md");
+        Path file = dir.resolve(model + (label.isBlank() ? "" : "-" + label) + "-" + stamp + ".md");
         Files.writeString(file, String.join("\n", report) + "\n");
         System.out.println("AI 평가 결과: " + file.toAbsolutePath());
     }
@@ -118,6 +137,76 @@ class ClaudeAiEvaluationTest {
         assertThat(rows).hasSameSizeAs(cases);
     }
 
+    // 조건 추천 ③: 서버가 조건으로 거른 후보 안에서 문장에 맞는 레시피를 고르는지, 맞는 게 없으면 빈 목록을 주는지 잰다.
+    // AI는 후보 이름만 보므로 정답도 이름으로 판단할 수 있는 문장만 둔다
+    // 대충·줄여·띄어쓰기 틀리게 쓴 문장도 추천이 나오는지 잰다. 문제는 한 단계가 아니라 이어진 흐름에서 생기므로
+    // Facade와 같이 ① 조건 정리 → ② 서버 조건(RecipeRecommendCondition)과 재료 빼기로 후보 거르기 → ③ 후보 안에서 고르기를
+    // 그대로 재현해 최종 추천으로 채점한다
+    @Test
+    @DisplayName("대충 쓴 문장: 조건 정리부터 후보 고르기까지 거친 최종 추천이 문장에 맞는지 잰다")
+    void evaluateVagueRecommend() throws IOException {
+        List<PickCase> cases = readCases("ai-eval/vague-cases.json", new TypeReference<>() {
+        });
+        List<Row> rows = new ArrayList<>();
+        for (PickCase evalCase : cases) {
+            AiResult<AiRecipeConditions> conditionResult = claudeAiClient.extractConditions(evalCase.text());
+            if (!conditionResult.isSuccess()) {
+                rows.add(new Row(evalCase.text(), false, "실패: " + conditionResult.failureType(), conditionResult));
+                continue;
+            }
+            RecipeRecommendCondition condition = RecipeRecommendCondition.from(conditionResult.content());
+            String conditionText = describeCondition(condition);
+            List<SeedRecipe> candidates = seedRecipes.stream()
+                .filter(recipe -> condition.matches(recipe.recipe()))
+                .filter(recipe -> condition.excludedIngredients().stream().noneMatch(recipe::contains))
+                .toList();
+            if (candidates.isEmpty()) {
+                rows.add(new Row(evalCase.text(), evalCase.accept().isEmpty(),
+                    conditionText + " → NO_MATCH(후보 없음)", conditionResult));
+                continue;
+            }
+            List<AiRecipeCandidate> options = candidates.stream().map(SeedRecipe::toCandidate).toList();
+            AiResult<List<AiRecommendedRecipe>> pickResult = claudeAiClient.recommendRecipes(evalCase.text(), options);
+            AiResult<?> combined = new AiResult<>(null, pickResult.failureType(),
+                conditionResult.usage().plus(pickResult.usage()));
+            if (!pickResult.isSuccess()) {
+                rows.add(new Row(evalCase.text(), false,
+                    conditionText + " → 실패: " + pickResult.failureType(), combined));
+                continue;
+            }
+            // 서버도 후보 밖 ID는 버리므로 후보 안에서 고른 것만 최종 추천으로 본다
+            Set<Long> candidateIds = options.stream().map(AiRecipeCandidate::id).collect(Collectors.toSet());
+            List<AiRecommendedRecipe> picks = pickResult.content().stream()
+                .filter(pick -> candidateIds.contains(pick.recipeId()))
+                .toList();
+            rows.add(new Row(evalCase.text(), evalCase.matches(picks, nameById),
+                conditionText + " → 후보 " + candidates.size() + "개 → " + describePicks(picks), combined));
+        }
+        appendSection("대충 쓴 문장 (조건 정리 → 후보 거르기 → 고르기)", rows);
+        assertThat(rows).hasSameSizeAs(cases);
+    }
+
+    @Test
+    @DisplayName("조건 추천 후보 고르기: 후보 안에서 맞는 레시피를 고르고, 없으면 빈 목록을 주는지 잰다")
+    void evaluateRecommendPicks() throws IOException {
+        List<PickCase> cases = readCases("ai-eval/recommend-pick-cases.json", new TypeReference<>() {
+        });
+        Map<String, SeedRecipe> seedByName = seedRecipes.stream()
+            .collect(Collectors.toMap(recipe -> recipe.recipe().getName(), Function.identity()));
+        List<Row> rows = new ArrayList<>();
+        for (PickCase evalCase : cases) {
+            List<AiRecipeCandidate> candidates = evalCase.candidates().stream()
+                .map(name -> seedByName.get(name).toCandidate())
+                .toList();
+            AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(evalCase.text(), candidates);
+            String answer = result.isSuccess() ? describePicks(result.content()) : "실패: " + result.failureType();
+            rows.add(new Row(evalCase.text(), result.isSuccess() && evalCase.matches(result.content(), nameById),
+                answer, result));
+        }
+        appendSection("조건 추천 후보 고르기 (③)", rows);
+        assertThat(rows).hasSameSizeAs(cases);
+    }
+
     private static List<AiRecipeOption> loadCatalog() throws IOException {
         try (InputStream in = ClaudeAiEvaluationTest.class.getResourceAsStream("/data-recipe-local.sql")) {
             Matcher matcher = SEED_RECIPE_NAME.matcher(new String(in.readAllBytes(), StandardCharsets.UTF_8));
@@ -126,6 +215,44 @@ class ClaudeAiEvaluationTest {
                 options.add(new AiRecipeOption((long) options.size() + 1, matcher.group(1)));
             }
             return options;
+        }
+    }
+
+    // ID는 loadCatalog와 같이 시드 순서(1부터)라 nameById로 이름을 찾을 수 있다
+    private static List<SeedRecipe> loadSeedRecipes() throws IOException {
+        Map<String, List<String>> ingredientsByRecipe = new HashMap<>();
+        Map<String, List<String>> requiredByRecipe = new HashMap<>();
+        Matcher ingredientMatcher = SEED_RECIPE_INGREDIENT.matcher(readResource("/data-product-local.sql"));
+        while (ingredientMatcher.find()) {
+            String recipeName = ingredientMatcher.group(3);
+            ingredientsByRecipe.computeIfAbsent(recipeName, name -> new ArrayList<>()).add(ingredientMatcher.group(2));
+            if (ingredientMatcher.group(1).equals("TRUE")) {
+                requiredByRecipe.computeIfAbsent(recipeName, name -> new ArrayList<>()).add(ingredientMatcher.group(2));
+            }
+        }
+        Matcher matcher = SEED_RECIPE.matcher(readResource("/data-recipe-local.sql"));
+        List<SeedRecipe> recipes = new ArrayList<>();
+        while (matcher.find()) {
+            Recipe recipe = Recipe.builder()
+                .name(matcher.group(1))
+                .cuisine(CuisineType.valueOf(matcher.group(2)))
+                .dishType(DishType.valueOf(matcher.group(3)))
+                .baseServings(Integer.parseInt(matcher.group(4)))
+                .cookTimeMin(Integer.parseInt(matcher.group(5)))
+                .difficulty(Difficulty.valueOf(matcher.group(6)))
+                .spicyLevel(Integer.parseInt(matcher.group(7)))
+                .steps(List.of())
+                .build();
+            recipes.add(new SeedRecipe((long) recipes.size() + 1, recipe,
+                ingredientsByRecipe.getOrDefault(recipe.getName(), List.of()),
+                requiredByRecipe.getOrDefault(recipe.getName(), List.of())));
+        }
+        return recipes;
+    }
+
+    private static String readResource(String path) throws IOException {
+        try (InputStream in = ClaudeAiEvaluationTest.class.getResourceAsStream(path)) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
@@ -139,6 +266,33 @@ class ClaudeAiEvaluationTest {
         return menus.stream()
             .map(menu -> menu.recipeIds().stream().map(nameById::get).toList() + "×" + menu.servings())
             .collect(Collectors.joining(", "));
+    }
+
+    private static String describePicks(List<AiRecommendedRecipe> picks) {
+        return picks.isEmpty()
+            ? "(빈 목록)"
+            : picks.stream().map(pick -> nameById.getOrDefault(pick.recipeId(), "목록 밖 " + pick.recipeId()))
+                .collect(Collectors.joining(", "));
+    }
+
+    private static String describeCondition(RecipeRecommendCondition condition) {
+        List<String> parts = new ArrayList<>();
+        if (condition.cuisineType() != null) {
+            parts.add(condition.cuisineType().name());
+        }
+        if (condition.dishType() != null) {
+            parts.add(condition.dishType().name());
+        }
+        if (condition.maxCookingMinutes() != null) {
+            parts.add(condition.maxCookingMinutes() + "분 이내");
+        }
+        if (condition.maxSpicyLevel() != null) {
+            parts.add("맵기 " + condition.maxSpicyLevel() + " 이하");
+        }
+        if (!condition.excludedIngredients().isEmpty()) {
+            parts.add(condition.excludedIngredients() + " 빼기");
+        }
+        return parts.isEmpty() ? "[조건 없음]" : parts.toString();
     }
 
     private static void appendSection(String title, List<Row> rows) {
@@ -180,6 +334,21 @@ class ClaudeAiEvaluationTest {
     }
 
     record Row(String text, boolean passed, String answer, AiResult<?> result) {
+    }
+
+    // 서버의 재료 빼기와 같이 재료 이름에 빼는 이름이 들어 있으면(LIKE '%이름%') 그 레시피를 뺀다.
+    // AI에게는 서버(RecipeService.findRequiredIngredientNames)와 같이 필수 재료만 넘긴다
+    record SeedRecipe(Long id, Recipe recipe, List<String> ingredients, List<String> requiredIngredients) {
+
+        boolean contains(String excludedName) {
+            return ingredients.stream().anyMatch(ingredient -> ingredient.contains(excludedName));
+        }
+
+        AiRecipeCandidate toCandidate() {
+            return new AiRecipeCandidate(id, recipe.getName(), recipe.getCuisine().name(),
+                recipe.getDishType().name(), recipe.getCookTimeMin(), recipe.getSpicyLevel(),
+                recipe.getDifficulty().name(), requiredIngredients);
+        }
     }
 
     record ExpectedMenu(List<String> accept, Integer servings) {
@@ -230,6 +399,19 @@ class ClaudeAiEvaluationTest {
             return names == null
                 ? Set.of()
                 : names.stream().map(String::strip).collect(Collectors.toCollection(HashSet::new));
+        }
+    }
+
+    // accept가 비어 있으면 후보 중 맞는 레시피가 없는 문장이라 빈 목록이어야 정답이다.
+    // 그 밖에는 하나 이상 골라야 하고, 고른 레시피가 모두 accept 안에 있어야 정답이다(후보 밖 ID도 틀림)
+    record PickCase(String text, List<String> candidates, List<String> accept) {
+
+        boolean matches(List<AiRecommendedRecipe> picks, Map<Long, String> nameById) {
+            List<String> names = picks.stream().map(pick -> nameById.get(pick.recipeId())).toList();
+            if (accept.isEmpty()) {
+                return names.isEmpty();
+            }
+            return !names.isEmpty() && accept.containsAll(names);
         }
     }
 }

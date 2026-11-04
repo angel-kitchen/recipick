@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.IntegrationTestSupport;
 import com.recipick.domain.member.entity.Member;
-import com.recipick.domain.member.entity.MemberAddress;
 import com.recipick.domain.member.repository.MemberAddressRepository;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.global.security.AuthPrincipal;

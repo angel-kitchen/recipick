@@ -33,7 +33,7 @@ import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.ai.AiClient;
 import com.recipick.infra.ai.dto.AiFailureType;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
-import com.recipick.infra.ai.dto.AiRecipeOption;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
 import com.recipick.infra.ai.dto.AiResult;
 import com.recipick.infra.ai.dto.AiUsage;
@@ -164,9 +164,9 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         aiRecipeRecommendFacade.recommend(MEMBER_ID, "오이 빼고 찌개");
 
         // then
-        ArgumentCaptor<List<AiRecipeOption>> candidates = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
         verify(aiClient).recommendRecipes(anyString(), candidates.capture());
-        assertThat(candidates.getValue()).extracting(AiRecipeOption::id)
+        assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(soybeanStew.getId())
             .doesNotContain(kimchiStew.getId());
     }
@@ -184,9 +184,9 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         aiRecipeRecommendFacade.recommend(MEMBER_ID, "% 빼고 찌개");
 
         // then
-        ArgumentCaptor<List<AiRecipeOption>> candidates = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
         verify(aiClient).recommendRecipes(anyString(), candidates.capture());
-        assertThat(candidates.getValue()).extracting(AiRecipeOption::id)
+        assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(kimchiStew.getId(), soybeanStew.getId());
     }
 
@@ -271,22 +271,69 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         });
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    @DisplayName("분석한 조건이 하나도 없으면 전체 레시피에서 고르지 않고 NO_MATCH를 준다")
-    void recommend_noMatchWhenNoConditionRead() {
+    @DisplayName("분석한 조건이 하나도 없으면 전체 레시피를 후보로 AI가 고른다")
+    void recommend_picksFromAllRecipesWhenNoConditionRead() {
         // given
         givenConditions(new AiRecipeConditions(null, null, null, null, List.of()));
+        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+            List.of(new AiRecommendedRecipe(kimchiStew.getId(), "해장에 좋은 국물이에요.")), PICK_USAGE));
 
         // when
-        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "통오징어찜");
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "해장용");
 
         // then
-        assertThat(response.status()).isEqualTo(AiResultStatus.NO_MATCH);
-        verify(aiClient, never()).recommendRecipes(anyString(), anyList());
-        assertThat(findLogs()).singleElement().satisfies(log -> {
-            assertThat(log.isSuccess()).isTrue();
-            assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH);
-        });
+        assertThat(response.status()).isEqualTo(AiResultStatus.RECOMMENDED);
+        assertThat(recipeIds(response)).containsExactly(kimchiStew.getId());
+        ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
+        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
+            .contains(kimchiStew.getId(), soybeanStew.getId());
+    }
+
+    @Test
+    @DisplayName("조건 없이 전체에서 고르다 실패하면 서버가 거른 후보가 없으므로 레시피 없이 FALLBACK을 준다")
+    void recommend_fallsBackWithoutRecipesWhenPickFailsWithoutCondition() {
+        // given
+        givenConditions(new AiRecipeConditions(null, null, null, null, List.of()));
+        given(aiClient.recommendRecipes(anyString(), anyList()))
+            .willReturn(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
+
+        // when
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "해장용");
+
+        // then
+        assertThat(response.status()).isEqualTo(AiResultStatus.FALLBACK);
+        assertThat(response.recipes()).isEmpty();
+        assertThat(findLogs().get(0).getFailureReason()).isEqualTo("TIMEOUT");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("후보마다 종류·요리 구분·조리 시간·맵기·필수 재료를 함께 AI에게 넘긴다")
+    void recommend_sendsCandidateAttributes() {
+        // given
+        givenConditions(CONDITIONS);
+        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+            List.of(new AiRecommendedRecipe(kimchiStew.getId(), "추천 이유")), PICK_USAGE));
+
+        // when
+        aiRecipeRecommendFacade.recommend(MEMBER_ID, "오이 들어간 찌개");
+
+        // then
+        ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
+        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        assertThat(candidates.getValue())
+            .filteredOn(candidate -> candidate.id().equals(kimchiStew.getId()))
+            .singleElement()
+            .satisfies(candidate -> {
+                assertThat(candidate.cuisineType()).isEqualTo("KOREAN");
+                assertThat(candidate.dishType()).isEqualTo("STEW");
+                assertThat(candidate.cookingMinutes()).isEqualTo(21);
+                assertThat(candidate.spicyLevel()).isEqualTo(1);
+                assertThat(candidate.requiredIngredients()).containsExactly("AI추천테스트오이");
+            });
     }
 
     @Test

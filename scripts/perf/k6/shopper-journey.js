@@ -1,4 +1,4 @@
-// 실행 준비: docs/performance/load-test.md의 "100명 종합 시나리오 준비" 참고.
+// 실행 준비: docs/performance/product/load-test.md의 "100명 종합 시나리오 준비" 참고.
 // 조회가 기본이다. purchase는 결제 성공/환불이 아니라 주문 생성 → 결제 전 취소만 측정한다.
 import { sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';

@@ -3,7 +3,7 @@ package com.recipick.domain.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-import com.recipick.domain.product.dto.MartResponse;
+import com.recipick.domain.product.dto.response.MartResponse;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.repository.MartRepository;

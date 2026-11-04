@@ -7,16 +7,17 @@ import com.recipick.global.audit.AdminAuditCommand;
 import com.recipick.global.audit.AdminAuditField;
 import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
-import com.recipick.domain.product.dto.ProductCreateRequest;
-import com.recipick.domain.product.dto.ProductDetailResponse;
-import com.recipick.domain.product.dto.ProductIdResponse;
-import com.recipick.domain.product.dto.ProductPriceResponse;
-import com.recipick.domain.product.dto.ProductPriceUpdateRequest;
-import com.recipick.domain.product.dto.ProductSearchRequest;
-import com.recipick.domain.product.dto.ProductSearchResponse;
-import com.recipick.domain.product.dto.ProductStatusResponse;
-import com.recipick.domain.product.dto.ProductStatusUpdateRequest;
-import com.recipick.domain.product.dto.ProductUpdateRequest;
+import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
+import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.response.ProductDetailResponse;
+import com.recipick.domain.product.dto.response.ProductIdResponse;
+import com.recipick.domain.product.dto.response.ProductPriceResponse;
+import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductSearchRequest;
+import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductStatusResponse;
+import com.recipick.domain.product.dto.request.ProductStatusUpdateRequest;
+import com.recipick.domain.product.dto.request.ProductUpdateRequest;
 import com.recipick.domain.product.entity.Category;
 import com.recipick.domain.product.entity.Mart;
 import com.recipick.domain.product.entity.Product;
@@ -25,7 +26,7 @@ import com.recipick.domain.product.repository.CategoryRepository;
 import com.recipick.domain.product.repository.MartRepository;
 import com.recipick.domain.product.repository.ProductMartId;
 import com.recipick.domain.product.repository.ProductRepository;
-import com.recipick.domain.product.dto.AdminProductResponse;
+import com.recipick.domain.product.dto.response.AdminProductResponse;
 import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
 import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
@@ -34,11 +35,13 @@ import com.recipick.global.exception.AuthErrorCode;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.response.PageResponse;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -53,6 +56,9 @@ import org.springframework.cache.annotation.Cacheable;
 @Transactional(readOnly = true)
 public class ProductService {
 
+    // 베스트는 상위 N개만 보여 주는 화면이라 페이지는 이 범위 안에서만 나뉜다
+    public static final int BEST_PRODUCT_LIMIT = 100;
+
     private final AdminAuditRecorder auditRecorder;
 
     private final ProductRepository productRepository;
@@ -62,16 +68,16 @@ public class ProductService {
     public PageResponse<AdminProductResponse> getAdminProducts(
         AdminRole role,
         Long adminMartId,
-        AdminProductSearchCondition condition,
+        AdminProductSearchRequest request,
         Pageable pageable
     ) {
-        Long martId = resolveMartId(role, adminMartId, condition.martId());
+        Long martId = resolveMartId(role, adminMartId, request.martId());
         AdminProductSearchCondition scoped = new AdminProductSearchCondition(
             martId,
-            condition.keyword(),
-            condition.categoryId(),
-            condition.ingredientId(),
-            condition.status()
+            request.keyword(),
+            request.categoryId(),
+            request.ingredientId(),
+            request.status()
         );
 
         return PageResponse.from(
@@ -320,6 +326,25 @@ public class ProductService {
         return Arrays.asList(product.getCategory().getId(), product.getIngredientId(), product.getName(),
                 product.getBrand(), product.getDescription(), product.getSaleUnitAmount() == null ? null : product.getSaleUnitAmount().stripTrailingZeros(),
                 product.getSaleUnit(), product.getImageUrl());
+    }
+
+    // 순위 ID는 주문 도메인이 정한다. 삭제·다른 마트 상품을 먼저 거른 목록을 기준으로 페이지를 잘라서
+    // 페이지가 덜 차거나 전체 개수가 실제보다 커지지 않는다
+    public PageResponse<ProductSearchResponse> findBestProducts(Long martId, List<Long> rankedIds, Pageable pageable){
+        List<ProductSearchResponse> ranked = List.of();
+        if (!rankedIds.isEmpty()){
+            Map<Long, Product> productById = productRepository
+                .findAllByIdInAndMartIdAndDeletedFalse(rankedIds, martId).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+            ranked = rankedIds.stream()
+                .map(productById :: get)
+                .filter(Objects::nonNull)
+                .map(ProductSearchResponse::from)
+                .toList();
+        }
+        int from = (int) Math.min(pageable.getOffset(), ranked.size());
+        int to = Math.min(from + pageable.getPageSize(), ranked.size());
+        return PageResponse.from(new PageImpl<>(ranked.subList(from, to), pageable, ranked.size()));
     }
 
 }

@@ -14,7 +14,7 @@ public record PortOneBillingPaymentRequest(
 ) {
 
     public static final String ORDER_NAME = "레시픽 멤버십 월 이용료";
-    public static final String CURRENCY = "KRW";
+    public static final String CURRENCY_KRW = "KRW";
     // KG이니시스 V2 빌링키 결제 필수. 멤버십은 상품 한 건이라 항상 1
     public static final int PRODUCT_COUNT = 1;
 
@@ -45,7 +45,7 @@ public record PortOneBillingPaymentRequest(
             ORDER_NAME,
             new Customer(customerId, new Name(name), email, phone),
             new Amount(total),
-            CURRENCY,
+            CURRENCY_KRW,
             PRODUCT_COUNT
         );
     }

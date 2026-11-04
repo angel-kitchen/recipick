@@ -6,7 +6,7 @@
 | 영향 | 로컬 부하 측정의 요청 실패·정리 실패와 결과 해석 |
 | 기준 | 앱 `bbd0943`, k6 1.3.0, macOS의 Docker→호스트 HTTP 경로 |
 | 상태 | 실행 경로를 바꾼 임시 대응·분리 검증 완료. Docker 내부 원인 미확정 |
-| 관련 근거 | [100명 보고서](../performance/local-100-users.md), [측정 요약](../performance/results/local-native-100-2026-11-03.json), [실행 안내](../performance/load-test.md) |
+| 관련 근거 | [100명 보고서](../performance/local-100-users.md), [측정 요약](../performance/results/local-native-100-2026-11-03.json), [실행 안내](../performance/product/load-test.md) |
 
 ## 1. 증상
 

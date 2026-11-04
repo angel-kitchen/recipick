@@ -1,4 +1,4 @@
-// 상품 검색 부하 테스트. 실행 방법은 docs/performance/load-test.md 참고.
+// 상품 검색 부하 테스트. 실행 방법은 docs/performance/product/load-test.md 참고.
 // 전제: scripts/perf/seed-products.sql, scripts/perf/seed-members.sql 로 데이터를 만들어 둔다.
 import http from 'k6/http';
 import { check, sleep } from 'k6';

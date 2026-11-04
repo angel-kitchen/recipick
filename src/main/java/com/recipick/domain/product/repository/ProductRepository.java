@@ -51,4 +51,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 
     boolean existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(Long martId, String name, String brand, Long id);
 
+    List<Product> findAllByIdInAndMartIdAndDeletedFalse(Collection<Long> ids, Long martId);
+
 }

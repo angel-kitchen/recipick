@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.recipick.infra.ai.dto.AiExtractedMenu;
 import com.recipick.infra.ai.dto.AiFailureType;
+import com.recipick.infra.ai.dto.AiRecipeCandidate;
 import com.recipick.infra.ai.dto.AiRecipeConditions;
 import com.recipick.infra.ai.dto.AiRecipeOption;
 import com.recipick.infra.ai.dto.AiRecommendedRecipe;
@@ -19,6 +20,9 @@ class FakeAiClientTest {
         new AiRecipeOption(1L, "김치찌개"),
         new AiRecipeOption(2L, "된장찌개"),
         new AiRecipeOption(3L, "크림 파스타"));
+    private final List<AiRecipeCandidate> candidates = recipes.stream()
+        .map(recipe -> new AiRecipeCandidate(recipe.id(), recipe.name(), null, null, null, null, null, List.of()))
+        .toList();
 
     @Test
     @DisplayName("문장에 들어 있는 레시피 이름과 인분을 메뉴로 돌려준다")
@@ -94,7 +98,7 @@ class FakeAiClientTest {
     @DisplayName("추천은 후보를 앞에서부터 최대 5개 고른다")
     void recommendRecipes_picksFirstCandidates() {
         // when
-        AiResult<List<AiRecommendedRecipe>> result = fakeAiClient.recommendRecipes("찌개 추천", recipes);
+        AiResult<List<AiRecommendedRecipe>> result = fakeAiClient.recommendRecipes("찌개 추천", candidates);
 
         // then
         assertThat(result.content()).extracting(AiRecommendedRecipe::recipeId).containsExactly(1L, 2L, 3L);
@@ -108,7 +112,7 @@ class FakeAiClientTest {
 
         // when
         AiResult<AiRecipeConditions> conditions = fakeAiClient.extractConditions(text);
-        AiResult<List<AiRecommendedRecipe>> picks = fakeAiClient.recommendRecipes(text, recipes);
+        AiResult<List<AiRecommendedRecipe>> picks = fakeAiClient.recommendRecipes(text, candidates);
 
         // then
         assertThat(conditions.isSuccess()).isTrue();

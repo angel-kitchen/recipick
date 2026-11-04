@@ -6,7 +6,7 @@
 - Java 17, Spring Boot 3.x, Spring Data JPA, QueryDSL
 - 시간은 한국 시간(+09:00), ISO-8601 (`2026-10-14T20:30:00+09:00`)
 - 패키지: `domain`(member, product, recipe, order, payment), `global`, `infra`
-- 도메인 하위 구조: `controller`, `service`, `repository`, `entity`, `dto/request`, `dto/response`, `exception`, 필요할 때만 `event`, `scheduler`
+- 도메인 하위 구조: `controller`, `service`, `repository`, `entity`, `dto/request`, `dto/response`(둘 다 Controller가 받거나 내보내는 DTO만. API 응답을 다른 도메인이 함께 써도 `dto/response`. request·response에 속하지 않는 계층 간·도메인 간 전달 전용은 `dto`에 바로 두고, `Request`·`Response` 접미어만 피해 내용·용도가 드러나게 짓는다), `exception`, 필요할 때만 `event`, `scheduler`
 - 한 도메인에서만 쓰는 코드는 그 도메인 안에, 두 개 이상 도메인이 쓸 때만 `global/common`
 - `infra`에는 외부 호출만 두고 업무 판단은 `domain`의 Service가 한다.
 
@@ -70,7 +70,7 @@
 - 탈퇴한 회원은 MemberService에서 MEMBER_NOT_FOUND. 탈퇴의 상태 조회를 일반 조회로 수행하려면 탈퇴 제한 상태를 새로 만드는 관련 경로도 회원 잠금을 공유해야 한다.
 - 신규 행 중복 생성은 UNIQUE 제약으로 최종 방어한다.
 - 락 대기 시간 초과는 `COMMON-010`(409), Idempotency-Key 충돌·처리 중은 `COMMON-006`(409)
-- 벌크 UPDATE는 Auditing을 거치지 않으므로 `updated_at`을 함께 갱신한다.
+- 벌크 UPDATE는 Auditing을 거치지 않으므로 `updated_at`을 함께 갱신한다. 단, 조회수 같은 카운터 증가는 내용 변경이 아니므로 갱신하지 않는다.
 
 ## 같은 요청 반복(멱등성)
 - 같은 요청이 다시 오면 처음 결과를 그대로 성공으로 반환한다. 409는 현재 상태와 맞지 않을 때만 쓴다.
