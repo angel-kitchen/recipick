@@ -113,7 +113,7 @@
 - 선택한 이유: Redis 명령 두 개(`INCR`, 첫 요청에서만 `PEXPIRE`)로 끝나고, 둘을 Lua 스크립트로 묶어 장애 시 만료 없는 카운터가 남아 그 IP가 계속 막히는 일을 방지했습니다.
 - 실패 처리: Redis 오류는 경고 로그만 남기고 통과(fail-open)시킵니다. 제한 장치 때문에 서비스가 멈추면 안 된다는 판단입니다. `spring.data.redis.timeout` 500ms를 명시해 fail-open이 바로 동작하게 했습니다.
 - 코드 근거: `global/filter/RateLimitFilter`, `infra/redis/RedisRateLimitStore`, `RateLimitProperties`
-- 측정 결과: 같은 IP 연속 호출 130회에서 200 × 120 + 429 × 10, 로그인 15회에서 400 × 10 + 429 × 5, 정책별로 따로 셈. 부하(k6) Before/After 수치는 측정하지 않았습니다. 자세한 내용은 [요청 수 제한 보고서](../performance/product/rate-limit.md).
+- 측정 결과: 같은 IP 연속 호출 130회에서 200 × 120 + 429 × 10, 로그인 15회에서 400 × 10 + 429 × 5, 정책별로 따로 셈. 악성 IP 1개와 일반 회원 20명을 함께 돌린 k6에서 일반 회원 중앙값 응답이 757ms → 166ms, 풀 평균 대기가 27.4 → 2.0건으로 줄었습니다. 자세한 내용은 [요청 수 제한 보고서](../performance/product/rate-limit.md).
 
 ### 3-4. 재고 차감·복구 (D6, D7)
 
@@ -188,7 +188,7 @@
   - 캐시 적중률(약 97.8%)은 k6 시나리오의 검색어가 5개뿐이라 실제보다 높게 나온 값입니다. 실제 사용자 검색에서는 개선 폭이 더 작을 수 있습니다.
   - 카테고리 없이 가격 조건만 쓰는 검색은 인덱스를 만들지 않았고 단독 실행 약 88ms입니다.
   - Redis 장애 중에는 요청 수 제한이 풀립니다(fail-open). IP 기준이라 공유 IP 사용자는 한 묶음으로 셉니다.
-  - 순위는 요청 시 집계라 데이터가 크게 늘면 느려질 수 있습니다. 베스트 상품·찜 순위는 캐시하지 않았습니다.
+  - 순위는 요청 시 집계라 데이터가 크게 늘면 느려질 수 있습니다. 베스트 상품·찜 순위는 캐시하지 않았습니다. 주문 10만 건에서 30일·전체 구간은 인덱스를 거의 쓰지 못해 0.5~0.9초가 걸렸습니다.
   - 인덱스가 늘어 상품 쓰기가 조금 느려질 수 있으나 측정하지 않았습니다.
   - 모든 측정은 로컬 단일 PC 결과입니다. 절대값이 아니라 같은 조건의 Before/After 비교에 의미가 있습니다.
 - 다시 검토할 조건
@@ -212,16 +212,32 @@
 | 재고 차감·복구·조정 규칙 | `ProductStockServiceTest`, `ProductStockAdjustServiceTest`, `ProductStockHistoryServiceTest`, `ProductStockAdminControllerTest` | 삭제·다른 마트·판매 중지 거절, 초과 감소 거절, 이력 기록 | 통과(11 + 7 + 5 + 6개) | `domain/product` 테스트 |
 | 순위 기간·집계 | `RankingPeriodTest`, `RecipeRankingRepositoryTest`, `OrderItemRepositoryTest` | 24시간·7일·30일·전체 시작 시각, 기간 안 찜·결제 완료 수량 합계 순서, 동수면 ID가 큰 쪽 먼저, 비활성 레시피·대상 아닌 주문 제외, 순위용 인덱스 컬럼 순서 | 통과(`RankingPeriodTest` 2개, `RecipeRankingRepositoryTest` 6개, `OrderItemRepositoryTest` 3개) | [기간](../../src/test/java/com/recipick/global/common/RankingPeriodTest.java), [찜](../../src/test/java/com/recipick/domain/recipe/repository/RecipeRankingRepositoryTest.java), [판매](../../src/test/java/com/recipick/domain/order/repository/OrderItemRepositoryTest.java) |
 | 조회수 실패 격리 | `RecipeFacadeTest` | 증가가 실패해도 상세 응답 반환 | 통과(3개) | [테스트](../../src/test/java/com/recipick/domain/recipe/facade/RecipeFacadeTest.java) |
-| 순위 인덱스 효과 | `EXPLAIN` 전후 | 풀 스캔 제거 | 측정 예정 | - |
-| 요청 수 제한 부하 Before/After | k6 여러 IP | 한 IP 폭주 시 풀 점유 감소 | 측정 예정 | - |
+| 순위 인덱스 효과 | `EXPLAIN ANALYZE` 전후(주문 10만 건, 찜 9,440건) | 읽는 행 감소 | 베스트 상품 24시간 455ms → 17.6ms, 7일 274 → 208ms, 30일 608 → 552ms, 전체 1,185 → 936ms. 찜 순위는 17.8 → 18.8ms로 차이 없음 | 이 표 아래 "순위 인덱스 측정 상세" |
+| 요청 수 제한 부하 Before/After | k6 악성 IP 1개 + 일반 회원 20명, 3회 중앙값 | 한 IP 폭주 시 풀 점유 감소 | 일반 회원 p95 1,343 → 791ms, 중앙값 757 → 166ms, 풀 평균 대기 27.4 → 2.0건, 일반 회원 429 0건 | [요청 수 제한](../performance/product/rate-limit.md) 5절 |
 | 도메인 전체 테스트 | `./gradlew test --tests 'com.recipick.domain.product.*'`, `domain.recipe.*`, 캐시·요청 수 제한·`RankingPeriodTest` | 전체 통과 | 상품 20개 클래스 186개, 레시피 29개 클래스 179개를 포함한 53개 클래스 378개 통과, 실패·건너뜀 0 (`OrderItemRepositoryTest` 3개 통과는 별도 실행) | 로컬 실행 2026-11-03(`9b173d2`) |
+
+### 순위 인덱스 측정 상세
+
+로컬 `recipick_perf`에 결제 완료 주문 90,000건(취소 10,010건 포함 100,010건), 주문 상품 300,047건, 찜 9,440건을 넣고 `EXPLAIN ANALYZE`를 돌렸습니다. Before는 새 인덱스를 `IGNORE INDEX`로 막은 상태, After는 힌트 없이 옵티마이저가 고른 상태입니다. 기간별 1회 측정입니다.
+
+| 베스트 상품 기간 | Before | After | After에서 새 인덱스를 썼나 |
+| --- | --- | --- | --- |
+| 24시간 | 455ms | 17.6ms | 사용 |
+| 7일 | 274ms | 208ms | 사용(강제해도 119ms) |
+| 30일 | 608ms | 552ms | 쓰지 않음 |
+| 전체 | 1,185ms | 936ms | 쓰지 않음(강제하면 1,624ms로 더 느림) |
+
+- 인덱스 `(mart_id, status, paid_at)`는 기간이 짧을수록 읽는 행이 줄어 효과가 큽니다. 24시간은 약 26배 빨라졌습니다.
+- 30일·전체는 주문의 절반 가까이를 읽어야 해서 효과가 작고, 전체는 옵티마이저가 쓰지 않는 쪽이 더 빠릅니다.
+- 같은 쿼리를 힌트 없이 3회 재면 30일 구간은 Before 657~995ms, After 543~680ms로 겹칩니다. 24시간 구간만 차이가 뚜렷합니다.
+- 찜 순위는 레시피가 100개뿐이라 Before 17.8ms, After 18.8ms(3회 중앙값)로 차이가 없습니다. 이 규모에서는 `(created_at, recipe_id)` 인덱스 효과를 입증하지 못했습니다.
 
 ## 6. 확인이 필요한 차이
 
 | 항목 | 요구사항·기대 | 현재 코드·상태 | 확인할 사람 |
 | --- | --- | --- | --- |
 | 레시피 순위 D8·D9·D10 | 레시피 도메인 책임 | 구현은 태헌이 했고 레시피 담당 확인 전 | 보민 |
-| 순위 인덱스 근거 | 인덱스 추가의 EXPLAIN 근거 | 인덱스는 추가했으나 전후 `EXPLAIN` 측정 안 함 | 태헌 |
+| 순위 인덱스 근거 | 베스트 상품은 짧은 기간(24시간·7일)에서만 효과, 찜 순위는 레시피 수천 건 이상에서 효과 | 24시간만 뚜렷하게 빨라졌고 30일·전체는 효과가 작음. 찜 순위는 레시피 100개 시드라 효과 측정 불가 | 태헌 |
 | 요청 수 제한 | 프록시가 `X-Forwarded-For`를 덮어쓰는지 | 확인 못 함(덮어쓰지 않으면 헤더 위조로 우회 가능) | 배포 담당 |
 | 요청 수 제한 429 | 프론트 다른 도메인에서도 429 본문 확인 | 필터가 Spring Security 앞이라 CORS 헤더가 없음 | 프론트·태헌 |
 | Redis 장애 대체 | 실제 장애 시 API 동작 | 오류 처리기 단위 테스트만 확인, Redis를 끄고 호출하는 확인은 안 함 | 태헌 |
