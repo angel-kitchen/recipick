@@ -3,6 +3,7 @@ package com.recipick.infra.ai.claude;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.anthropic.client.AnthropicClient;
@@ -10,6 +11,7 @@ import com.anthropic.models.messages.Model;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.StructuredMessage;
 import com.anthropic.models.messages.StructuredMessageCreateParams;
+import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.Usage;
 import com.recipick.infra.ai.claude.ClaudeAiClient.ConditionOutput;
 import com.recipick.infra.ai.claude.ClaudeAiClient.MenuOutput;
@@ -21,6 +23,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
 
 class ClaudeAiClientTest {
 
@@ -96,10 +99,46 @@ class ClaudeAiClientTest {
 
         // when
         AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(
-            "찌개 추천", List.of(new AiRecipeOption(1L, "김치찌개")));
+            "찌개 추천", List.of(kimchiStewCandidate()));
 
         // then
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.failureType()).isEqualTo(AiFailureType.INVALID_RESPONSE);
+    }
+
+    @Test
+    @DisplayName("추천 후보는 이름과 함께 속성·필수 재료를 한 줄로 보내고, 등록되지 않은 속성은 ?로 표시하며 캐시한다")
+    @SuppressWarnings("unchecked")
+    void recommendRecipes_sendsCandidateAttributes() {
+        // given
+        StructuredMessage<ClaudeAiClient.RecommendOutput> message = mock(StructuredMessage.class);
+        Usage usage = mock(Usage.class);
+        when(usage.inputTokens()).thenReturn(900L);
+        when(usage.outputTokens()).thenReturn(10L);
+        when(usage.cacheReadInputTokens()).thenReturn(Optional.empty());
+        when(message.usage()).thenReturn(usage);
+        when(message.model()).thenReturn(Model.of("claude-opus-5-5"));
+        when(message.stopReason()).thenReturn(Optional.of(StopReason.END_TURN));
+        when(message.content()).thenReturn(List.of());
+        when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+        AiRecipeCandidate unknown = new AiRecipeCandidate(2L, "새 레시피", null, null, null, null, null, List.of());
+
+        // when
+        claudeAiClient.recommendRecipes("두부", List.of(kimchiStewCandidate(), unknown));
+
+        // then
+        ArgumentCaptor<StructuredMessageCreateParams<ClaudeAiClient.RecommendOutput>> params =
+            ArgumentCaptor.forClass(StructuredMessageCreateParams.class);
+        verify(client.messages()).create(params.capture());
+        TextBlockParam system = params.getValue().rawParams().system().orElseThrow()
+            .asTextBlockParams().get(0);
+        assertThat(system.text())
+            .contains("1: 김치찌개 | KOREAN STEW | 30분 | 맵기 2 | EASY | 김치, 두부")
+            .contains("2: 새 레시피 | ? ? | ? | 맵기 ? | ? | ");
+        assertThat(system.cacheControl()).isPresent();
+    }
+
+    private static AiRecipeCandidate kimchiStewCandidate() {
+        return new AiRecipeCandidate(1L, "김치찌개", "KOREAN", "STEW", 30, 2, "EASY", List.of("김치", "두부"));
     }
 }

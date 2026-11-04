@@ -138,6 +138,16 @@ public class RecipeService {
             .toList();
     }
 
+    // 조건 추천 ③에서 재료 이름만 쓴 문장도 고를 수 있게 넘기는 재료. 양념까지 다 넘기면 토큰만 늘어 필수 재료만 준다
+    public Map<Long, List<String>> findRequiredIngredientNames(List<Long> recipeIds) {
+        return recipeIngredientRepository.findAllWithIngredientByRecipeIds(recipeIds).stream()
+            .filter(RecipeIngredient::isRequired)
+            .collect(Collectors.groupingBy(
+                recipeIngredient -> recipeIngredient.getRecipe().getId(),
+                Collectors.mapping(recipeIngredient -> recipeIngredient.getIngredient().getName(),
+                    Collectors.toList())));
+    }
+
     // AI가 준 재료 이름의 %·_가 와일드카드로 해석되면 그 재료가 없는 레시피까지 빠지므로 글자 그대로 찾게 한다
     private static String escapeLikePattern(String name) {
         return name.replace("!", "!!")
