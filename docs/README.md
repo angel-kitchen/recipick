@@ -41,12 +41,14 @@
 | 결제·웹훅·환불 정합성 | [선택 근거](adr/payment-consistency.md) · [동시성 결제 절](concurrency.md#6-결제-도메인-승인만료취소웹훅포인트) · [결제 API 명세](payment-api.md) · [회원·멤버십 ↔ 결제 연동](member-payment-integration.md) · [결제 추적성 검토](payment-observability.md) | 정윤, 주문 연동 준희 | 검증·리뷰: 웹훅 재조회·지연 큐와 Fallback·PG 호출과 트랜잭션 분리·잠금/UNIQUE/멱등 키 역할·늦은 승인과 SYSTEM 환불·자동청구 선점. 결제 패키지 136개 클래스·1,673건 통과(2026-11-04 `9172f6d`, 작성자 작업 환경의 로컬 MySQL 8.0 실행, CI는 Testcontainers MySQL 8.4. 근거·재현 명령은 [동시성 6-5절](concurrency.md#6-5-실제-동시-요청실패-결과)). 추적성 개선은 도입 검토 단계 |
 | 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v3 재평가 완료. Tool Calling 등 고도화 남음 |
 | 상품 조회·성능·재고·순위 | [선택 근거·검증](adr/product-domain.md) | 태헌, 레시피 순위 보민 확인 | 작성: 검색 인덱스·캐시·요청 수 제한·재고 잠금·순위 집계·모니터링 공개 규칙. 순위 인덱스 EXPLAIN과 요청 수 제한 부하 수치는 측정 예정 |
-| 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 부하·병목·캐싱 보고서 있음. 호출 제한 결과와 제출용 수치 확정은 담당자 확인 |
+| 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [로컬 100명 결과](performance/local-100-users.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 로컬 100명 혼합 검증·API별 지연·정합성 결과 추가. 기존 병목·캐싱 보고서는 유지하며 운영 측정·제출 수치는 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
-| 트러블슈팅 | `docs/troubleshooting/<주제>.md` · 레시피·AI: [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) · 주문: [잠금 전 엔티티 조회로 변경 덮어씀](troubleshooting/order-stale-entity-before-lock.md) · [회원 잠금 테스트 경합 없이 통과](troubleshooting/order-member-lock-test-false-pass.md) · [결제 완료 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md) · 결제: [포인트 예약 잠금 경합](troubleshooting/payment-point-gap-lock-deadlock.md) · [지연 큐 작업 유실과 Fallback 복구](troubleshooting/payment-delay-queue-recovery.md) · [스케줄러 등록 후 기본 실행기 누락](troubleshooting/payment-scheduler-autoconfiguration.md) | 문제를 해결한 담당자 | 레시피·AI 1건, 주문 3건, 결제 3건 작성. 나머지 도메인 작성 대기: 재현·확인된 원인·수정·회귀 결과 |
+| 트러블슈팅 | [로컬 k6 타임아웃](troubleshooting/k6-docker-host-timeout.md) · [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) | 문제를 해결한 담당자 | 로컬 k6 실행 경로 분리·임시 대응과 레시피·AI 사례 작성. Docker 내부 원인은 미확정으로 구분 |
 
 위 표는 문서 분담과 작성 위치 제안입니다. 실제 담당·측정 범위가 정해지면 갱신합니다.
 개별 기술 선택 문서는 해당 양식을 쓰고, 여러 도메인의 동시성 결과는 공통 문서의 도메인별 절로 모읍니다.
+
+2026-11-03 추가한 [로컬 검증 결과](performance/local-100-users.md#4-사전-기능-검증과-남은-항목)는 앱 `bbd0943` 자동 테스트 3,384건 및 당시 로컬 화면 점검을 구분합니다. 아래 회원 기능 표는 2026-11-02의 기존 스냅샷으로 유지하며, 최신 dev 전체 E2E 완료로 읽지 않습니다. 멤버십 화면 연결·탈퇴 성공·실제 PG 등 남은 검증은 추가 보고서를 따릅니다.
 
 ## 회원 기능 문서 반영 상태
 

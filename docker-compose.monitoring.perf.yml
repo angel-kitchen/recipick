@@ -1,0 +1,6 @@
+# 기본 모니터링 구성과 함께 사용해 성능 서버를 수집한다.
+# docker compose -f docker-compose.monitoring.yml -f docker-compose.monitoring.perf.yml up -d
+services:
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus/prometheus-perf.yml:/etc/prometheus/prometheus.yml:ro

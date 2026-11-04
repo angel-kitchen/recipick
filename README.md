@@ -125,6 +125,7 @@ GitHub Actions는 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스�
 | 상품 검색·쿼리 개선 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [병목 개선](docs/performance/product/bottleneck.md) |
 | 캐싱 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [캐싱](docs/performance/product/caching.md) |
 | 부하 테스트 | 보고서에 기록 | 제출용 요약 확인 대기 | 제출용 요약 확인 대기 | [부하 테스트](docs/performance/product/load-test.md) |
+| 100명 혼합 예비 검증 | 로컬 단일 PC, 앱 `bbd0943`, 회원 100·상품 100,660·레시피 100 | 개선 비교 아님 | 58,199요청 실패 0, 시나리오 p95 약 72ms, 종료 정합성 통과 | [환경·API별 결과](docs/performance/local-100-users.md) |
 | 호출 제한 | 담당자 확인 대기 | 확인 대기 | 확인 대기 | [요청 수 제한](docs/performance/product/rate-limit.md) (결과 취합 대기) |
 
 측정용 데이터의 규모와 생성 방법은 [성능 시드 문서](docs/performance/product/seed-data.md)를 참고합니다.

@@ -1,0 +1,277 @@
+{
+  "appCommit": "bbd0943",
+  "date": "2026-11-03",
+  "execution": "macOS arm64 native k6 1.3.0",
+  "maxVUs": 100,
+  "metrics": {
+    "http_reqs": {
+      "count": 58199,
+      "rate": 149.4058866535459
+    },
+    "http_req_failed": {
+      "passes": 0,
+      "fails": 58199,
+      "value": 0
+    },
+    "http_req_failed{phase:journey}": {
+      "passes": 0,
+      "fails": 57499,
+      "thresholds": {
+        "rate<0.01": false
+      },
+      "value": 0
+    },
+    "http_req_duration{phase:journey}": {
+      "p(99)": 193.05363999999997,
+      "max": 770.749,
+      "avg": 18.675041270282893,
+      "med": 8.661,
+      "p(90)": 35.221199999999996,
+      "p(95)": 72.44959999999993,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "http_req_duration{name:product_search,phase:journey}": {
+      "avg": 19.81395931294926,
+      "med": 8.431,
+      "p(90)": 43.044399999999996,
+      "p(95)": 80.78919999999995,
+      "p(99)": 185.28644,
+      "max": 461.3,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "http_req_duration{name:recipe_list,phase:journey}": {
+      "avg": 20.595215116279082,
+      "med": 11.9815,
+      "p(90)": 36.5634,
+      "p(95)": 69.91805,
+      "p(99)": 165.79159999999996,
+      "max": 370.958,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "journey_completed": {
+      "count": 16408,
+      "rate": 42.1218884896885
+    },
+    "journey_failed": {
+      "passes": 0,
+      "fails": 16408,
+      "thresholds": {
+        "rate<0.01": false
+      },
+      "value": 0
+    },
+    "iterations": {
+      "count": 16408,
+      "rate": 42.1218884896885
+    },
+    "blocked_writers": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "cleanup_failed": {
+      "rate": 0,
+      "count": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "skipped_writes": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "checks": {
+      "fails": 0,
+      "passes": 70342,
+      "value": 1
+    },
+    "request_wall_time": {
+      "p(95)": 72,
+      "p(99)": 192,
+      "max": 771,
+      "avg": 18.80216154916751,
+      "med": 9,
+      "p(90)": 36
+    }
+  },
+  "apiServerHistogramDelta": [
+    {
+      "method": "DELETE",
+      "uri": "/api/cart-items/{cartItemId}",
+      "count": 3293,
+      "meanServerMs": 15.132740767689036,
+      "p95ServerUpperMs": 61.516456,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/cart-items",
+      "count": 3393,
+      "meanServerMs": 19.36211130120837,
+      "p95ServerUpperMs": 89.47848499999999,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/categories",
+      "count": 8209,
+      "meanServerMs": 1.205270121939335,
+      "p95ServerUpperMs": 4.194304000000001,
+      "p99ServerUpperMs": 8.388606999999999
+    },
+    {
+      "method": "GET",
+      "uri": "/api/members/me",
+      "count": 1738,
+      "meanServerMs": 20.52192382681243,
+      "p95ServerUpperMs": 67.10886400000001,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/orders",
+      "count": 1738,
+      "meanServerMs": 17.718651802646722,
+      "p95ServerUpperMs": 61.516456,
+      "p99ServerUpperMs": 156.587348
+    },
+    {
+      "method": "GET",
+      "uri": "/api/orders/{orderId}",
+      "count": 1650,
+      "meanServerMs": 14.749864569696967,
+      "p95ServerUpperMs": 67.10886400000001,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/payments/orders/{orderId}",
+      "count": 1650,
+      "meanServerMs": 25.638262110909093,
+      "p95ServerUpperMs": 111.848106,
+      "p99ServerUpperMs": 357.913941
+    },
+    {
+      "method": "GET",
+      "uri": "/api/points",
+      "count": 1638,
+      "meanServerMs": 15.842942345543346,
+      "p95ServerUpperMs": 55.924051000000006,
+      "p99ServerUpperMs": 156.587348
+    },
+    {
+      "method": "GET",
+      "uri": "/api/products",
+      "count": 8309,
+      "meanServerMs": 19.351427647249967,
+      "p95ServerUpperMs": 89.47848499999999,
+      "p99ServerUpperMs": 201.32659
+    },
+    {
+      "method": "GET",
+      "uri": "/api/products/{productId}",
+      "count": 8309,
+      "meanServerMs": 16.96154487062222,
+      "p95ServerUpperMs": 67.10886400000001,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/recipes",
+      "count": 3368,
+      "meanServerMs": 19.9615614043943,
+      "p95ServerUpperMs": 89.47848499999999,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "GET",
+      "uri": "/api/recipes/{recipeId}",
+      "count": 3268,
+      "meanServerMs": 18.361475781823746,
+      "p95ServerUpperMs": 67.10886400000001,
+      "p99ServerUpperMs": 178.956969
+    },
+    {
+      "method": "PATCH",
+      "uri": "/api/cart-items/{cartItemId}",
+      "count": 3293,
+      "meanServerMs": 21.762571632857576,
+      "p95ServerUpperMs": 89.47848499999999,
+      "p99ServerUpperMs": 201.32659
+    },
+    {
+      "method": "POST",
+      "uri": "/api/auth/login",
+      "count": 100,
+      "meanServerMs": 65.54338912,
+      "p95ServerUpperMs": 89.47848499999999,
+      "p99ServerUpperMs": 89.47848499999999
+    },
+    {
+      "method": "POST",
+      "uri": "/api/cart-items",
+      "count": 3293,
+      "meanServerMs": 25.63481676860006,
+      "p95ServerUpperMs": 111.848106,
+      "p99ServerUpperMs": 246.065832
+    },
+    {
+      "method": "POST",
+      "uri": "/api/orders",
+      "count": 1650,
+      "meanServerMs": 35.884078505454546,
+      "p95ServerUpperMs": 156.587348,
+      "p99ServerUpperMs": 357.913941
+    },
+    {
+      "method": "POST",
+      "uri": "/api/orders/preview",
+      "count": 1650,
+      "meanServerMs": 50.765305410909086,
+      "p95ServerUpperMs": 223.696211,
+      "p99ServerUpperMs": 536.870911
+    },
+    {
+      "method": "POST",
+      "uri": "/api/payments/{paymentId}/cancel",
+      "count": 1650,
+      "meanServerMs": 30.87570851878788,
+      "p95ServerUpperMs": 156.587348,
+      "p99ServerUpperMs": 357.913941
+    }
+  ],
+  "integrity": {
+    "cartItems": 0,
+    "pointBalance": 0,
+    "pendingOrders": 0,
+    "reservedUsages": 0,
+    "pendingEarnings": 0,
+    "notCanceledPayments": 0,
+    "stockRestored": true
+  },
+  "sampledPeaks": {
+    "process_cpu_usage": 0.15815191423966166,
+    "system_cpu_usage": 1.0,
+    "hikaricp_connections_pending": 16.0,
+    "hikaricp_connections_timeout_total": 0,
+    "tomcat_threads_busy_threads": 26.0
+  },
+  "rawFileSha256": {
+    "mixed-100-summary.json": "f88b1ec3088d8b5182a9455dee3db98199015180d736ffd554611c4e693a9611",
+    "before-prometheus.txt": "cae739e9dd39b1b94f71e93fd9364ea14bb9479c460c0173b9228730a5fe1d76",
+    "after-prometheus.txt": "5e3b91578ff8e3c4e83e891ee486e96170e7caed8bd34d462ce82057a94f7b3b",
+    "integrity.json": "cd4a15c48af70afaf06a5d897a332e665e257a7565a26994529579796afe9362",
+    "sampled-peaks.json": "d861fb87b2db0c1a98165c9f32853a76151b424710cc034c1e1a374995174ead"
+  }
+}
