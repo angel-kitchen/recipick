@@ -144,3 +144,4 @@ spring:
         - classpath:data-admin-local.sql
         - optional:classpath:data-recipe-local.sql
         - optional:classpath:data-product-local.sql
+        - classpath:data-member-demo.sql

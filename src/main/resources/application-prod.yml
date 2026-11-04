@@ -9,6 +9,12 @@ spring:
     hibernate:
       # DDL·마이그레이션 파일이 없어 첫 배포부터 스키마를 앱이 만들어야 한다. 컬럼 삭제·타입 변경은 수동 처리
       ddl-auto: update
+  sql:
+    init:
+      # 공용 시연 회원만 포함한다. 로컬 관리자·상품·레시피 시드는 운영에서 실행하지 않는다.
+      data-locations:
+        - classpath:data.sql
+        - classpath:data-member-demo.sql
   lifecycle:
     # graceful shutdown 때 진행 중 요청을 기다리는 상한
     timeout-per-shutdown-phase: 20s
