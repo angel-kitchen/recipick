@@ -26,6 +26,9 @@ public record AiRequestLogAdminResponse(
     Integer outputTokens,
     Integer cacheReadTokens,
     int latencyMs,
+    // 종류별 버전 번호. 코드 기본 지시문이면 null이고, 프롬프트 버전 기록 전의 이력은 전체가 null이다
+    @JsonRawValue
+    String promptVersions,
     LocalDateTime createdAt
 ) {
 
@@ -46,6 +49,7 @@ public record AiRequestLogAdminResponse(
             log.getOutputTokens(),
             log.getCacheReadTokens(),
             log.getLatencyMs(),
+            log.getPromptVersions(),
             log.getCreatedAt());
     }
 

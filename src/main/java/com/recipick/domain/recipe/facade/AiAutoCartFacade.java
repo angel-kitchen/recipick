@@ -1,6 +1,9 @@
 package com.recipick.domain.recipe.facade;
 
+import com.recipick.domain.recipe.dto.ActiveAiPrompt;
 import com.recipick.domain.recipe.dto.response.AiAutoCartPreviewResponse;
+import com.recipick.domain.recipe.entity.AiPromptType;
+import com.recipick.domain.recipe.service.AiPromptService;
 import com.recipick.domain.recipe.service.AiRequestLimiter;
 import com.recipick.domain.recipe.service.AutoCartService;
 import com.recipick.infra.ai.AiClient;
@@ -20,6 +23,7 @@ public class AiAutoCartFacade {
     private final AutoCartFacade autoCartFacade;
     private final AutoCartService autoCartService;
     private final AiRequestLimiter aiRequestLimiter;
+    private final AiPromptService aiPromptService;
     private final AiClient aiClient;
     private final AiAutoCartProcessor aiAutoCartProcessor;
 
@@ -27,7 +31,8 @@ public class AiAutoCartFacade {
         autoCartFacade.validatePreviewable(memberId);
         aiRequestLimiter.acquire(memberId);
         List<AiRecipeOption> recipes = autoCartService.findAiRecipeOptions();
-        AiResult<List<AiExtractedMenu>> aiResult = aiClient.extractMenus(text, recipes);
-        return aiAutoCartProcessor.process(memberId, text, recipes, aiResult);
+        ActiveAiPrompt prompt = aiPromptService.getActive(AiPromptType.MENU);
+        AiResult<List<AiExtractedMenu>> aiResult = aiClient.extractMenus(prompt.content(), text, recipes);
+        return aiAutoCartProcessor.process(memberId, text, recipes, aiResult, prompt);
     }
 }

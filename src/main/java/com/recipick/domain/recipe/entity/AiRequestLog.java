@@ -80,6 +80,10 @@ public class AiRequestLog {
     @Column(nullable = false)
     private int latencyMs;
 
+    // 사용한 프롬프트 종류별 버전 번호. 코드 기본 지시문을 썼으면 그 종류의 값이 null이다
+    @Column(columnDefinition = "json")
+    private String promptVersions;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -99,7 +103,8 @@ public class AiRequestLog {
             Integer inputTokens,
             Integer outputTokens,
             Integer cacheReadTokens,
-            int latencyMs
+            int latencyMs,
+            String promptVersions
     ) {
         this.memberId = memberId;
         this.autoCartRequest = autoCartRequest;
@@ -115,5 +120,6 @@ public class AiRequestLog {
         this.outputTokens = outputTokens;
         this.cacheReadTokens = cacheReadTokens;
         this.latencyMs = latencyMs;
+        this.promptVersions = promptVersions;
     }
 }

@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recipick.domain.recipe.dto.ActiveAiPrompt;
 import com.recipick.domain.recipe.dto.request.AiRequestLogAdminSearchRequest;
 import com.recipick.domain.recipe.entity.AiRequestLog;
 import com.recipick.domain.recipe.entity.AiRequestType;
@@ -10,7 +11,9 @@ import com.recipick.domain.recipe.repository.AiRequestLogRepository;
 import com.recipick.domain.recipe.repository.AutoCartRequestRepository;
 import com.recipick.infra.ai.dto.AiResult;
 import com.recipick.infra.ai.dto.AiUsage;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,7 +34,8 @@ public class AiRequestLogService {
 
     @Transactional
     public void save(Long memberId, AiRequestType requestType, String rawText, AiResultStatus resultStatus,
-                     AiResult<?> aiResult, List<Long> matchedRecipeIds, Long autoCartRequestId) {
+                     AiResult<?> aiResult, List<Long> matchedRecipeIds, Long autoCartRequestId,
+                     List<ActiveAiPrompt> prompts) {
         AiUsage usage = aiResult.usage();
         aiRequestLogRepository.save(AiRequestLog.builder()
             .memberId(memberId)
@@ -51,6 +55,7 @@ public class AiRequestLogService {
             .outputTokens(usage.outputTokens())
             .cacheReadTokens(usage.cacheReadTokens())
             .latencyMs(Math.toIntExact(usage.latencyMs()))
+            .promptVersions(toJson(toVersions(prompts)))
             .build());
 
         // 자연어 장보기는 미리보기 저장과 같은 트랜잭션에서 이력을 남기므로 저장 뒤에 롤백될 수 있다.
@@ -70,6 +75,13 @@ public class AiRequestLogService {
             request.toFromAt(),
             request.toToExclusive(),
             request.toPageable());
+    }
+
+    // 기본 지시문(버전 null)도 어떤 종류를 썼는지 남기려고 null 값을 허용하는 Map으로 만든다
+    private static Map<String, Integer> toVersions(List<ActiveAiPrompt> prompts) {
+        Map<String, Integer> versions = new LinkedHashMap<>();
+        prompts.forEach(prompt -> versions.put(prompt.type().name(), prompt.version()));
+        return versions;
     }
 
     private String toJson(Object content) {

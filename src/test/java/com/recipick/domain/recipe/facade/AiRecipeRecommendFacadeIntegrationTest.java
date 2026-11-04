@@ -16,6 +16,8 @@ import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse.RecommendedRecipe;
+import com.recipick.domain.recipe.entity.AiPrompt;
+import com.recipick.domain.recipe.entity.AiPromptType;
 import com.recipick.domain.recipe.entity.AiRequestLog;
 import com.recipick.domain.recipe.entity.AiRequestType;
 import com.recipick.domain.recipe.entity.AiResultStatus;
@@ -24,6 +26,7 @@ import com.recipick.domain.recipe.entity.DishType;
 import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.domain.recipe.repository.AiPromptRepository;
 import com.recipick.domain.recipe.repository.AiRequestLogRepository;
 import com.recipick.domain.recipe.repository.IngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
@@ -69,6 +72,8 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     RecipeIngredientRepository recipeIngredientRepository;
     @Autowired
     StringRedisTemplate redisTemplate;
+    @Autowired
+    AiPromptRepository aiPromptRepository;
 
     @MockitoBean
     AiClient aiClient;
@@ -93,6 +98,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @AfterEach
     void cleanUp() {
         aiRequestLogRepository.deleteAll(findLogs());
+        aiPromptRepository.deleteAll(aiPromptRepository.findAllByPromptTypeOrderByVersionDesc(AiPromptType.RECOMMEND));
         recipeIngredientRepository.deleteAll(recipeIngredientRepository.findAllWithIngredient(kimchiStew.getId()));
         ingredientRepository.deleteById(cucumber.getId());
         recipeRepository.deleteAllById(List.of(kimchiStew.getId(), soybeanStew.getId()));
@@ -118,7 +124,8 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     }
 
     private void givenConditions(AiRecipeConditions conditions) {
-        given(aiClient.extractConditions(anyString())).willReturn(AiResult.success(conditions, CONDITION_USAGE));
+        given(aiClient.extractConditions(anyString(), anyString()))
+            .willReturn(AiResult.success(conditions, CONDITION_USAGE));
     }
 
     private List<Long> recipeIds(AiRecipeRecommendResponse response) {
@@ -130,7 +137,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_returnsPicksWithReason() {
         // given
         givenConditions(CONDITIONS);
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(List.of(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(List.of(
             new AiRecommendedRecipe(soybeanStew.getId(), "맵지 않고 빨리 끓일 수 있어요."),
             new AiRecommendedRecipe(99_999L, "후보에 없는 레시피")), PICK_USAGE));
 
@@ -151,13 +158,53 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(log.getLatencyMs()).isEqualTo(2000);
     }
 
+    @Test
+    @DisplayName("활성화한 프롬프트 버전을 AI 호출에 쓰고, 이력에 종류별 버전을 남긴다")
+    void recommend_usesActivePromptAndRecordsVersions() {
+        // given
+        AiPrompt prompt = AiPrompt.builder()
+            .promptType(AiPromptType.RECOMMEND)
+            .version(1)
+            .content("관리자가 고친 추천 지시문\n")
+            .createdByAdminId(1L)
+            .build();
+        prompt.activate();
+        aiPromptRepository.save(prompt);
+        givenConditions(CONDITIONS);
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
+            List.of(new AiRecommendedRecipe(soybeanStew.getId(), "맵지 않아요.")), PICK_USAGE));
+
+        // when
+        aiRecipeRecommendFacade.recommend(MEMBER_ID, "안 매운 찌개");
+
+        // then
+        verify(aiClient).extractConditions(eq(AiPromptType.CONDITION.defaultContent()), eq("안 매운 찌개"));
+        verify(aiClient).recommendRecipes(eq("관리자가 고친 추천 지시문\n"), eq("안 매운 찌개"), anyList());
+        assertThat(findLogs().get(0).getPromptVersions())
+            .isEqualToIgnoringWhitespace("{\"CONDITION\":null,\"RECOMMEND\":1}");
+    }
+
+    @Test
+    @DisplayName("조건 분석에서 실패하면 쓴 프롬프트인 조건 분석 버전만 남긴다")
+    void recommend_recordsOnlyConditionPromptWhenConditionFails() {
+        // given
+        given(aiClient.extractConditions(anyString(), anyString()))
+            .willReturn(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-sonnet-5-5", 15000)));
+
+        // when
+        aiRecipeRecommendFacade.recommend(MEMBER_ID, "안 매운 찌개");
+
+        // then
+        assertThat(findLogs().get(0).getPromptVersions()).isEqualToIgnoringWhitespace("{\"CONDITION\":null}");
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     @DisplayName("제외 재료가 들어간 레시피는 AI에게 후보로 보내지 않는다")
     void recommend_excludesRecipesWithExcludedIngredient() {
         // given
         givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("AI추천테스트오이")));
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(soybeanStew.getId(), "오이가 없어요.")), PICK_USAGE));
 
         // when
@@ -165,7 +212,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
-        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
         assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(soybeanStew.getId())
             .doesNotContain(kimchiStew.getId());
@@ -177,7 +224,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_treatsLikeWildcardsAsLiteral() {
         // given
         givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("%", "AI추천테스트_이")));
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "추천 이유")), PICK_USAGE));
 
         // when
@@ -185,7 +232,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
-        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
         assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(kimchiStew.getId(), soybeanStew.getId());
     }
@@ -194,7 +241,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("조건 분석이 실패하면 추천 없이 FALLBACK을 주고, 두 번째 AI는 부르지 않는다")
     void recommend_fallsBackWithoutRecipesWhenConditionFails() {
         // given
-        given(aiClient.extractConditions(anyString()))
+        given(aiClient.extractConditions(anyString(), anyString()))
             .willReturn(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
 
         // when
@@ -203,7 +250,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(response.status()).isEqualTo(AiResultStatus.FALLBACK);
         assertThat(response.recipes()).isEmpty();
-        verify(aiClient, never()).recommendRecipes(anyString(), anyList());
+        verify(aiClient, never()).recommendRecipes(anyString(), anyString(), anyList());
 
         AiRequestLog log = findLogs().get(0);
         assertThat(log.isSuccess()).isFalse();
@@ -218,7 +265,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_fallsBackToCandidatesWhenPickFails() {
         // given
         givenConditions(CONDITIONS);
-        given(aiClient.recommendRecipes(anyString(), anyList()))
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList()))
             .willReturn(AiResult.failure(AiFailureType.RATE_LIMITED, AiUsage.failed("claude-opus-5-5", 500)));
 
         // when
@@ -241,7 +288,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_fallsBackWhenNoValidPick() {
         // given
         givenConditions(CONDITIONS);
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(99_999L, "지어낸 레시피")), PICK_USAGE));
 
         // when
@@ -263,7 +310,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(response.status()).isEqualTo(AiResultStatus.NO_MATCH);
-        verify(aiClient, never()).recommendRecipes(anyString(), anyList());
+        verify(aiClient, never()).recommendRecipes(anyString(), anyString(), anyList());
         assertThat(findLogs()).singleElement().satisfies(log -> {
             assertThat(log.isSuccess()).isTrue();
             assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH);
@@ -277,7 +324,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_picksFromAllRecipesWhenNoConditionRead() {
         // given
         givenConditions(new AiRecipeConditions(null, null, null, null, List.of()));
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "해장에 좋은 국물이에요.")), PICK_USAGE));
 
         // when
@@ -287,7 +334,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         assertThat(response.status()).isEqualTo(AiResultStatus.RECOMMENDED);
         assertThat(recipeIds(response)).containsExactly(kimchiStew.getId());
         ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
-        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
         assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(kimchiStew.getId(), soybeanStew.getId());
     }
@@ -297,7 +344,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_fallsBackWithoutRecipesWhenPickFailsWithoutCondition() {
         // given
         givenConditions(new AiRecipeConditions(null, null, null, null, List.of()));
-        given(aiClient.recommendRecipes(anyString(), anyList()))
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList()))
             .willReturn(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
 
         // when
@@ -315,7 +362,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_sendsCandidateAttributes() {
         // given
         givenConditions(CONDITIONS);
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "추천 이유")), PICK_USAGE));
 
         // when
@@ -323,7 +370,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
-        verify(aiClient).recommendRecipes(anyString(), candidates.capture());
+        verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
         assertThat(candidates.getValue())
             .filteredOn(candidate -> candidate.id().equals(kimchiStew.getId()))
             .singleElement()
@@ -341,7 +388,8 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_noMatchWhenAiPicksNothing() {
         // given
         givenConditions(CONDITIONS);
-        given(aiClient.recommendRecipes(anyString(), anyList())).willReturn(AiResult.success(List.of(), PICK_USAGE));
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList()))
+            .willReturn(AiResult.success(List.of(), PICK_USAGE));
 
         // when
         AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "통오징어찜 같은 찌개");
@@ -367,6 +415,6 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(((BusinessException) thrown).getErrorCode()).isEqualTo(MemberErrorCode.MEMBERSHIP_REQUIRED);
-        verify(aiClient, never()).extractConditions(anyString());
+        verify(aiClient, never()).extractConditions(anyString(), anyString());
     }
 }

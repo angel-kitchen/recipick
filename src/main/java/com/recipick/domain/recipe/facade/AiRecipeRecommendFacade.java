@@ -2,12 +2,15 @@ package com.recipick.domain.recipe.facade;
 
 import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MembershipService;
+import com.recipick.domain.recipe.dto.ActiveAiPrompt;
 import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
+import com.recipick.domain.recipe.entity.AiPromptType;
 import com.recipick.domain.recipe.entity.AiRequestType;
 import com.recipick.domain.recipe.entity.AiResultStatus;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.service.AiRecipeRecommendResolver;
 import com.recipick.domain.recipe.service.AiRecipeRecommendResolver.Recommendation;
+import com.recipick.domain.recipe.service.AiPromptService;
 import com.recipick.domain.recipe.service.AiRequestLimiter;
 import com.recipick.domain.recipe.service.AiRequestLogService;
 import com.recipick.domain.recipe.service.RecipeRecommendCondition;
@@ -36,6 +39,7 @@ public class AiRecipeRecommendFacade {
     private final RecipeService recipeService;
     private final AiRequestLimiter aiRequestLimiter;
     private final AiRequestLogService aiRequestLogService;
+    private final AiPromptService aiPromptService;
     private final AiClient aiClient;
     private final Clock clock;
 
@@ -43,9 +47,10 @@ public class AiRecipeRecommendFacade {
         validateMembership(memberId);
         aiRequestLimiter.acquire(memberId);
 
-        AiResult<AiRecipeConditions> conditionResult = aiClient.extractConditions(text);
+        ActiveAiPrompt conditionPrompt = aiPromptService.getActive(AiPromptType.CONDITION);
+        AiResult<AiRecipeConditions> conditionResult = aiClient.extractConditions(conditionPrompt.content(), text);
         if (!conditionResult.isSuccess()) {
-            saveLog(memberId, text, AiResultStatus.FALLBACK, conditionResult, List.of());
+            saveLog(memberId, text, AiResultStatus.FALLBACK, conditionResult, List.of(), List.of(conditionPrompt));
             return AiRecipeRecommendResponse.fallback(List.of());
         }
 
@@ -54,15 +59,18 @@ public class AiRecipeRecommendFacade {
         // 레시피와 관계없는 문장은 AI가 빈 목록을 줘 NO_MATCH가 된다
         List<Recipe> candidates = recipeService.findRecommendCandidates(condition);
         if (candidates.isEmpty()) {
-            saveLog(memberId, text, AiResultStatus.NO_MATCH, conditionResult, List.of());
+            saveLog(memberId, text, AiResultStatus.NO_MATCH, conditionResult, List.of(), List.of(conditionPrompt));
             return AiRecipeRecommendResponse.noMatch();
         }
 
-        AiResult<List<AiRecommendedRecipe>> pickResult = aiClient.recommendRecipes(text, toCandidates(candidates));
+        ActiveAiPrompt recommendPrompt = aiPromptService.getActive(AiPromptType.RECOMMEND);
+        List<ActiveAiPrompt> prompts = List.of(conditionPrompt, recommendPrompt);
+        AiResult<List<AiRecommendedRecipe>> pickResult =
+            aiClient.recommendRecipes(recommendPrompt.content(), text, toCandidates(candidates));
         // 빈 목록은 AI가 후보 중 맞는 레시피가 없다고 판단한 것이라 장애가 아닌 정상 결과다
         if (pickResult.isSuccess() && pickResult.content().isEmpty()) {
             saveLog(memberId, text, AiResultStatus.NO_MATCH,
-                combine(conditionResult, pickResult, null), List.of());
+                combine(conditionResult, pickResult, null), List.of(), prompts);
             return AiRecipeRecommendResponse.noMatch();
         }
         List<Recommendation> recommendations = pickResult.isSuccess()
@@ -78,11 +86,11 @@ public class AiRecipeRecommendFacade {
                 ? List.of()
                 : AiRecipeRecommendResolver.fallback(candidates);
             saveLog(memberId, text, AiResultStatus.FALLBACK,
-                combine(conditionResult, pickResult, failureType), toRecipeIds(fallback));
+                combine(conditionResult, pickResult, failureType), toRecipeIds(fallback), prompts);
             return AiRecipeRecommendResponse.fallback(fallback);
         }
         saveLog(memberId, text, AiResultStatus.RECOMMENDED,
-            combine(conditionResult, pickResult, null), toRecipeIds(recommendations));
+            combine(conditionResult, pickResult, null), toRecipeIds(recommendations), prompts);
         return AiRecipeRecommendResponse.recommended(recommendations);
     }
 
@@ -130,8 +138,9 @@ public class AiRecipeRecommendFacade {
     }
 
     private void saveLog(Long memberId, String text, AiResultStatus status, AiResult<?> aiResult,
-                         List<Long> recipeIds) {
-        aiRequestLogService.save(memberId, AiRequestType.RECOMMENDATION, text, status, aiResult, recipeIds, null);
+                         List<Long> recipeIds, List<ActiveAiPrompt> prompts) {
+        aiRequestLogService.save(memberId, AiRequestType.RECOMMENDATION, text, status, aiResult, recipeIds, null,
+            prompts);
     }
 
     // 고르기에서 실패하면 recommendations는 null이라, 이력에는 받은 조건 분석 결과만 남는다

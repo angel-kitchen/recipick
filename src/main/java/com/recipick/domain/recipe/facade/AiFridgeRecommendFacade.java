@@ -4,11 +4,14 @@ import com.recipick.domain.member.exception.MemberErrorCode;
 import com.recipick.domain.member.service.MemberService;
 import com.recipick.domain.member.service.MembershipService;
 import com.recipick.domain.product.service.ProductIngredientService;
+import com.recipick.domain.recipe.dto.ActiveAiPrompt;
 import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.FridgeRecipe;
 import com.recipick.domain.recipe.dto.IngredientPrice;
 import com.recipick.domain.recipe.dto.response.AiFridgeRecommendResponse;
+import com.recipick.domain.recipe.entity.AiPromptType;
 import com.recipick.domain.recipe.entity.AiRequestType;
 import com.recipick.domain.recipe.entity.AiResultStatus;
+import com.recipick.domain.recipe.service.AiPromptService;
 import com.recipick.domain.recipe.service.AiRequestLimiter;
 import com.recipick.domain.recipe.service.AiRequestLogService;
 import com.recipick.domain.recipe.service.RecipeService;
@@ -37,6 +40,7 @@ public class AiFridgeRecommendFacade {
     private final ProductIngredientService productIngredientService;
     private final AiRequestLimiter aiRequestLimiter;
     private final AiRequestLogService aiRequestLogService;
+    private final AiPromptService aiPromptService;
     private final AiClient aiClient;
     private final Clock clock;
 
@@ -46,27 +50,28 @@ public class AiFridgeRecommendFacade {
 
         AiFridgeToolExecutor tools =
             new AiFridgeToolExecutor(memberId, recipeService, memberService, productIngredientService);
+        ActiveAiPrompt prompt = aiPromptService.getActive(AiPromptType.FRIDGE);
         AiResult<AiFridgeAnswer> result =
-            aiClient.answerFridgeQuestion(text, recipeService.findIngredientNames(), tools);
+            aiClient.answerFridgeQuestion(prompt.content(), text, recipeService.findIngredientNames(), tools);
         if (!result.isSuccess()) {
-            saveLog(memberId, text, AiResultStatus.FALLBACK, result, List.of());
+            saveLog(memberId, text, AiResultStatus.FALLBACK, result, List.of(), prompt);
             return AiFridgeRecommendResponse.fallback(isMartSelected(memberId));
         }
         // 빈 목록은 AI가 재료를 알 수 없거나 만들 레시피가 없다고 판단한 것이라, 그 안내 문장과 함께 정상 결과로 준다
         if (result.content().recipeIds().isEmpty()) {
-            saveLog(memberId, text, AiResultStatus.NO_MATCH, result, List.of());
+            saveLog(memberId, text, AiResultStatus.NO_MATCH, result, List.of(), prompt);
             return AiFridgeRecommendResponse.noMatch(result.content().answer(), isMartSelected(memberId));
         }
         List<FridgeRecipe> recipes = tools.pick(result.content().recipeIds());
         // 레시피 찾기가 돌려주지 않은 레시피만 골랐으면 답변이 그 레시피를 설명하고 있어 쓸 수 없다
         if (recipes.isEmpty()) {
             saveLog(memberId, text, AiResultStatus.FALLBACK,
-                new AiResult<>(result.content(), AiFailureType.INVALID_RESPONSE, result.usage()), List.of());
+                new AiResult<>(result.content(), AiFailureType.INVALID_RESPONSE, result.usage()), List.of(), prompt);
             return AiFridgeRecommendResponse.fallback(isMartSelected(memberId));
         }
         Optional<Map<Long, IngredientPrice>> prices = tools.findPricesForResponse(recipes);
         saveLog(memberId, text, AiResultStatus.ANSWERED, result,
-            recipes.stream().map(FridgeRecipe::recipeId).toList());
+            recipes.stream().map(FridgeRecipe::recipeId).toList(), prompt);
         return AiFridgeRecommendResponse.answered(result.content().answer(), recipes, prices);
     }
 
@@ -82,7 +87,8 @@ public class AiFridgeRecommendFacade {
     }
 
     private void saveLog(Long memberId, String text, AiResultStatus status, AiResult<?> aiResult,
-                         List<Long> recipeIds) {
-        aiRequestLogService.save(memberId, AiRequestType.FRIDGE, text, status, aiResult, recipeIds, null);
+                         List<Long> recipeIds, ActiveAiPrompt prompt) {
+        aiRequestLogService.save(memberId, AiRequestType.FRIDGE, text, status, aiResult, recipeIds, null,
+            List.of(prompt));
     }
 }
