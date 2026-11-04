@@ -168,4 +168,6 @@ export const MEMBERSHIP_STATUS = {
   CANCEL_RESERVED: '해지 예약',
   EXPIRED: '만료',
   TERMINATED: '종료',
+  PAYMENT_PENDING: '결제 대기',
+  CONVERSION_PENDING: '유료 전환 대기',
 };
