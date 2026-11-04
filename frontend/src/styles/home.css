@@ -92,7 +92,7 @@
 }
 
 .section--alt {
-  background: #f4f4f4;
+  background: var(--white);
 }
 
 .section__title {
@@ -110,10 +110,10 @@
   font-size: 16px;
 }
 
-/* 세 단계 소개: 연한 초록 바탕 위에 단계별 화면 그림, 번호, 설명 순서로 쌓는다 */
+/* 세 단계 소개: 흰색 바탕 위에 단계별 화면 그림, 번호, 설명 순서로 쌓는다 */
 .section--steps {
   min-height: auto;
-  background: var(--green-wash);
+  background: var(--white);
 }
 
 .section--steps .section__title,
