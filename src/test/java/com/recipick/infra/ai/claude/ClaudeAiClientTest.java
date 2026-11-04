@@ -38,6 +38,9 @@ import org.mockito.ArgumentCaptor;
 
 class ClaudeAiClientTest {
 
+    // 지시문 내용은 관리자가 바꾸는 값이라, 호출 구조만 보는 이 테스트는 고정 문구를 쓴다
+    private static final String INSTRUCTION = "지시문\n";
+
     private final AnthropicClient client = mock(AnthropicClient.class, Answers.RETURNS_DEEP_STUBS);
     private final ClaudeAiClient claudeAiClient = new ClaudeAiClient(
         client, new ClaudeProperties("test-key", "claude-opus-5-5", Duration.ofSeconds(15), 2, 4096));
@@ -60,7 +63,7 @@ class ClaudeAiClientTest {
         when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
 
         // when
-        AiResult<List<AiExtractedMenu>> result = claudeAiClient.extractMenus(
+        AiResult<List<AiExtractedMenu>> result = claudeAiClient.extractMenus(INSTRUCTION, 
             "김치찌개 2인분", List.of(new AiRecipeOption(1L, "김치찌개")));
 
         // then
@@ -109,7 +112,7 @@ class ClaudeAiClientTest {
         when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
 
         // when
-        AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(
+        AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(INSTRUCTION, 
             "찌개 추천", List.of(kimchiStewCandidate()));
 
         // then
@@ -135,7 +138,7 @@ class ClaudeAiClientTest {
         AiRecipeCandidate unknown = new AiRecipeCandidate(2L, "새 레시피", null, null, null, null, null, List.of());
 
         // when
-        claudeAiClient.recommendRecipes("두부", List.of(kimchiStewCandidate(), unknown));
+        claudeAiClient.recommendRecipes(INSTRUCTION, "두부", List.of(kimchiStewCandidate(), unknown));
 
         // then
         ArgumentCaptor<StructuredMessageCreateParams<ClaudeAiClient.RecommendOutput>> params =
@@ -166,7 +169,8 @@ class ClaudeAiClientTest {
         RecordingTools tools = new RecordingTools();
 
         // when
-        AiResult<AiFridgeAnswer> result = claudeAiClient.answerFridgeQuestion("두부 있어", List.of("두부", "김치"), tools);
+        AiResult<AiFridgeAnswer> result =
+            claudeAiClient.answerFridgeQuestion(INSTRUCTION, "두부 있어", List.of("두부", "김치"), tools);
 
         // then
         assertThat(tools.recipeSearches).containsExactly(List.of("두부"));
@@ -193,7 +197,8 @@ class ClaudeAiClientTest {
         RecordingTools tools = new RecordingTools();
 
         // when
-        AiResult<AiFridgeAnswer> result = claudeAiClient.answerFridgeQuestion("두부 있어", List.of("두부"), tools);
+        AiResult<AiFridgeAnswer> result =
+            claudeAiClient.answerFridgeQuestion(INSTRUCTION, "두부 있어", List.of("두부"), tools);
 
         // then
         assertThat(result.failureType()).isEqualTo(AiFailureType.TOOL_LIMIT_EXCEEDED);

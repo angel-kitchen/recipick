@@ -1,5 +1,6 @@
 package com.recipick.domain.recipe.facade;
 
+import com.recipick.domain.recipe.dto.ActiveAiPrompt;
 import com.recipick.domain.recipe.dto.response.AiAutoCartPreviewResponse;
 import com.recipick.domain.recipe.dto.response.AutoCartPreviewResponse;
 import com.recipick.domain.recipe.entity.AiRequestType;
@@ -24,34 +25,35 @@ public class AiAutoCartProcessor {
 
     @Transactional
     public AiAutoCartPreviewResponse process(
-        Long memberId, String text, List<AiRecipeOption> recipes, AiResult<List<AiExtractedMenu>> aiResult) {
+        Long memberId, String text, List<AiRecipeOption> recipes, AiResult<List<AiExtractedMenu>> aiResult,
+        ActiveAiPrompt prompt) {
         if (!aiResult.isSuccess()) {
             List<AiRecipeOption> namedRecipes = AiAutoCartResolver.findNamedRecipes(text, recipes);
             saveLog(memberId, text, AiResultStatus.FALLBACK, aiResult, namedRecipes.stream()
                 .map(AiRecipeOption::id)
-                .toList(), null);
+                .toList(), null, prompt);
             return AiAutoCartPreviewResponse.fallback(namedRecipes);
         }
 
         AiAutoCartResolver.Resolution resolution = AiAutoCartResolver.resolve(aiResult.content(), recipes);
         if (resolution.status() == AiResultStatus.NO_MATCH) {
-            saveLog(memberId, text, AiResultStatus.NO_MATCH, aiResult, List.of(), null);
+            saveLog(memberId, text, AiResultStatus.NO_MATCH, aiResult, List.of(), null, prompt);
             return AiAutoCartPreviewResponse.noMatch();
         }
         if (resolution.status() == AiResultStatus.NEEDS_SELECTION) {
-            saveLog(memberId, text, AiResultStatus.NEEDS_SELECTION, aiResult, resolution.recipeIds(), null);
+            saveLog(memberId, text, AiResultStatus.NEEDS_SELECTION, aiResult, resolution.recipeIds(), null, prompt);
             return AiAutoCartPreviewResponse.needsSelection(resolution.menus());
         }
         // 미리보기 계산·저장은 직접 고른 경우와 같은 규칙을 쓰도록 기존 미리보기를 이 트랜잭션 안에서 부른다
         AutoCartPreviewResponse preview = autoCartFacade.preview(memberId, resolution.toPreviewRequest());
         saveLog(memberId, text, AiResultStatus.PREVIEWED, aiResult, resolution.recipeIds(),
-            preview.autoCartRequestId());
+            preview.autoCartRequestId(), prompt);
         return AiAutoCartPreviewResponse.previewed(preview);
     }
 
     private void saveLog(Long memberId, String text, AiResultStatus status, AiResult<?> aiResult,
-                         List<Long> recipeIds, Long autoCartRequestId) {
-        aiRequestLogService.save(
-            memberId, AiRequestType.AUTO_CART, text, status, aiResult, recipeIds, autoCartRequestId);
+                         List<Long> recipeIds, Long autoCartRequestId, ActiveAiPrompt prompt) {
+        aiRequestLogService.save(memberId, AiRequestType.AUTO_CART, text, status, aiResult, recipeIds,
+            autoCartRequestId, List.of(prompt));
     }
 }

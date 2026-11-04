@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+// 정해진 규칙으로만 답하므로 지시문(instruction)은 쓰지 않는다
 @Component
 @ConditionalOnProperty(name = "ai.client", havingValue = "fake", matchIfMissing = true)
 public class FakeAiClient implements AiClient {
@@ -32,7 +33,7 @@ public class FakeAiClient implements AiClient {
     private static final int MAX_FRIDGE_RECIPES = 3;
 
     @Override
-    public AiResult<List<AiExtractedMenu>> extractMenus(String text, List<AiRecipeOption> recipes) {
+    public AiResult<List<AiExtractedMenu>> extractMenus(String instruction, String text, List<AiRecipeOption> recipes) {
         if (text.contains(FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
         }
@@ -47,7 +48,7 @@ public class FakeAiClient implements AiClient {
 
     // 로컬 화면 확인용이라 한식·양식과 "N분"만 읽고, 나머지 조건은 비워 둔다
     @Override
-    public AiResult<AiRecipeConditions> extractConditions(String text) {
+    public AiResult<AiRecipeConditions> extractConditions(String instruction, String text) {
         if (text.contains(FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
         }
@@ -60,7 +61,8 @@ public class FakeAiClient implements AiClient {
     }
 
     @Override
-    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String text, List<AiRecipeCandidate> candidates) {
+    public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String instruction, String text,
+                                                                List<AiRecipeCandidate> candidates) {
         if (text.contains(RECOMMEND_FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));
         }
@@ -73,7 +75,7 @@ public class FakeAiClient implements AiClient {
 
     // 로컬 화면 확인용이라 문장에 들어 있는 등록 재료 이름으로만 찾고, 가장 덜 부족한 레시피부터 고른다
     @Override
-    public AiResult<AiFridgeAnswer> answerFridgeQuestion(String text, List<String> ingredientNames,
+    public AiResult<AiFridgeAnswer> answerFridgeQuestion(String instruction, String text, List<String> ingredientNames,
                                                          AiFridgeTools tools) {
         if (text.contains(FAILURE_TRIGGER)) {
             return AiResult.failure(AiFailureType.UNAVAILABLE, AiUsage.failed(MODEL, 0));

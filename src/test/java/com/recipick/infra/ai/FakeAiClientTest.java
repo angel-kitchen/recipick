@@ -21,6 +21,9 @@ import org.junit.jupiter.api.Test;
 
 class FakeAiClientTest {
 
+    // 가짜 AI는 지시문을 쓰지 않는다
+    private static final String INSTRUCTION = "지시문\n";
+
     private final FakeAiClient fakeAiClient = new FakeAiClient();
     private final List<AiRecipeOption> recipes = List.of(
         new AiRecipeOption(1L, "김치찌개"),
@@ -37,7 +40,7 @@ class FakeAiClientTest {
         String text = "오늘 저녁 김치찌개랑 크림 파스타 3인분";
 
         // when
-        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(text, recipes);
+        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(INSTRUCTION, text, recipes);
 
         // then
         assertThat(result.isSuccess()).isTrue();
@@ -54,7 +57,7 @@ class FakeAiClientTest {
         String text = "된장찌개 먹고 싶어";
 
         // when
-        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(text, recipes);
+        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(INSTRUCTION, text, recipes);
 
         // then
         assertThat(result.content()).containsExactly(new AiExtractedMenu("된장찌개", List.of(2L), null));
@@ -67,7 +70,7 @@ class FakeAiClientTest {
         String text = "아무거나 맛있는 거";
 
         // when
-        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(text, recipes);
+        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(INSTRUCTION, text, recipes);
 
         // then
         assertThat(result.isSuccess()).isTrue();
@@ -81,7 +84,7 @@ class FakeAiClientTest {
         String text = "김치찌개 " + FakeAiClient.FAILURE_TRIGGER;
 
         // when
-        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(text, recipes);
+        AiResult<List<AiExtractedMenu>> result = fakeAiClient.extractMenus(INSTRUCTION, text, recipes);
 
         // then
         assertThat(result.isSuccess()).isFalse();
@@ -94,7 +97,7 @@ class FakeAiClientTest {
     @DisplayName("조건 분석은 한식·양식과 조리 시간만 읽고 나머지는 비워 둔다")
     void extractConditions_readsCuisineAndMinutes() {
         // when
-        AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions("30분 안에 되는 한식");
+        AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions(INSTRUCTION, "30분 안에 되는 한식");
 
         // then
         assertThat(result.content()).isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of()));
@@ -104,7 +107,7 @@ class FakeAiClientTest {
     @DisplayName("추천은 후보를 앞에서부터 최대 5개 고른다")
     void recommendRecipes_picksFirstCandidates() {
         // when
-        AiResult<List<AiRecommendedRecipe>> result = fakeAiClient.recommendRecipes("찌개 추천", candidates);
+        AiResult<List<AiRecommendedRecipe>> result = fakeAiClient.recommendRecipes(INSTRUCTION, "찌개 추천", candidates);
 
         // then
         assertThat(result.content()).extracting(AiRecommendedRecipe::recipeId).containsExactly(1L, 2L, 3L);
@@ -117,8 +120,8 @@ class FakeAiClientTest {
         String text = "찌개 " + FakeAiClient.RECOMMEND_FAILURE_TRIGGER;
 
         // when
-        AiResult<AiRecipeConditions> conditions = fakeAiClient.extractConditions(text);
-        AiResult<List<AiRecommendedRecipe>> picks = fakeAiClient.recommendRecipes(text, candidates);
+        AiResult<AiRecipeConditions> conditions = fakeAiClient.extractConditions(INSTRUCTION, text);
+        AiResult<List<AiRecommendedRecipe>> picks = fakeAiClient.recommendRecipes(INSTRUCTION, text, candidates);
 
         // then
         assertThat(conditions.isSuccess()).isTrue();
@@ -148,7 +151,7 @@ class FakeAiClientTest {
 
         // when
         AiResult<AiFridgeAnswer> result =
-            fakeAiClient.answerFridgeQuestion("두부랑 김치 있어", List.of("김치", "두부", "계란"), tools);
+            fakeAiClient.answerFridgeQuestion(INSTRUCTION, "두부랑 김치 있어", List.of("김치", "두부", "계란"), tools);
 
         // then
         assertThat(searched).containsExactly(List.of("김치", "두부"));

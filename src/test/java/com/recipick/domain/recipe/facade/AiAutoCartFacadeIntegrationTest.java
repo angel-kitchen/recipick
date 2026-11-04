@@ -119,7 +119,7 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
     }
 
     private void givenAiResult(AiResult<List<AiExtractedMenu>> result) {
-        given(aiClient.extractMenus(anyString(), anyList())).willReturn(result);
+        given(aiClient.extractMenus(anyString(), anyString(), anyList())).willReturn(result);
     }
 
     private List<AiRequestLog> findLogs() {
@@ -236,7 +236,7 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(((BusinessException) thrown).getErrorCode()).isEqualTo(AiErrorCode.AI_REQUEST_LIMIT_EXCEEDED);
-        verify(aiClient, times(5)).extractMenus(anyString(), anyList());
+        verify(aiClient, times(5)).extractMenus(anyString(), anyString(), anyList());
         assertThat(findLogs()).hasSize(5)
             .allSatisfy(log -> assertThat(log.getResultStatus()).isEqualTo(AiResultStatus.NO_MATCH));
     }
@@ -253,7 +253,7 @@ class AiAutoCartFacadeIntegrationTest extends IntegrationTestSupport {
 
         // then
         assertThat(((BusinessException) thrown).getErrorCode()).isEqualTo(MemberErrorCode.MEMBERSHIP_REQUIRED);
-        verify(aiClient, never()).extractMenus(anyString(), anyList());
+        verify(aiClient, never()).extractMenus(anyString(), anyString(), anyList());
     }
 
     @Test

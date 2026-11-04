@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult;
 import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.FridgeRecipe;
 import com.recipick.domain.recipe.dto.FridgeRecipeSearchResult.IngredientRef;
+import com.recipick.domain.recipe.entity.AiPromptType;
 import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.Difficulty;
 import com.recipick.domain.recipe.entity.DishType;
@@ -144,7 +145,8 @@ class ClaudeAiEvaluationTest {
         });
         List<Row> rows = new ArrayList<>();
         for (AutoCartCase evalCase : cases) {
-            AiResult<List<AiExtractedMenu>> result = claudeAiClient.extractMenus(evalCase.text(), catalog);
+            AiResult<List<AiExtractedMenu>> result =
+                claudeAiClient.extractMenus(AiPromptType.MENU.defaultContent(), evalCase.text(), catalog);
             String answer = result.isSuccess() ? describeMenus(result.content()) : "실패: " + result.failureType();
             rows.add(new Row(evalCase.text(), result.isSuccess() && evalCase.matches(result.content(), nameById),
                 answer, result));
@@ -160,7 +162,8 @@ class ClaudeAiEvaluationTest {
         });
         List<Row> rows = new ArrayList<>();
         for (ConditionCase evalCase : cases) {
-            AiResult<AiRecipeConditions> result = claudeAiClient.extractConditions(evalCase.text());
+            AiResult<AiRecipeConditions> result =
+                claudeAiClient.extractConditions(AiPromptType.CONDITION.defaultContent(), evalCase.text());
             String answer = result.isSuccess() ? result.content().toString() : "실패: " + result.failureType();
             rows.add(new Row(evalCase.text(), result.isSuccess() && evalCase.matches(result.content()),
                 answer, result));
@@ -181,7 +184,8 @@ class ClaudeAiEvaluationTest {
         });
         List<Row> rows = new ArrayList<>();
         for (PickCase evalCase : cases) {
-            AiResult<AiRecipeConditions> conditionResult = claudeAiClient.extractConditions(evalCase.text());
+            AiResult<AiRecipeConditions> conditionResult =
+                claudeAiClient.extractConditions(AiPromptType.CONDITION.defaultContent(), evalCase.text());
             if (!conditionResult.isSuccess()) {
                 rows.add(new Row(evalCase.text(), false, "실패: " + conditionResult.failureType(), conditionResult));
                 continue;
@@ -198,7 +202,8 @@ class ClaudeAiEvaluationTest {
                 continue;
             }
             List<AiRecipeCandidate> options = candidates.stream().map(SeedRecipe::toCandidate).toList();
-            AiResult<List<AiRecommendedRecipe>> pickResult = claudeAiClient.recommendRecipes(evalCase.text(), options);
+            AiResult<List<AiRecommendedRecipe>> pickResult =
+                claudeAiClient.recommendRecipes(AiPromptType.RECOMMEND.defaultContent(), evalCase.text(), options);
             AiResult<?> combined = new AiResult<>(null, pickResult.failureType(),
                 conditionResult.usage().plus(pickResult.usage()));
             if (!pickResult.isSuccess()) {
@@ -230,7 +235,8 @@ class ClaudeAiEvaluationTest {
             List<AiRecipeCandidate> candidates = evalCase.candidates().stream()
                 .map(name -> seedByName.get(name).toCandidate())
                 .toList();
-            AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(evalCase.text(), candidates);
+            AiResult<List<AiRecommendedRecipe>> result = claudeAiClient.recommendRecipes(
+                AiPromptType.RECOMMEND.defaultContent(), evalCase.text(), candidates);
             String answer = result.isSuccess() ? describePicks(result.content()) : "실패: " + result.failureType();
             rows.add(new Row(evalCase.text(), result.isSuccess() && evalCase.matches(result.content(), nameById),
                 answer, result));
@@ -250,7 +256,8 @@ class ClaudeAiEvaluationTest {
         for (FridgeCase evalCase : cases) {
             SeedFridgeTools tools = new SeedFridgeTools(recipeService, evalCase.martSelected() != Boolean.FALSE);
             AiResult<AiFridgeAnswer> result =
-                claudeAiClient.answerFridgeQuestion(evalCase.text(), ingredientNames, tools);
+                claudeAiClient.answerFridgeQuestion(
+                    AiPromptType.FRIDGE.defaultContent(), evalCase.text(), ingredientNames, tools);
             if (!result.isSuccess()) {
                 rows.add(new Row(evalCase.text(), false, tools.describeCalls() + " → 실패: " + result.failureType(),
                     result));

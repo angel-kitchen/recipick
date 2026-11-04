@@ -55,7 +55,7 @@ class AiRequestLogServiceMetricsTest extends IntegrationTestSupport {
 
         // when
         aiRequestLogService.save(MEMBER_ID, AiRequestType.RECOMMENDATION, "찌개", AiResultStatus.NO_MATCH,
-            RESULT, List.of(), null);
+            RESULT, List.of(), null, List.of());
 
         // then
         assertThat(noMatchCount()).isEqualTo(before + 1);
@@ -70,7 +70,7 @@ class AiRequestLogServiceMetricsTest extends IntegrationTestSupport {
         // when
         Throwable thrown = catchThrowable(() -> transactionTemplate.executeWithoutResult(status -> {
             aiRequestLogService.save(MEMBER_ID, AiRequestType.RECOMMENDATION, "찌개", AiResultStatus.NO_MATCH,
-                RESULT, List.of(), null);
+                RESULT, List.of(), null, List.of());
             throw new IllegalStateException("미리보기 저장 실패");
         }));
 

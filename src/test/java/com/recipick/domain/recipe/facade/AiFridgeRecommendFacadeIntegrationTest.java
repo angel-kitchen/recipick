@@ -132,8 +132,8 @@ class AiFridgeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
 
     // AI 대신 Tool을 직접 불러 보고, 받은 Tool 결과로 답변을 정한다
     private void givenAiCallsTools(Function<AiFridgeTools, AiResult<AiFridgeAnswer>> behavior) {
-        given(aiClient.answerFridgeQuestion(anyString(), anyList(), any()))
-            .willAnswer(invocation -> behavior.apply(invocation.getArgument(2)));
+        given(aiClient.answerFridgeQuestion(anyString(), anyString(), anyList(), any()))
+            .willAnswer(invocation -> behavior.apply(invocation.getArgument(3)));
     }
 
     @Test
@@ -262,7 +262,7 @@ class AiFridgeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("AI 호출이 실패하면 결과 없이 FALLBACK을 주고 실패 사유를 남긴다")
     void recommend_fallsBackWhenAiFails() {
         // given
-        given(aiClient.answerFridgeQuestion(anyString(), anyList(), any())).willReturn(
+        given(aiClient.answerFridgeQuestion(anyString(), anyString(), anyList(), any())).willReturn(
             AiResult.failure(AiFailureType.TOOL_LIMIT_EXCEEDED, USAGE));
 
         // when
