@@ -21,6 +21,7 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
+import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
@@ -78,6 +79,9 @@ class PaymentCancelFacadeTest {
     private PaymentCancelProcessor paymentCancelProcessor;
 
     @Mock
+    private PaymentService paymentService;
+
+    @Mock
     private PortOnePaymentClient portOnePaymentClient;
 
     @Mock
@@ -88,8 +92,8 @@ class PaymentCancelFacadeTest {
     @BeforeEach
     void setUp() {
         // Clock은 mock이 아니라 @InjectMocks로는 못 넣는다. 시계를 멈춰 두고 직접 조립한다
-        facade = new PaymentCancelFacade(paymentCancelProcessor, portOnePaymentClient, paymentDelayQueue,
-            Clock.fixed(NOW_INSTANT, SEOUL));
+        facade = new PaymentCancelFacade(paymentCancelProcessor, paymentService, portOnePaymentClient,
+            paymentDelayQueue, Clock.fixed(NOW_INSTANT, SEOUL));
     }
 
     @ParameterizedTest

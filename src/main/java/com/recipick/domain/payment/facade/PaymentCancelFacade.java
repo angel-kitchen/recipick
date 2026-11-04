@@ -5,6 +5,7 @@ import com.recipick.domain.payment.dto.PaymentCancelResult;
 import com.recipick.domain.payment.service.PaymentCancelOutcome;
 import com.recipick.domain.payment.service.PaymentDelayQueue;
 import com.recipick.domain.payment.service.PaymentDelayTask;
+import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.global.exception.ErrorCode;
@@ -43,6 +44,7 @@ public class PaymentCancelFacade {
     private static final long LOCK_RETRY_BACKOFF_MILLIS = 100L;
 
     private final PaymentCancelProcessor paymentCancelProcessor;
+    private final PaymentService paymentService;
     private final PortOnePaymentClient portOnePaymentClient;
     private final PaymentDelayQueue paymentDelayQueue;
     private final Clock clock;
@@ -132,14 +134,24 @@ public class PaymentCancelFacade {
                 scheduleRefundReconcileNow(refundId);
                 throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
             }
-            // 거절 응답에는 취소 내역이 없어 PortOne 조회로는 확인할 수 없다. 운영 확인 대상이다
+            // 거절 응답에는 취소 내역이 없어 PortOne 조회로는 확인할 수 없다. 거절 사실을 환불 행에 남겨
+            // 재확인이 PortOne을 다시 부르지 않고 그 기록으로 PAID 복귀·FAILED를 확정하게 한다
             case REJECTED -> {
-                log.error("PortOne 거절을 DB에 반영하지 못함 — 운영 확인 필요: paymentId={}, refundId={}, detail={}",
-                    paymentId, refundId, portOneResult.detail());
+                recordPendingRejection(paymentId, refundId);
                 scheduleRefundReconcileNow(refundId);
                 throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
             }
         };
+    }
+
+    // 기록마저 못 남기면 재확인은 PortOne 조회에서 취소 내역을 찾지 못해 끝내 확정하지 못한다. 자동 복구를 기대하지 않고 운영에 넘긴다
+    private void recordPendingRejection(Long paymentId, Long refundId) {
+        try {
+            paymentService.recordPendingMemberRefundRejection(refundId);
+        } catch (DataAccessException e) {
+            log.error("PortOne 거절 기록 실패 — 자동 복구 불가, 운영 확인 필요: paymentId={}, refundId={}, cause={}, {}",
+                paymentId, refundId, e.getClass().getSimpleName(), LockFailureDetail.of(e));
+        }
     }
 
     // 잠금 없이 읽은 지금 상태로 답한다. 웹훅·재확인이 먼저 끝냈으면 그 결과가 나온다.

@@ -102,6 +102,12 @@ public class RefundReconciliationFacade {
     }
 
     private Decision check(Refund refund) {
+        // 취소 API의 TX2가 반영하지 못하고 남긴 PortOne 거절이다. 거절 응답에는 취소 내역이 없어 조회로는 확인할 수 없으므로
+        // PortOne을 다시 부르지 않고 그 기록으로 반영한다
+        if (refund.hasPendingRejection()) {
+            return applyRecordedRejection(refund);
+        }
+
         Payment payment = refund.getPayment();
 
         // 락 없이 PortOne을 묻는다
@@ -124,6 +130,21 @@ public class RefundReconciliationFacade {
             case CONFLICT -> Decision.manualReview(match.reason());
             case ABSENT -> reconcileApiCancellation(refund, portOnePayment, cancellationId);
         };
+    }
+
+    // 취소 API가 받았던 거절과 같은 결과로 TX2를 다시 돌린다. 잠금 실패는 바깥 catch가 재예약한다
+    private Decision applyRecordedRejection(Refund refund) {
+        PortOneCancelResult rejected =
+            new PortOneCancelResult(PortOneCancelOutcome.REJECTED, null, null, refund.getFailureReason());
+        PaymentCancelResult applied =
+            paymentCancelProcessor.apply(refund.getPayment().getId(), refund.getId(), rejected);
+        log.info("기록한 PortOne 거절 반영: refundId={}, outcome={}", refund.getId(), applied.outcome());
+        // 판정과 잠금 사이에 다른 경로가 이 환불을 다른 결과로 끝냈다. 거절 기록과 맞지 않으므로 운영에 넘긴다
+        if (applied.outcome() != PaymentCancelOutcome.REQUEST_REJECTED) {
+            return Decision.manualReview("기록한 PortOne 거절과 반영 결과가 다름: refundId=" + refund.getId()
+                + ", outcome=" + applied.outcome());
+        }
+        return Decision.resolved();
     }
 
     // 자동 정합화할 외부 취소가 없다. 서버가 API로 요청한 취소를 이 환불에 묶는 기존 판정이다

@@ -231,12 +231,18 @@ public class PaymentCancelProcessor {
             case COMPLETED ->
                 PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.CANCELED, payment, refund));
             case FAILED -> PaymentCancelPreparation.finished(afterPay(failureOutcome(refund), payment, refund));
-            // 취소 ID가 없으면 PortOne에 닿았는지 모른다. 멱등 보장 시간 안이면 같은 서버 키로 다시 물어도 이중 취소가 아니다.
-            // ID가 있거나 시간이 지났으면 재호출 대신 웹훅·재조회에 맡긴다
-            case REQUESTED -> canRetryPortOne(refund)
-                ? PaymentCancelPreparation.callPortOne(
-                refund.getId(), payment.getPortonePaymentId(), payment.getAmount())
-                : PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.PENDING, payment, refund));
+            case REQUESTED -> {
+                // PortOne이 이미 거절했는데 TX2가 반영하지 못했다. 다시 부르지 않고 재확인이 FAILED로 확정할 때까지 기다리게 한다
+                if (refund.hasPendingRejection()) {
+                    throw new BusinessException(CommonErrorCode.LOCK_ACQUISITION_TIMEOUT);
+                }
+                // 취소 ID가 없으면 PortOne에 닿았는지 모른다. 멱등 보장 시간 안이면 같은 서버 키로 다시 물어도 이중 취소가 아니다.
+                // ID가 있거나 시간이 지났으면 재호출 대신 웹훅·재조회에 맡긴다
+                yield canRetryPortOne(refund)
+                    ? PaymentCancelPreparation.callPortOne(
+                    refund.getId(), payment.getPortonePaymentId(), payment.getAmount())
+                    : PaymentCancelPreparation.finished(afterPay(PaymentCancelOutcome.PENDING, payment, refund));
+            }
         };
     }
 
