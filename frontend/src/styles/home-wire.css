@@ -888,3 +888,8 @@
 .map-legend .map-legend__closed {
   background: #8e8e8e;
 }
+
+/* 투명 테두리 때문에 둥근 가장자리에 흰 이음새가 비치던 것을, 테두리를 바탕과 같은 색으로 칠해 없앤다 */
+.hm-pill--fill {
+  border-color: var(--accent);
+}
