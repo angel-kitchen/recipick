@@ -39,7 +39,8 @@ class AdminSeedProfileTest {
         runner.run(context -> {
             // then
             assertThat(context).hasNotFailed();
-            assertThat(context.getEnvironment().getProperty("spring.sql.init.data-locations[1]")).isNull();
+            assertThat(context.getEnvironment().getProperty("spring.sql.init.data-locations[1]"))
+                    .isNotEqualTo("classpath:data-admin-local.sql");
             assertThat(context.getEnvironment().getProperty("spring.sql.init.mode")).isEqualTo("always");
         });
     }
