@@ -76,7 +76,8 @@ class MemberSettlementLockIntegrationTest extends IntegrationTestSupport {
     @DisplayName("정산 잠금은 바깥 트랜잭션이 없으면 실행하지 않는다")
     void requiresExistingTransaction() {
         // given, when, then
-        assertThatThrownBy(() -> service.lockMemberForSettlement(1L)).isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.lockMemberForSettlement(1L))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     @Test

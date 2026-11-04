@@ -29,7 +29,8 @@ class MembershipCancelReservationServiceTest {
     private final MemberRepository members = mock(MemberRepository.class);
     private final MembershipRepository memberships = mock(MembershipRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-10-30T03:00:00Z"), ZoneId.of("Asia/Seoul"));
-    private final MembershipCancelReservationService service = new MembershipCancelReservationService(members, memberships, clock);
+    private final MembershipCancelReservationService service = new MembershipCancelReservationService(members,
+            memberships, clock);
     private final LocalDateTime now = LocalDateTime.now(clock);
 
     @Test

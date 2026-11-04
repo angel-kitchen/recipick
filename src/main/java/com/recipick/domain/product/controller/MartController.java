@@ -20,7 +20,7 @@ public class MartController {
     private final MartService martService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<MartMapResponse>>> getMarts(){
+    public ResponseEntity<ApiResponse<List<MartMapResponse>>> getMarts() {
         return ResponseEntity.ok(ApiResponse.success(martService.findMartsForMap()));
     }
 }

@@ -18,8 +18,8 @@ public class MartFacade {
     private final RegionService regionService;
 
     @Transactional
-    public MartIdResponse createMart(MartCreateRequest request){
-        if (!regionService.existsById(request.regionId())){
+    public MartIdResponse createMart(MartCreateRequest request) {
+        if (!regionService.existsById(request.regionId())) {
             throw new BusinessException(MemberErrorCode.REGION_NOT_FOUND);
         }
         return martService.createMart(request);

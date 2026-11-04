@@ -8,7 +8,7 @@ public record ProductStatusResponse(
     ProductStatus status
 ) {
 
-    public static ProductStatusResponse from(Product product){
+    public static ProductStatusResponse from(Product product) {
         return new ProductStatusResponse(product.getId(), product.getStatus());
     }
 }

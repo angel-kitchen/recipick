@@ -147,7 +147,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         // when, then
         assertThatThrownBy(() -> withdraw((id, balance) -> { throw new AssertionError("정산 검사 전에 거절"); }))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP));
+                        error -> assertThat(error.getErrorCode())
+                                .isEqualTo(MemberErrorCode.WITHDRAW_BLOCKED_MEMBERSHIP));
     }
 
     @Test
@@ -155,7 +156,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     void refusesWithoutSettlementContract() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/members/me/withdraw").header("Authorization", "Bearer " + access)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Original1!\",\"acknowledgedPointBalance\":0}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"password\":\"Original1!\",\"acknowledgedPointBalance\":0}"))
                 .andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(503);
@@ -168,7 +170,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     void refusesIncorrectPassword() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/members/me/withdraw").header("Authorization", "Bearer " + access)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"Wrong1!\",\"acknowledgedPointBalance\":0}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"password\":\"Wrong1!\",\"acknowledgedPointBalance\":0}"))
                 .andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(400);
@@ -294,7 +297,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         Membership history = histories.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31))
+                .endAt(now.minusDays(1)).build());
         // when
         withdraw((id, balance) -> {});
         // then
@@ -308,7 +312,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         histories.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(1)).activatedAt(now.minusDays(1)).endAt(now.plusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(1)).activatedAt(now.minusDays(1))
+                .endAt(now.plusDays(1)).build());
         // when, then
         assertThatThrownBy(() -> withdraw((id, balance) -> { throw new AssertionError("정산 조회 전에 거절해야 함"); }))
                 .isInstanceOfSatisfying(BusinessException.class,
@@ -332,7 +337,8 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         // given
         LocalDateTime now = LocalDateTime.now(clock);
         histories.saveAndFlush(Membership.builder().member(member).type(MembershipType.PAID)
-                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31)).endAt(now.minusDays(1)).build());
+                .source(MembershipSource.ADMIN_GRANT).startAt(now.minusDays(31)).activatedAt(now.minusDays(31))
+                .endAt(now.minusDays(1)).build());
         // when, then
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             processor((id, balance) -> {}).withdraw(member.getId(), new MemberWithdrawRequest(password, 0L));

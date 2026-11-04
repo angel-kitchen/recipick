@@ -289,7 +289,7 @@ class AuthenticationWebTest {
         // then
         assertThat(anonymous.getStatus()).isEqualTo(200);
         assertThat(stale.getStatus()).isEqualTo(200);
-        verify(categoryService, times(2)).getCategories();
+        verify(categoryService, times(2)).findCategories();
     }
 
     @Test

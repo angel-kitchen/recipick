@@ -35,7 +35,8 @@ public class MembershipTrialService {
         Membership trial = memberships.save(Membership.builder().member(member).type(MembershipType.TRIAL)
                 .source(MembershipSource.TRIAL).startAt(now).activatedAt(now).endAt(now.plusDays(TRIAL_DAYS))
                 .autoRenew(true).consentedAmount(consent.consentedAmount())
-                .consentTextVersion(consent.consentTextVersion()).autopayConsentedAt(consent.autopayConsentedAt()).build());
+                .consentTextVersion(consent.consentTextVersion()).autopayConsentedAt(consent.autopayConsentedAt())
+                .build());
         return new MembershipTrialStartResponse(trial.getId(), trial.getType().name(), trial.getSource().name(),
                 trial.getStartAt(), trial.getEndAt(), trial.isAutoRenew());
     }

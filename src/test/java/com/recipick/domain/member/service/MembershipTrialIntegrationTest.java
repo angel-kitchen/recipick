@@ -142,7 +142,8 @@ class MembershipTrialIntegrationTest extends IntegrationTestSupport {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"NULL", "AMOUNT", "VERSION", "LONG_VERSION", "TIME", "OTHER_TIME", "SPACE", "TAB", "UNICODE_SPACE"})
+    @ValueSource(strings = {"NULL", "AMOUNT", "VERSION", "LONG_VERSION", "TIME", "OTHER_TIME", "SPACE", "TAB",
+            "UNICODE_SPACE"})
     @DisplayName("동의 누락·다른 금액·잘못된 버전·다른 동의 시각은 저장 전에 거절한다")
     void rejectsInvalidConsent(String kind) {
         // given
@@ -178,7 +179,8 @@ class MembershipTrialIntegrationTest extends IntegrationTestSupport {
     @DisplayName("체험 생성은 바깥 트랜잭션 없이 실행하지 않는다")
     void requiresOuterTransaction() {
         // given, when, then
-        assertThatThrownBy(() -> trials.start(null, consent(), NOW)).isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> trials.start(null, consent(), NOW))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     @Test

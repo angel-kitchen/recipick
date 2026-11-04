@@ -26,7 +26,7 @@ public class ProductIngredientService {
         if (ingredientIds.isEmpty()) {
             return counts;
         }
-        ingredientIds.forEach(id -> counts.put(id,0L));
+        ingredientIds.forEach(id -> counts.put(id, 0L));
         for (IngredientProductCount row : productRepository.countByIngredientIds(ingredientIds)) {
             counts.put(row.getIngredientId(), row.getProductCount());
         }

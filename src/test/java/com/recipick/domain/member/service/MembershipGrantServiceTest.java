@@ -39,7 +39,8 @@ class MembershipGrantServiceTest {
             ReflectionTestUtils.setField(value, "id", 3L);
             return value;
         });
-        MembershipGrantService service = new MembershipGrantService(admins, memberships, mock(com.recipick.global.audit.AdminAuditRecorder.class));
+        MembershipGrantService service = new MembershipGrantService(admins, memberships,
+                mock(com.recipick.global.audit.AdminAuditRecorder.class));
 
         // when
         MembershipGrantResponse result = service.grant(member, admin, start);

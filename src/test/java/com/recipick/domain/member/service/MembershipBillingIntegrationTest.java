@@ -53,7 +53,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
     private Membership trial(Member member, LocalDateTime end) {
         return memberships.saveAndFlush(Membership.builder().member(member).type(MembershipType.TRIAL)
                 .source(MembershipSource.TRIAL).startAt(end.minusDays(7)).activatedAt(end.minusDays(7)).endAt(end)
-                .autoRenew(true).consentedAmount(CONSENT.consentedAmount()).consentTextVersion(CONSENT.consentTextVersion())
+                .autoRenew(true).consentedAmount(CONSENT.consentedAmount())
+                .consentTextVersion(CONSENT.consentTextVersion())
                 .autopayConsentedAt(CONSENT.autopayConsentedAt()).build());
     }
 
@@ -96,7 +97,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         // given, when, then
         assertThatThrownBy(() -> billing.findMemberIdOfMembership(-1L))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
+                        error -> assertThat(error.getErrorCode())
+                                .isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
     }
 
     @Test
@@ -108,7 +110,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         Long id = billing.createPendingSubscription(member.getId(), CONSENT, NOW);
         var pending = billing.getBillingMembershipForUpdate(member.getId(), id);
         // when
-        var first = billing.applyFirstPaymentPaid(id, NOW.plusMinutes(1), NOW.plusMonths(1), NOW.plusMonths(1).plusDays(3));
+        var first = billing.applyFirstPaymentPaid(id, NOW.plusMinutes(1), NOW.plusMonths(1),
+                NOW.plusMonths(1).plusDays(3));
         var repeated = billing.applyFirstPaymentPaid(id, NOW.plusMinutes(2), NOW.plusMonths(2), null);
         memberships.flush();
         entityManager.clear();
@@ -158,7 +161,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         // when, then
         assertThatThrownBy(() -> billing.getBillingMembershipForUpdate(other.getId(), id))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
+                        error -> assertThat(error.getErrorCode())
+                                .isEqualTo(MemberErrorCode.ACTIVE_MEMBERSHIP_NOT_FOUND));
         assertThatThrownBy(() -> billing.createPendingSubscription(owner.getId(), CONSENT, NOW))
                 .isInstanceOfSatisfying(BusinessException.class,
                         error -> assertThat(error.getErrorCode()).isEqualTo(MemberErrorCode.MEMBERSHIP_ALREADY_ACTIVE));
@@ -177,12 +181,14 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         // when, then
         assertThat(billing.applyRenewalPaid(id, NOW.plusMonths(2), NOW.plusMonths(2).plusDays(3)))
                 .isEqualTo(MembershipBillingResult.EXTENDED);
-        assertThat(billing.applyRenewalPaid(id, NOW.plusMonths(2), null)).isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
+        assertThat(billing.applyRenewalPaid(id, NOW.plusMonths(2), null))
+                .isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
         assertThat(billing.stopRenewal(id)).isEqualTo(MembershipBillingResult.RENEWAL_STOPPED);
         assertThat(billing.stopRenewal(id)).isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
         assertThat(memberships.findById(id).orElseThrow().getGraceEndAt()).isEqualTo(NOW.plusMonths(2).plusDays(3));
         assertThat(billing.terminateAfterRefund(id, NOW.plusDays(1))).isEqualTo(MembershipBillingResult.TERMINATED);
-        assertThat(billing.terminateAfterRefund(id, NOW.plusDays(2))).isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
+        assertThat(billing.terminateAfterRefund(id, NOW.plusDays(2)))
+                .isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
         assertThat(memberships.findById(id).orElseThrow().getTerminatedAt()).isEqualTo(NOW.plusDays(1));
     }
 
@@ -196,7 +202,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         billing.getBillingMembershipForUpdate(member.getId(), id);
         // when, then
         assertThat(billing.applyFirstPaymentFailed(id, NOW)).isEqualTo(MembershipBillingResult.CLOSED_UNPAID);
-        assertThat(billing.applyFirstPaymentFailed(id, NOW.plusMinutes(1))).isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
+        assertThat(billing.applyFirstPaymentFailed(id, NOW.plusMinutes(1)))
+                .isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
         assertThat(billing.findMembershipIds(member.getId())).containsExactly(id);
         assertThat(service.isTrialEligible(member.getId())).isTrue();
         assertThat(billing.existsBlockingMembership(member.getId(), NOW)).isFalse();
@@ -211,7 +218,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         Membership second = trial(member, NOW.minusDays(1));
         Membership cancelled = trial(member, NOW);
         cancelled.reserveCancellation(NOW);
-        Membership renewal = Membership.pendingPaid(member, MembershipSource.SUBSCRIBE, NOW.minusMonths(1), NOW, CONSENT);
+        Membership renewal = Membership.pendingPaid(member, MembershipSource.SUBSCRIBE, NOW.minusMonths(1), NOW,
+                CONSENT);
         renewal.activateAfterFirstPayment(NOW.minusMonths(1), NOW, NOW.plusDays(3));
         memberships.saveAndFlush(renewal);
         Membership unpaid = memberships.saveAndFlush(Membership.pendingPaid(member, MembershipSource.SUBSCRIBE,
@@ -226,7 +234,8 @@ class MembershipBillingIntegrationTest extends IntegrationTestSupport {
         assertThat(billing.findRenewalTargets(NOW, null, 10)).extracting(value -> value.membershipId())
                 .containsExactly(renewal.getId()).doesNotContain(unpaid.getId());
         assertThat(billing.findRenewalTargets(NOW.plusDays(3), null, 10)).isEmpty();
-        assertThat(billing.closeTrialConversion(first.getId(), NOW)).isEqualTo(MembershipBillingResult.CONVERSION_CLOSED);
+        assertThat(billing.closeTrialConversion(first.getId(), NOW))
+                .isEqualTo(MembershipBillingResult.CONVERSION_CLOSED);
         assertThat(billing.closeTrialConversion(first.getId(), NOW)).isEqualTo(MembershipBillingResult.ALREADY_APPLIED);
     }
 

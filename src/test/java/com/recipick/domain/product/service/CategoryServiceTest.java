@@ -43,7 +43,7 @@ public class CategoryServiceTest {
     @InjectMocks
     private CategoryService categoryService;
 
-    private Category category(Long id, String name){
+    private Category category(Long id, String name) {
         Category category = Category.builder().name(name).build();
         ReflectionTestUtils.setField(category, "id", id);
         return category;
@@ -51,13 +51,13 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("목록: 삭제되지 않은 카테고리를 응답으로 바꿔 돌려준다.")
-    void getCategories(){
+    void getCategories() {
         // given
         given(categoryRepository.findAllByDeletedFalse())
-            .willReturn(List.of(category(1L,"채소"), category(2L,"육류")));
+            .willReturn(List.of(category(1L, "채소"), category(2L, "육류")));
 
         // when
-        List<CategoryResponse> result = categoryService.getCategories();
+        List<CategoryResponse> result = categoryService.findCategories();
 
         // then
         assertThat(result).isEqualTo(List.of(new CategoryResponse(1L, "채소"), new CategoryResponse(2L, "육류")));
@@ -65,9 +65,9 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("등록: 성공하면 저장된 id를 돌려준다.")
-    void createCategory(){
+    void createCategory() {
         given(categoryRepository.findByNameForUpdate("채소")).willReturn(Optional.empty());
-        given(categoryRepository.save(any(Category.class))).willReturn(category(1L,"채소"));
+        given(categoryRepository.save(any(Category.class))).willReturn(category(1L, "채소"));
 
         CategoryIdResponse result = categoryService.createCategory(new CategoryCreateRequest("채소"));
 
@@ -76,7 +76,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("등록: 이름이 중복이면 CATEGORY_NAME_DUPLICATED")
-    void createCategory_duplicated(){
+    void createCategory_duplicated() {
         given(categoryRepository.findByNameForUpdate("채소")).willReturn(Optional.of(category(1L, "채소")));
 
         assertThatThrownBy(() -> categoryService.createCategory(new CategoryCreateRequest("채소")))
@@ -88,7 +88,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("등록 : 삭제된 같은 이름이 있으면 새로 만들지 않고 복구한다")
-    void createCategory_restoreDeleted(){
+    void createCategory_restoreDeleted() {
         // given
         Category deleted = category(1L, "채소");
         deleted.delete();
@@ -106,7 +106,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("수정 : 새 이름이면 이름이 바뀐다")
-    void updateCategory(){
+    void updateCategory() {
         Category category = category(1L, "채소");
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
         given(categoryRepository.existsByName("신선 채소")).willReturn(false);
@@ -118,8 +118,8 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("수정 : 같은 이름이면 중복 검사 없이 성공한다")
-    void updateCategory_sameName(){
-        Category category = category(1L,"채소");
+    void updateCategory_sameName() {
+        Category category = category(1L, "채소");
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
 
         CategoryIdResponse result = categoryService.updateCategory(1L, new CategoryUpdateRequest("채소"));
@@ -130,7 +130,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("수정: 다른 카테고리와 이름이 겹치면 CATEGORY_NAME_DUPLICATED")
-    void updateCategory_duplicated(){
+    void updateCategory_duplicated() {
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category(1L, "채소")));
         given(categoryRepository.existsByName("육류")).willReturn(true);
 
@@ -141,7 +141,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("수정: 없는 id면 CATEGORY_NOT_FOUND")
-    void updateCategory_notFound(){
+    void updateCategory_notFound() {
         given(categoryRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.updateCategory(99L, new CategoryUpdateRequest("채소")))
@@ -151,7 +151,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("수정: 삭제된 카테고리면 CATEGORY_ALREADY_DELETED")
-    void updateCategory_alreadyDeleted(){
+    void updateCategory_alreadyDeleted() {
         Category category = category(1L, "채소");
         category.delete();
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
@@ -163,7 +163,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("삭제: 상품이 없으면 deleted가 true가 된다")
-    void delete(){
+    void delete() {
         Category category = category(1L, "채소");
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
         given(productRepository.existsByCategoryIdAndDeletedFalse(1L)).willReturn(false);
@@ -175,7 +175,7 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("삭제: 상품이 연결돼 있으면 CATEGORY_HAS_PRODUCTS")
-    void delete_hasProducts(){
+    void delete_hasProducts() {
         Category category = category(1L, "채소");
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
         given(productRepository.existsByCategoryIdAndDeletedFalse(1L)).willReturn(true);
@@ -188,22 +188,22 @@ public class CategoryServiceTest {
 
     @Test
     @DisplayName("삭제: 이미 삭제됐으면 CATEGORY_ALREADY_DELETED")
-    void delete_alreadyDeleted(){
+    void delete_alreadyDeleted() {
         Category category = category(1L, "채소");
         category.delete();
         given(categoryRepository.findByIdForUpdate(1L)).willReturn(Optional.of(category));
 
-        assertThatThrownBy(()-> categoryService.delete(1L))
-            .extracting(e-> ((BusinessException)e).getErrorCode())
+        assertThatThrownBy(() -> categoryService.delete(1L))
+            .extracting(e -> ((BusinessException)e).getErrorCode())
             .isEqualTo(ProductErrorCode.CATEGORY_ALREADY_DELETED);
     }
 
     @Test
     @DisplayName("삭제 : 없는 id면 CATEGORY_NOT_FOUND")
-    void delete_notFound(){
+    void delete_notFound() {
         given(categoryRepository.findByIdForUpdate(99L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(()-> categoryService.delete(99L))
+        assertThatThrownBy(() -> categoryService.delete(99L))
             .extracting(e -> ((BusinessException)e).getErrorCode())
             .isEqualTo(ProductErrorCode.CATEGORY_NOT_FOUND);
     }

@@ -76,7 +76,7 @@ public class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
-    private final Pageable pageable = PageRequest.of(0,20);
+    private final Pageable pageable = PageRequest.of(0, 20);
 
     private Product product(Long id, Long martId) {
         Mart mart = Mart.builder()
@@ -102,13 +102,13 @@ public class ProductServiceTest {
         return product;
     }
 
-    private AdminProductSearchRequest requestOf(Long martId){
-        return new AdminProductSearchRequest(martId, null,null,null,null);
+    private AdminProductSearchRequest requestOf(Long martId) {
+        return new AdminProductSearchRequest(martId, null, null, null, null);
     }
 
     @Test
     @DisplayName("마트 관리자는 martId를 안 보내도 자기 마트로 조회된다")
-    void martAdminScopedToOwnMart(){
+    void martAdminScopedToOwnMart() {
         // given
         given(productRepository.searchAdminProducts(any(), any()))
             .willReturn(new PageImpl<>(List.of(product(1L, 1L)), pageable, 1));
@@ -129,7 +129,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("관리자 상품 목록 응답에 상품 설명이 포함된다")
-    void adminProductsIncludeDescription(){
+    void adminProductsIncludeDescription() {
         // given
         given(productRepository.searchAdminProducts(any(), any()))
             .willReturn(new PageImpl<>(List.of(product(1L, 1L)), pageable, 1));
@@ -225,7 +225,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("상태 변경 : SUPER_ADMIN이 판매 중 상품을 판매 중지로 바꾼다")
-    void changeStatus_toStopped(){
+    void changeStatus_toStopped() {
         // given
         Product product = product(1L, 1L);
         given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
@@ -242,7 +242,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("상태 변경 : 판매 중지 상품을 다시 판매중으로 바꾼다")
-    void changeStatus_toSelling(){
+    void changeStatus_toSelling() {
         //given
         Product product = product(1L, 1L);
         product.changeStatus(ProductStatus.STOPPED);
@@ -260,7 +260,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("상태 변경 : 이미 같은 상태로 바꿔도 성공한다")
-    void changeStatus_sameStatus(){
+    void changeStatus_sameStatus() {
         // given
         Product product = product(1L, 1L);
         given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
@@ -276,7 +276,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("상태 변경 : MART_ADMIN은 본인 마트 상품의 상태를 바꿀 수 있다.")
-    void changeStatus_martAdminOwnMart(){
+    void changeStatus_martAdminOwnMart() {
         // given
         Product product = product(1L, 1L);
         given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
@@ -291,7 +291,7 @@ public class ProductServiceTest {
 
     @Test
     @DisplayName("상태 변경: MART_ADMIN이 다른 마트 상품을 바꾸면 MART_ACCESS_DENIED이고 상태는 그대로다")
-    void changeStats_martAdminOtherMart(){
+    void changeStats_martAdminOtherMart() {
         Product product = product(1L, 2L);
         given(productRepository.findByIdForUpdate(1L)).willReturn(Optional.of(product));
         ProductStatusUpdateRequest request = new ProductStatusUpdateRequest(ProductStatus.STOPPED);
@@ -1048,9 +1048,12 @@ public class ProductServiceTest {
             .willReturn(List.of(product(5L, 1L), product(3L, 1L), product(2L, 1L), product(1L, 1L)));
 
         // when
-        PageResponse<ProductSearchResponse> first = productService.findBestProducts(1L, rankedIds, PageRequest.of(0, 2));
-        PageResponse<ProductSearchResponse> second = productService.findBestProducts(1L, rankedIds, PageRequest.of(1, 2));
-        PageResponse<ProductSearchResponse> beyond = productService.findBestProducts(1L, rankedIds, PageRequest.of(5, 2));
+        PageResponse<ProductSearchResponse> first = productService.findBestProducts(1L, rankedIds,
+            PageRequest.of(0, 2));
+        PageResponse<ProductSearchResponse> second = productService.findBestProducts(1L, rankedIds,
+            PageRequest.of(1, 2));
+        PageResponse<ProductSearchResponse> beyond = productService.findBestProducts(1L, rankedIds,
+            PageRequest.of(5, 2));
 
         // then
         assertThat(first.content()).extracting(ProductSearchResponse::productId).containsExactly(5L, 3L);

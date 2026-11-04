@@ -45,7 +45,7 @@ public class ProductAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @ModelAttribute AdminProductSearchRequest request,
         Pageable pageable
-        ){
+        ) {
         PageResponse<AdminProductResponse> response = productService.getAdminProducts(
             AdminRole.valueOf(principal.role()), principal.martId(), request, pageable);
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.", response));
@@ -67,7 +67,7 @@ public class ProductAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId,
         @Valid @RequestBody ProductUpdateRequest request
-        ){
+        ) {
         ProductIdResponse response = productAdminFacade.updateProduct(
             AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
         return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
@@ -78,7 +78,7 @@ public class ProductAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId,
         @Valid @RequestBody ProductPriceUpdateRequest request
-        ){
+        ) {
         ProductPriceResponse response = productService.updatePrice(
             AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
         return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
@@ -89,7 +89,7 @@ public class ProductAdminController {
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId,
         @Valid @RequestBody ProductStatusUpdateRequest request
-    ){
+    ) {
         ProductStatusResponse response = productService.changeStatus(
             AdminRole.valueOf(principal.role()), principal.martId(), productId, request);
         return ResponseEntity.ok(ApiResponse.success("수정되었습니다.", response));
@@ -99,8 +99,8 @@ public class ProductAdminController {
     public ResponseEntity<ApiResponse<Void>> deleteProduct(
         @AuthenticationPrincipal AuthPrincipal principal,
         @PathVariable Long productId
-    ){
+    ) {
         productService.deleteProduct(AdminRole.valueOf(principal.role()), principal.martId(), productId);
-        return ResponseEntity.ok(ApiResponse.<Void>success("삭제되었습니다.",null));
+        return ResponseEntity.ok(ApiResponse.<Void>success("삭제되었습니다.", null));
     }
 }
