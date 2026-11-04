@@ -663,8 +663,30 @@ class ClaudeAiEvaluationTest {
     }
 
     // 정답 레시피를 하나로 정할 수 없어, 개수·중복·목록 밖 ID·인분과 문장의 조건을 지켰는지로 채점한다
+    // "고기·해산물 위주"는 필수 재료로 판단한다. 새우젓·국물용 멸치·액젓은 양념이라 해산물로 세지 않는다
+    private static final Set<String> MEAT = Set.of("돼지고기 앞다리살", "다진 돼지고기", "소고기 국거리", "소고기 불고기용",
+        "소갈비", "소고기 홍두깨살", "소고기 스테이크용", "다진 소고기", "돼지 등뼈", "닭볶음탕용 닭", "닭다리살", "닭가슴살",
+        "영계", "베이컨", "햄", "소시지");
+    private static final Set<String> CHICKEN = Set.of("닭볶음탕용 닭", "닭다리살", "닭가슴살", "영계");
+    private static final Set<String> SEAFOOD = Set.of("동태", "오징어", "낙지", "쭈꾸미", "북어채", "고등어", "새우", "바지락",
+        "홍합", "어묵", "맛살", "잔멸치", "안초비", "참치캔");
+
+    // mainIngredient: MEAT·CHICKEN·SEAFOOD는 필수 재료에 그 종류가 있어야 하고, VEGETABLE은 고기·해산물이 없어야 한다.
+    // 이름에 "닭"이 없는 영계도 닭이라 이름 일부가 아니라 재료 목록으로 판단한다
     record MealPlanCase(String text, int count, Integer servings, Integer maxSpicy, Integer maxMinutes,
-                        String cuisine, String dishType, String excluded, boolean distinctDishType) {
+                        String cuisine, String dishType, String excluded, boolean distinctDishType,
+                        String mainIngredient) {
+
+        boolean hasMainIngredient(SeedRecipe recipe) {
+            List<String> required = recipe.requiredIngredients();
+            return switch (mainIngredient) {
+                case "MEAT" -> required.stream().anyMatch(MEAT::contains);
+                case "CHICKEN" -> required.stream().anyMatch(CHICKEN::contains);
+                case "SEAFOOD" -> required.stream().anyMatch(SEAFOOD::contains);
+                case "VEGETABLE" -> required.stream().noneMatch(name -> MEAT.contains(name) || SEAFOOD.contains(name));
+                default -> throw new IllegalArgumentException("알 수 없는 주재료: " + mainIngredient);
+            };
+        }
 
         List<String> problems(List<AiPlannedMeal> meals, Map<Long, SeedRecipe> seedById) {
             List<String> problems = new ArrayList<>();
@@ -703,6 +725,9 @@ class ClaudeAiEvaluationTest {
             if (distinctDishType
                 && recipes.stream().map(r -> r.recipe().getDishType()).distinct().count() != recipes.size()) {
                 problems.add("요리 구분 겹침");
+            }
+            if (mainIngredient != null && !recipes.stream().allMatch(this::hasMainIngredient)) {
+                problems.add("주재료(" + mainIngredient + ")");
             }
             return problems;
         }
