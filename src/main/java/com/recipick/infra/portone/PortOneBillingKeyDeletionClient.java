@@ -5,8 +5,6 @@ import com.recipick.infra.portone.dto.PortOneBillingKeyDeletionCode;
 import com.recipick.infra.portone.dto.PortOneBillingKeyDeletionObservation;
 import com.recipick.infra.portone.dto.PortOneBillingKeyDeletionObservation.Kind;
 import java.net.URI;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -52,7 +50,7 @@ public class PortOneBillingKeyDeletionClient {
                 return observation;
             });
         } catch (ResourceAccessException e) {
-            return PortOneBillingKeyDeletionObservation.unknown(isTimeout(e)
+            return PortOneBillingKeyDeletionObservation.unknown(PortOneErrorClassifier.isTimeout(e)
                 ? PortOneBillingKeyDeletionCode.TIMEOUT : PortOneBillingKeyDeletionCode.HTTP_ERROR);
         } catch (RestClientException e) {
             return PortOneBillingKeyDeletionObservation.unknown(PortOneBillingKeyDeletionCode.INVALID_RESPONSE);
@@ -83,7 +81,8 @@ public class PortOneBillingKeyDeletionClient {
                 return PortOneBillingKeyDeletionCode.HTTP_ERROR;
             });
         } catch (ResourceAccessException e) {
-            return isTimeout(e) ? PortOneBillingKeyDeletionCode.TIMEOUT : PortOneBillingKeyDeletionCode.HTTP_ERROR;
+            return PortOneErrorClassifier.isTimeout(e)
+                ? PortOneBillingKeyDeletionCode.TIMEOUT : PortOneBillingKeyDeletionCode.HTTP_ERROR;
         } catch (RestClientException e) {
             return PortOneBillingKeyDeletionCode.INVALID_RESPONSE;
         }
@@ -130,14 +129,5 @@ public class PortOneBillingKeyDeletionClient {
             }
         }
         return true;
-    }
-
-    private static boolean isTimeout(Throwable exception) {
-        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -6,11 +6,14 @@ import com.recipick.domain.payment.integration.BillingKeyDeletionStubServer;
 import com.recipick.domain.payment.integration.BillingKeyDeletionStubServer.Entry;
 import com.recipick.infra.portone.dto.PortOneBillingKeyDeletionCode;
 import com.recipick.infra.portone.dto.PortOneBillingKeyDeletionObservation.Kind;
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -92,5 +95,22 @@ class PortOneBillingKeyDeletionClientTest {
             .isEqualTo(PortOneBillingKeyDeletionCode.TIMEOUT);
         server.releaseDeleteReply();
         assertThat(client.lookup("key", BillingKeyDeletionStubServer.STORE).kind()).isEqualTo(Kind.ABSENT);
+    }
+
+    @Test
+    @DisplayName("TimeoutException이 원인인 연결 실패도 결제·빌링 클라이언트와 같은 기준으로 TIMEOUT으로 분류한다")
+    void classifiesWrappedTimeoutExceptionAsTimeout() {
+        // given
+        ClientHttpRequestFactory timingOut = (uri, method) -> {
+            throw new IOException("request timed out", new TimeoutException());
+        };
+        PortOneBillingKeyDeletionClient timingOutClient = new PortOneBillingKeyDeletionClient(
+            RestClient.builder().requestFactory(timingOut).build(), server.baseUrl());
+
+        // when, then
+        assertThat(timingOutClient.lookup("key", BillingKeyDeletionStubServer.STORE).code())
+            .isEqualTo(PortOneBillingKeyDeletionCode.TIMEOUT);
+        assertThat(timingOutClient.delete("key", BillingKeyDeletionStubServer.STORE, "RECIPICK_REPLACED_KEY", "ADMIN"))
+            .isEqualTo(PortOneBillingKeyDeletionCode.TIMEOUT);
     }
 }
