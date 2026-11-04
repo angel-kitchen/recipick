@@ -2,7 +2,9 @@
 
 > 각 개선은 "변경 동기 → 토큰 변화 → 출력 품질 변화 → 다음 개선 방향" 순서로 기록한다. 수치는 `evaluation.md`의 실행 결과를 쓴다.
 
-프롬프트 위치: `ClaudeAiClient`의 `MENU_INSTRUCTION`, `CONDITION_INSTRUCTION`, `RECOMMEND_INSTRUCTION`, `FRIDGE_INSTRUCTION`(v5부터)
+프롬프트 위치: 기본 지시문은 `AiPromptType`의 `MENU`, `CONDITION`, `RECOMMEND`, `FRIDGE`(v5부터). v5까지는 `ClaudeAiClient` 상수였다.
+
+#457부터 관리자가 DB(`AI_PROMPT`)에 새 버전을 저장·활성화해 재배포 없이 바꿀 수 있다. 이 문서의 v 번호는 코드 기본 지시문의 변경 이력이고, DB 버전은 종류별 번호(`MENU` 3 등)로 따로 매겨진다. DB 버전으로 개선을 시험했으면 같은 형식으로 "DB `종류` 버전 N"을 제목에 적고, 수치는 AI 이력의 `promptVersions`로 그 버전의 요청만 모아 본다. 결과가 좋으면 코드 기본 지시문에 반영해 새 v 번호를 남긴다.
 
 ## v1. 첫 버전
 | 항목 | 내용 |
