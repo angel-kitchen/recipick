@@ -342,7 +342,7 @@ export default function Home() {
           <div className="container">
             <p className="hm-apple__tag">Recipick Membership</p>
             <h2 className="hm-apple__title" id="hm-apple-title">
-              고르는 건 메뉴,
+              고르는 건 메뉴뿐,
               <br />
               담는 건 레시픽이 합니다.
             </h2>
@@ -352,7 +352,7 @@ export default function Home() {
               상품 검색과 직접 장보기는 멤버십 없이도 쓸 수 있어요.
             </p>
             <div className="hm-apple__cta">
-              <Link to="/membership" className="hm-pill hm-pill--fill">
+              <Link to="/membership-info" className="hm-pill hm-pill--fill">
                 월 3,900원 · {membershipLabel}
               </Link>
               <button type="button" className="hm-pill hm-pill--ghost" onClick={() => setInfoOpen(true)}>

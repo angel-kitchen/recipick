@@ -174,7 +174,7 @@ export default function MyPage() {
                   ? `${MEMBERSHIP_TYPE[member.membership.type] ?? member.membership.type} · ${formatDateTime(member.membership.endAt)}까지`
                   : '이용 중이 아니에요'}
               </span>
-              <Link to="/membership" className="btn btn--muted">
+              <Link to={member.membership?.active ? '/membership' : '/membership-info'} className="btn btn--muted">
                 자세히
               </Link>
             </dd>
