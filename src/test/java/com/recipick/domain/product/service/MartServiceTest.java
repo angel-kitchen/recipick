@@ -158,7 +158,7 @@ public class MartServiceTest {
         ReflectionTestUtils.setField(closed, "status", MartStatus.CLOSED);
         given(martRepository.findAll()).willReturn(List.of(open,closed));
 
-        List<MartResponse> result = martService.getMarts(AdminRole.SUPER_ADMIN, null);
+        List<MartResponse> result = martService.findMarts(AdminRole.SUPER_ADMIN, null);
         assertThat(result).extracting(MartResponse :: martId).containsExactly(1L,2L);
         assertThat(result).extracting(MartResponse :: status).containsExactly(MartStatus.OPEN, MartStatus.CLOSED);
     }
@@ -168,7 +168,7 @@ public class MartServiceTest {
     void getMarts_superAdmin_empty(){
         given(martRepository.findAll()).willReturn(List.of());
 
-        assertThat(martService.getMarts(AdminRole.SUPER_ADMIN, null)).isEmpty();
+        assertThat(martService.findMarts(AdminRole.SUPER_ADMIN, null)).isEmpty();
     }
 
     @Test
@@ -176,7 +176,7 @@ public class MartServiceTest {
     void getMarts_martAdmin(){
         given(martRepository.findById(1L)).willReturn(Optional.of(mart(1L, 31L, "삼청동 마트")));
 
-        List<MartResponse> result = martService.getMarts(AdminRole.MART_ADMIN, 1L);
+        List<MartResponse> result = martService.findMarts(AdminRole.MART_ADMIN, 1L);
         assertThat(result).extracting(MartResponse :: martId).containsExactly(1L);
         verify(martRepository, never()).findAll();
     }
@@ -185,7 +185,7 @@ public class MartServiceTest {
     @DisplayName("목록 : MART_ADMIN의 마트가 없으면 빈 목록")
     void getMarts_martAdmin_empty(){
         given(martRepository.findById(99L)).willReturn(Optional.empty());
-        assertThat(martService.getMarts(AdminRole.MART_ADMIN, 99L)).isEmpty();
+        assertThat(martService.findMarts(AdminRole.MART_ADMIN, 99L)).isEmpty();
 
     }
 

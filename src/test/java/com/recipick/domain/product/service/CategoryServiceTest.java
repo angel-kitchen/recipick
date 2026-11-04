@@ -57,7 +57,7 @@ public class CategoryServiceTest {
             .willReturn(List.of(category(1L,"채소"), category(2L,"육류")));
 
         // when
-        List<CategoryResponse> result = categoryService.getCategories();
+        List<CategoryResponse> result = categoryService.findCategories();
 
         // then
         assertThat(result).isEqualTo(List.of(new CategoryResponse(1L, "채소"), new CategoryResponse(2L, "육류")));

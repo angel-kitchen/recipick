@@ -20,6 +20,6 @@ public class CategoryController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> getCategories(){
-        return ResponseEntity.ok(ApiResponse.success(categoryService.getCategories()));
+        return ResponseEntity.ok(ApiResponse.success(categoryService.findCategories()));
     }
 }

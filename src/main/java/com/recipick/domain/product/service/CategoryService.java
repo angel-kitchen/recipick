@@ -34,7 +34,7 @@ public class CategoryService {
 
     @Cacheable(cacheNames = CacheConfig.CATEGORIES)
     @Transactional(readOnly = true)
-    public List<CategoryResponse> getCategories(){
+    public List<CategoryResponse> findCategories(){
         return categoryRepository.findAllByDeletedFalse().stream()
             .map(CategoryResponse::from)
             .toList();

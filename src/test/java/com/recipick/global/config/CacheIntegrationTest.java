@@ -61,8 +61,8 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("카테고리 목록은 두 번째 조회부터 DB를 거치지 않는다")
     void categories_areCached() {
-        categoryService.getCategories();
-        categoryService.getCategories();
+        categoryService.findCategories();
+        categoryService.findCategories();
 
         verify(categoryRepository, times(1)).findAllByDeletedFalse();
     }
@@ -70,11 +70,11 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("카테고리를 만들면 캐시가 비워져 다음 조회에 바로 반영된다")
     void createCategory_evictsCache() {
-        int before = categoryService.getCategories().size();
+        int before = categoryService.findCategories().size();
 
         categoryService.createCategory(new CategoryCreateRequest("캐시검증카테고리"));
 
-        assertThat(categoryService.getCategories()).hasSize(before + 1)
+        assertThat(categoryService.findCategories()).hasSize(before + 1)
             .extracting(CategoryResponse::name).contains("캐시검증카테고리");
     }
 

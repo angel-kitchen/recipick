@@ -46,7 +46,7 @@ public class MartAdminController {
     public ResponseEntity<ApiResponse<List<MartResponse>>> getMarts(
         @AuthenticationPrincipal AuthPrincipal principal
     ) {
-        List<MartResponse> response = martService.getMarts(
+        List<MartResponse> response = martService.findMarts(
             AdminRole.valueOf(principal.role()), principal.martId());
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.", response));
     }

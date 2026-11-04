@@ -124,7 +124,7 @@ public class MartService {
     }
 
     @Transactional(readOnly = true)
-    public List<MartResponse> getMarts(AdminRole role, Long adminMartId){
+    public List<MartResponse> findMarts(AdminRole role, Long adminMartId){
         if(role == AdminRole.SUPER_ADMIN){
             return martRepository.findAll().stream()
                 .map(MartResponse::from)
