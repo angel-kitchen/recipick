@@ -2,6 +2,8 @@
 
 작성일: 2026-10-25 · 작성자: 김준희
 
+> 초기 검토 당시의 Spring AI·OpenAI 도입 제안입니다. 현재 구현은 Anthropic SDK 기반 Claude 및 SDK Tool Calling이며, 이 문서의 예시 코드는 채택된 구현을 뜻하지 않습니다. 현재 선택·검증 결과는 [AI ADR](adr/recipe-ai.md)과 [모델 선택](ai/model-selection.md)을 따릅니다.
+
 ## 결론
 
 튜터님 흐름은 그대로 두되, 벡터 검색(사전준비·kNN)은 지금 단계에서 빼는 것을 권장한다. 등록 레시피 100개 전체를 프롬프트에 넣고 Spring AI `ChatClient` 한 번 호출로 레시피 ID·인분을 구조화 JSON으로 받으면 된다.

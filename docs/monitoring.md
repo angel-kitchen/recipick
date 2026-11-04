@@ -2,6 +2,8 @@
 
 >  2-C 단계(Prometheus·Grafana 구성과 기본 대시보드)까지의 기록입니다. 부하 테스트·병목 개선의 Before → After 수치는 이 대시보드로 확인합니다.
 
+> 로컬 혼합 부하 추가 구성(2026-11-04): 개발 앱 8081 대신 성능 앱 28081을 수집하려면 `docker compose -f docker-compose.monitoring.yml -f docker-compose.monitoring.perf.yml up -d`를 사용한다. 기존 대시보드를 재사용하며 실행 이후부터 수집한다. [실행 안내](performance/product/load-test.md#로컬-성능-서버를-grafana로-보기)와 [결과·캡처](performance/local-100-users.md#6-grafana-연결-후-추가-측정-2026-11-04)를 참고한다.
+
 ## 1. 엔드포인트 공개 규칙
 
 ### 상황
