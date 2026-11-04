@@ -12,6 +12,15 @@ const TRIAL_OFFER_EXCLUDED = ['/start', '/membership', '/checkout'];
 const HIDE_TODAY_KEY = 'trialOfferHiddenDate';
 const todayInSeoul = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 
+function hiddenToday() {
+  try {
+    return localStorage.getItem(HIDE_TODAY_KEY) === todayInSeoul();
+  } catch {
+    // 저장소를 못 쓰면 숨김 기록이 없는 것으로 보고 이번 방문에 안내한다
+    return false;
+  }
+}
+
 export default function Layout() {
   const { member } = useAuth();
   const { pathname, search } = useLocation();
@@ -29,7 +38,7 @@ export default function Layout() {
       !TRIAL_OFFER_EXCLUDED.includes(pathname) &&
       !new URLSearchParams(search).has('paymentId') &&
       closedFor !== member.memberId &&
-      localStorage.getItem(HIDE_TODAY_KEY) !== todayInSeoul();
+      !hiddenToday();
     setTrialOffer(Boolean(offerable));
   }, [member, pathname, search, closedFor]);
 
@@ -39,7 +48,11 @@ export default function Layout() {
   };
 
   const hideTrialOfferToday = () => {
-    localStorage.setItem(HIDE_TODAY_KEY, todayInSeoul());
+    try {
+      localStorage.setItem(HIDE_TODAY_KEY, todayInSeoul());
+    } catch {
+      // 저장하지 못해도 지금 창은 닫는다. 새로고침하면 다시 보일 뿐이다
+    }
     closeTrialOffer();
   };
 
