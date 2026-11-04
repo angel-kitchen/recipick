@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import ErrorNotice from '../../components/ErrorNotice';
 import Pager from '../../components/Pager';
-import { AI_REQUEST_TYPE, AI_RESULT_STATUS, formatDateTime } from '../../labels';
+import { AI_PROMPT_TYPE, AI_REQUEST_TYPE, AI_RESULT_STATUS, formatDateTime } from '../../labels';
 import useLoad from '../useLoad';
 
 export default function AdminAiRequests() {
@@ -78,6 +78,7 @@ export default function AdminAiRequests() {
               <th>결과</th>
               <th>성공</th>
               <th>모델</th>
+              <th>프롬프트</th>
               <th>지연(ms)</th>
               <th>시각</th>
               <th />
@@ -93,6 +94,7 @@ export default function AdminAiRequests() {
                 <td>{AI_RESULT_STATUS[log.resultStatus] ?? log.resultStatus}</td>
                 <td>{log.success ? '예' : '아니오'}</td>
                 <td>{log.model ?? '-'}</td>
+                <td>{promptText(log.promptVersions)}</td>
                 <td>{log.latencyMs}</td>
                 <td>{formatDateTime(log.createdAt)}</td>
                 <td>
@@ -118,4 +120,12 @@ export default function AdminAiRequests() {
       {data && <Pager page={data.page} totalPages={data.totalPages} onChange={setPage} />}
     </>
   );
+}
+
+// 종류별 버전 번호. null은 코드 기본 지시문이고, 버전 기록 전의 이력은 promptVersions 자체가 없다
+function promptText(promptVersions) {
+  if (!promptVersions) return '-';
+  return Object.entries(promptVersions)
+    .map(([type, version]) => `${AI_PROMPT_TYPE[type] ?? type} ${version == null ? '기본' : `v${version}`}`)
+    .join(', ');
 }

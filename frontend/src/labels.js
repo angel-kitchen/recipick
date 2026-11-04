@@ -105,6 +105,8 @@ export const AUDIT_TARGET = {
   INGREDIENT: '재료',
   ORDER: '주문',
   PAYMENT: '결제',
+  AI_REQUEST: 'AI 요청',
+  AI_PROMPT: 'AI 프롬프트',
 };
 
 export const AUDIT_ACTION = {
@@ -141,6 +143,9 @@ export const AUDIT_ACTION = {
   PAYMENT_DETAIL_VIEW: '결제 상세 조회',
   POINT_BALANCE_VIEW: '포인트 잔액 조회',
   POINT_HISTORY_VIEW: '포인트 이력 조회',
+  AI_REQUEST_LIST_VIEW: 'AI 요청 이력 조회',
+  AI_PROMPT_CREATE: 'AI 프롬프트 저장',
+  AI_PROMPT_ACTIVE_CHANGE: 'AI 프롬프트 활성 변경',
 };
 
 export const AI_REQUEST_TYPE = {
@@ -155,6 +160,13 @@ export const AI_RESULT_STATUS = {
   RECOMMENDED: '추천 완료',
   ANSWERED: '답변 완료',
   FALLBACK: '대체 결과',
+};
+
+export const AI_PROMPT_TYPE = {
+  MENU: '자연어 장보기',
+  CONDITION: '조건 추천 ① 조건 분석',
+  RECOMMEND: '조건 추천 ② 고르기',
+  FRIDGE: '냉장고 파먹기',
 };
 
 export const MEMBERSHIP_SOURCE = {
