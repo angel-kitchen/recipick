@@ -9,6 +9,7 @@ import './styles/layout.css';
 import './styles/home.css';
 import './styles/shop.css';
 import './styles/admin.css';
+import './styles/membership-intro.css';
 import './styles/theme.css';
 
 createRoot(document.getElementById('root')).render(

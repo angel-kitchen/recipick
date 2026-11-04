@@ -2,6 +2,21 @@
 const PATHS = {
   recipe: <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />,
   product: <path d="M6 7h12l1 13H5L6 7zM9 7a3 3 0 0 1 6 0" />,
+  // 왕관: 멤버십
+  membership: <path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8zM6 22h12" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  shield: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3zM8.5 12l2.5 2.5L16 9.5" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </>
+  ),
   heart: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />,
   cart: (
     <>
