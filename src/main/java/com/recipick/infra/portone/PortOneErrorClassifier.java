@@ -8,7 +8,7 @@ import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.concurrent.TimeoutException;
 
-// 결제·빌링·멤버십 환불 클라이언트가 같은 기준으로 PortOne 오류와 타임아웃을 분류하도록 한 곳에 둔다
+// 결제·빌링·빌링키 삭제·멤버십 환불 클라이언트가 같은 기준으로 PortOne 오류와 타임아웃을 분류하도록 한 곳에 둔다
 final class PortOneErrorClassifier {
 
     private PortOneErrorClassifier() {
