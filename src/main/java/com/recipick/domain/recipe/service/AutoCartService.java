@@ -101,6 +101,27 @@ public class AutoCartService {
         return List.copyOf(totals.values());
     }
 
+    // 조건 추천의 예상 금액은 레시피마다 따로 계산하므로, 미리보기와 달리 레시피끼리 재료를 합치지 않는다
+    public Map<Long, List<RequiredIngredient>> sumRequiredIngredientsByRecipe(Map<Long, Integer> servingsByRecipeId) {
+        Map<Long, Map<Long, RequiredIngredient>> totals = new LinkedHashMap<>();
+        for (RecipeIngredient recipeIngredient : recipeIngredientRepository.findAllWithIngredientByRecipeIds(
+            servingsByRecipeId.keySet())) {
+            if (!recipeIngredient.isRequired()) {
+                continue;
+            }
+            Long recipeId = recipeIngredient.getRecipe().getId();
+            Long ingredientId = recipeIngredient.getIngredient().getId();
+            totals.computeIfAbsent(recipeId, id -> new LinkedHashMap<>()).merge(ingredientId, new RequiredIngredient(
+                ingredientId,
+                recipeIngredient.getIngredient().getName(),
+                recipeIngredient.getUnit(),
+                recipeIngredient.calculateRequiredAmount(servingsByRecipeId.get(recipeId))
+            ), RequiredIngredient::add);
+        }
+        return totals.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> List.copyOf(entry.getValue().values())));
+    }
+
     @Transactional
     public AutoCartRequest savePreview(Long memberId, Long martId, List<AutoCartMenu> menus, long totalPrice) {
         return autoCartRequestRepository.save(AutoCartRequest.builder()

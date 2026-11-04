@@ -379,7 +379,9 @@ public class ClaudeAiClient implements AiClient {
         String dishType,
         int maxCookingMinutes,
         int maxSpicyLevel,
-        List<String> excludedIngredients
+        List<String> excludedIngredients,
+        int maxBudget,
+        int servings
     ) {
 
         AiRecipeConditions toConditions() {
@@ -388,7 +390,9 @@ public class ClaudeAiClient implements AiClient {
                 blankToNull(dishType),
                 maxCookingMinutes > 0 ? maxCookingMinutes : null,
                 maxSpicyLevel >= 0 ? maxSpicyLevel : null,
-                excludedIngredients);
+                excludedIngredients,
+                maxBudget > 0 ? maxBudget : null,
+                servings > 0 ? servings : null);
         }
 
         private static String blankToNull(String value) {

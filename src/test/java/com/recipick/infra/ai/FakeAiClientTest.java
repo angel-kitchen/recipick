@@ -101,7 +101,18 @@ class FakeAiClientTest {
         AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions(INSTRUCTION, "30분 안에 되는 한식");
 
         // then
-        assertThat(result.content()).isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of()));
+        assertThat(result.content()).isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of(), null, null));
+    }
+
+    @Test
+    @DisplayName("조건 분석은 'N만 원'을 예산으로, 'N인분'을 인분으로 읽는다")
+    void extractConditions_readsBudgetAndServings() {
+        // when
+        AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions(INSTRUCTION, "2만 원 안으로 2인분 저녁");
+
+        // then
+        assertThat(result.content().maxBudget()).isEqualTo(20000);
+        assertThat(result.content().servings()).isEqualTo(2);
     }
 
     @Test

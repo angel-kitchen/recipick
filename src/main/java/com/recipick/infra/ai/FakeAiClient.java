@@ -30,6 +30,9 @@ public class FakeAiClient implements AiClient {
 
     private static final Pattern SERVINGS = Pattern.compile("(\\d+)\\s*인분");
     private static final Pattern COOKING_MINUTES = Pattern.compile("(\\d+)\\s*분");
+    private static final Pattern BUDGET_MAN_WON = Pattern.compile("(\\d+)\\s*만\\s*원");
+    private static final Pattern BUDGET_WON = Pattern.compile("(\\d{4,})\\s*원");
+    private static final int MAN = 10_000;
     private static final int MAX_RECOMMENDATIONS = 5;
     private static final int MAX_FRIDGE_RECIPES = 3;
     private static final Pattern MEAL_COUNT = Pattern.compile("(\\d+)\\s*(일|끼|개|가지)");
@@ -50,7 +53,7 @@ public class FakeAiClient implements AiClient {
         return AiResult.success(menus, new AiUsage(MODEL, 0, 0, 0, 0));
     }
 
-    // 로컬 화면 확인용이라 한식·양식과 "N분"만 읽고, 나머지 조건은 비워 둔다
+    // 로컬 화면 확인용이라 한식·양식, "N분", "N만 원·N원", "N인분"만 읽고, 나머지 조건은 비워 둔다
     @Override
     public AiResult<AiRecipeConditions> extractConditions(String instruction, String text) {
         if (text.contains(FAILURE_TRIGGER)) {
@@ -60,7 +63,8 @@ public class FakeAiClient implements AiClient {
         Matcher matcher = COOKING_MINUTES.matcher(text);
         Integer maxCookingMinutes = matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
         AiRecipeConditions conditions =
-            new AiRecipeConditions(cuisineType, null, maxCookingMinutes, null, List.of());
+            new AiRecipeConditions(cuisineType, null, maxCookingMinutes, null, List.of(), parseBudget(text),
+                parseServings(text));
         return AiResult.success(conditions, new AiUsage(MODEL, 0, 0, 0, 0));
     }
 
@@ -94,6 +98,15 @@ public class FakeAiClient implements AiClient {
             ? "가진 재료로 만들 수 있는 레시피를 찾지 못했어요."
             : "가진 재료로 만들 수 있는 레시피를 골랐어요.";
         return AiResult.success(new AiFridgeAnswer(answer, recipeIds), new AiUsage(MODEL, 0, 0, 0, 0));
+    }
+
+    private Integer parseBudget(String text) {
+        Matcher manWon = BUDGET_MAN_WON.matcher(text);
+        if (manWon.find()) {
+            return Integer.parseInt(manWon.group(1)) * MAN;
+        }
+        Matcher won = BUDGET_WON.matcher(text);
+        return won.find() ? Integer.valueOf(won.group(1)) : null;
     }
 
     private Integer parseServings(String text) {
