@@ -1,0 +1,78 @@
+{
+  "run": {
+    "startedAt": "2026-11-04T01:16:24.270714+00:00",
+    "finishedAt": "2026-11-04T01:22:53.161665+00:00",
+    "k6Exit": 0,
+    "grafanaEnabled": true
+  },
+  "metrics": {
+    "http_reqs": {
+      "count": 59899,
+      "rate": 154.28566670032075
+    },
+    "http_req_failed": {
+      "passes": 0,
+      "fails": 59899,
+      "value": 0
+    },
+    "http_req_duration{phase:journey}": {
+      "p(90)": 18.278200000000002,
+      "p(95)": 22.388099999999998,
+      "p(99)": 35.65713999999999,
+      "max": 151.967,
+      "avg": 9.436037601986563,
+      "med": 7.825,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "journey_failed": {
+      "passes": 0,
+      "fails": 16921,
+      "thresholds": {
+        "rate<0.01": false
+      },
+      "value": 0
+    },
+    "blocked_writers": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "cleanup_failed": {
+      "rate": 0,
+      "count": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "skipped_writes": {
+      "count": 0,
+      "rate": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "journey_completed": {
+      "count": 16921,
+      "rate": 43.58449667333557
+    }
+  },
+  "integrity": {
+    "cartItems": 0,
+    "pointBalance": 0,
+    "pendingOrders": 0,
+    "reservedUsages": 0,
+    "pendingEarnings": 0,
+    "notCanceledPayments": 0,
+    "stockRestored": true
+  },
+  "sourceSha256": {
+    "summary.json": "4b67ef88ef658a6087c3a0afd4835dac6f0f20845c9bcec59857ac0cf35bd8f5",
+    "before-prometheus.txt": "8420a27de5722486785917cfd8510e9a96eb5ba6b24db45e1eb99f1dcd02e356",
+    "after-prometheus.txt": "5c76b32e146f8c130b6a57ceb55ceae215e2e105fcec16d12469783bb7e1b64e"
+  },
+  "screenshot": "../images/local-mixed-100-grafana-2026-11-04.png"
+}
