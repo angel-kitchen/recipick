@@ -14,6 +14,7 @@ import com.recipick.domain.product.controller.CategoryController;
 import com.recipick.domain.product.service.CategoryService;
 import com.recipick.domain.recipe.controller.RecipeBookmarkController;
 import com.recipick.domain.recipe.controller.RecipeController;
+import com.recipick.domain.recipe.facade.AiFridgeRecommendFacade;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
 import com.recipick.domain.recipe.service.RecipeBookmarkService;
 import com.recipick.domain.recipe.facade.RecipeFacade;
@@ -88,6 +89,8 @@ class AuthenticationWebTest {
     private RecipeBookmarkService bookmarkService;
     @MockitoBean
     private AiRecipeRecommendFacade aiRecipeRecommendFacade;
+    @MockitoBean
+    private AiFridgeRecommendFacade aiFridgeRecommendFacade;
     @MockitoBean
     private CategoryService categoryService;
 

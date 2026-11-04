@@ -5,5 +5,6 @@ public enum AiResultStatus {
     NEEDS_SELECTION,
     NO_MATCH,
     RECOMMENDED,
+    ANSWERED,
     FALLBACK
 }
