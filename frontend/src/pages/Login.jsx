@@ -4,6 +4,9 @@ import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import { clearPendingAddress, readPendingAddress, registerAddress } from '../pendingAddress';
 
+// 발표회 시연용 체험 계정(#442). 번들에 실려 공개되는 값이라 체험 전용 계정만 넣고 발표 뒤 비밀번호를 바꾼다
+const DEMO_MEMBER = { email: 'test01@recipick.shop', password: 'ghldnjs1234!' };
+
 export default function Login() {
   const { member, login, reloadMember } = useAuth();
   const location = useLocation();
@@ -99,6 +102,16 @@ export default function Login() {
         </label>
         <button type="submit" className="btn btn--large btn--block" disabled={submitting}>
           {submitting ? '로그인 중...' : '로그인'}
+        </button>
+        <button
+          type="button"
+          className="btn btn--outline btn--block"
+          onClick={() => {
+            setEmail(DEMO_MEMBER.email);
+            setPassword(DEMO_MEMBER.password);
+          }}
+        >
+          체험 계정으로 채우기
         </button>
         <p className="auth-card__footer">
           아직 회원이 아니신가요? <Link to="/signup">회원가입</Link>
