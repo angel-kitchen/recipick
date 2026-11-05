@@ -1,0 +1,368 @@
+/* 레시피 목록 위쪽 AI 도우미(채팅형). 색은 theme.css의 정글·리프 토큰만 쓴다 */
+.chat {
+  position: relative;
+  margin: 20px 0 24px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--tint-soft) 0%, #fff 70%);
+  color: var(--jungle);
+}
+
+.chat::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, #7ba05b 14%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+.chat-deco {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: -4px 0 18px;
+}
+
+.chat-deco i {
+  display: block;
+  width: 90px;
+  height: 1px;
+  background: var(--line);
+}
+
+.chat-sparkle {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: var(--leaf);
+}
+
+.chat-deco .chat-sparkle {
+  width: 14px;
+  height: 14px;
+}
+
+/* 말풍선 */
+.chat-avatar {
+  display: inline-flex;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--tint);
+}
+
+.chat-avatar svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chat-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.chat-col {
+  max-width: 560px;
+  min-width: 0;
+}
+
+.chat-name {
+  display: block;
+  margin: 0 0 4px 2px;
+  color: var(--leaf);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-bubble {
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px 18px 18px 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(13, 76, 60, 0.06);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.chat-bubble p {
+  margin: 0;
+}
+
+.chat-bubble p + p {
+  margin-top: 4px;
+}
+
+.chat-row--me {
+  justify-content: flex-end;
+}
+
+.chat-row--me .chat-bubble {
+  border-radius: 18px 4px 18px 18px;
+  background: var(--tint);
+  font-weight: 500;
+}
+
+/* 칩은 말풍선 글자 줄(아바타 너비 + 간격)에 맞춰 들여 쓴다 */
+.chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 14px 54px;
+}
+
+.chat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1px solid var(--jungle);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jungle);
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-chip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chat-chip.is-on {
+  background: var(--jungle);
+  color: #fff;
+}
+
+.chat-chip.is-on .chat-sparkle {
+  fill: #fff;
+}
+
+.chat-restart {
+  display: block;
+  margin: 0 0 12px 54px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 추천 카드 */
+.chat-recipes {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px 54px;
+}
+
+.chat-recipe {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.chat-recipe__thumb,
+.chat-recipe .tile__image {
+  width: 76px;
+  height: 76px;
+  aspect-ratio: auto;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.chat-recipe .tile__image svg {
+  width: 44px;
+  height: 44px;
+}
+
+.chat-recipe__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-recipe__title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.chat-recipe__meta {
+  color: var(--forest);
+  font-size: 13.5px;
+}
+
+.chat-recipe__reason {
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.chat-recipe__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-recipe__tags .badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--jungle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-recipe__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--jungle);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jungle);
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat-btn--solid {
+  background: var(--jungle);
+  color: #fff;
+}
+
+.chat-btn:disabled {
+  border-color: var(--line);
+  background: var(--tint-soft);
+  color: var(--forest);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* 자세히 찾기: 대화 아래로 기존 검색 화면이 이어진다 */
+.chat-detail {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* 하단 입력 카드 */
+.chat-composer {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(13, 76, 60, 0.08);
+}
+
+.chat-more {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #0d4c3c, #2d6a4f);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-line {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-field {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jungle);
+  font-size: 15px;
+}
+
+.chat-send {
+  flex: none;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--jungle);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--jungle);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-send:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chat :focus-visible {
+  outline: 2px solid var(--leaf);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .chat {
+    padding: 16px;
+  }
+
+  .chat-chips,
+  .chat-recipes,
+  .chat-restart {
+    margin-left: 0;
+  }
+
+  .chat-recipe {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .chat-recipe__thumb,
+  .chat-recipe .tile__image {
+    width: 64px;
+    height: 64px;
+  }
+
+  .chat-recipe__actions {
+    grid-column: 1 / -1;
+  }
+
+  .chat-recipe__actions > * {
+    flex: 1;
+  }
+}
