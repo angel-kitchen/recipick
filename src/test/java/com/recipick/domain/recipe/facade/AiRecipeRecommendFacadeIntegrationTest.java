@@ -220,7 +220,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.of(MART_ID));
         // 오이 1개 2,000원 × 3인분 = 6,000원으로 김치찌개는 예산(5,000원)을 넘고, 재료가 없는 된장찌개는 0원이다
         given(productIngredientService.findCandidates(MART_ID, List.of(cucumber.getId()))).willReturn(Map.of(
-            cucumber.getId(), List.of(new ProductSummary(1L, MART_ID, "오이 1개", null, 2000L, 2000L, 0, BigDecimal.ONE,
+            cucumber.getId(), List.of(new ProductSummary(1L, MART_ID, "오이 1개", null, 2000L, BigDecimal.ONE,
                 SaleUnit.EA, ProductStatus.SELLING, 10, false))));
         givenConditions(new AiRecipeConditions("KOREAN", "STEW", null, null, List.of(), 5000, 3));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(

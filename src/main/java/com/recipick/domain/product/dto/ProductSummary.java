@@ -13,8 +13,6 @@ public record ProductSummary(
     String name,
     String imageUrl,
     Long price,
-    Long originalPrice,
-    int discountRate,
     BigDecimal saleUnitAmount,
     SaleUnit saleUnit,
     ProductStatus status,
@@ -23,15 +21,12 @@ public record ProductSummary(
 ) {
 
     public static ProductSummary from(Product product, LocalDateTime now) {
-        boolean discounted = product.isDiscounted(now);
         return new ProductSummary(
             product.getId(),
             product.getMart().getId(),
             product.getName(),
             product.getImageUrl(),
             product.getSalePrice(now),
-            product.getPrice(),
-            discounted ? product.getDiscountRate() : 0,
             product.getSaleUnitAmount(),
             product.getSaleUnit(),
             product.getStatus(),

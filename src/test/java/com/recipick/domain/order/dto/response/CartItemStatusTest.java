@@ -70,6 +70,6 @@ class CartItemStatusTest {
     }
 
     private ProductSummary product(Long martId, boolean deleted, ProductStatus status, int stock) {
-        return new ProductSummary(10L, martId, "애호박", null, 1500L, 1500L, 0, null, null, status, stock, deleted);
+        return new ProductSummary(10L, martId, "애호박", null, 1500L, null, null, status, stock, deleted);
     }
 }

@@ -287,8 +287,8 @@ function StockPanel({ product, onDone, onCancel }) {
 
 function DiscountPanel({ product, onDone, onCancel }) {
   const [form, setForm] = useState({
-    rate: product.discounted ? String(product.discountRate) : '',
-    endAt: product.discounted ? String(product.discountEndAt).slice(0, 16) : '',
+    rate: product.discountRate > 0 ? String(product.discountRate) : '',
+    endAt: product.discountRate > 0 ? String(product.discountEndAt).slice(0, 16) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -348,13 +348,14 @@ function DiscountPanel({ product, onDone, onCancel }) {
             onChange={(e) => setForm((p) => ({ ...p, endAt: e.target.value }))}
             required
           />
+          <span className="tile__meta">이 시각에 할인이 끝나요. 예) 11/13 00:00으로 지정하면 12일까지 할인돼요.</span>
         </label>
       </div>
       <div className="row-actions" style={{ marginTop: 0 }}>
         <button type="submit" className="btn" disabled={saving || !validRate}>
           저장
         </button>
-        {product.discounted && (
+        {product.discountRate > 0 && (
           <button
             type="button"
             className="btn btn--outline"
@@ -516,6 +517,10 @@ export default function AdminProducts() {
                     <>
                       <s>{formatWon(product.price)}</s> {formatWon(product.salePrice)} ({product.discountRate}% · ~
                       {formatDateTime(product.discountEndAt)})
+                    </>
+                  ) : product.discountRate > 0 ? (
+                    <>
+                      {formatWon(product.price)} <span className="tile__meta">(할인 종료됨)</span>
                     </>
                   ) : (
                     formatWon(product.price)

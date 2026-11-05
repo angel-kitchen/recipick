@@ -64,10 +64,11 @@ public class ProductService {
     public static final int BEST_PRODUCT_LIMIT = 100;
 
     private final AdminAuditRecorder auditRecorder;
-    private final Clock clock;
+
     private final ProductRepository productRepository;
     private final MartRepository martRepository;
     private final CategoryRepository categoryRepository;
+    private final Clock clock;
 
     public PageResponse<AdminProductResponse> getAdminProducts(
         AdminRole role,
@@ -138,7 +139,7 @@ public class ProductService {
         }
         LocalDateTime now = LocalDateTime.now(clock);
         return productRepository.findAllById(productIds).stream()
-            .map(p-> ProductSummary.from(p, now))
+            .map(p -> ProductSummary.from(p, now))
             .toList();
     }
 

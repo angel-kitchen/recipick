@@ -120,7 +120,7 @@ class AiFridgeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     }
 
     private ProductSummary product(Long id, String name, Long price, int quantity) {
-        return new ProductSummary(id, MART_ID, name, null, price, price, 0, new BigDecimal("300"), SaleUnit.G,
+        return new ProductSummary(id, MART_ID, name, null, price, new BigDecimal("300"), SaleUnit.G,
             ProductStatus.SELLING, quantity, false);
     }
 
