@@ -14,6 +14,7 @@ public record RecipeRecommendCondition(
     DishType dishType,
     Integer maxCookingMinutes,
     Integer maxSpicyLevel,
+    List<String> includedIngredients,
     List<String> excludedIngredients,
     Integer maxBudget,
     Integer servings
@@ -21,7 +22,7 @@ public record RecipeRecommendCondition(
 
     private static final int MIN_SPICY_LEVEL = 0;
     private static final int MAX_SPICY_LEVEL = 3;
-    private static final int MAX_EXCLUDED_INGREDIENTS = 5;
+    private static final int MAX_INGREDIENTS = 5;
     private static final int MAX_INGREDIENT_NAME_LENGTH = 50;
     private static final int MIN_BUDGET = 1_000;
     private static final int MAX_BUDGET = 1_000_000;
@@ -32,6 +33,7 @@ public record RecipeRecommendCondition(
             toEnum(DishType.class, conditions.dishType()),
             positiveOrNull(conditions.maxCookingMinutes()),
             spicyLevelOrNull(conditions.maxSpicyLevel()),
+            cleanIngredients(conditions.includedIngredients()),
             cleanIngredients(conditions.excludedIngredients()),
             inRangeOrNull(conditions.maxBudget(), MIN_BUDGET, MAX_BUDGET),
             inRangeOrNull(conditions.servings(), Recipe.MIN_SERVINGS, Recipe.MAX_SERVINGS));
@@ -40,7 +42,7 @@ public record RecipeRecommendCondition(
     // 예산·인분은 레시피 속성으로 거르는 조건이 아니라 금액 계산에 쓰므로, 비었는지 판단할 때는 보지 않는다
     public boolean isEmpty() {
         return cuisineType == null && dishType == null && maxCookingMinutes == null
-            && maxSpicyLevel == null && excludedIngredients.isEmpty();
+            && maxSpicyLevel == null && includedIngredients.isEmpty() && excludedIngredients.isEmpty();
     }
 
     // 조리 시간·맵기가 비어 있는 레시피는 조건을 만족하는지 알 수 없으므로, 그 조건을 걸었을 때는 빼고 보여 준다
@@ -85,7 +87,7 @@ public record RecipeRecommendCondition(
             .map(String::strip)
             .filter(name -> !name.isEmpty() && name.length() <= MAX_INGREDIENT_NAME_LENGTH)
             .distinct()
-            .limit(MAX_EXCLUDED_INGREDIENTS)
+            .limit(MAX_INGREDIENTS)
             .toList();
     }
 }

@@ -24,5 +24,11 @@
   {"text": "3인 가족 3만원 이하 한식 찌개", "expected": {"cuisineType": "KOREAN", "dishType": "STEW", "maxBudget": 30000, "servings": 3}},
   {"text": "1만원으로 안 매운 거", "expected": {"maxSpicyLevel": 0, "maxBudget": 10000}},
   {"text": "4인분 파스타", "expected": {"dishType": "PASTA", "servings": 4}},
-  {"text": "5천 원짜리 반찬", "expected": {"dishType": "SIDE", "maxBudget": 5000}}
+  {"text": "5천 원짜리 반찬", "expected": {"dishType": "SIDE", "maxBudget": 5000}},
+  {"text": "계란 들어간 요리", "expected": {"includedIngredients": ["계란"]}},
+  {"text": "달걀 요리 추천", "expected": {"includedIngredients": ["계란"]}},
+  {"text": "두부로 30분 안에 되는 거", "expected": {"maxCookingMinutes": 30, "includedIngredients": ["두부"]}},
+  {"text": "김치랑 돼지고기 들어간 찌개", "expected": {"dishType": "STEW", "includedIngredients": ["김치", "돼지고기"]}},
+  {"text": "새우 넣은 양식, 양파는 빼고", "expected": {"cuisineType": "WESTERN", "includedIngredients": ["새우"], "excludedIngredients": ["양파"]}},
+  {"text": "버섯 들어간 파스타", "expected": {"dishType": "PASTA", "includedIngredients": ["버섯"]}}
 ]

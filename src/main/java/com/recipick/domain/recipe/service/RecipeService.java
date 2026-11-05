@@ -185,14 +185,21 @@ public class RecipeService {
     // 등록 레시피가 100개 남짓이라 활성 레시피를 한 번에 읽고 조건은 메모리에서 거른다. 순서는 ID순으로 고정한다
     public List<Recipe> findRecommendCandidates(RecipeRecommendCondition condition) {
         Set<Long> excludedRecipeIds = condition.excludedIngredients().stream()
-            .flatMap(name -> recipeIngredientRepository
-                .findRecipeIdsByIngredientNameContaining(escapeLikePattern(name))
-                .stream())
+            .flatMap(name -> findRecipeIdsByIngredientName(name).stream())
             .collect(Collectors.toSet());
+        // "계란이랑 두부"는 둘 다 들어간 레시피를 원하는 말이라, 재료마다 찾은 레시피가 모두 겹치는 것만 남긴다
+        List<Set<Long>> includedRecipeIds = condition.includedIngredients().stream()
+            .map(name -> Set.copyOf(findRecipeIdsByIngredientName(name)))
+            .toList();
         return recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE).stream()
             .filter(condition::matches)
             .filter(recipe -> !excludedRecipeIds.contains(recipe.getId()))
+            .filter(recipe -> includedRecipeIds.stream().allMatch(ids -> ids.contains(recipe.getId())))
             .toList();
+    }
+
+    private List<Long> findRecipeIdsByIngredientName(String name) {
+        return recipeIngredientRepository.findRecipeIdsByIngredientNameContaining(escapeLikePattern(name));
     }
 
     // 냉장고 파먹기에서 AI가 가진 재료를 등록 이름으로 옮기도록 넘기는 목록. 프롬프트 캐시가 맞도록 순서를 ID순으로 고정한다

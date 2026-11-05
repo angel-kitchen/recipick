@@ -76,13 +76,14 @@ class ClaudeAiClientTest {
     @DisplayName("조건을 말하지 않아 빈 문자열·0·-1로 온 값은 null로 바꾼다")
     void conditionOutput_convertsMissingValuesToNull() {
         // given
-        ConditionOutput output = new ConditionOutput("", " ", 0, -1, List.of(), 0, 0);
+        ConditionOutput output = new ConditionOutput("", " ", 0, -1, List.of(), List.of(), 0, 0);
 
         // when
         AiRecipeConditions conditions = output.toConditions();
 
         // then
-        assertThat(conditions).isEqualTo(new AiRecipeConditions(null, null, null, null, List.of(), null, null));
+        assertThat(conditions)
+            .isEqualTo(new AiRecipeConditions(null, null, null, null, List.of(), List.of(), null, null));
     }
 
     @Test
@@ -90,10 +91,11 @@ class ClaudeAiClientTest {
     void conditionOutput_keepsZeroSpicyLevel() {
         // when
         AiRecipeConditions conditions =
-            new ConditionOutput("KOREAN", "STEW", 20, 0, List.of("오이"), 0, 0).toConditions();
+            new ConditionOutput("KOREAN", "STEW", 20, 0, List.of("계란"), List.of("오이"), 0, 0).toConditions();
 
         // then
-        assertThat(conditions).isEqualTo(new AiRecipeConditions("KOREAN", "STEW", 20, 0, List.of("오이"), null, null));
+        assertThat(conditions)
+            .isEqualTo(new AiRecipeConditions("KOREAN", "STEW", 20, 0, List.of("계란"), List.of("오이"), null, null));
     }
 
     @Test
