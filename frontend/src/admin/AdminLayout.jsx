@@ -16,6 +16,7 @@ const ITEMS = [
   { to: '/admin/member-points', label: '회원 포인트', roles: [SUPER] },
   { to: '/admin/payments', label: '결제', roles: [SUPER] },
   { to: '/admin/ai-requests', label: 'AI 요청', roles: [SUPER] },
+  { to: '/admin/ai-usage', label: 'AI 토큰 사용량', roles: [SUPER] },
   { to: '/admin/ai-prompts', label: 'AI 프롬프트', roles: [SUPER] },
   { to: '/admin/audit', label: '감사 로그', roles: [SUPER] },
 ];
