@@ -10,6 +10,7 @@ import java.util.List;
 
 import com.recipick.domain.product.dto.OpenMartData;
 import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.recipe.dto.response.RecipeSuggestionResponse;
 import com.recipick.global.response.PageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,7 @@ public class CacheConfig implements CachingConfigurer {
     public static final String CATEGORIES = "categories";
     public static final String OPEN_MARTS = "openMarts";
     public static final String PRODUCT_SEARCH = "productSearch";
+    public static final String RECIPE_SUGGESTIONS = "recipeSuggestions";
 
     private static final String KEY_PREFIX = "recipick:cache:";
     private static final Logger log = LoggerFactory.getLogger(CacheConfig.class);
@@ -56,11 +58,14 @@ public class CacheConfig implements CachingConfigurer {
         JavaType openMarts = mapper.getTypeFactory().constructCollectionType(List.class, OpenMartData.class);
         JavaType productSearch = mapper.getTypeFactory()
             .constructParametricType(PageResponse.class, ProductSearchResponse.class);
+        JavaType recipeSuggestions =
+            mapper.getTypeFactory().constructCollectionType(List.class, RecipeSuggestionResponse.class);
 
         return RedisCacheManager.builder(connectionFactory)
             .withCacheConfiguration(CATEGORIES, typed(base, mapper, categories, Duration.ofMinutes(10)))
             .withCacheConfiguration(OPEN_MARTS, typed(base, mapper, openMarts, Duration.ofMinutes(5)))
             .withCacheConfiguration(PRODUCT_SEARCH, typed(base, mapper, productSearch, Duration.ofSeconds(30)))
+            .withCacheConfiguration(RECIPE_SUGGESTIONS, typed(base, mapper, recipeSuggestions, Duration.ofSeconds(30)))
             .disableCreateOnMissingCache()
             .enableStatistics()
             .build();
