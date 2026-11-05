@@ -63,7 +63,7 @@ public class FakeAiClient implements AiClient {
         Matcher matcher = COOKING_MINUTES.matcher(text);
         Integer maxCookingMinutes = matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
         AiRecipeConditions conditions =
-            new AiRecipeConditions(cuisineType, null, maxCookingMinutes, null, List.of(), parseBudget(text),
+            new AiRecipeConditions(cuisineType, null, maxCookingMinutes, null, List.of(), List.of(), parseBudget(text),
                 parseServings(text));
         return AiResult.success(conditions, new AiUsage(MODEL, 0, 0, 0, 0));
     }

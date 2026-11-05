@@ -379,6 +379,7 @@ public class ClaudeAiClient implements AiClient {
         String dishType,
         int maxCookingMinutes,
         int maxSpicyLevel,
+        List<String> includedIngredients,
         List<String> excludedIngredients,
         int maxBudget,
         int servings
@@ -390,6 +391,7 @@ public class ClaudeAiClient implements AiClient {
                 blankToNull(dishType),
                 maxCookingMinutes > 0 ? maxCookingMinutes : null,
                 maxSpicyLevel >= 0 ? maxSpicyLevel : null,
+                includedIngredients,
                 excludedIngredients,
                 maxBudget > 0 ? maxBudget : null,
                 servings > 0 ? servings : null);

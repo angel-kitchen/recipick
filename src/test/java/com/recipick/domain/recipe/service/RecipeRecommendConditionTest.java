@@ -30,11 +30,11 @@ class RecipeRecommendConditionTest {
     void from_keepsValidValues() {
         // when
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(
-            new AiRecipeConditions("KOREAN", "STEW", 30, 1, List.of("오이"), null, null));
+            new AiRecipeConditions("KOREAN", "STEW", 30, 1, List.of(), List.of("오이"), null, null));
 
         // then
-        assertThat(condition).isEqualTo(
-            new RecipeRecommendCondition(CuisineType.KOREAN, DishType.STEW, 30, 1, List.of("오이"), null, null));
+        assertThat(condition).isEqualTo(new RecipeRecommendCondition(
+            CuisineType.KOREAN, DishType.STEW, 30, 1, List.of(), List.of("오이"), null, null));
     }
 
     @Test
@@ -42,10 +42,11 @@ class RecipeRecommendConditionTest {
     void from_dropsInvalidValues() {
         // when
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(
-            new AiRecipeConditions("CHINESE", "BBQ", -10, 9, null, null, null));
+            new AiRecipeConditions("CHINESE", "BBQ", -10, 9, null, null, null, null));
 
         // then
-        assertThat(condition).isEqualTo(new RecipeRecommendCondition(null, null, null, null, List.of(), null, null));
+        assertThat(condition).isEqualTo(
+            new RecipeRecommendCondition(null, null, null, null, List.of(), List.of(), null, null));
     }
 
     @Test
@@ -53,9 +54,9 @@ class RecipeRecommendConditionTest {
     void from_keepsBudgetAndServingsInRange() {
         // when
         RecipeRecommendCondition valid = RecipeRecommendCondition.from(
-            new AiRecipeConditions(null, null, null, null, List.of(), 20000, 2));
+            new AiRecipeConditions(null, null, null, null, List.of(), List.of(), 20000, 2));
         RecipeRecommendCondition outOfRange = RecipeRecommendCondition.from(
-            new AiRecipeConditions(null, null, null, null, List.of(), 500, 11));
+            new AiRecipeConditions(null, null, null, null, List.of(), List.of(), 500, 11));
 
         // then
         assertThat(valid.maxBudget()).isEqualTo(20000);
@@ -74,10 +75,25 @@ class RecipeRecommendConditionTest {
 
         // when
         RecipeRecommendCondition condition = RecipeRecommendCondition.from(
-            new AiRecipeConditions(null, null, null, null, names, null, null));
+            new AiRecipeConditions(null, null, null, null, List.of(), names, null, null));
 
         // then
         assertThat(condition.excludedIngredients()).containsExactly("오이", "당근", "양파", "마늘", "파");
+    }
+
+    @Test
+    @DisplayName("포함 재료도 제외 재료와 같은 기준으로 정리하고, 포함 재료만 있어도 거르는 조건이 있는 것으로 본다")
+    void from_cleansIncludedIngredients() {
+        // given
+        List<String> names = Arrays.asList(" 계란 ", "계란", "", null, "두부", "대파", "양파", "마늘", "버섯");
+
+        // when
+        RecipeRecommendCondition condition = RecipeRecommendCondition.from(
+            new AiRecipeConditions(null, null, null, null, names, List.of(), null, null));
+
+        // then
+        assertThat(condition.includedIngredients()).containsExactly("계란", "두부", "대파", "양파", "마늘");
+        assertThat(condition.isEmpty()).isFalse();
     }
 
     @Test
@@ -85,7 +101,7 @@ class RecipeRecommendConditionTest {
     void matches_checksEveryCondition() {
         // given
         RecipeRecommendCondition condition =
-            new RecipeRecommendCondition(CuisineType.KOREAN, DishType.STEW, 30, 1, List.of(), null, null);
+            new RecipeRecommendCondition(CuisineType.KOREAN, DishType.STEW, 30, 1, List.of(), List.of(), null, null);
 
         // when & then
         assertThat(condition.matches(recipe(CuisineType.KOREAN, DishType.STEW, 30, 1))).isTrue();
@@ -99,9 +115,10 @@ class RecipeRecommendConditionTest {
     @DisplayName("시간·맵기 조건을 걸었는데 레시피에 값이 없으면 만족 여부를 알 수 없어 뺀다")
     void matches_excludesUnknownValuesWhenConditionSet() {
         // given
-        RecipeRecommendCondition condition = new RecipeRecommendCondition(null, null, 30, 1, List.of(), null, null);
+        RecipeRecommendCondition condition =
+            new RecipeRecommendCondition(null, null, 30, 1, List.of(), List.of(), null, null);
         RecipeRecommendCondition noCondition =
-            new RecipeRecommendCondition(null, null, null, null, List.of(), null, null);
+            new RecipeRecommendCondition(null, null, null, null, List.of(), List.of(), null, null);
         Recipe unknown = recipe(CuisineType.KOREAN, DishType.STEW, null, null);
 
         // when & then

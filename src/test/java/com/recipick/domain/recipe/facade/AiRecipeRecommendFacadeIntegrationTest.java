@@ -65,7 +65,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     private static final AiUsage PICK_USAGE = new AiUsage("claude-opus-5-5", 900, 200, 0, 1300);
     // 테스트용 레시피만 남도록 다른 데이터와 겹치지 않는 조건으로 고정한다
     private static final AiRecipeConditions CONDITIONS =
-        new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of(), null, null);
+        new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of(), List.of(), null, null);
 
     @Autowired
     AiRecipeRecommendFacade aiRecipeRecommendFacade;
@@ -222,7 +222,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         given(productIngredientService.findCandidates(MART_ID, List.of(cucumber.getId()))).willReturn(Map.of(
             cucumber.getId(), List.of(new ProductSummary(1L, MART_ID, "오이 1개", null, 2000L, BigDecimal.ONE,
                 SaleUnit.EA, ProductStatus.SELLING, 10, false))));
-        givenConditions(new AiRecipeConditions("KOREAN", "STEW", null, null, List.of(), 5000, 3));
+        givenConditions(new AiRecipeConditions("KOREAN", "STEW", null, null, List.of(), List.of(), 5000, 3));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(soybeanStew.getId(), "예산 안이에요.")), PICK_USAGE));
 
@@ -244,7 +244,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     void recommend_skipsBudgetWithoutMart() {
         // given
         given(memberService.getMartId(MEMBER_ID)).willReturn(Optional.empty());
-        givenConditions(new AiRecipeConditions("KOREAN", "STEW", null, null, List.of(), 5000, 3));
+        givenConditions(new AiRecipeConditions("KOREAN", "STEW", null, null, List.of(), List.of(), 5000, 3));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "얼큰해요.")), PICK_USAGE));
 
@@ -266,7 +266,8 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("제외 재료가 들어간 레시피는 AI에게 후보로 보내지 않는다")
     void recommend_excludesRecipesWithExcludedIngredient() {
         // given
-        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("AI추천테스트오이"), null, null));
+        givenConditions(
+            new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of(), List.of("AI추천테스트오이"), null, null));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(soybeanStew.getId(), "오이가 없어요.")), PICK_USAGE));
 
@@ -286,7 +287,8 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("제외 재료 이름의 %·_는 와일드카드가 아니라 글자로 찾아, 그 글자가 없는 재료의 레시피는 빼지 않는다")
     void recommend_treatsLikeWildcardsAsLiteral() {
         // given
-        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("%", "AI추천테스트_이"), null, null));
+        givenConditions(
+            new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of(), List.of("%", "AI추천테스트_이"), null, null));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "추천 이유")), PICK_USAGE));
 
@@ -298,6 +300,43 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
         verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
         assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
             .contains(kimchiStew.getId(), soybeanStew.getId());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("포함 재료가 들어간 레시피만 AI에게 후보로 보낸다")
+    void recommend_keepsOnlyRecipesWithIncludedIngredient() {
+        // given
+        givenConditions(
+            new AiRecipeConditions("KOREAN", "STEW", 25, 1, List.of("AI추천테스트오이"), List.of(), null, null));
+        given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
+            List.of(new AiRecommendedRecipe(kimchiStew.getId(), "오이가 들어가요.")), PICK_USAGE));
+
+        // when
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "오이 들어간 찌개");
+
+        // then
+        ArgumentCaptor<List<AiRecipeCandidate>> candidates = ArgumentCaptor.forClass(List.class);
+        verify(aiClient).recommendRecipes(anyString(), anyString(), candidates.capture());
+        assertThat(candidates.getValue()).extracting(AiRecipeCandidate::id)
+            .contains(kimchiStew.getId())
+            .doesNotContain(soybeanStew.getId());
+        assertThat(response.status()).isEqualTo(AiResultStatus.RECOMMENDED);
+    }
+
+    @Test
+    @DisplayName("포함 재료가 여러 개면 모두 들어간 레시피만 남기고, 없으면 두 번째 AI를 부르지 않고 NO_MATCH를 준다")
+    void recommend_noMatchWhenNoRecipeHasAllIncludedIngredients() {
+        // given
+        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 25, 1,
+            List.of("AI추천테스트오이", "AI추천테스트없는재료"), List.of(), null, null));
+
+        // when
+        AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "오이랑 없는재료 들어간 찌개");
+
+        // then
+        assertThat(response.status()).isEqualTo(AiResultStatus.NO_MATCH);
+        verify(aiClient, never()).recommendRecipes(anyString(), anyString(), anyList());
     }
 
     @Test
@@ -366,7 +405,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("조건을 만족하는 레시피가 없으면 두 번째 AI를 부르지 않고 NO_MATCH를 준다")
     void recommend_noMatchWhenNoCandidates() {
         // given
-        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 1, 0, List.of(), null, null));
+        givenConditions(new AiRecipeConditions("KOREAN", "STEW", 1, 0, List.of(), List.of(), null, null));
 
         // when
         AiRecipeRecommendResponse response = aiRecipeRecommendFacade.recommend(MEMBER_ID, "1분 안에 되는 찌개");
@@ -386,7 +425,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("분석한 조건이 하나도 없으면 전체 레시피를 후보로 AI가 고른다")
     void recommend_picksFromAllRecipesWhenNoConditionRead() {
         // given
-        givenConditions(new AiRecipeConditions(null, null, null, null, List.of(), null, null));
+        givenConditions(new AiRecipeConditions(null, null, null, null, List.of(), List.of(), null, null));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList())).willReturn(AiResult.success(
             List.of(new AiRecommendedRecipe(kimchiStew.getId(), "해장에 좋은 국물이에요.")), PICK_USAGE));
 
@@ -406,7 +445,7 @@ class AiRecipeRecommendFacadeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("조건 없이 전체에서 고르다 실패하면 서버가 거른 후보가 없으므로 레시피 없이 FALLBACK을 준다")
     void recommend_fallsBackWithoutRecipesWhenPickFailsWithoutCondition() {
         // given
-        givenConditions(new AiRecipeConditions(null, null, null, null, List.of(), null, null));
+        givenConditions(new AiRecipeConditions(null, null, null, null, List.of(), List.of(), null, null));
         given(aiClient.recommendRecipes(anyString(), anyString(), anyList()))
             .willReturn(AiResult.failure(AiFailureType.TIMEOUT, AiUsage.failed("claude-opus-5-5", 15000)));
 

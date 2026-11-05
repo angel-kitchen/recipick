@@ -101,7 +101,8 @@ class FakeAiClientTest {
         AiResult<AiRecipeConditions> result = fakeAiClient.extractConditions(INSTRUCTION, "30분 안에 되는 한식");
 
         // then
-        assertThat(result.content()).isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of(), null, null));
+        assertThat(result.content())
+            .isEqualTo(new AiRecipeConditions("KOREAN", null, 30, null, List.of(), List.of(), null, null));
     }
 
     @Test
