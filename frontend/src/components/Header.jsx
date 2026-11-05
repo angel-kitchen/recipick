@@ -123,9 +123,11 @@ export default function Header() {
                 {cartCount > 0 && <span className="header__count">{cartCount}</span>}
               </NavLink>
               <details className="header__menu" ref={menuRef}>
-                <summary className="header__item">
+                <summary className="header__item" title={`${member.name}님`}>
                   <Icon name="user" />
-                  <span>{member.name}님 ▾</span>
+                  <span>
+                    <span className="header__member-name">{member.name}</span>님 ▾
+                  </span>
                 </summary>
                 <div className="header__menu-list">
                   <NavLink to="/mypage">내 정보</NavLink>
