@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { clearMemory, readMemory, writeMemory } from '../chatMemory';
+import { clearMemory, isValidResult, readMemory, writeMemory } from '../chatMemory';
 import { CUISINE, DISH_TYPE, formatWon, spicyText } from '../labels';
 import ChefAvatar from './ChefAvatar';
 import ErrorNotice from './ErrorNotice';
@@ -144,7 +144,9 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
   const { member } = useAuth();
   const isMembership = Boolean(member?.membership?.active);
   // 상세 화면에 갔다가 뒤로 오면 같은 대화를 보여 줘서, AI를 다시 부르지 않게 한다(chatMemory.js)
-  const [saved] = useState(() => readMemory('chat', member?.memberId));
+  const [saved] = useState(() =>
+    readMemory('chat', member?.memberId, (data) => (data.topic === -1 || TOPICS[data.topic] !== undefined) && isValidResult(data.result)),
+  );
   const [topic, setTopic] = useState(() => TOPICS[saved?.topic] ?? null);
   const [option, setOption] = useState(() => TOPICS[saved?.topic]?.options[saved?.option] ?? null);
   const [asked, setAsked] = useState(saved?.asked ?? null);
@@ -158,10 +160,11 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
   const latest = useRef(0);
   const started = topic || asked;
 
-  // 답을 기다리는 중이거나 오류일 때는 기억을 바꾸지 않는다. 대화를 처음으로 되돌리면 기억도 지운다
+  // 답을 기다리는 중이거나 오류일 때는 기억을 바꾸지 않는다. 대화를 처음으로 되돌리면 기억도 지운다.
+  // 문장만 보내고 결과가 없는 상태는 메뉴 이름이라 미리보기 화면으로 넘어간 경우라서, 기억하면 돌아왔을 때 질문만 남는다
   useEffect(() => {
     if (loading || error || !member) return;
-    if (!started) {
+    if (!started || (asked && !result)) {
       clearMemory('chat');
       return;
     }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { readMemory, writeMemory } from '../chatMemory';
+import { isValidResult, readMemory, writeMemory } from '../chatMemory';
 import { CUISINE, DISH_TYPE, formatWon, spicyText } from '../labels';
 import ErrorNotice from './ErrorNotice';
 import ImagePlaceholder from './ImagePlaceholder';
@@ -39,7 +39,9 @@ export default function AiAutoCartBox() {
   const { member } = useAuth();
   const isMembership = Boolean(member?.membership?.active);
   // 상세 화면에 갔다가 뒤로 오면 입력과 결과를 그대로 보여 줘서, AI를 다시 부르지 않게 한다(chatMemory.js)
-  const [saved] = useState(() => readMemory('detail', member?.memberId));
+  const [saved] = useState(() =>
+    readMemory('detail', member?.memberId, (data) => data.mode in MODES && isValidResult(data.result)),
+  );
   const [mode, setMode] = useState(saved?.mode ?? 'menu');
   const [text, setText] = useState(saved?.text ?? '');
   const [result, setResult] = useState(saved?.result ?? null);
@@ -288,7 +290,8 @@ function Recommendations({ result }) {
 }
 
 // 이 응답에는 사진 주소가 없어서, 레시피 이름으로 목록을 검색해 같은 번호의 사진을 가져온다(AI 호출 아님).
-// 사진은 덤이라 못 가져와도 접시 그림으로 두고 넘어간다
+// 사진은 덤이라 한 레시피의 요청이 실패하거나 20건 안에서 못 찾아도 그 카드만 접시 그림으로 두고 넘어간다.
+// 찾은 것만 기억해서, 못 찾은 것은 다음에 다시 시도한다
 const thumbnailCache = new Map();
 
 function useThumbnails(recipes) {
@@ -298,14 +301,17 @@ function useThumbnails(recipes) {
     Promise.all(
       recipes.map(async ({ recipeId, name }) => {
         if (!thumbnailCache.has(recipeId)) {
-          const data = await api.get('/api/recipes', { keyword: name, size: 20 });
-          thumbnailCache.set(recipeId, data.content.find((item) => item.recipeId === recipeId)?.thumbnailUrl ?? null);
+          try {
+            const data = await api.get('/api/recipes', { keyword: name, size: 20 });
+            const url = data.content.find((item) => item.recipeId === recipeId)?.thumbnailUrl;
+            if (url) thumbnailCache.set(recipeId, url);
+          } catch {
+            // 사진 없이 보여 준다
+          }
         }
-        return [recipeId, thumbnailCache.get(recipeId)];
+        return [recipeId, thumbnailCache.get(recipeId) ?? null];
       }),
-    )
-      .then((pairs) => !ignore && setUrls(Object.fromEntries(pairs)))
-      .catch(() => {});
+    ).then((pairs) => !ignore && setUrls(Object.fromEntries(pairs)));
     return () => {
       ignore = true;
     };
@@ -322,7 +328,11 @@ function FridgeAnswer({ result }) {
   }
   return (
     <>
-      <p className="ai-lead">{result.recipes.length > 0 ? '이렇게 골라 봤어요' : result.answer}</p>
+      <p className="ai-lead">
+        {result.recipes.length > 0
+          ? '이렇게 골라 봤어요'
+          : (result.answer ?? '맞는 레시피를 찾지 못했어요. 다른 재료로 다시 입력해 주세요.')}
+      </p>
       <div className="grid" style={{ marginTop: 12 }}>
         {result.recipes.map((recipe) => (
           <Link key={recipe.recipeId} to={`/recipes/${recipe.recipeId}`} className="tile">
