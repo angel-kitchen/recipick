@@ -427,6 +427,7 @@ function BulkDiscountPanel({ productIds, onDone, onCancel }) {
             onChange={(e) => setForm((p) => ({ ...p, endAt: e.target.value }))}
             required
           />
+          <span className="tile__meta">이 시각에 할인이 끝나요. 예) 11/13 00:00으로 지정하면 12일까지 할인돼요.</span>
         </label>
       </div>
       <div className="row-actions" style={{ marginTop: 0 }}>
