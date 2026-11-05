@@ -12,12 +12,14 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-// 설계 5-5 ④표. 입력 record를 직접 만들어 검사 순서와 사유를 본다 — Spring·외부 호출 없음
+// 입력 record를 직접 만들어 검사 순서와 사유를 본다 — Spring·외부 호출 없음.
+// 검증기에는 카드 등록 전용 채널 키를 준다. 주문 일반결제 채널 키는 "우리 상점의 TEST 채널"이어도 통과하면 안 된다
 class BillingKeyIssuanceVerifierTest {
 
     private static final Long MEMBER_ID = 7L;
     private static final String STORE_ID = "test-store-id";
-    private static final String CHANNEL_KEY = "test-channel-key";
+    private static final String CHANNEL_KEY = "test-billing-channel-key";
+    private static final String ORDER_CHANNEL_KEY = "test-channel-key";
     private static final String KEY = "billing-key-test-0001";
     private static final String ISSUE_ID = "rcp-bk-0f8a1c2e-6d4b-4a1e-9c3f-1234567890ab";
     private static final LocalDateTime ISSUED_AT = LocalDateTime.of(2026, 10, 31, 14, 0);
@@ -25,6 +27,7 @@ class BillingKeyIssuanceVerifierTest {
     private static final Channel OUR_LIVE_CHANNEL = new Channel(CHANNEL_KEY, "LIVE");
     private static final Channel OTHER_TEST_CHANNEL = new Channel("other-channel-key", "TEST");
     private static final Channel OTHER_LIVE_CHANNEL = new Channel("other-channel-key", "LIVE");
+    private static final Channel ORDER_TEST_CHANNEL = new Channel(ORDER_CHANNEL_KEY, "TEST");
 
     private final BillingKeyIssuanceVerifier verifier = new BillingKeyIssuanceVerifier(STORE_ID, CHANNEL_KEY);
 
@@ -87,6 +90,13 @@ class BillingKeyIssuanceVerifierTest {
         // then
         assertThat(verify(info(List.of(OTHER_TEST_CHANNEL), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
         assertThat(verify(info(List.of(), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
+    }
+
+    @Test
+    @DisplayName("주문 일반결제 채널에서 발급된 키는 같은 상점의 TEST 채널이어도 CHANNEL_MISMATCH다")
+    void orderChannelKeyIsNotBillingChannel() {
+        // then
+        assertThat(verify(info(List.of(ORDER_TEST_CHANNEL), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
     }
 
     @Test

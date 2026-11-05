@@ -33,6 +33,8 @@ portone:
   read-timeout: 1s
   store-id: test-store-id
   channel-key: test-channel-key
+  # 카드 등록 전용 채널 키는 일반결제 키와 다른 값으로 둔다 — 발급 응답·검증기가 일반결제 키를 섞어 쓰면 테스트가 잡아낸다
+  billing-channel-key: test-billing-channel-key
   # Standard Webhooks 공개 예제 키(실제 키 아님). 서명 검증 테스트가 같은 값을 쓴다
   webhook:
     secret: MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw

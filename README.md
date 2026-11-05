@@ -71,7 +71,7 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 
 - `.env`의 MySQL DB명·사용자·비밀번호와 `application-local.yml`의 datasource 값을 맞춥니다.
 - 포트를 바꾸면 datasource URL과 Redis 접속 포트도 함께 맞춥니다. `.env`는 Docker Compose용이며 앱 설정에 자동으로 주입되지 않습니다.
-- PortOne 실제 연동을 확인할 때는 `application-local.yml`의 API Secret·store-id·channel-key를 본인 테스트 환경에 맞게 설정합니다.
+- PortOne 실제 연동을 확인할 때는 `application-local.yml`의 API Secret·store-id·channel-key를 본인 테스트 환경에 맞게 설정합니다. 멤버십 카드 등록까지 확인하려면 같은 상점의 정기결제 채널 키를 billing-channel-key에 따로 넣습니다(일반결제 채널로는 빌링키 발급이 거절됩니다).
 - 두 로컬 설정 파일은 Git에서 제외됩니다. 실제 인증 정보는 예시 파일이나 문서에 옮기지 않습니다.
 
 ### 2. MySQL·Redis 실행

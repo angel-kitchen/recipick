@@ -33,6 +33,21 @@ class PortOneConfigServiceTest {
         assertThat(response.channelKey()).isEqualTo("test-channel-key");
     }
 
+    @Test
+    @DisplayName("카드 등록 채널 키가 따로 있어도 공개 설정은 주문 일반결제 채널 키를 준다")
+    void getPublicConfigKeepsOrderChannelKey() {
+        // given
+        PortOneConfigService service = new PortOneConfigService(new PortOneProperties(
+            "test-secret", "https://api.portone.io", Duration.ofSeconds(1), Duration.ofSeconds(1),
+            "test-store-id", "test-channel-key", Duration.ofSeconds(60), "test-billing-channel-key"));
+
+        // when
+        PortOneConfigResponse response = service.getPublicConfig();
+
+        // then
+        assertThat(response.channelKey()).isEqualTo("test-channel-key");
+    }
+
     @ParameterizedTest
     @MethodSource("missingConfigs")
     @DisplayName("storeId 또는 channelKey가 비어 있으면 PAYMENT-010이다")

@@ -15,9 +15,11 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({BillingKeyProperties.class, MembershipBillingProperties.class})
 public class BillingKeyConfig {
 
+    // 발급 응답(BillingKeyRegistrationFacade.issue)과 같은 카드 등록 채널 키로 대조한다. 응답과 검증기의 키가 다르면
+    // SDK 발급은 되고 등록은 CHANNEL_MISMATCH로 거절된다
     @Bean
     public BillingKeyIssuanceVerifier billingKeyIssuanceVerifier(PortOneProperties properties) {
-        return new BillingKeyIssuanceVerifier(properties.storeId(), properties.channelKey());
+        return new BillingKeyIssuanceVerifier(properties.storeId(), properties.billingChannelKey());
     }
 
     // Logback(기본 로깅)의 TurboFilter로 단다 — appender보다 앞에서 판정하므로 콘솔·JSON 어느 출력에도 닿지 않는다.
