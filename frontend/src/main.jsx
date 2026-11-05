@@ -13,6 +13,7 @@ import './styles/membership-intro.css';
 import './styles/band-scenes.css';
 import './styles/theme.css';
 import './styles/home-wire.css';
+import './styles/recipe-chat.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

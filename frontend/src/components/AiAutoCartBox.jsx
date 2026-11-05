@@ -6,6 +6,7 @@ import { CUISINE, DISH_TYPE, UNAVAILABLE_REASON, formatWon, spicyText } from '..
 import ErrorNotice from './ErrorNotice';
 import ImagePlaceholder from './ImagePlaceholder';
 import MembershipInfoModal from './MembershipInfoModal';
+import RecipeChat from './RecipeChat';
 
 // 쓰는 법이 입력칸의 흐린 글씨만으로는 안 보여서, 누르면 입력칸에 채워지는 예시를 보여 준다.
 // 메뉴·조건과 가진 재료는 같은 문장이 양쪽으로 읽힐 수 있어("두부랑 김치") 자동으로 나누지 않고 탭으로 고르게 한다
@@ -47,6 +48,8 @@ export default function AiAutoCartBox() {
   const [loading, setLoading] = useState(false);
   const [martMissing, setMartMissing] = useState(false);
   const [membershipInfo, setMembershipInfo] = useState(false);
+  // 채팅형 도우미가 기본이고, 이 세 가지 검색은 "자세히 찾기"를 누르면 같은 상자가 길어지며 보인다. 닫아도 입력·결과는 남긴다
+  const [detail, setDetail] = useState(false);
 
   const run = async (action) => {
     setError(null);
@@ -131,9 +134,8 @@ export default function AiAutoCartBox() {
     });
 
   return (
-    <section className="card" style={{ marginBottom: 24 }}>
-      <h2 className="tile__title">먹고 싶은 걸 말해보세요</h2>
-      <div className="chips" style={{ marginTop: 12 }}>
+    <RecipeChat detailOpen={detail} onToggleDetail={() => setDetail((open) => !open)}>
+      <div className="chips">
         {Object.entries(MODES).map(([value, { label }]) => (
           <button
             key={value}
@@ -237,7 +239,7 @@ export default function AiAutoCartBox() {
           </div>
         )}
       </div>
-    </section>
+    </RecipeChat>
   );
 }
 

@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
 import AiAutoCartBox from '../components/AiAutoCartBox';
-import AutoCartReview from '../components/AutoCartReview';
 import BookmarkButton from '../components/BookmarkButton';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import Pager from '../components/Pager';
+import QuickAdd from '../components/QuickAdd';
 import RecentViews from '../components/RecentViews';
 import RecipeSearchInput from '../components/RecipeSearchInput';
-import { CardSkeletons, ListSkeleton } from '../components/Skeleton';
-import { deliveryBlock } from '../delivery';
+import { CardSkeletons } from '../components/Skeleton';
 import { CUISINE, DIFFICULTY, DISH_TYPE, spicyText } from '../labels';
 
 const PAGE_SIZE = 12;
@@ -59,70 +57,6 @@ function SideFilter({ title, value, options, onSelect }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-// 상세로 들어가지 않고 카드에서 1인분 재료를 바로 확인해 담는다. 멤버십·배송지·자동 담기 설정이 없으면 이유를 알려 주고 막는다
-function QuickAdd({ recipe }) {
-  const { member } = useAuth();
-  const [preview, setPreview] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const blockedText =
-    deliveryBlock(member)?.text ??
-    (!member.membership?.active
-      ? '멤버십 회원만 이용할 수 있어요'
-      : !recipe.autoCartAvailable
-        ? '아직 자동으로 담을 수 없는 레시피예요'
-        : null);
-
-  const start = async () => {
-    setError(null);
-    setPreview(null);
-    setOpen(true);
-    setLoading(true);
-    try {
-      setPreview(
-        await api.post('/api/auto-carts/preview', {
-          menus: [{ recipeId: recipe.recipeId, servings: 1, optionalIngredientIds: [] }],
-        }),
-      );
-    } catch (e) {
-      setError(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <button type="button" className="btn btn--outline quick-add" disabled={Boolean(blockedText)} title={blockedText ?? undefined} onClick={start}>
-        재료 담기
-      </button>
-      {open && (
-        <div className="modal" role="dialog" aria-modal="true" aria-label={`${recipe.name} 재료 담기`}>
-          <div className="modal__box modal__box--wide card">
-            <button type="button" className="modal__close" aria-label="닫기" onClick={() => setOpen(false)}>
-              ×
-            </button>
-            <h2 className="tile__title">{recipe.name} 1인분 재료</h2>
-            <ErrorNotice error={error} />
-            {loading && <ListSkeleton rows={4} />}
-            {preview && <AutoCartReview preview={preview} onBrowse={() => setOpen(false)} />}
-            <div className="row-actions" style={{ marginTop: 12 }}>
-              <Link to={`/recipes/${recipe.recipeId}`} className="btn btn--outline">
-                인분·선택 재료 바꾸기
-              </Link>
-              <button type="button" className="btn btn--outline" style={{ marginLeft: 'auto' }} onClick={() => setOpen(false)}>
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
   );
 }
 
