@@ -1,13 +1,15 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { clearMemory, readMemory, writeMemory } from '../chatMemory';
 import { CUISINE, DISH_TYPE, formatWon, spicyText } from '../labels';
 import ChefAvatar from './ChefAvatar';
 import ErrorNotice from './ErrorNotice';
 import ImagePlaceholder from './ImagePlaceholder';
 import MembershipInfoModal from './MembershipInfoModal';
 import QuickAdd from './QuickAdd';
+import RepiSearching from './RepiSearching';
 
 // 칩 → 꼬리질문 1번 → 공감 한마디 → 추천 레시피 순서로 끝나는 짧은 대화다.
 // 질문·선택지·공감 문구는 정해 둔 문장이고, 고른 답을 한 문장(text)으로 합쳐 기존 AI 조건 추천에 보낸다.
@@ -141,11 +143,13 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
   const navigate = useNavigate();
   const { member } = useAuth();
   const isMembership = Boolean(member?.membership?.active);
-  const [topic, setTopic] = useState(null);
-  const [option, setOption] = useState(null);
-  const [asked, setAsked] = useState(null);
+  // 상세 화면에 갔다가 뒤로 오면 같은 대화를 보여 줘서, AI를 다시 부르지 않게 한다(chatMemory.js)
+  const [saved] = useState(() => readMemory('chat', member?.memberId));
+  const [topic, setTopic] = useState(() => TOPICS[saved?.topic] ?? null);
+  const [option, setOption] = useState(() => TOPICS[saved?.topic]?.options[saved?.option] ?? null);
+  const [asked, setAsked] = useState(saved?.asked ?? null);
   const [text, setText] = useState('');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(saved?.result ?? null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [membershipInfo, setMembershipInfo] = useState(false);
@@ -153,6 +157,21 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
   // 늦게 도착한 이전 요청의 응답이 지금 화면을 덮어쓰지 않도록 요청마다 번호를 매긴다
   const latest = useRef(0);
   const started = topic || asked;
+
+  // 답을 기다리는 중이거나 오류일 때는 기억을 바꾸지 않는다. 대화를 처음으로 되돌리면 기억도 지운다
+  useEffect(() => {
+    if (loading || error || !member) return;
+    if (!started) {
+      clearMemory('chat');
+      return;
+    }
+    writeMemory('chat', member.memberId, {
+      topic: TOPICS.indexOf(topic),
+      option: topic ? topic.options.indexOf(option) : -1,
+      asked,
+      result,
+    });
+  }, [loading, error, member, started, topic, option, asked, result]);
 
   const reset = () => {
     latest.current += 1;
@@ -269,7 +288,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
           </>
         )}
         {asked && <Me>{asked}</Me>}
-        {loading && <Ai live lines={['잠깐만요, 골라 볼게요…']} />}
+        {loading && <RepiSearching />}
         {error && <ErrorNotice error={error} />}
         {result?.names && (
           <>
