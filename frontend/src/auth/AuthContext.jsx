@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, restoreSession, setAccessToken, setAuthLostHandler } from '../api/client';
+import { clearMemory } from '../chatMemory';
 
 const AuthContext = createContext(null);
 
@@ -13,7 +14,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    setAuthLostHandler(() => setMember(null));
+    setAuthLostHandler(() => {
+      setMember(null);
+      clearMemory();
+    });
     // 쿠키가 관리자 것이면 회원 화면에서는 비로그인으로 둔다
     restoreSession()
       .then((who) => (who === 'MEMBER' ? loadMember() : setMember(null)))
@@ -36,6 +40,7 @@ export function AuthProvider({ children }) {
     } finally {
       setAccessToken(null);
       setMember(null);
+      clearMemory();
     }
   }, []);
 
