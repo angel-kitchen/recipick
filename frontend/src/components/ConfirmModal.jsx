@@ -6,9 +6,11 @@ export default function ConfirmModal({
   children,
   confirmLabel,
   cancelLabel,
+  secondaryLabel,
   busy,
   error,
   onConfirm,
+  onSecondary,
   onCancel,
   onClose = onCancel,
 }) {
@@ -24,11 +26,27 @@ export default function ConfirmModal({
         </div>
         <ErrorNotice error={error} />
         <div className="row-actions">
-          <button type="button" className="btn btn--large" disabled={busy} onClick={onConfirm}>
+          {/* 보조 버튼이 있으면 그쪽을 기본(채움)으로 두고 원래 확인 버튼은 윤곽선으로 낮춘다 */}
+          <button
+            type="button"
+            className={`btn btn--large${secondaryLabel ? ' btn--outline' : ''}`}
+            disabled={busy}
+            onClick={onConfirm}
+          >
             {busy ? '처리하는 중...' : confirmLabel}
           </button>
+          {secondaryLabel && (
+            <button type="button" className="btn btn--large" disabled={busy} onClick={onSecondary}>
+              {secondaryLabel}
+            </button>
+          )}
           {cancelLabel && (
-            <button type="button" className="btn btn--large btn--outline" disabled={busy} onClick={onCancel}>
+            <button
+              type="button"
+              className={`btn btn--large btn--outline${secondaryLabel ? ' row-actions__end' : ''}`}
+              disabled={busy}
+              onClick={onCancel}
+            >
               {cancelLabel}
             </button>
           )}

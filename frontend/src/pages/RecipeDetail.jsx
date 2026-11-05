@@ -161,7 +161,10 @@ function RecipeDetailView({ recipeId }) {
         if (ignore) return;
         setRecipe(data);
         setBookmarked(data.bookmarked);
-        recordRecent(member.memberId, 'recipe', { id: data.recipeId, name: data.name });
+        // 상세 응답에는 썸네일이 없어, 서버가 목록에 주는 것과 같은 유튜브 썸네일 주소를 영상 주소에서 만든다
+        const videoId = data.youtubeUrl ? new URL(data.youtubeUrl).searchParams.get('v') : null;
+        const imageUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+        recordRecent(member.memberId, 'recipe', { id: data.recipeId, name: data.name, imageUrl });
       })
       .catch((e) => !ignore && setError(e));
     return () => {
