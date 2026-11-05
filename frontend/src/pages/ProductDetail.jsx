@@ -4,12 +4,13 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import PriceTag from '../components/PriceTag';
 import { ListSkeleton } from '../components/Skeleton';
 import { notifyCartChanged } from '../cartSource';
 import { deliveryBlock } from '../delivery';
 import { useToast } from '../components/Toast';
 import usePreviousMartGuard from '../components/usePreviousMartGuard';
-import { PRODUCT_STATUS, formatAmount, formatWon } from '../labels';
+import { PRODUCT_STATUS, formatAmount } from '../labels';
 import { recordRecent } from '../recentViews';
 
 export default function ProductDetail() {
@@ -93,9 +94,9 @@ export default function ProductDetail() {
           <p className="tile__meta">
             {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
           </p>
-          <p className="tile__price" style={{ fontSize: 28, margin: '12px 0' }}>
-            {formatWon(product.price)}
-          </p>
+          <div style={{ margin: '12px 0' }}>
+            <PriceTag large price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
+          </div>
           {unavailable && <span className="badge badge--warn">{product.soldOut ? '품절' : PRODUCT_STATUS[product.status]}</span>}
           {product.description && <p style={{ margin: '16px 0', whiteSpace: 'pre-line' }}>{product.description}</p>}
           <ErrorNotice error={error} />

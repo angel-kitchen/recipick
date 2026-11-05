@@ -26,7 +26,9 @@ public enum ProductErrorCode implements ErrorCode {
     INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "STOCK-001", "재고가 부족합니다."),
     STOCK_ADJUST_EXCEEDS_AVAILABLE(HttpStatus.BAD_REQUEST, "STOCK-002", "감소 수량이 가용 재고를 넘을 수 없습니다."),
     INVALID_ADJUST_QUANTITY(HttpStatus.BAD_REQUEST, "STOCK-003", "조정 수량은 1 이상이어야 합니다."),
-    MART_NOT_SELECTED(HttpStatus.CONFLICT, "PRODUCT-010", "이용마트가 지정되지 않았습니다.");
+    MART_NOT_SELECTED(HttpStatus.CONFLICT, "PRODUCT-010", "이용마트가 지정되지 않았습니다."),
+    INVALID_DISCOUNT_RATE(HttpStatus.BAD_REQUEST, "PRODUCT-011", "할인율은 1 이상 99 이하여야 합니다."),
+    INVALID_DISCOUNT_END_AT(HttpStatus.BAD_REQUEST, "PRODUCT-012", "할인 종료 시각은 현재 이후여야 합니다.");
 
     private final HttpStatus status;
     private final String code;

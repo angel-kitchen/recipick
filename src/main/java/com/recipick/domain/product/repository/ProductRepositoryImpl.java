@@ -6,12 +6,16 @@ import static com.recipick.domain.product.entity.QCategory.category;
 import com.querydsl.core.types.Order;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.CaseBuilder;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.entity.ProductStatus;
 import com.recipick.domain.product.repository.dto.AdminProductSearchCondition;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -85,14 +89,14 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
             martIdEq(condition.martId()),
             nameContains(condition.keyword()),
             categoryIdEq(condition.categoryId()),
-            priceGoe(condition.minPrice()),
-            priceLoe(condition.maxPrice())
+            priceGoe(condition.minPrice(), condition.now()),
+            priceLoe(condition.maxPrice(), condition.now())
         };
 
         List<Product> content = queryFactory
             .selectFrom(product)
             .where(where)
-            .orderBy(memberOrderSpecifiers(pageable.getSort()))
+            .orderBy(memberOrderSpecifiers(pageable.getSort(), condition.now()))
             .offset(pageable.getOffset())
             .limit(pageable.getPageSize())
             .fetch();
@@ -105,12 +109,12 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
-    private OrderSpecifier<?>[] memberOrderSpecifiers(Sort sort) {
+    private OrderSpecifier<?>[] memberOrderSpecifiers(Sort sort, LocalDateTime now) {
         List<OrderSpecifier<?>> orders = new ArrayList<>();
         for (Sort.Order order : sort) {
             Order direction = order.isAscending() ? Order.ASC : Order.DESC;
             switch (order.getProperty()) {
-                case "price" -> orders.add(new OrderSpecifier<>(direction, product.price));
+                case "price" -> orders.add(new OrderSpecifier<>(direction, salePrice(now)));
                 case "createdAt" -> orders.add(new OrderSpecifier<>(direction, product.createdAt));
                 default -> throw new IllegalArgumentException("지원하지 않는 정렬 기준입니다 : " +
                     order.getProperty());
@@ -123,11 +127,20 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
         return orders.toArray(OrderSpecifier[]::new);
     }
 
-    private BooleanExpression priceGoe(Long minPrice) {
-        return minPrice == null ? null : product.price.goe(minPrice);
+    private BooleanExpression priceGoe(Long minPrice, LocalDateTime now) {
+        return minPrice == null ? null : salePrice(now).goe(minPrice);
     }
 
-    private BooleanExpression priceLoe(Long maxPrice) {
-        return maxPrice == null ? null : product.price.loe(maxPrice);
+    private BooleanExpression priceLoe(Long maxPrice, LocalDateTime now) {
+        return maxPrice == null ? null : salePrice(now).loe(maxPrice);
+    }
+
+    // 할인 중이면 정상가에서 할인율을 뺀 값(원 단위 내림), 아니면 정상가. 정렬·가격 범위를 판매가 기준으로 맞춘다
+    private NumberExpression<Long> salePrice(LocalDateTime now) {
+        return new CaseBuilder()
+            .when(product.discountRate.gt(0).and(product.discountEndAt.after(now)))
+            .then(Expressions.numberTemplate(
+                Long.class, "floor({0} * (100 - {1}) / 100.0)", product.price, product.discountRate))
+            .otherwise(product.price);
     }
 }

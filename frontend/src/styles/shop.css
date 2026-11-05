@@ -123,6 +123,39 @@
   font-weight: 700;
 }
 
+.price-tag {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.price-tag__original {
+  font-size: 14px;
+  color: var(--text-soft);
+  text-decoration: line-through;
+}
+
+.price-tag__line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.price-tag__rate {
+  font-weight: 700;
+  color: var(--red);
+}
+
+.price-tag--large .tile__price,
+.price-tag--large .price-tag__rate,
+.tile__price.price-tag--large {
+  font-size: 28px;
+}
+
+.price-tag--large .price-tag__original {
+  font-size: 16px;
+}
+
 .tile__actions {
   margin-top: auto;
   padding-top: var(--space-2);

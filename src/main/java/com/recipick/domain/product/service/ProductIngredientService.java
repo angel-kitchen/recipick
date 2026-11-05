@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 public class ProductIngredientService {
 
     private final ProductRepository productRepository;
+    private final Clock clock;
 
     public Map<Long, Long> countLinkedProducts(Collection<Long> ingredientIds) {
         Map<Long, Long> counts = new HashMap<>();
@@ -37,10 +40,11 @@ public class ProductIngredientService {
         if (ingredientIds.isEmpty()) {
             return Map.of();
         }
+        LocalDateTime now = LocalDateTime.now(clock);
         return productRepository.findAllByMartIdAndIngredientIdIn(martId, ingredientIds).stream()
             .collect(Collectors.groupingBy(
                 Product::getIngredientId,
-                Collectors.mapping(ProductSummary::from, Collectors.toList())
+                Collectors.mapping(p -> ProductSummary.from(p, now), Collectors.toList())
             ));
     }
 }

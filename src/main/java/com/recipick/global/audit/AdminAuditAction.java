@@ -14,6 +14,7 @@ public enum AdminAuditAction {
     PRODUCT_UPDATE(AdminAuditTarget.PRODUCT, false, true, true),
     PRODUCT_DELETE(AdminAuditTarget.PRODUCT, false, true, true),
     PRODUCT_PRICE_CHANGE(AdminAuditTarget.PRODUCT, false, true, true),
+    PRODUCT_DISCOUNT_CHANGE(AdminAuditTarget.PRODUCT, false, true, true),
     PRODUCT_STATUS_CHANGE(AdminAuditTarget.PRODUCT, false, true, true),
     PRODUCT_INGREDIENT_CHANGE(AdminAuditTarget.PRODUCT, false, true, true),
     STOCK_ADJUST(AdminAuditTarget.PRODUCT, false, true, true),

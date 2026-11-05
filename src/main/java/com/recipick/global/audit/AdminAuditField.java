@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 public enum AdminAuditField {
     PRICE("price", Kind.NUMBER),
+    DISCOUNT_RATE("discountRate", Kind.NUMBER),
     TOTAL_QUANTITY("totalQuantity", Kind.NUMBER),
     QUANTITY("quantity", Kind.NUMBER),
     SALE_UNIT_AMOUNT("saleUnitAmount", Kind.NUMBER),
@@ -34,7 +35,8 @@ public enum AdminAuditField {
     TYPE("type", Kind.ENUM),
     SOURCE("source", Kind.ENUM),
     START_AT("startAt", Kind.TIME),
-    END_AT("endAt", Kind.TIME);
+    END_AT("endAt", Kind.TIME),
+    DISCOUNT_END_AT("discountEndAt", Kind.TIME);
 
     private final String key;
     private final Kind kind;
@@ -50,7 +52,8 @@ public enum AdminAuditField {
 
     public boolean supports(AdminAuditTarget target) {
         return switch (this) {
-            case PRICE, TOTAL_QUANTITY, QUANTITY, CATEGORY_ID, DELETED -> target == AdminAuditTarget.PRODUCT;
+            case PRICE, DISCOUNT_RATE, DISCOUNT_END_AT, TOTAL_QUANTITY, QUANTITY, CATEGORY_ID, DELETED ->
+                    target == AdminAuditTarget.PRODUCT;
             case SALE_UNIT, SALE_UNIT_AMOUNT -> target == AdminAuditTarget.PRODUCT
                     || target == AdminAuditTarget.INGREDIENT;
             case SERVICE_RADIUS_M, LATITUDE, LONGITUDE -> target == AdminAuditTarget.MART;

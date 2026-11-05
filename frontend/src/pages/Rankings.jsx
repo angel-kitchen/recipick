@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import ErrorNotice from '../components/ErrorNotice';
 import Pager from '../components/Pager';
-import { formatWon } from '../labels';
+import PriceTag from '../components/PriceTag';
 
 const PERIODS = { DAILY: '최근 24시간', WEEKLY: '최근 7일', MONTHLY: '최근 30일', ALL: '전체' };
 export default function Rankings({ products = false }) {
@@ -72,11 +72,20 @@ export default function Rankings({ products = false }) {
                             {item.name}
                         </Link>
                         <p>
-                            {products
-                                ? `${formatWon(item.price)}${item.status === 'STOPPED' ? ' · 판매 중지' : item.soldOut ? ' · 품절' : ''}`
-                                : mode === 'popular'
-                                  ? `찜 ${item.bookmarkCount}개`
-                                  : `조회 ${item.viewCount}회`}
+                            {products ? (
+                                <>
+                                    <PriceTag
+                                        price={item.price}
+                                        salePrice={item.salePrice}
+                                        discountRate={item.discountRate}
+                                    />
+                                    {item.status === 'STOPPED' ? ' · 판매 중지' : item.soldOut ? ' · 품절' : ''}
+                                </>
+                            ) : mode === 'popular' ? (
+                                `찜 ${item.bookmarkCount}개`
+                            ) : (
+                                `조회 ${item.viewCount}회`
+                            )}
                         </p>
                     </li>
                 ))}
