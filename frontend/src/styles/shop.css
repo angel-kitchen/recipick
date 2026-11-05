@@ -636,9 +636,21 @@
 }
 
 .cart-group__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: var(--space-2);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--line);
+}
+
+.cart-group__title .check {
+  font: inherit;
+}
+
+/* 버튼 줄에서 이 버튼부터 오른쪽 끝으로 민다 */
+.row-actions__end {
+  margin-left: auto;
 }
 
 /* 레시피 영상 임베드(16:9) */
@@ -1399,11 +1411,25 @@
 }
 
 .floating-recent__title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--green-brand);
   text-align: center;
+}
+
+.floating-recent__toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.floating-recent__title:has(+ .floating-recent__list) {
+  margin-bottom: 6px;
 }
 
 .floating-recent__list {
