@@ -341,7 +341,7 @@ export default function Home() {
       {member && (
         <section className="hm-section">
           <div className="container">
-            <DealsStrip limit={8} moreTo="/products" />
+            <DealsStrip limit={8} moreTo="/products?onSale=true" />
           </div>
         </section>
       )}

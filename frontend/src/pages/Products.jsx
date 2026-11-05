@@ -7,6 +7,7 @@ import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import Countdown from '../components/Countdown';
 import DealsStrip from '../components/DealsStrip';
+import { expireDiscount } from '../discount';
 import PriceTag from '../components/PriceTag';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
@@ -35,7 +36,8 @@ export default function Products() {
   const [priceKey, setPriceKey] = useState('');
   const [sort, setSort] = useState('createdAt,desc');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
-  const [onSaleOnly, setOnSaleOnly] = useState(false);
+  const [onSaleOnly, setOnSaleOnly] = useState(searchParams.get('onSale') === 'true');
+  const [endedIds, setEndedIds] = useState([]);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -50,6 +52,7 @@ export default function Products() {
   // 레시피 상세에서 재료 이름으로 들어오면 그 검색어를 입력칸에 반영한다
   useEffect(() => {
     setKeyword(searchParams.get('keyword') ?? '');
+    setOnSaleOnly(searchParams.get('onSale') === 'true');
     setPage(0);
   }, [searchParams]);
 
@@ -98,7 +101,12 @@ export default function Products() {
     setSearchParams({});
   };
 
-  const visible = result?.content.filter((product) => !onlyAvailable || (!product.soldOut && product.status !== 'STOPPED'));
+  const markEnded = (productId) => setEndedIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+  const shown = result?.content.map((product) => expireDiscount(product, endedIds.includes(product.productId)));
+  const visible = shown?.filter(
+    (product) =>
+      (!onlyAvailable || (!product.soldOut && product.status !== 'STOPPED')) && (!onSaleOnly || product.discountRate > 0),
+  );
 
   return (
     <div className="container page">
@@ -215,7 +223,9 @@ export default function Products() {
                     {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
                   </span>
                   <PriceTag price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
-                  {product.discountEndAt && <Countdown endAt={product.discountEndAt} />}
+                  {product.discountEndAt && (
+                    <Countdown endAt={product.discountEndAt} onEnd={() => markEnded(product.productId)} />
+                  )}
                   <div className="tile__actions">
                     {product.soldOut ? (
                       <span className="badge badge--warn">품절</span>
