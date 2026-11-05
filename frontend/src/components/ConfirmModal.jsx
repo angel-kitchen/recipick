@@ -6,9 +6,11 @@ export default function ConfirmModal({
   children,
   confirmLabel,
   cancelLabel,
+  secondaryLabel,
   busy,
   error,
   onConfirm,
+  onSecondary,
   onCancel,
   onClose = onCancel,
 }) {
@@ -27,8 +29,19 @@ export default function ConfirmModal({
           <button type="button" className="btn btn--large" disabled={busy} onClick={onConfirm}>
             {busy ? '처리하는 중...' : confirmLabel}
           </button>
+          {secondaryLabel && (
+            <button type="button" className="btn btn--large" disabled={busy} onClick={onSecondary}>
+              {secondaryLabel}
+            </button>
+          )}
           {cancelLabel && (
-            <button type="button" className="btn btn--large btn--outline" disabled={busy} onClick={onCancel}>
+            <button
+              type="button"
+              className="btn btn--large btn--outline"
+              style={secondaryLabel ? { marginLeft: 'auto' } : undefined}
+              disabled={busy}
+              onClick={onCancel}
+            >
               {cancelLabel}
             </button>
           )}

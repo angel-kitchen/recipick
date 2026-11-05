@@ -13,7 +13,7 @@ const NONE = 'NONE';
 // 서버가 만든 미리보기(preview)를 재료별로 고쳐서 장바구니에 담는다.
 // - 체크를 빼거나 상품 목록에서 "선택 안 함"을 고르면 그 재료는 담지 않는다.
 // - 서버의 확정 API가 선택·제외를 검증하고 장바구니와 확정 이력을 함께 저장한다.
-export default function AutoCartReview({ preview, disabled = false }) {
+export default function AutoCartReview({ preview, disabled = false, onBrowse }) {
   const navigate = useNavigate();
   const { member } = useAuth();
   const { guard, modal } = usePreviousMartGuard();
@@ -74,13 +74,16 @@ export default function AutoCartReview({ preview, disabled = false }) {
       return next;
     });
 
-  const doAdd = async (targets) => {
+  const doAdd = async (targets, skippedIngredientIds = []) => {
     setError(null);
     setSubmitting(true);
     try {
       const result = await api.post(`/api/auto-carts/${preview.autoCartRequestId}/confirm`, {
         productSelections: targets.map((line) => ({ ingredientId: line.item.ingredientId, productId: line.productId })),
-        excludedIngredientIds: preview.items.filter((item) => choices[item.ingredientId] === NONE).map((item) => item.ingredientId),
+        excludedIngredientIds: [
+          ...preview.items.filter((item) => choices[item.ingredientId] === NONE).map((item) => item.ingredientId),
+          ...skippedIngredientIds,
+        ],
       });
       const done = result.addedItems.map((item) => ({
         ...targets.find((line) => line.productId === item.productId),
@@ -134,6 +137,17 @@ export default function AutoCartReview({ preview, disabled = false }) {
     const { targets } = duplicates;
     setDuplicates(null);
     doAdd(targets);
+  };
+
+  // 이미 장바구니에 있는 상품은 빼고 나머지만 담는다
+  const confirmWithoutDuplicates = () => {
+    const { targets, found } = duplicates;
+    const dupIds = new Set(found.map((line) => line.productId));
+    setDuplicates(null);
+    doAdd(
+      targets.filter((line) => !dupIds.has(line.productId)),
+      targets.filter((line) => dupIds.has(line.productId)).map((line) => line.item.ingredientId),
+    );
   };
 
   const cancelDuplicates = () => {
@@ -244,6 +258,8 @@ export default function AutoCartReview({ preview, disabled = false }) {
           title="이미 장바구니에 중복된 재료가 있어요"
           confirmLabel="또 담기"
           cancelLabel="취소"
+          secondaryLabel={duplicates.found.length < duplicates.targets.length ? '중복된 재료는 빼고 담기' : undefined}
+          onSecondary={confirmWithoutDuplicates}
           onConfirm={confirmDuplicates}
           onCancel={cancelDuplicates}
         >
@@ -297,6 +313,17 @@ export default function AutoCartReview({ preview, disabled = false }) {
               </button>
               <Link to="/cart" className="btn btn--large btn--outline">
                 장바구니로 가기
+              </Link>
+              {/* 이미 레시피 목록 위의 팝업이면 이동할 곳이 없어서, 부모가 팝업을 닫도록 알린다 */}
+              <Link
+                to="/recipes"
+                className="btn btn--large btn--outline"
+                onClick={() => {
+                  setAdded(null);
+                  onBrowse?.();
+                }}
+              >
+                레시피 더 둘러보기
               </Link>
             </div>
           </div>

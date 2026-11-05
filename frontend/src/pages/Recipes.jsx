@@ -110,11 +110,14 @@ function QuickAdd({ recipe }) {
             <h2 className="tile__title">{recipe.name} 1인분 재료</h2>
             <ErrorNotice error={error} />
             {loading && <ListSkeleton rows={4} />}
-            {preview && <AutoCartReview preview={preview} />}
+            {preview && <AutoCartReview preview={preview} onBrowse={() => setOpen(false)} />}
             <div className="row-actions" style={{ marginTop: 12 }}>
               <Link to={`/recipes/${recipe.recipeId}`} className="btn btn--outline">
                 인분·선택 재료 바꾸기
               </Link>
+              <button type="button" className="btn btn--outline" style={{ marginLeft: 'auto' }} onClick={() => setOpen(false)}>
+                닫기
+              </button>
             </div>
           </div>
         </div>
