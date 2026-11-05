@@ -10,6 +10,7 @@ import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
+import RecipeSearchInput from '../components/RecipeSearchInput';
 import { CardSkeletons, ListSkeleton } from '../components/Skeleton';
 import { deliveryBlock } from '../delivery';
 import { CUISINE, DIFFICULTY, DISH_TYPE, spicyText } from '../labels';
@@ -227,9 +228,7 @@ export default function Recipes() {
       <AiAutoCartBox />
       <RecentViews type="recipe" title="최근 본 레시피" toPath={(id) => `/recipes/${id}`} />
       <div className="filters">
-        <input
-          className="field__input"
-          placeholder="레시피 이름 검색"
+        <RecipeSearchInput
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
           onCompositionStart={() => setComposing(true)}
@@ -237,7 +236,6 @@ export default function Recipes() {
             setKeywordInput(e.target.value);
             setComposing(false);
           }}
-          maxLength={50}
         />
       </div>
 

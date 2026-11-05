@@ -156,6 +156,52 @@
   min-width: 140px;
 }
 
+/* 레시피 검색 자동완성: 입력창 바로 아래에 겹쳐 띄워 목록이 페이지를 밀어내지 않게 한다 */
+.suggest {
+  position: relative;
+}
+
+.suggest .field__input {
+  min-width: 280px;
+}
+
+.suggest__list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-nav);
+}
+
+.suggest__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.suggest__item.is-active {
+  background: var(--green-wash);
+}
+
+.suggest__thumb {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--ceramic);
+}
+
 /* 상품 목록: 왼쪽에 카테고리·가격대·판매 상태, 오른쪽에 상품 */
 .catalog {
   display: grid;
