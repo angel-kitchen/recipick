@@ -196,6 +196,7 @@ class ClaudeAiEvaluationTest {
             List<SeedRecipe> candidates = seedRecipes.stream()
                 .filter(recipe -> condition.matches(recipe.recipe()))
                 .filter(recipe -> condition.excludedIngredients().stream().noneMatch(recipe::contains))
+                .filter(recipe -> condition.includedIngredients().stream().allMatch(recipe::contains))
                 .toList();
             if (candidates.isEmpty()) {
                 rows.add(new Row(evalCase.text(), evalCase.accept().isEmpty(),
@@ -426,6 +427,9 @@ class ClaudeAiEvaluationTest {
         if (condition.maxSpicyLevel() != null) {
             parts.add("맵기 " + condition.maxSpicyLevel() + " 이하");
         }
+        if (!condition.includedIngredients().isEmpty()) {
+            parts.add(condition.includedIngredients() + " 넣기");
+        }
         if (!condition.excludedIngredients().isEmpty()) {
             parts.add(condition.excludedIngredients() + " 빼기");
         }
@@ -473,12 +477,12 @@ class ClaudeAiEvaluationTest {
     record Row(String text, boolean passed, String answer, AiResult<?> result) {
     }
 
-    // 서버의 재료 빼기와 같이 재료 이름에 빼는 이름이 들어 있으면(LIKE '%이름%') 그 레시피를 뺀다.
+    // 서버의 재료 넣기·빼기와 같이 재료 이름에 그 이름이 들어 있으면(LIKE '%이름%') 그 재료가 있는 레시피로 본다.
     // AI에게는 서버(RecipeService.findRequiredIngredientNames)와 같이 필수 재료만 넘긴다
     record SeedRecipe(Long id, Recipe recipe, List<String> ingredients, List<String> requiredIngredients) {
 
-        boolean contains(String excludedName) {
-            return ingredients.stream().anyMatch(ingredient -> ingredient.contains(excludedName));
+        boolean contains(String name) {
+            return ingredients.stream().anyMatch(ingredient -> ingredient.contains(name));
         }
 
         AiRecipeCandidate toCandidate() {
@@ -627,10 +631,11 @@ class ClaudeAiEvaluationTest {
     }
 
     record ExpectedConditions(String cuisineType, String dishType, Integer maxCookingMinutes, Integer maxSpicyLevel,
-                              List<String> excludedIngredients, Integer maxBudget, Integer servings) {
+                              List<String> includedIngredients, List<String> excludedIngredients,
+                              Integer maxBudget, Integer servings) {
     }
 
-    // 일곱 조건(예산·인분 포함)이 모두 같아야 정답이다. 말하지 않은 조건을 채우거나(예: 맵기를 마음대로 정함) 빠뜨리면 틀린 것으로 본다
+    // 여덟 조건(포함 재료·예산·인분 포함)이 모두 같아야 정답이다. 말하지 않은 조건을 채우거나(예: 맵기를 마음대로 정함) 빠뜨리면 틀린 것으로 본다
     record ConditionCase(String text, ExpectedConditions expected) {
 
         boolean matches(AiRecipeConditions actual) {
@@ -638,6 +643,7 @@ class ClaudeAiEvaluationTest {
                 && Objects.equals(expected.dishType(), actual.dishType())
                 && Objects.equals(expected.maxCookingMinutes(), actual.maxCookingMinutes())
                 && Objects.equals(expected.maxSpicyLevel(), actual.maxSpicyLevel())
+                && toSet(expected.includedIngredients()).equals(toSet(actual.includedIngredients()))
                 && toSet(expected.excludedIngredients()).equals(toSet(actual.excludedIngredients()))
                 && Objects.equals(expected.maxBudget(), actual.maxBudget())
                 && Objects.equals(expected.servings(), actual.servings());
