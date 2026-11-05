@@ -278,11 +278,191 @@
   opacity: 0.7;
 }
 
+/* 답을 기다리는 동안 레피가 먼지를 일으키며 달려간다. 다리는 빠르게 도는 바퀴로 그린다 */
+.repi-run {
+  margin: 0 0 12px 54px;
+  padding: 10px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.repi-run__track {
+  position: relative;
+  height: 70px;
+  overflow: hidden;
+  border-bottom: 2px dashed var(--line);
+}
+
+.repi-run__runner {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 96px;
+  height: 64px;
+  animation: repi-across 2.4s linear infinite;
+}
+
+.repi-run__chef {
+  position: absolute;
+  inset: 0;
+  width: 96px;
+  height: 64px;
+}
+
+.repi-run__body {
+  animation: repi-bob 0.3s ease-in-out infinite alternate;
+}
+
+.repi-run__legs {
+  transform-box: view-box;
+  transform-origin: 58px 56px;
+  animation: repi-spin 0.28s linear infinite;
+}
+
+.repi-puff {
+  position: absolute;
+  bottom: 2px;
+  left: 6px;
+  width: 30px;
+  height: 22px;
+  fill: var(--tint);
+  stroke: var(--leaf);
+  stroke-width: 1.4;
+  opacity: 0;
+  animation: repi-puff 0.9s ease-out infinite;
+}
+
+.repi-puff:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.repi-puff:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+.repi-puff path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.repi-run__text {
+  margin: 8px 0 0;
+  color: var(--jungle);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.repi-run__text::after {
+  content: '';
+  display: inline-block;
+  width: 1.4em;
+  text-align: left;
+  animation: repi-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes repi-across {
+  from {
+    left: -20px;
+  }
+
+  to {
+    left: calc(100% - 70px);
+  }
+}
+
+@keyframes repi-bob {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  to {
+    transform: translateY(-4px) rotate(-3deg);
+  }
+}
+
+@keyframes repi-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes repi-puff {
+  0% {
+    opacity: 0.95;
+    transform: translateX(0) scale(0.4);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-34px) scale(1.25);
+  }
+}
+
+@keyframes repi-dots {
+  0% {
+    content: '';
+  }
+
+  25% {
+    content: '.';
+  }
+
+  50% {
+    content: '..';
+  }
+
+  75% {
+    content: '...';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repi-run__runner,
+  .repi-run__body,
+  .repi-run__legs,
+  .repi-puff,
+  .repi-run__text::after {
+    animation: none;
+  }
+
+  .repi-run__runner {
+    left: calc(50% - 48px);
+  }
+
+  .repi-puff {
+    display: none;
+  }
+
+  .repi-run__text::after {
+    content: '…';
+  }
+}
+
 /* 자세히 찾기: 대화 아래로 기존 검색 화면이 이어진다 */
 .chat-detail {
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
+}
+
+/* 자세히 찾기 결과: 흐린 회색 대신 진한 글씨로, 안내는 크고 굵게 */
+.ai-lead {
+  margin: 0 0 8px;
+  color: var(--jungle);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.ai-reason {
+  color: var(--jungle);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.chat-detail .repi-run {
+  margin-left: 0;
 }
 
 /* 하단 입력 카드 */
@@ -356,7 +536,8 @@
 
   .chat-chips,
   .chat-recipes,
-  .chat-restart {
+  .chat-restart,
+  .repi-run {
     margin-left: 0;
   }
 

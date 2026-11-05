@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, restoreSession, setAccessToken, setAuthLostHandler } from '../api/client';
+import { clearMemory } from '../chatMemory';
 
 const AuthContext = createContext(null);
 
@@ -36,6 +37,7 @@ export function AuthProvider({ children }) {
     } finally {
       setAccessToken(null);
       setMember(null);
+      clearMemory();
     }
   }, []);
 
