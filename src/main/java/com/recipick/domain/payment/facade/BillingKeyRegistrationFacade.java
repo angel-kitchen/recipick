@@ -66,7 +66,7 @@ public class BillingKeyRegistrationFacade {
             request.getIssueId(),
             ISSUE_NAME,
             portOneProperties.storeId(),
-            portOneProperties.channelKey(),
+            portOneProperties.billingChannelKey(),
             String.valueOf(memberId),
             DISPLAY_AMOUNT,
             CURRENCY,
@@ -126,10 +126,12 @@ public class BillingKeyRegistrationFacade {
         }
     }
 
-    // 상점·채널 설정 없이는 검증이 성립하지 않으므로 등록을 열지 않는다
+    // 상점·카드 등록 채널 설정 없이는 검증이 성립하지 않으므로 등록을 열지 않는다. 카드 등록 채널 키가 비어도 주문 일반결제
+    // 채널 키로 대신하지 않는다 — KG이니시스는 일반결제 MID로 빌링키를 발급할 수 없고, 검증기도 같은 키로 채널을 대조한다
     private void requireConfig() {
-        if (!StringUtils.hasText(portOneProperties.storeId()) || !StringUtils.hasText(portOneProperties.channelKey())) {
-            log.error("PortOne 상점·채널 설정이 없어 카드 등록을 진행할 수 없음");
+        if (!StringUtils.hasText(portOneProperties.storeId())
+            || !StringUtils.hasText(portOneProperties.billingChannelKey())) {
+            log.error("PortOne 상점·카드 등록 채널 설정이 없어 카드 등록을 진행할 수 없음");
             throw new BusinessException(CommonErrorCode.EXTERNAL_SERVICE_ERROR);
         }
     }

@@ -123,10 +123,10 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
         assertThat(PORTONE.totalRequests()).isZero();
     }
 
-    // 발급 요청을 만들고 PG 스텁에 그 요청과 묶인 ISSUED 카드 응답을 둔다
+    // 발급 요청을 만들고 PG 스텁에 그 요청과 묶인 ISSUED 카드 응답을 둔다. 채널은 카드 등록 전용 키 — 검증기가 대조하는 키다
     private String issued(String billingKey) {
         BillingKeyIssueRequest request = issueRequests.create(member.getId());
-        PORTONE.billingKeyIssued(billingKey, "test-store-id", "test-channel-key", request.getIssueId(),
+        PORTONE.billingKeyIssued(billingKey, "test-store-id", "test-billing-channel-key", request.getIssueId(),
             member.getId(), T.minusMinutes(1));
         return request.getIssueId();
     }

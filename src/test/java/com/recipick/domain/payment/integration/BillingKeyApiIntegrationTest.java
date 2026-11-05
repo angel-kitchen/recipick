@@ -84,7 +84,8 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("발급 요청은 SDK에 넣을 값 8개를 돌려주고, 행을 REQUESTED로 남기며, 응답을 캐시하지 말라고 표시한다")
+    @DisplayName("발급 요청은 SDK에 넣을 값 8개를 돌려주고, 행을 REQUESTED로 남기며, 응답을 캐시하지 말라고 표시한다"
+        + " — 채널 키는 주문 일반결제 키가 아니라 카드 등록 전용 키다")
     void issuesRequest() throws Exception {
         // when
         String body = mvc.perform(post("/api/billing-keys/issue-requests")
@@ -95,7 +96,7 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
             .andExpect(jsonPath("$.data.issueId").isString())
             .andExpect(jsonPath("$.data.issueName").value("레시픽 멤버십 자동결제 카드 등록"))
             .andExpect(jsonPath("$.data.storeId").value("test-store-id"))
-            .andExpect(jsonPath("$.data.channelKey").value("test-channel-key"))
+            .andExpect(jsonPath("$.data.channelKey").value("test-billing-channel-key"))
             .andExpect(jsonPath("$.data.customerId").value(String.valueOf(member.getId())))
             .andExpect(jsonPath("$.data.displayAmount").value(3900))
             .andExpect(jsonPath("$.data.currency").value("KRW"))
