@@ -198,12 +198,14 @@ public class Product extends BaseTimeEntity {
         return discountRate > 0 && discountEndAt != null && now.isBefore(discountEndAt);
     }
 
-    // 원 단위 정수 나눗셈이라 소수점 이하는 내림된다
+    // 원 단위 정수 나눗셈이라 소수점 이하는 내림된다. price × (100 - 할인율)은 큰 가격에서 Long 범위를 넘을 수 있어
+    // 100으로 먼저 나눈 몫과 나머지로 나눠 계산한다(결과는 같다)
     public Long getSalePrice(LocalDateTime now) {
         if (price == null || !isDiscounted(now)) {
             return price;
         }
-        return price * (100 - discountRate) / 100;
+        long keep = 100 - discountRate;
+        return price / 100 * keep + price % 100 * keep / 100;
     }
 
     public void delete() {

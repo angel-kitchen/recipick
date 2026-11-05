@@ -123,6 +123,7 @@ export const AUDIT_ACTION = {
   PRODUCT_UPDATE: '상품 수정',
   PRODUCT_DELETE: '상품 삭제',
   PRODUCT_PRICE_CHANGE: '상품 가격 변경',
+  PRODUCT_DISCOUNT_CHANGE: '상품 할인 변경',
   PRODUCT_STATUS_CHANGE: '상품 판매 상태 변경',
   PRODUCT_INGREDIENT_CHANGE: '상품 재료 연결 변경',
   STOCK_ADJUST: '재고 조정',

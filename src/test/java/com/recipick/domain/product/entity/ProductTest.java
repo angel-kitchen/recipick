@@ -113,6 +113,20 @@ public class ProductTest {
     }
 
     @Test
+    @DisplayName("판매가 : 매우 큰 가격도 넘치지 않고 정확히 계산한다")
+    void getSalePrice_largePrice() {
+        // given
+        Product product = pricedProduct(100_000_000_000_000_000L);
+        product.changeDiscount(1, NOW.plusDays(1), NOW);
+
+        // when
+        Long salePrice = product.getSalePrice(NOW);
+
+        // then
+        assertThat(salePrice).isEqualTo(99_000_000_000_000_000L);
+    }
+
+    @Test
     @DisplayName("판매가 : 종료 시각이 되면 정상가로 돌아온다")
     void getSalePrice_endedAtBoundary() {
         // given
