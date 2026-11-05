@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import useRecipeSuggestions from '../hooks/useRecipeSuggestions';
 import Icon from './Icon';
 
 export default function Header() {
@@ -12,6 +13,7 @@ export default function Header() {
   const [keyword, setKeyword] = useState('');
   const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef(null);
+  const { inputProps: suggestionProps, list: suggestionList } = useRecipeSuggestions(keyword, 'header-recipe-suggestions');
 
   useEffect(() => {
     setOpen(false);
@@ -65,17 +67,19 @@ export default function Header() {
           </Link>
         )}
         {member && (
-          <form className="header__search" role="search" onSubmit={handleSearch}>
+          <form className="header__search suggest" role="search" onSubmit={handleSearch}>
             <input
               type="search"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder="오늘 저녁, 무엇을 만들까요?"
               aria-label="레시피 검색"
+              {...suggestionProps}
             />
             <button type="submit" aria-label="검색">
               <Icon name="search" size={18} />
             </button>
+            {suggestionList}
           </form>
         )}
         <button
