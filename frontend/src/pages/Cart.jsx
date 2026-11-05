@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { notifyCartChanged, readSources } from '../cartSource';
+import { forgetRecipe, notifyCartChanged, readSources } from '../cartSource';
 import ConfirmModal from '../components/ConfirmModal';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
@@ -25,6 +25,8 @@ export default function Cart() {
   const [error, setError] = useState(null);
   // 삭제 확인 창: 'selected' | 'all' | null
   const [deleting, setDeleting] = useState(null);
+  // 레시피 묶음 삭제일 때 대상({ title, name, removable, shared }). 다른 레시피에도 쓰이는 상품(shared)은 지우지 않는다
+  const [groupTarget, setGroupTarget] = useState(null);
   const loadedOnce = useRef(false);
 
   const load = useCallback(async () => {
@@ -72,13 +74,22 @@ export default function Cart() {
     });
 
   const removeMany = async () => {
-    const targets = deleting === 'all' ? cart.items : cart.items.filter((item) => selected.has(item.cartItemId));
+    let targets;
+    if (deleting === 'all') targets = cart.items;
+    else if (deleting === 'group') targets = groupTarget.removable;
+    else targets = cart.items.filter((item) => selected.has(item.cartItemId));
+    const group = deleting === 'group' ? groupTarget : null;
     setDeleting(null);
-    if (targets.length === 0) return;
+    setGroupTarget(null);
+    if (targets.length === 0 && !group) return;
     // 한 번에 지울 수 있는 개수가 100개라 나눠서 보낸다
     await act(async () => {
       for (let i = 0; i < targets.length; i += 100) {
         await api.post('/api/cart-items/bulk-delete', { cartItemIds: targets.slice(i, i + 100).map((item) => item.cartItemId) });
+      }
+      // 남긴 상품은 지운 레시피 묶음에서 빠져 다른 레시피 묶음 아래로 옮겨 보이게 한다
+      if (group?.name) {
+        forgetRecipe(member.memberId, group.shared.map((item) => item.productId), group.name);
       }
     });
   };
@@ -218,12 +229,54 @@ export default function Cart() {
                 </button>
               </span>
             </div>
-            {groups.map((group) => (
-              <section key={group.name ?? 'direct'} className="card">
-                <h2 className="tile__title cart-group__title">{group.name ? `${group.name} 재료` : '직접 담은 상품'}</h2>
-                {group.items.map(renderItem)}
-              </section>
-            ))}
+            {groups.map((group) => {
+              const title = group.name ? `${group.name} 재료` : '직접 담은 상품';
+              const groupIds = group.items.filter((item) => item.status === 'AVAILABLE').map((item) => item.cartItemId);
+              const groupSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
+              return (
+                <section key={group.name ?? 'direct'} className="card">
+                  <h2 className="tile__title cart-group__title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className="check" style={{ font: 'inherit' }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${title} 전체 선택`}
+                        checked={groupSelected}
+                        disabled={groupIds.length === 0}
+                        onChange={() =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            groupIds.forEach((id) => (groupSelected ? next.delete(id) : next.add(id)));
+                            return next;
+                          })
+                        }
+                      />
+                      {title}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--outline"
+                      onClick={() => {
+                        // 인분만 다른 같은 레시피는 한 레시피로 본다
+                        const base = (name) => name.replace(/ \d+인분$/, '');
+                        const shared = group.items.filter(
+                          (item) => new Set((sources[item.productId] ?? []).map(base)).size > 1,
+                        );
+                        setGroupTarget({
+                          title,
+                          name: group.name,
+                          shared,
+                          removable: group.items.filter((item) => !shared.includes(item)),
+                        });
+                        setDeleting('group');
+                      }}
+                    >
+                      {group.name ? '이 레시피 재료 삭제' : '직접 담은 상품 삭제'}
+                    </button>
+                  </h2>
+                  {group.items.map(renderItem)}
+                </section>
+              );
+            })}
           </div>
 
           <aside className="card">
@@ -261,13 +314,30 @@ export default function Cart() {
       )}
       {deleting && (
         <ConfirmModal
-          title={deleting === 'all' ? '장바구니를 모두 비울까요?' : '선택한 상품을 삭제할까요?'}
+          title={
+            deleting === 'all'
+              ? '장바구니를 모두 비울까요?'
+              : deleting === 'group'
+                ? `'${groupTarget.title}' 전체를 삭제할까요?`
+                : '선택한 상품을 삭제할까요?'
+          }
           confirmLabel="삭제"
           cancelLabel="취소"
           onConfirm={removeMany}
-          onCancel={() => setDeleting(null)}
+          onCancel={() => {
+            setDeleting(null);
+            setGroupTarget(null);
+          }}
         >
-          {deleting === 'all' ? `담긴 상품 ${cart.items.length}개가 모두 삭제돼요.` : `선택한 상품 ${chosen.length}개가 삭제돼요.`}
+          {deleting === 'all'
+            ? `담긴 상품 ${cart.items.length}개가 모두 삭제돼요.`
+            : deleting === 'group'
+              ? `상품 ${groupTarget.removable.length}개가 삭제돼요.${
+                  groupTarget.shared.length > 0
+                    ? ` 다른 레시피에도 쓰이는 재료 ${groupTarget.shared.length}개는 지우지 않고 남겨요.`
+                    : ''
+                }`
+              : `선택한 상품 ${chosen.length}개가 삭제돼요.`}
         </ConfirmModal>
       )}
     </div>

@@ -30,6 +30,16 @@ export function rememberSources(memberId, productIds, recipeNames) {
   write(memberId, all);
 }
 
+// 레시피 묶음을 지울 때 다른 레시피에도 쓰여 남기는 상품에서 그 레시피만 기억에서 뺀다(인분 표기는 무시)
+export function forgetRecipe(memberId, productIds, recipeName) {
+  const base = (name) => name.replace(/ \d+인분$/, '');
+  const all = read(memberId);
+  productIds.forEach((productId) => {
+    if (all[productId]) all[productId] = all[productId].filter((name) => base(name) !== base(recipeName));
+  });
+  write(memberId, all);
+}
+
 // 장바구니에 남아 있는 상품의 기억만 돌려주고 나머지는 지운다
 export function readSources(memberId, presentProductIds) {
   const all = read(memberId);
