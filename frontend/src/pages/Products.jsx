@@ -5,6 +5,9 @@ import { useAuth } from '../auth/AuthContext';
 import EmptyState from '../components/EmptyState';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import Countdown from '../components/Countdown';
+import DealsStrip from '../components/DealsStrip';
+import { expireDiscount } from '../discount';
 import PriceTag from '../components/PriceTag';
 import Pager from '../components/Pager';
 import RecentViews from '../components/RecentViews';
@@ -33,6 +36,8 @@ export default function Products() {
   const [priceKey, setPriceKey] = useState('');
   const [sort, setSort] = useState('createdAt,desc');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [onSaleOnly, setOnSaleOnly] = useState(searchParams.get('onSale') === 'true');
+  const [endedIds, setEndedIds] = useState([]);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -47,6 +52,7 @@ export default function Products() {
   // 레시피 상세에서 재료 이름으로 들어오면 그 검색어를 입력칸에 반영한다
   useEffect(() => {
     setKeyword(searchParams.get('keyword') ?? '');
+    setOnSaleOnly(searchParams.get('onSale') === 'true');
     setPage(0);
   }, [searchParams]);
 
@@ -61,6 +67,7 @@ export default function Products() {
         categoryId,
         minPrice: priceRange?.minPrice,
         maxPrice: priceRange?.maxPrice,
+        onSale: onSaleOnly || undefined,
         page,
         size: PAGE_SIZE,
         sort,
@@ -70,7 +77,7 @@ export default function Products() {
     return () => {
       ignore = true;
     };
-  }, [keyword, categoryId, priceRange, page, sort]);
+  }, [keyword, categoryId, priceRange, onSaleOnly, page, sort]);
 
   const addToCart = async (product) => {
     setError(null);
@@ -89,11 +96,17 @@ export default function Products() {
     setCategoryId('');
     setPriceKey('');
     setOnlyAvailable(false);
+    setOnSaleOnly(false);
     setPage(0);
     setSearchParams({});
   };
 
-  const visible = result?.content.filter((product) => !onlyAvailable || (!product.soldOut && product.status !== 'STOPPED'));
+  const markEnded = (productId) => setEndedIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]));
+  const shown = result?.content.map((product) => expireDiscount(product, endedIds.includes(product.productId)));
+  const visible = shown?.filter(
+    (product) =>
+      (!onlyAvailable || (!product.soldOut && product.status !== 'STOPPED')) && (!onSaleOnly || product.discountRate > 0),
+  );
 
   return (
     <div className="container page">
@@ -101,6 +114,15 @@ export default function Products() {
       <div className="row-actions"><Link to="/products/best" className="btn btn--outline">베스트 상품</Link><select className="field__input" aria-label="상품 정렬" value={sort} onChange={(e) => { setSort(e.target.value); setPage(0); }}><option value="createdAt,desc">최신순</option><option value="price,asc">낮은 가격순</option><option value="price,desc">높은 가격순</option></select></div>
       {member.mart && <p className="page__sub">이용 마트: {member.mart.name}</p>}
       <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
+      {!onSaleOnly && (
+        <DealsStrip
+          limit={4}
+          onMore={() => {
+            setOnSaleOnly(true);
+            setPage(0);
+          }}
+        />
+      )}
       <div className="filters">
         <input
           className="field__input"
@@ -153,6 +175,20 @@ export default function Products() {
             ))}
           </section>
           <section className="side-group">
+            <h2 className="side-group__title">특가</h2>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={onSaleOnly}
+                onChange={(e) => {
+                  setOnSaleOnly(e.target.checked);
+                  setPage(0);
+                }}
+              />
+              특가 상품만 보기
+            </label>
+          </section>
+          <section className="side-group">
             <h2 className="side-group__title">판매 상태</h2>
             <label className="check">
               <input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} />
@@ -177,6 +213,7 @@ export default function Products() {
                   ) : (
                     <ImagePlaceholder />
                   )}
+                  {product.discountRate === 50 && <span className="tile__ribbon">반값특가</span>}
                 </Link>
                 <div className="tile__body">
                   <Link to={`/products/${product.productId}`} className="tile__title">
@@ -186,6 +223,9 @@ export default function Products() {
                     {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
                   </span>
                   <PriceTag price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
+                  {product.discountEndAt && (
+                    <Countdown endAt={product.discountEndAt} onEnd={() => markEnded(product.productId)} />
+                  )}
                   <div className="tile__actions">
                     {product.soldOut ? (
                       <span className="badge badge--warn">품절</span>

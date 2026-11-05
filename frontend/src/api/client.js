@@ -82,7 +82,18 @@ async function send(method, path, { body, headers, query, admin, credentials = '
   });
 }
 
+// 사용자 PC 시계가 틀려도 특가 카운트다운이 맞도록 응답의 Date 헤더로 서버 시각과의 차이를 기억한다.
+// 검색 결과는 캐시되므로 본문에 시각을 넣지 않고 헤더(캐시와 무관)를 쓴다
+let serverOffsetMs = 0;
+export const serverNow = () => Date.now() + serverOffsetMs;
+
+function syncServerClock(res) {
+  const serverTime = Date.parse(res.headers.get('Date') ?? '');
+  if (!Number.isNaN(serverTime)) serverOffsetMs = serverTime - Date.now();
+}
+
 async function parse(res) {
+  syncServerClock(res);
   const text = await res.text();
   let json = null;
   try {

@@ -11,7 +11,9 @@ import com.recipick.global.audit.AdminAuditRecorder;
 import com.recipick.domain.member.entity.enums.AdminRole;
 import com.recipick.domain.product.dto.request.AdminProductSearchRequest;
 import com.recipick.domain.product.dto.request.ProductCreateRequest;
+import com.recipick.domain.product.dto.request.ProductDiscountBulkRequest;
 import com.recipick.domain.product.dto.request.ProductDiscountUpdateRequest;
+import com.recipick.domain.product.dto.response.ProductDiscountBulkResponse;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
 import com.recipick.domain.product.dto.response.ProductDiscountResponse;
 import com.recipick.domain.product.dto.response.ProductIdResponse;
@@ -300,6 +302,34 @@ public class ProductService {
         return ProductDiscountResponse.from(product, now);
     }
 
+    // 여러 상품에 같은 할인을 한 번에 지정한다. 하나라도 지정할 수 없으면 전체를 되돌린다.
+    // 잠금은 상품 ID 오름차순으로 잡는다(findAllByIdInForUpdate).
+    @Transactional
+    public ProductDiscountBulkResponse updateDiscountBulk(
+        AdminRole role,
+        Long adminMartId,
+        ProductDiscountBulkRequest request
+    ) {
+        List<Long> ids = request.productIds().stream().distinct().toList();
+        List<Product> products = productRepository.findAllByIdInForUpdate(ids);
+        if (products.size() != ids.size() || products.stream().anyMatch(Product::isDeleted)) {
+            throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+        if (role == AdminRole.MART_ADMIN
+            && products.stream().anyMatch(p -> !p.getMart().getId().equals(adminMartId))) {
+            throw new BusinessException(AuthErrorCode.MART_ACCESS_DENIED);
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (Product product : products) {
+            int beforeRate = product.getDiscountRate();
+            LocalDateTime beforeEndAt = product.getDiscountEndAt();
+            product.changeDiscount(request.discountRate(), request.discountEndAt(), now);
+            recordDiscountChange(product, beforeRate, beforeEndAt);
+        }
+        return new ProductDiscountBulkResponse(products.size());
+    }
+
     @Transactional
     public ProductDiscountResponse clearDiscount(AdminRole role, Long adminMartId, Long productId) {
         Product product = getProductForUpdate(role, adminMartId, productId);
@@ -331,14 +361,14 @@ public class ProductService {
         return product;
     }
 
-    private static final Set<String> SEARCH_SORT_PROPERTIES = Set.of("price", "createdAt");
+    private static final Set<String> SEARCH_SORT_PROPERTIES = Set.of("price", "createdAt", "discountEndAt");
 
 
     @Cacheable(
         cacheNames = CacheConfig.PRODUCT_SEARCH,
         key = "#martId + ':' + (#request.keyword == null ? '-' : #request.keyword.length() + '#' + #request.keyword)"
             + " + ':' + #request.categoryId() + ':' + #request.minPrice"
-            + " + ':' + #request.maxPrice + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
+            + " + ':' + #request.maxPrice + ':' + #request.onSale + ':' + #pageable.pageNumber + ':' + #pageable.pageSize"
             + " + ':' + #pageable.sort"
     )
     public PageResponse<ProductSearchResponse> searchProducts(
@@ -358,7 +388,8 @@ public class ProductService {
 
         LocalDateTime now = LocalDateTime.now(clock);
         MemberProductSearchCondition condition = new MemberProductSearchCondition(
-            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice(), now);
+            martId, request.keyword(), request.categoryId(), request.minPrice(), request.maxPrice(), now,
+            Boolean.TRUE.equals(request.onSale()));
         return PageResponse.from(
             productRepository.searchMemberProducts(condition, pageable)
                 .map(product -> ProductSearchResponse.from(product, now))

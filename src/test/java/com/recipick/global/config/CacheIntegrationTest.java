@@ -105,7 +105,7 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("같은 조건의 상품 검색은 두 번째부터 DB를 거치지 않고, 조건이 다르면 따로 저장한다")
     void productSearch_isCachedPerCondition() {
-        ProductSearchRequest request = new ProductSearchRequest("대파", null, null, null);
+        ProductSearchRequest request = new ProductSearchRequest("대파", null, null, null, null);
         PageRequest page = PageRequest.of(0, 20, Sort.by("price"));
 
         var first = productService.searchProducts(1L, request, page);
@@ -113,7 +113,7 @@ class CacheIntegrationTest extends IntegrationTestSupport {
         assertThat(second).isEqualTo(first);
         verify(productRepository, times(1)).searchMemberProducts(any(), any());
 
-        productService.searchProducts(1L, new ProductSearchRequest("양파", null, null, null), page);
+        productService.searchProducts(1L, new ProductSearchRequest("양파", null, null, null, null), page);
         verify(productRepository, times(2)).searchMemberProducts(any(), any());
     }
     @org.junit.jupiter.api.AfterEach

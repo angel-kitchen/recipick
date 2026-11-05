@@ -4,6 +4,8 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import Countdown from '../components/Countdown';
+import { expireDiscount } from '../discount';
 import PriceTag from '../components/PriceTag';
 import { ListSkeleton } from '../components/Skeleton';
 import { notifyCartChanged } from '../cartSource';
@@ -17,6 +19,7 @@ export default function ProductDetail() {
   const { productId } = useParams();
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
+  const [discountEnded, setDiscountEnded] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState(null);
   // 요청 중에는 다시 담지 않는다. 연달아 눌러도 막히도록 상태가 아니라 ref로 먼저 확인한다
@@ -30,13 +33,14 @@ export default function ProductDetail() {
   useEffect(() => {
     let ignore = false;
     setProduct(null);
+    setDiscountEnded(false);
     setError(null);
     api
       .get(`/api/products/${productId}`)
       .then((data) => {
         if (ignore) return;
         setProduct(data);
-        recordRecent(member.memberId, 'product', { id: data.productId, name: data.name });
+        recordRecent(member.memberId, 'product', { id: data.productId, name: data.name, imageUrl: data.imageUrl });
       })
       .catch((e) => !ignore && setError(e));
     return () => {
@@ -74,6 +78,7 @@ export default function ProductDetail() {
   }
 
   const unavailable = product.soldOut || product.status !== 'SELLING';
+  const view = expireDiscount(product, discountEnded);
 
   return (
     <div className="container page">
@@ -82,11 +87,14 @@ export default function ProductDetail() {
       </p>
       <div className="detail">
         <section className="card">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" style={{ width: '100%', borderRadius: 12 }} />
-          ) : (
-            <ImagePlaceholder />
-          )}
+          <div style={{ position: 'relative' }}>
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt="" style={{ width: '100%', borderRadius: 12 }} />
+            ) : (
+              <ImagePlaceholder />
+            )}
+            {view.discountRate === 50 && <span className="tile__ribbon">반값특가</span>}
+          </div>
         </section>
         <section className="card">
           <span className="tile__meta">{product.categoryName}</span>
@@ -95,7 +103,8 @@ export default function ProductDetail() {
             {product.brand} · {formatAmount(product.saleUnitAmount, product.saleUnit)}
           </p>
           <div style={{ margin: '12px 0' }}>
-            <PriceTag large price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
+            <PriceTag large price={view.price} salePrice={view.salePrice} discountRate={view.discountRate} />
+            {view.discountEndAt && <Countdown endAt={view.discountEndAt} onEnd={() => setDiscountEnded(true)} />}
           </div>
           {unavailable && <span className="badge badge--warn">{product.soldOut ? '품절' : PRODUCT_STATUS[product.status]}</span>}
           {product.description && <p style={{ margin: '16px 0', whiteSpace: 'pre-line' }}>{product.description}</p>}

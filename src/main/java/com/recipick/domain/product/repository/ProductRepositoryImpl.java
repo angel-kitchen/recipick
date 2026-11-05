@@ -90,7 +90,8 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
             nameContains(condition.keyword()),
             categoryIdEq(condition.categoryId()),
             priceGoe(condition.minPrice(), condition.now()),
-            priceLoe(condition.maxPrice(), condition.now())
+            priceLoe(condition.maxPrice(), condition.now()),
+            onSaleOnly(condition.onSale(), condition.now())
         };
 
         List<Product> content = queryFactory
@@ -116,6 +117,7 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
             switch (order.getProperty()) {
                 case "price" -> orders.add(new OrderSpecifier<>(direction, salePrice(now)));
                 case "createdAt" -> orders.add(new OrderSpecifier<>(direction, product.createdAt));
+                case "discountEndAt" -> orders.add(new OrderSpecifier<>(direction, product.discountEndAt));
                 default -> throw new IllegalArgumentException("지원하지 않는 정렬 기준입니다 : " +
                     order.getProperty());
             }
@@ -125,6 +127,10 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
         }
         orders.add(product.id.desc());
         return orders.toArray(OrderSpecifier[]::new);
+    }
+
+    private BooleanExpression onSaleOnly(boolean onSale, LocalDateTime now) {
+        return onSale ? product.discountRate.gt(0).and(product.discountEndAt.after(now)) : null;
     }
 
     private BooleanExpression priceGoe(Long minPrice, LocalDateTime now) {

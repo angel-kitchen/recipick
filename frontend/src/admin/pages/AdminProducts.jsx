@@ -373,12 +373,82 @@ function DiscountPanel({ product, onDone, onCancel }) {
   );
 }
 
+const BULK_LIMIT = 100;
+
+// 체크한 여러 상품에 같은 할인율·종료 일시를 한 번에 지정한다. 하나라도 지정하지 못하면 서버가 전부 되돌린다
+function BulkDiscountPanel({ productIds, onDone, onCancel }) {
+  const [form, setForm] = useState({ rate: '', endAt: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const rate = Number(form.rate);
+  const validRate = Number.isInteger(rate) && rate >= 1 && rate <= 99;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch('/api/admin/products/discounts', {
+        productIds,
+        discountRate: rate,
+        discountEndAt: form.endAt,
+      });
+      onDone();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form className="card form admin__section" onSubmit={submit}>
+      <h2 className="tile__title">선택한 {productIds.length}개 상품 일괄 할인</h2>
+      <ErrorNotice error={error} />
+      <div className="form-grid">
+        <label className="field">
+          <span className="field__label">할인율(%)</span>
+          <input
+            className="field__input"
+            inputMode="numeric"
+            value={form.rate}
+            placeholder="1 ~ 99"
+            onChange={(e) => setForm((p) => ({ ...p, rate: e.target.value.replace(/\D/g, '').slice(0, 2) }))}
+            required
+          />
+        </label>
+        <label className="field">
+          <span className="field__label">할인 종료 일시</span>
+          <input
+            className="field__input"
+            type="datetime-local"
+            value={form.endAt}
+            onChange={(e) => setForm((p) => ({ ...p, endAt: e.target.value }))}
+            required
+          />
+          <span className="tile__meta">이 시각에 할인이 끝나요. 예) 11/13 00:00으로 지정하면 12일까지 할인돼요.</span>
+        </label>
+      </div>
+      <div className="row-actions" style={{ marginTop: 0 }}>
+        <button type="submit" className="btn" disabled={saving || !validRate}>
+          일괄 저장
+        </button>
+        <button type="button" className="btn btn--outline" onClick={onCancel}>
+          닫기
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function AdminProducts() {
   const { admin } = useAdmin();
   const isSuper = admin.role === 'SUPER_ADMIN';
   const [filter, setFilter] = useState({ keyword: '', categoryId: '', status: '', martId: '' });
   const [page, setPage] = useState(0);
   const [panel, setPanel] = useState(null);
+  const [selected, setSelected] = useState([]);
   const [actionError, setActionError] = useState(null);
   const { data, error, reload } = useLoad(() => api.get('/api/admin/products', { ...filter, page, size: 20 }), [filter, page]);
   const [refs, setRefs] = useState({ marts: [], categories: [], ingredients: [] });
@@ -445,6 +515,17 @@ export default function AdminProducts() {
           onCancel={() => setPanel(null)}
         />
       )}
+      {panel?.type === 'bulk' && (
+        <BulkDiscountPanel
+          productIds={selected}
+          onDone={() => {
+            setPanel(null);
+            setSelected([]);
+            reload();
+          }}
+          onCancel={() => setPanel(null)}
+        />
+      )}
       {panel?.type === 'discount' && (
         <DiscountPanel
           key={panel.product.productId}
@@ -489,10 +570,40 @@ export default function AdminProducts() {
         )}
       </div>
       <ErrorNotice error={error ?? actionError} />
+      {selected.length > 0 && (
+        <div className="row-actions" style={{ marginTop: 0 }}>
+          <span className="tile__meta">{selected.length}개 선택됨</span>
+          <button
+            type="button"
+            className="btn"
+            disabled={selected.length > BULK_LIMIT}
+            title={selected.length > BULK_LIMIT ? `한 번에 ${BULK_LIMIT}개까지 지정할 수 있어요` : undefined}
+            onClick={() => setPanel({ type: 'bulk' })}
+          >
+            선택 상품 일괄 할인
+          </button>
+          <button type="button" className="btn btn--outline" onClick={() => setSelected([])}>
+            선택 해제
+          </button>
+        </div>
+      )}
       <div className="card table-wrap">
         <table className="table">
           <thead>
             <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label="현재 페이지 전체 선택"
+                  checked={Boolean(data?.content.length) && data.content.every((p) => selected.includes(p.productId))}
+                  onChange={(e) => {
+                    const pageIds = data?.content.map((p) => p.productId) ?? [];
+                    setSelected((prev) =>
+                      e.target.checked ? [...new Set([...prev, ...pageIds])] : prev.filter((id) => !pageIds.includes(id)),
+                    );
+                  }}
+                />
+              </th>
               <th />
               <th>상품명</th>
               <th>브랜드</th>
@@ -507,6 +618,18 @@ export default function AdminProducts() {
           <tbody>
             {data?.content.map((product) => (
               <tr key={product.productId}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`${product.name} 선택`}
+                    checked={selected.includes(product.productId)}
+                    onChange={(e) =>
+                      setSelected((prev) =>
+                        e.target.checked ? [...prev, product.productId] : prev.filter((id) => id !== product.productId),
+                      )
+                    }
+                  />
+                </td>
                 <td>{product.imageUrl ? <img className="table__thumb" src={product.imageUrl} alt="" /> : <div className="table__thumb" />}</td>
                 <td>{product.name}</td>
                 <td>{product.brand ?? '-'}</td>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Footer from './Footer';
+import FloatingRecent from './FloatingRecent';
 import DeliveryNotice from './DeliveryNotice';
 import Header from './Header';
 import MembershipInfoModal from './MembershipInfoModal';
@@ -62,6 +63,7 @@ export default function Layout() {
         <DeliveryNotice />
         <Outlet />
       </main>
+      <FloatingRecent />
       <Footer />
       {trialOffer && <MembershipInfoModal onClose={closeTrialOffer} onHideToday={hideTrialOfferToday} />}
     </ToastProvider>

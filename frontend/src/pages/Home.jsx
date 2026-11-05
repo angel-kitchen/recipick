@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import BandScene from '../components/BandScenes';
+import DealsStrip from '../components/DealsStrip';
 import Icon from '../components/Icon';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import MembershipInfoModal from '../components/MembershipInfoModal';
@@ -336,6 +337,14 @@ export default function Home() {
       {member && <WeeklyRecipes />}
 
       {member && <PopularRanking />}
+
+      {member && (
+        <section className="hm-section">
+          <div className="container">
+            <DealsStrip limit={8} moreTo="/products?onSale=true" />
+          </div>
+        </section>
+      )}
 
       {!isActiveMember && (
         <section className="hm-apple" aria-labelledby="hm-apple-title">
