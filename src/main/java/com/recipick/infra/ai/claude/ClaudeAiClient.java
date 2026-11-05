@@ -82,7 +82,7 @@ public class ClaudeAiClient implements AiClient {
     public AiResult<List<AiExtractedMenu>> extractMenus(String instruction, String text, List<AiRecipeOption> recipes) {
         // 레시피 목록은 요청마다 같으므로 캐시해 입력 토큰 비용을 줄인다
         AiResult<List<MenuOutput>> result =
-            call(MenuOutput.class, instruction + catalog(recipes), true, text, "메뉴 분석");
+            call(MenuOutput.class, properties.menuModel(), instruction + catalog(recipes), true, text, "메뉴 분석");
         if (!result.isSuccess()) {
             return AiResult.failure(result.failureType(), result.usage());
         }
@@ -96,7 +96,7 @@ public class ClaudeAiClient implements AiClient {
     @Override
     public AiResult<AiRecipeConditions> extractConditions(String instruction, String text) {
         AiResult<List<ConditionOutput>> result =
-            call(ConditionOutput.class, instruction, false, text, "조건 분석");
+            call(ConditionOutput.class, properties.model(), instruction, false, text, "조건 분석");
         if (!result.isSuccess()) {
             return AiResult.failure(result.failureType(), result.usage());
         }
@@ -114,7 +114,8 @@ public class ClaudeAiClient implements AiClient {
     public AiResult<List<AiRecommendedRecipe>> recommendRecipes(String instruction, String text,
                                                                 List<AiRecipeCandidate> candidates) {
         AiResult<List<RecommendOutput>> result =
-            call(RecommendOutput.class, instruction + candidateCatalog(candidates), true, text, "레시피 추천");
+            call(RecommendOutput.class, properties.model(), instruction + candidateCatalog(candidates), true, text,
+                "레시피 추천");
         if (!result.isSuccess()) {
             return AiResult.failure(result.failureType(), result.usage());
         }
@@ -135,7 +136,8 @@ public class ClaudeAiClient implements AiClient {
     public AiResult<List<AiPlannedMeal>> planMeals(String instruction, String text,
                                                    List<AiRecipeCandidate> candidates) {
         AiResult<List<MealPlanOutput>> result =
-            call(MealPlanOutput.class, instruction + candidateCatalog(candidates), true, text, "식단 구성");
+            call(MealPlanOutput.class, properties.model(), instruction + candidateCatalog(candidates), true, text,
+                "식단 구성");
         if (!result.isSuccess()) {
             return AiResult.failure(result.failureType(), result.usage());
         }
@@ -162,7 +164,7 @@ public class ClaudeAiClient implements AiClient {
             .cacheControl(CacheControlEphemeral.builder().build())
             .build();
         StructuredMessageCreateParams.Builder<FridgeOutput> params = MessageCreateParams.builder()
-            .model(properties.model())
+            .model(properties.fridgeModel())
             .maxTokens(properties.maxTokens())
             .outputConfig(FridgeOutput.class)
             .systemOfTextBlockParams(List.of(system))
@@ -180,7 +182,7 @@ public class ClaudeAiClient implements AiClient {
                 AiFailureType failureType = classify(e);
                 log.warn("Claude 냉장고 파먹기 호출 실패: type={}, round={}", failureType, round, e);
                 return AiResult.failure(failureType,
-                    plus(usage, AiUsage.failed(properties.model(), elapsedMs(startedAt))));
+                    plus(usage, AiUsage.failed(properties.fridgeModel(), elapsedMs(startedAt))));
             }
             usage = plus(usage, toUsage(message, elapsedMs(startedAt)));
             if (message.stopReason().filter(StopReason.REFUSAL::equals).isPresent()) {
@@ -258,14 +260,14 @@ public class ClaudeAiClient implements AiClient {
             .build();
     }
 
-    private <T> AiResult<List<T>> call(Class<T> outputType, String instruction, boolean cacheInstruction,
-                                       String text, String task) {
+    private <T> AiResult<List<T>> call(Class<T> outputType, String model, String instruction,
+                                       boolean cacheInstruction, String text, String task) {
         TextBlockParam.Builder system = TextBlockParam.builder().text(instruction);
         if (cacheInstruction) {
             system.cacheControl(CacheControlEphemeral.builder().build());
         }
         StructuredMessageCreateParams<T> params = MessageCreateParams.builder()
-            .model(properties.model())
+            .model(model)
             .maxTokens(properties.maxTokens())
             // SDK가 출력 레코드로 JSON 스키마를 만들어 보내므로, 응답이 항상 이 형태로 온다
             .outputConfig(outputType)
@@ -295,7 +297,7 @@ public class ClaudeAiClient implements AiClient {
         } catch (AnthropicException e) {
             AiFailureType failureType = classify(e);
             log.warn("Claude {} 호출 실패: type={}", task, failureType, e);
-            return AiResult.failure(failureType, AiUsage.failed(properties.model(), elapsedMs(startedAt)));
+            return AiResult.failure(failureType, AiUsage.failed(model, elapsedMs(startedAt)));
         }
     }
 
