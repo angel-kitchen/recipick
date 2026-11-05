@@ -6,6 +6,7 @@ import AdminLayout from './admin/AdminLayout';
 import AdminShell from './admin/AdminShell';
 import AdminAiPrompts from './admin/pages/AdminAiPrompts';
 import AdminAiRequests from './admin/pages/AdminAiRequests';
+import AdminAiUsage from './admin/pages/AdminAiUsage';
 import AdminAudit from './admin/pages/AdminAudit';
 import AdminCategories from './admin/pages/AdminCategories';
 import AdminIngredients from './admin/pages/AdminIngredients';
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="membership-payments" element={<AdminMembershipPayments />} />
           <Route path="member-points" element={<AdminMemberPoints />} />
           <Route path="ai-requests" element={<AdminAiRequests />} />
+          <Route path="ai-usage" element={<AdminAiUsage />} />
           <Route path="ai-prompts" element={<AdminAiPrompts />} />
           <Route path="audit" element={<AdminAudit />} />
         </Route>
