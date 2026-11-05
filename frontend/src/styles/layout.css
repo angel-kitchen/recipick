@@ -190,12 +190,28 @@
 
 /* 현재 배송지: 로고 옆에 말줄임으로 보여 주고 누르면 배송지 화면으로 간다 */
 .header__address {
-  max-width: 260px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 15px;
   color: var(--text-soft);
+}
+
+/* 회원 이름은 길이에 제한이 없어, 헤더에서는 일정 너비에서 말줄임하고 전체 이름은 title로 보여 준다 */
+.header__member-name {
+  display: inline-block;
+  vertical-align: bottom;
+  max-width: 7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 노트북처럼 조금 좁은 화면에서는 배송지를 숨겨 검색창과 메뉴 자리를 지킨다. 배송지는 배송지 관리에서 볼 수 있다 */
+@media (max-width: 1100px) {
+  .header__address {
+    display: none;
+  }
 }
 
 .header__address::before {
@@ -215,9 +231,12 @@
 }
 
 /* 헤더 오른쪽: 찜·장바구니(개수)·마이페이지 메뉴 */
+/* 이름·배송지가 길어 공간이 모자라도 메뉴 글자가 쪼개지지 않게, 메뉴는 줄바꿈·줄어듦을 막고 검색창·배송지가 대신 줄어든다 */
 .header__nav .header__item {
   position: relative;
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   border-radius: var(--radius-tesla);
   flex-direction: column;
