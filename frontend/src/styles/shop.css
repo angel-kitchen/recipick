@@ -1399,11 +1399,25 @@
 }
 
 .floating-recent__title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--green-brand);
   text-align: center;
+}
+
+.floating-recent__toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.floating-recent__title:has(+ .floating-recent__list) {
+  margin-bottom: 6px;
 }
 
 .floating-recent__list {
