@@ -18,7 +18,7 @@
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, #7ba05b 14%, transparent), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--leaf) 14%, transparent), transparent 70%);
   pointer-events: none;
 }
 
@@ -64,6 +64,18 @@
 .chat-avatar svg {
   width: 100%;
   height: 100%;
+}
+
+.chef-line {
+  stroke: var(--jungle);
+}
+
+.chef-fill {
+  fill: var(--jungle);
+}
+
+.chef-leaf {
+  fill: var(--leaf);
 }
 
 .chat-row {
@@ -290,7 +302,7 @@
   height: 44px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(90deg, #0d4c3c, #2d6a4f);
+  background: linear-gradient(90deg, var(--jungle), var(--accent-deep));
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -346,6 +358,11 @@
   .chat-recipes,
   .chat-restart {
     margin-left: 0;
+  }
+
+  /* iOS Safari는 16px보다 작은 입력칸에 포커스하면 화면을 확대한다 */
+  .chat-field {
+    font-size: 16px;
   }
 
   .chat-recipe {

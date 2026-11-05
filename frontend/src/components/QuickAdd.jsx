@@ -16,6 +16,9 @@ export default function QuickAdd({ recipe, className = 'btn btn--outline quick-a
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
+  // 로그아웃 직후 화면이 바뀌기 전 한 번 그려질 때 member가 비어 있을 수 있다
+  if (!member) return null;
+
   const blockedText =
     deliveryBlock(member)?.text ??
     (!member.membership?.active
@@ -44,7 +47,14 @@ export default function QuickAdd({ recipe, className = 'btn btn--outline quick-a
 
   return (
     <>
-      <button type="button" className={className} disabled={Boolean(blockedText)} title={blockedText ?? undefined} onClick={start}>
+      <button
+        type="button"
+        className={className}
+        disabled={Boolean(blockedText)}
+        title={blockedText ?? undefined}
+        aria-label={blockedText ? `재료 담기, ${blockedText}` : undefined}
+        onClick={start}
+      >
         재료 담기
       </button>
       {open && (

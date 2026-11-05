@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -54,6 +54,7 @@ const TOPICS = [
   },
 ];
 
+// 서버는 최대 5개를 주지만 대화가 길어 보이지 않도록 4개까지만 보여 준다
 const MAX_CARDS = 4;
 
 function Sparkle() {
@@ -66,20 +67,25 @@ function Sparkle() {
 
 function Chip({ onClick, selected, disabled, children }) {
   return (
-    <button type="button" className={`chat-chip${selected ? ' is-on' : ''}`} onClick={onClick} disabled={disabled}>
+    <button type="button" className={`chat-chip${selected ? ' is-on' : ''}`} aria-pressed={selected} onClick={onClick} disabled={disabled}>
       <Sparkle />
       {children}
     </button>
   );
 }
 
-function Ai({ lines, children }) {
+// live는 새로 나타나는 답을 스크린리더가 읽게 할 말풍선에만 붙인다
+function Ai({ lines, live }) {
   return (
     <div className="chat-row">
       <ChefAvatar />
       <div className="chat-col">
         <b className="chat-name">레피</b>
-        <div className="chat-bubble">{lines ? lines.map((line) => <p key={line}>{line}</p>) : children}</div>
+        <div className="chat-bubble" role={live ? 'status' : undefined}>
+          {lines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -94,7 +100,9 @@ function Me({ children }) {
 }
 
 function RecipeCard({ recipe, showPrice }) {
-  const facts = [
+  const meta = [
+    CUISINE[recipe.cuisineType],
+    DISH_TYPE[recipe.dishType],
     recipe.cookingTimeMinutes ? `${recipe.cookingTimeMinutes}분` : null,
     recipe.spicyLevel != null ? spicyText(recipe.spicyLevel) : null,
   ]
@@ -109,10 +117,7 @@ function RecipeCard({ recipe, showPrice }) {
       )}
       <div className="chat-recipe__body">
         <span className="chat-recipe__title">{recipe.name}</span>
-        <span className="chat-recipe__meta">
-          {CUISINE[recipe.cuisineType]} · {DISH_TYPE[recipe.dishType]}
-          {facts && ` · ${facts}`}
-        </span>
+        <span className="chat-recipe__meta">{meta}</span>
         {recipe.reason && <span className="chat-recipe__reason">{recipe.reason}</span>}
         <span className="chat-recipe__tags">
           {recipe.autoCartAvailable && <span className="badge">자동 담기 가능</span>}
@@ -145,26 +150,37 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
   const [loading, setLoading] = useState(false);
   const [membershipInfo, setMembershipInfo] = useState(false);
 
+  // 늦게 도착한 이전 요청의 응답이 지금 화면을 덮어쓰지 않도록 요청마다 번호를 매긴다
+  const latest = useRef(0);
   const started = topic || asked;
 
   const reset = () => {
+    latest.current += 1;
     setTopic(null);
     setOption(null);
     setAsked(null);
     setResult(null);
     setError(null);
+    setLoading(false);
   };
 
+  // action이 돌려준 값을 결과로 보여 준다(돌려주지 않으면 화면을 바꾸지 않는다). 성공하면 true
   const run = async (action) => {
+    latest.current += 1;
+    const id = latest.current;
     setError(null);
     setResult(null);
     setLoading(true);
     try {
-      await action();
+      const data = await action();
+      if (id !== latest.current) return false;
+      if (data) setResult(data);
+      return true;
     } catch (e) {
-      setError(e);
+      if (id === latest.current) setError(e);
+      return false;
     } finally {
-      setLoading(false);
+      if (id === latest.current) setLoading(false);
     }
   };
 
@@ -179,7 +195,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
 
   const pickOption = (next) => {
     setOption(next);
-    run(async () => setResult(await api.post('/api/recipes/ai-recommendations', { text: next.text })));
+    run(() => api.post('/api/recipes/ai-recommendations', { text: next.text }));
   };
 
   // 메뉴 이름이면 자동 장바구니 미리보기로 넘어가고, 이름으로 못 찾으면 같은 문장을 조건으로 보고 추천한다.
@@ -190,7 +206,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
     if (!sentence) return;
     reset();
     setAsked(sentence);
-    setText('');
+    // 요청이 실패하면 다시 보낼 수 있게 입력을 남겨 둔다
     run(async () => {
       let data;
       try {
@@ -201,15 +217,15 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
       }
       if (data.status === 'PREVIEWED') {
         navigate(`/auto-carts/${data.preview.autoCartRequestId}`);
-        return;
+        return null;
       }
-      if (data.status === 'NO_MATCH') {
-        setResult(await api.post('/api/recipes/ai-recommendations', { text: sentence }));
-        return;
-      }
-      // 후보 선택이 필요하거나 AI 장애일 때는 이름만 보여 주고 상세로 보낸다. 같은 AI를 또 부르지 않는다
-      setResult({ status: data.status, names: data.status === 'FALLBACK' ? data.recipes : data.menus.flatMap((menu) => menu.candidates) });
-    });
+      if (data.status === 'NO_MATCH') return api.post('/api/recipes/ai-recommendations', { text: sentence });
+      // 후보 선택이 필요하거나 AI 장애일 때는 이름만 보여 주고 상세로 보낸다. 같은 AI를 또 부르지 않는다.
+      // 인분까지 고르는 화면은 "자세히 찾기"에 있다. 메뉴가 여럿이면 같은 레시피가 겹칠 수 있어 하나만 남긴다
+      const candidates = data.status === 'FALLBACK' ? data.recipes : data.menus.flatMap((menu) => menu.candidates);
+      const names = [...new Map(candidates.map((item) => [item.recipeId, item])).values()];
+      return names.length === 0 ? { status: 'NO_MATCH' } : { status: data.status, names };
+    }).then((ok) => ok && setText(''));
   };
 
   const guardMembership = () => {
@@ -225,7 +241,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
         <Sparkle />
         <i />
       </div>
-      <div className="chat-log" aria-live="polite">
+      <div className="chat-log">
         {!started && (
           <>
             <Ai lines={['오늘 뭐 먹을지 같이 골라 볼까요?', '아래에서 하나 눌러도 되고, 직접 말해 줘도 돼요.']} />
@@ -253,12 +269,17 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
           </>
         )}
         {asked && <Me>{asked}</Me>}
-        {loading && <Ai lines={['잠깐만요, 골라 볼게요…']} />}
+        {loading && <Ai live lines={['잠깐만요, 골라 볼게요…']} />}
         {error && <ErrorNotice error={error} />}
         {result?.names && (
           <>
             <Ai
-              lines={[result.status === 'FALLBACK' ? '잘 알아듣지 못했어요. 대신 이런 레시피는 어때요?' : '어떤 레시피인지 골라 주세요.']}
+              live
+              lines={
+                result.status === 'FALLBACK'
+                  ? ['잘 알아듣지 못했어요.', '대신 이런 레시피는 어때요?']
+                  : ['어떤 레시피인지 골라 주세요.', '인분까지 정하려면 "자세히 찾기"를 써 주세요.']
+              }
             />
             <div className="chat-chips">
               {result.names.map((item) => (
@@ -271,13 +292,16 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
         )}
         {result && !result.names && (
           <>
-            {result.status === 'NO_MATCH' && <Ai lines={['조건에 맞는 레시피를 찾지 못했어요.', '조건을 줄여서 다시 골라 볼까요?']} />}
-            {result.status === 'FALLBACK' && recipes.length === 0 && (
-              <Ai lines={['지금은 추천하기 어려워요.', '아래 필터로 직접 찾아볼까요?']} />
+            {recipes.length === 0 && result.status === 'FALLBACK' && (
+              <Ai live lines={['지금은 추천하기 어려워요.', '아래 필터로 직접 찾아볼까요?']} />
+            )}
+            {recipes.length === 0 && result.status !== 'FALLBACK' && (
+              <Ai live lines={['조건에 맞는 레시피를 찾지 못했어요.', '조건을 줄여서 다시 골라 볼까요?']} />
             )}
             {recipes.length > 0 && (
               <>
                 <Ai
+                  live
                   lines={
                     result.status === 'FALLBACK'
                       ? ['지금은 AI가 고르지 못했어요.', '조건에 맞는 레시피를 순서대로 보여 드려요.']
