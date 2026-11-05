@@ -72,12 +72,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 // 실제 Claude API를 불러 평가 문장의 정답률·응답 시간·토큰을 잰다. 호출마다 비용이 들므로 평소 테스트와 CI에서는 건너뛰고,
-// AI_EVAL=true와 ANTHROPIC_API_KEY를 넣었을 때만 돈다. 모델은 AI_EVAL_MODEL로 바꿔 같은 문장으로 비교한다.
+// AI_EVAL=true와 ANTHROPIC_API_KEY를 넣었을 때만 돈다. AI_EVAL_MODEL을 주면 모든 기능을 그 모델로 돌려 같은 문장으로 비교하고,
+// 없으면 운영과 같은 기능별 모델(장보기·냉장고 파먹기 Haiku, 나머지 Sonnet)로 돈다.
 // 정답률을 재는 측정이라 점수로 테스트를 실패시키지 않고, 결과는 build/ai-eval/에 표로 남긴다
 @EnabledIfEnvironmentVariable(named = "AI_EVAL", matches = "true")
 class ClaudeAiEvaluationTest {
 
     private static final String DEFAULT_MODEL = "claude-sonnet-5-5";
+    private static final String DEFAULT_LIGHT_MODEL = "claude-haiku-5-5";
+    // 운영과 같은 기능별 모델로 돌렸다는 것을 결과 파일 이름으로 구분한다
+    private static final String DEFAULT_MODEL_LABEL = "default-models";
     // 로컬 시드와 같은 100개 목록을 쓰려고 시드 SQL에서 레시피 이름을 순서대로 읽는다. ID는 시드 순서(1부터)다
     private static final Pattern SEED_RECIPE_NAME =
         Pattern.compile("^SELECT '([^']+)', '(?:KOREAN|WESTERN)'", Pattern.MULTILINE);
@@ -108,11 +112,15 @@ class ClaudeAiEvaluationTest {
 
     @BeforeAll
     static void setUp() throws IOException {
-        model = System.getenv().getOrDefault("AI_EVAL_MODEL", DEFAULT_MODEL);
+        String evalModel = System.getenv("AI_EVAL_MODEL");
+        model = evalModel == null ? DEFAULT_MODEL_LABEL : evalModel;
         label = System.getenv().getOrDefault("AI_EVAL_LABEL", "");
         // 평가 결과로 운영 모델을 고르므로 타임아웃·재시도·최대 토큰은 ClaudeProperties 기본값과 같게 둔다
-        ClaudeProperties properties = new ClaudeProperties(
-            System.getenv("ANTHROPIC_API_KEY"), model, Duration.ofSeconds(15), 2, 4096);
+        ClaudeProperties properties = evalModel == null
+            ? new ClaudeProperties(System.getenv("ANTHROPIC_API_KEY"), DEFAULT_MODEL, Duration.ofSeconds(15), 2, 4096,
+                DEFAULT_LIGHT_MODEL, DEFAULT_LIGHT_MODEL)
+            : new ClaudeProperties(System.getenv("ANTHROPIC_API_KEY"), evalModel, Duration.ofSeconds(15), 2, 4096,
+                evalModel, evalModel);
         anthropicClient = AnthropicOkHttpClient.builder()
             .apiKey(properties.apiKey())
             .timeout(properties.timeout())

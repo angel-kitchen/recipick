@@ -43,7 +43,8 @@ class ClaudeAiClientTest {
 
     private final AnthropicClient client = mock(AnthropicClient.class, Answers.RETURNS_DEEP_STUBS);
     private final ClaudeAiClient claudeAiClient = new ClaudeAiClient(
-        client, new ClaudeProperties("test-key", "claude-opus-5-5", Duration.ofSeconds(15), 2, 4096));
+        client, new ClaudeProperties("test-key", "claude-opus-5-5", Duration.ofSeconds(15), 2, 4096,
+            "claude-haiku-5-5", "claude-haiku-5-5"));
 
     @Test
     @DisplayName("응답이 최대 토큰에서 잘리면 메뉴를 읽지 않고 실패로 돌려준다")
@@ -153,6 +154,37 @@ class ClaudeAiClientTest {
         assertThat(system.cacheControl()).isPresent();
     }
 
+    @Test
+    @DisplayName("메뉴 분석은 장보기 모델로, 조건 분석·추천·식단은 기본 모델로 부른다")
+    @SuppressWarnings("unchecked")
+    void callsEachTaskWithItsModel() {
+        // given
+        StructuredMessage<Object> message = mock(StructuredMessage.class);
+        Usage usage = mock(Usage.class);
+        when(usage.inputTokens()).thenReturn(900L);
+        when(usage.outputTokens()).thenReturn(10L);
+        when(usage.cacheReadInputTokens()).thenReturn(Optional.empty());
+        when(message.usage()).thenReturn(usage);
+        when(message.model()).thenReturn(Model.of("claude-opus-5-5"));
+        when(message.stopReason()).thenReturn(Optional.of(StopReason.END_TURN));
+        when(message.content()).thenReturn(List.of());
+        when(client.messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+
+        // when
+        claudeAiClient.extractMenus(INSTRUCTION, "김치찌개", List.of(new AiRecipeOption(1L, "김치찌개")));
+        claudeAiClient.extractConditions(INSTRUCTION, "한식 찌개");
+        claudeAiClient.recommendRecipes(INSTRUCTION, "두부", List.of(kimchiStewCandidate()));
+        claudeAiClient.planMeals(INSTRUCTION, "3일치", List.of(kimchiStewCandidate()));
+
+        // then
+        ArgumentCaptor<StructuredMessageCreateParams<Object>> params =
+            ArgumentCaptor.forClass(StructuredMessageCreateParams.class);
+        verify(client.messages(), times(4)).create(params.capture());
+        assertThat(params.getAllValues())
+            .extracting(param -> param.rawParams().model().asString())
+            .containsExactly("claude-haiku-5-5", "claude-opus-5-5", "claude-opus-5-5", "claude-opus-5-5");
+    }
+
     private static AiRecipeCandidate kimchiStewCandidate() {
         return new AiRecipeCandidate(1L, "김치찌개", "KOREAN", "STEW", 30, 2, "EASY", List.of("김치", "두부"));
     }
@@ -230,6 +262,9 @@ class ClaudeAiClientTest {
         assertThat(system.text()).endsWith("두부, 김치");
         assertThat(system.cacheControl()).isPresent();
         assertThat(params.getValue().rawParams().messages()).hasSize(3);
+        assertThat(params.getAllValues())
+            .extracting(param -> param.rawParams().model().asString())
+            .containsOnly("claude-haiku-5-5");
     }
 
     @Test
