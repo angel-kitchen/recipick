@@ -7,6 +7,7 @@ import com.recipick.domain.recipe.dto.request.RecipeSearchRequest;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeMetadataResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
+import com.recipick.domain.recipe.dto.response.RecipeSuggestionResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
@@ -21,9 +22,11 @@ import com.recipick.domain.recipe.repository.RecipeBookmarkRepository;
 import com.recipick.domain.recipe.repository.RecipeIngredientRepository;
 import com.recipick.domain.recipe.repository.RecipeRepository;
 import com.recipick.domain.recipe.repository.RecipeSearchCondition;
+import com.recipick.global.config.CacheConfig;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -50,6 +54,9 @@ public class RecipeService {
 
     // AI가 한 번에 읽고 고를 만큼만 돌려준다. 추천은 이 중 최대 3개다
     private static final int FRIDGE_RECIPE_LIMIT = 10;
+    private static final int SUGGESTION_LIMIT = 8;
+    // 레시피명 컬럼이 varchar(50)이라 그보다 긴 검색어는 맞을 수 없다
+    private static final int MAX_SUGGESTION_KEYWORD_LENGTH = 50;
 
     private final RecipeRepository recipeRepository;
     private final RecipeIngredientRepository recipeIngredientRepository;
@@ -74,6 +81,34 @@ public class RecipeService {
 
         return PageResponse.from(recipes.map(recipe ->
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
+    }
+
+    // 검색창 자동완성. 활성 레시피가 100개 남짓이라 이름 비교는 메모리에서 하고, 키 입력마다 오는 요청은 30초 캐시한다.
+    // 사람은 앞글자부터 치므로 이름이 검색어로 시작하는 레시피를 먼저, 같은 순위는 많이 본 레시피를 먼저 보여 준다
+    @Cacheable(cacheNames = CacheConfig.RECIPE_SUGGESTIONS, key = "#keyword", condition = "#keyword != null")
+    public List<RecipeSuggestionResponse> findSuggestions(String keyword) {
+        String query = keyword == null ? "" : withoutSpaces(keyword).toLowerCase(Locale.ROOT);
+        if (query.isEmpty() || query.length() > MAX_SUGGESTION_KEYWORD_LENGTH) {
+            return List.of();
+        }
+        boolean choseongOnly = Choseong.isChoseongOnly(query);
+        Comparator<Map.Entry<Recipe, Integer>> order = Comparator
+            .comparing((Map.Entry<Recipe, Integer> match) -> match.getValue() != 0)
+            .thenComparing(match -> match.getKey().getViewCount(), Comparator.reverseOrder())
+            .thenComparing(match -> match.getKey().getName());
+        return recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE).stream()
+            .map(recipe -> Map.entry(recipe, matchIndex(recipe.getName(), query, choseongOnly)))
+            .filter(match -> match.getValue() >= 0)
+            .sorted(order)
+            .limit(SUGGESTION_LIMIT)
+            .map(match -> RecipeSuggestionResponse.from(match.getKey()))
+            .toList();
+    }
+
+    // 검색어가 이름의 몇 번째 글자에서 시작하는지 돌려주고, 없으면 -1이다. 초성 검색이면 이름도 초성으로 바꿔 비교한다
+    private int matchIndex(String name, String query, boolean choseongOnly) {
+        String target = withoutSpaces(name).toLowerCase(Locale.ROOT);
+        return (choseongOnly ? Choseong.of(target) : target).indexOf(query);
     }
 
     public PageResponse<RecipeRankingResponse> findPopularRecipes(

@@ -8,6 +8,7 @@ import com.recipick.domain.recipe.dto.response.AiRecipeRecommendResponse;
 import com.recipick.domain.recipe.dto.response.RecipeDetailResponse;
 import com.recipick.domain.recipe.dto.response.RecipeMetadataResponse;
 import com.recipick.domain.recipe.dto.response.RecipeRankingResponse;
+import com.recipick.domain.recipe.dto.response.RecipeSuggestionResponse;
 import com.recipick.domain.recipe.dto.response.RecipeSummaryResponse;
 import com.recipick.domain.recipe.facade.AiFridgeRecommendFacade;
 import com.recipick.domain.recipe.facade.AiRecipeRecommendFacade;
@@ -18,6 +19,7 @@ import com.recipick.global.response.ApiResponse;
 import com.recipick.global.security.LoginMember;
 import com.recipick.global.response.PageResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +49,13 @@ public class RecipeController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(ApiResponse.success(recipeService.searchRecipes(memberId, request, pageable)));
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<ApiResponse<List<RecipeSuggestionResponse>>> findSuggestions(
+        @RequestParam(required = false) String keyword
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(recipeService.findSuggestions(keyword)));
     }
 
     @GetMapping("/popular")
