@@ -4,12 +4,13 @@ import ErrorNotice from '../../components/ErrorNotice';
 import { AI_REQUEST_TYPE, AI_RESULT_STATUS, formatDateTime } from '../../labels';
 import useLoad from '../useLoad';
 
-// 서버는 요청 1건마다 회원 ID와 토큰을 주고 회원별 합계는 주지 않는다. 그래서 요청 이력을 읽어 와 화면에서 회원별로 합산한다
+// 서버는 요청 1건마다 회원 ID와 토큰을 주고 회원별 합계는 주지 않는다. 그래서 요청 이력을 읽어 와 화면에서 회원별로 합산한다.
+// 이 API는 호출 1번마다 관리자 감사 기록을 쓰기 트랜잭션으로 남기므로(#266) 호출 수를 줄이려고 상한을 낮게 잡는다
 const PAGE_SIZE = 100; // API가 허용하는 최대 크기
-const MAX_PAGES = 50; // 최신 5,000건까지만 합산한다
+const MAX_PAGES = 20; // 최신 2,000건까지만 합산한다
 const PARALLEL = 5;
 
-const won = (value) => (value ?? 0).toLocaleString('ko-KR');
+const formatCount = (value) => (value ?? 0).toLocaleString('ko-KR');
 
 async function loadRequests(filter) {
   const first = await api.get('/api/admin/ai-requests', { ...filter, page: 0, size: PAGE_SIZE });
@@ -44,6 +45,11 @@ function summarize(rows) {
   return [...byMember.values()].map((entry) => ({ ...entry, total: entry.input + entry.output }));
 }
 
+// 기본은 최근 7일(한국 시간, 오늘 포함)이다. 기간 없이 전체를 읽으면 호출 수와 감사 기록이 크게 늘기 때문이다
+const seoulDate = (offsetDays = 0) =>
+  new Date(Date.now() + offsetDays * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+const defaultFilter = () => ({ requestType: '', from: seoulDate(-6), to: seoulDate() });
+
 const SORTS = {
   total: { label: '총 토큰 많은 순', compare: (a, b) => b.total - a.total },
   requests: { label: '요청 수 많은 순', compare: (a, b) => b.requests - a.requests },
@@ -51,16 +57,21 @@ const SORTS = {
 };
 
 export default function AdminAiUsage() {
-  const [filter, setFilter] = useState({ requestType: '', from: '', to: '' });
+  // 조건을 바꿀 때마다 읽으면 호출과 감사 기록이 쌓이므로, 입력 중인 조건(draft)은 "조회"를 눌러야 반영한다
+  const [draft, setDraft] = useState(defaultFilter);
+  const [filter, setFilter] = useState(draft);
   const [memberQuery, setMemberQuery] = useState('');
   const [sortKey, setSortKey] = useState('total');
   const [openId, setOpenId] = useState(null);
   const { data, error, loading } = useLoad(() => loadRequests(filter), [filter]);
 
-  const setFilterValue = (key) => (e) => {
+  const setFilterValue = (key) => (e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }));
+  // 같은 조건이어도 새 객체로 바꿔 다시 읽는다(새로고침 역할)
+  const search = () => {
     setOpenId(null);
-    setFilter((prev) => ({ ...prev, [key]: e.target.value }));
+    setFilter({ ...draft });
   };
+  const rangeInvalid = Boolean(draft.from && draft.to && draft.from > draft.to);
 
   const members = useMemo(() => (data ? summarize(data.rows) : []), [data]);
   const visible = useMemo(() => {
@@ -82,7 +93,7 @@ export default function AdminAiUsage() {
         <h1 className="page__title">AI 토큰 사용량</h1>
       </div>
       <div className="filters">
-        <select className="field__input" aria-label="요청 유형" value={filter.requestType} onChange={setFilterValue('requestType')}>
+        <select className="field__input" aria-label="요청 유형" value={draft.requestType} onChange={setFilterValue('requestType')}>
           <option value="">유형 전체</option>
           {Object.entries(AI_REQUEST_TYPE).map(([value, label]) => (
             <option key={value} value={value}>
@@ -90,8 +101,11 @@ export default function AdminAiUsage() {
             </option>
           ))}
         </select>
-        <input className="field__input" type="date" aria-label="시작일" value={filter.from} onChange={setFilterValue('from')} />
-        <input className="field__input" type="date" aria-label="종료일" value={filter.to} onChange={setFilterValue('to')} />
+        <input className="field__input" type="date" aria-label="시작일" value={draft.from} onChange={setFilterValue('from')} />
+        <input className="field__input" type="date" aria-label="종료일" value={draft.to} onChange={setFilterValue('to')} />
+        <button type="button" className="btn" disabled={loading || rangeInvalid} onClick={search}>
+          {loading ? '읽는 중...' : '조회'}
+        </button>
         <input
           className="field__input"
           inputMode="numeric"
@@ -108,16 +122,19 @@ export default function AdminAiUsage() {
           ))}
         </select>
       </div>
+      <p className="field__hint" style={{ margin: '0 0 8px' }}>
+        {rangeInvalid ? '시작일이 종료일보다 늦어요.' : '기간과 유형을 정하고 "조회"를 눌러 주세요. 조회할 때마다 관리자 감사 기록이 남아요.'}
+      </p>
       <ErrorNotice error={error} />
       {data?.truncated && (
         <div className="notice" role="status">
-          요청이 {won(data.total)}건이라 최신 {won(MAX_PAGES * PAGE_SIZE)}건만 합산했어요. 기간을 좁히면 전체를 볼 수 있어요.
+          요청이 {formatCount(data.total)}건이라 최신 {formatCount(MAX_PAGES * PAGE_SIZE)}건만 합산했어요. 기간을 좁히면 전체를 볼 수 있어요.
         </div>
       )}
       {data && (
         <p className="field__hint" style={{ margin: '4px 0 12px' }}>
-          회원 {won(members.length)}명 · 요청 {won(totals.requests)}건 · 입력 {won(totals.input)} + 출력 {won(totals.output)} = 총{' '}
-          {won(totals.input + totals.output)} 토큰 (캐시 읽기 {won(totals.cache)}는 따로 표시)
+          회원 {formatCount(members.length)}명 · 요청 {formatCount(totals.requests)}건 · 입력 {formatCount(totals.input)} + 출력 {formatCount(totals.output)} = 총{' '}
+          {formatCount(totals.input + totals.output)} 토큰 (캐시 읽기 {formatCount(totals.cache)}는 따로 표시)
         </p>
       )}
       <div className="card table-wrap">
@@ -143,14 +160,14 @@ export default function AdminAiUsage() {
                   <Fragment key={key}>
                     <tr className="is-clickable" onClick={() => setOpenId(opened ? null : key)}>
                       <td>{member.memberId ?? '회원 없음'}</td>
-                      <td>{won(member.requests)}</td>
-                      <td>{won(member.failed)}</td>
-                      <td>{won(member.input)}</td>
-                      <td>{won(member.output)}</td>
+                      <td>{formatCount(member.requests)}</td>
+                      <td>{formatCount(member.failed)}</td>
+                      <td>{formatCount(member.input)}</td>
+                      <td>{formatCount(member.output)}</td>
                       <td>
-                        <strong>{won(member.total)}</strong>
+                        <strong>{formatCount(member.total)}</strong>
                       </td>
-                      <td>{won(member.cache)}</td>
+                      <td>{formatCount(member.cache)}</td>
                       <td>
                         <button
                           type="button"
@@ -188,9 +205,9 @@ export default function AdminAiUsage() {
                                   <td>{AI_REQUEST_TYPE[log.requestType] ?? log.requestType}</td>
                                   <td>{log.rawText}</td>
                                   <td>{AI_RESULT_STATUS[log.resultStatus] ?? log.resultStatus}</td>
-                                  <td>{log.inputTokens == null ? '-' : won(log.inputTokens)}</td>
-                                  <td>{log.outputTokens == null ? '-' : won(log.outputTokens)}</td>
-                                  <td>{log.cacheReadTokens == null ? '-' : won(log.cacheReadTokens)}</td>
+                                  <td>{log.inputTokens == null ? '-' : formatCount(log.inputTokens)}</td>
+                                  <td>{log.outputTokens == null ? '-' : formatCount(log.outputTokens)}</td>
+                                  <td>{log.cacheReadTokens == null ? '-' : formatCount(log.cacheReadTokens)}</td>
                                 </tr>
                               ))}
                             </tbody>
