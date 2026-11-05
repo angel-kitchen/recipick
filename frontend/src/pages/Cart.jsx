@@ -235,8 +235,8 @@ export default function Cart() {
               const groupSelected = groupIds.length > 0 && groupIds.every((id) => selected.has(id));
               return (
                 <section key={group.name ?? 'direct'} className="card">
-                  <h2 className="tile__title cart-group__title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <label className="check" style={{ font: 'inherit' }}>
+                  <h2 className="tile__title cart-group__title">
+                    <label className="check">
                       <input
                         type="checkbox"
                         aria-label={`${title} 전체 선택`}
@@ -256,11 +256,8 @@ export default function Cart() {
                       type="button"
                       className="btn btn--outline"
                       onClick={() => {
-                        // 인분만 다른 같은 레시피는 한 레시피로 본다
-                        const base = (name) => name.replace(/ \d+인분$/, '');
-                        const shared = group.items.filter(
-                          (item) => new Set((sources[item.productId] ?? []).map(base)).size > 1,
-                        );
+                        // 화면 묶음과 같은 기준으로, 묶음 이름이 둘 이상 기록된 상품은 공유 재료로 본다
+                        const shared = group.items.filter((item) => (sources[item.productId] ?? []).length > 1);
                         setGroupTarget({
                           title,
                           name: group.name,

@@ -74,7 +74,7 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
       return next;
     });
 
-  const doAdd = async (targets, skippedIngredientIds = []) => {
+  const doAdd = async (targets, skippedLines = []) => {
     setError(null);
     setSubmitting(true);
     try {
@@ -82,7 +82,7 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
         productSelections: targets.map((line) => ({ ingredientId: line.item.ingredientId, productId: line.productId })),
         excludedIngredientIds: [
           ...preview.items.filter((item) => choices[item.ingredientId] === NONE).map((item) => item.ingredientId),
-          ...skippedIngredientIds,
+          ...skippedLines.map((line) => line.item.ingredientId),
         ],
       });
       const done = result.addedItems.map((item) => ({
@@ -90,7 +90,8 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
         productId: item.productId, name: item.name, quantity: item.addedQuantity,
         total: item.cartQuantity, price: item.linePrice,
       }));
-      rememberSources(member.memberId, done.map((line) => line.productId), menuLabels);
+      // 뺀 중복 상품도 이 레시피의 재료이므로 출처를 남겨야 나중에 다른 레시피를 지울 때 공유 재료로 판단돼 남는다
+      rememberSources(member.memberId, [...done, ...skippedLines].map((line) => line.productId), menuLabels);
       notifyCartChanged();
       setAdded({ lines: done, priceChanged: result.priceChanged, excluded: result.excludedItems });
     } catch (e) {
@@ -146,7 +147,7 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
     setDuplicates(null);
     doAdd(
       targets.filter((line) => !dupIds.has(line.productId)),
-      targets.filter((line) => dupIds.has(line.productId)).map((line) => line.item.ingredientId),
+      targets.filter((line) => dupIds.has(line.productId)),
     );
   };
 
@@ -314,17 +315,23 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
               <Link to="/cart" className="btn btn--large btn--outline">
                 장바구니로 가기
               </Link>
-              {/* 이미 레시피 목록 위의 팝업이면 이동할 곳이 없어서, 부모가 팝업을 닫도록 알린다 */}
-              <Link
-                to="/recipes"
-                className="btn btn--large btn--outline"
-                onClick={() => {
-                  setAdded(null);
-                  onBrowse?.();
-                }}
-              >
-                레시피 더 둘러보기
-              </Link>
+              {/* 목록 위의 팝업 안이면 이동하지 않고 팝업만 닫아야 검색어·페이지가 유지된다 */}
+              {onBrowse ? (
+                <button
+                  type="button"
+                  className="btn btn--large btn--outline"
+                  onClick={() => {
+                    setAdded(null);
+                    onBrowse();
+                  }}
+                >
+                  레시피 더 둘러보기
+                </button>
+              ) : (
+                <Link to="/recipes" className="btn btn--large btn--outline">
+                  레시피 더 둘러보기
+                </Link>
+              )}
             </div>
           </div>
         </div>
