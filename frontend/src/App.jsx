@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AccountHistory from './pages/AccountHistory';
+import PointHistory from './pages/PointHistory';
 import Rankings from './pages/Rankings';
 import AutoCartBuilder from './pages/AutoCartBuilder';
 import AdminLayout from './admin/AdminLayout';
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/auto-carts/new" element={<AutoCartBuilder />} />
           <Route path="/payments" element={<AccountHistory kind="payments" />} />
           <Route path="/points/earnings" element={<AccountHistory kind="earnings" />} />
+          <Route path="/points/history" element={<PointHistory />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/auto-carts" element={<AutoCartHistory />} />
