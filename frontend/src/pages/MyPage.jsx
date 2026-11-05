@@ -138,7 +138,7 @@ export default function MyPage() {
   return (
     <div className="container page">
       <h1 className="page__title">내 정보</h1>
-      <div className="row-actions"><Link to="/payments" className="btn btn--outline">결제 내역</Link><Link to="/points/earnings" className="btn btn--outline">포인트 적립 내역</Link></div>
+      <div className="row-actions"><Link to="/payments" className="btn btn--outline">결제 내역</Link><Link to="/points/earnings" className="btn btn--outline">포인트 적립 내역</Link><Link to="/points/history" className="btn btn--outline">포인트 전체 이력</Link></div>
       <div className="stack">
         <section className="card">
           <h2 className="tile__title">기본 정보</h2>
