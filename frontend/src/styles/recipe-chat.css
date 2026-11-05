@@ -300,7 +300,7 @@
   left: 0;
   width: 96px;
   height: 64px;
-  animation: repi-across 2.4s linear infinite;
+  animation: repi-across 3s linear infinite;
 }
 
 .repi-run__chef {
@@ -308,16 +308,18 @@
   inset: 0;
   width: 96px;
   height: 64px;
+  /* 들썩일 때 모자와 프라이팬이 그림 경계에 잘리지 않게 한다 */
+  overflow: visible;
 }
 
 .repi-run__body {
-  animation: repi-bob 0.3s ease-in-out infinite alternate;
+  animation: repi-bob 0.375s ease-in-out infinite alternate;
 }
 
 .repi-run__legs {
   transform-box: view-box;
   transform-origin: 58px 56px;
-  animation: repi-spin 0.28s linear infinite;
+  animation: repi-spin 0.375s linear infinite;
 }
 
 .repi-puff {
@@ -330,15 +332,15 @@
   stroke: var(--leaf);
   stroke-width: 1.4;
   opacity: 0;
-  animation: repi-puff 0.9s ease-out infinite;
+  animation: repi-puff 1s ease-out infinite;
 }
 
 .repi-puff:nth-child(2) {
-  animation-delay: 0.3s;
+  animation-delay: 0.33s;
 }
 
 .repi-puff:nth-child(3) {
-  animation-delay: 0.6s;
+  animation-delay: 0.66s;
 }
 
 .repi-puff path {
@@ -367,7 +369,7 @@
   }
 
   to {
-    left: calc(100% - 70px);
+    left: calc(100% - 100px);
   }
 }
 
