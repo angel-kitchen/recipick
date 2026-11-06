@@ -53,4 +53,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 
     List<Product> findAllByIdInAndMartIdAndDeletedFalse(Collection<Long> ids, Long martId);
 
+    List<Product> findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
+
 }

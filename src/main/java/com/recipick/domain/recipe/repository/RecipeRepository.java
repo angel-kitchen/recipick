@@ -32,4 +32,6 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long>, RecipeRep
     @Modifying
     @Query("update Recipe r set r.viewCount = r.viewCount + 1 where r.id = :id")
     int increaseViewCount(@Param("id") Long id);
+
+    List<Recipe> findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
 }

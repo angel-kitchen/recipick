@@ -13,6 +13,7 @@ import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeBookmarkId;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
+import com.recipick.global.common.Choseong;
 import com.recipick.global.common.RankingPeriod;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
