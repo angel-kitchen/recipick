@@ -27,6 +27,12 @@ const PRICE_RANGES = [
   { key: 'high', label: '10,000원 이상', minPrice: 10000 },
 ];
 
+const PRODUCT_SORTS = [
+  { value: 'createdAt,desc', label: '최신순' },
+  { value: 'price,asc', label: '낮은 가격순' },
+  { value: 'price,desc', label: '높은 가격순' },
+];
+
 export default function Products() {
   const { member } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -111,8 +117,7 @@ export default function Products() {
   return (
     <div className="container page">
       <h1 className="page__title">상품</h1>
-      <div className="row-actions"><Link to="/products/best" className="btn btn--outline">베스트 상품</Link><select className="field__input" aria-label="상품 정렬" value={sort} onChange={(e) => { setSort(e.target.value); setPage(0); }}><option value="createdAt,desc">최신순</option><option value="price,asc">낮은 가격순</option><option value="price,desc">높은 가격순</option></select></div>
-      {member.mart && <p className="page__sub">이용 마트: {member.mart.name}</p>}
+      <div className="row-actions row-actions--page"><Link to="/products/best" className="btn btn--outline">베스트 상품</Link></div>
       <RecentViews type="product" title="최근 본 상품" toPath={(id) => `/products/${id}`} />
       {!onSaleOnly && (
         <DealsStrip
@@ -123,17 +128,6 @@ export default function Products() {
           }}
         />
       )}
-      <div className="filters">
-        <input
-          className="field__input"
-          placeholder="상품 이름 검색"
-          value={keyword}
-          onChange={(e) => {
-            setPage(0);
-            setKeyword(e.target.value);
-          }}
-        />
-      </div>
 
       {modal}
       <div className="catalog">
@@ -198,6 +192,38 @@ export default function Products() {
         </aside>
 
         <div className="catalog__main">
+          <div className="filters">
+            <input
+              className="field__input"
+              placeholder="상품 이름 검색"
+              value={keyword}
+              onChange={(e) => {
+                setPage(0);
+                setKeyword(e.target.value);
+              }}
+            />
+          </div>
+          <div className="sort-bar" role="group" aria-label="상품 정렬">
+            {PRODUCT_SORTS.map((item) => {
+              const on = sort === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={`sort-bar__item ${on ? 'is-on' : ''}`}
+                  aria-pressed={on}
+                  onClick={() => {
+                    setSort(item.value);
+                    setPage(0);
+                  }}
+                >
+                  {on ? '✓ ' : ''}
+                  {item.label}
+                </button>
+              );
+            })}
+            {member.mart && <span className="mart-pin">📍 {member.mart.name}</span>}
+          </div>
           <ErrorNotice error={error} />
           {!result && !error && <CardSkeletons />}
           {visible?.length === 0 && (

@@ -1268,6 +1268,11 @@
 }
 
 /* 멤버십 홍보 창: 왼쪽 아래 가입 버튼, 오른쪽 아래 오늘 하루 안 보기·닫기 */
+/* 닫기(×)가 그림 위 "7일 무료" 띠와 겹치지 않게 그림을 닫기 버튼 아래로 내린다 */
+.modal__box.promo {
+  padding-top: calc(var(--space-2) + 40px);
+}
+
 .promo__art {
   position: relative;
   display: flex;
@@ -1459,4 +1464,21 @@
   height: 64px;
   border-radius: 6px;
   object-fit: cover;
+}
+
+/* 상품 정렬 바 오른쪽 끝의 이용 마트: 어느 마트 상품을 보고 있는지 목록 바로 위에서 보이게 한다 */
+.mart-pin {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--green-light);
+  color: var(--green-accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 제목 아래 버튼 줄: 위(제목)와 아래(목록) 여백을 같게 해 둘 사이 가운데에 놓는다 */
+.row-actions--page {
+  margin-top: 0;
+  margin-bottom: var(--space-4);
 }
