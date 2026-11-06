@@ -108,6 +108,8 @@ DB 커넥션 풀(HikariCP)
 
 인덱스만으로 전체 p95가 약 74% 줄었고(1.87s → 492ms) 풀 대기는 62에서 23으로 줄었다.
 
+**원인 후보: 판매가 식(#494).** 그 사이 가격 조건·정렬이 `price` 컬럼이 아니라 할인율을 반영한 판매가 `CASE` 식으로 바뀌었다(`ProductRepositoryImpl.salePrice`). 식에 감싼 가격은 인덱스의 범위·정렬을 못 써서, 필터 검색이 `(mart_id, category_id, deleted)`까지만 인덱스를 타고 그 카테고리 행(2,397건)을 모두 읽어 거른 뒤 정렬한다. 단독 `EXPLAIN ANALYZE`(`recipick_perf`, 같은 쿼리를 두 번째 실행한 값)에서 필터 검색 목록이 5.5ms(`price` 컬럼을 직접 쓰면 0.46ms), 개수가 5.4ms였다. 재측정에서 필터 검색 p95가 10월 135ms보다 느린 369ms가 된 것과 방향이 맞지만, 부하 상태에서 이 차이가 얼마나 기여했는지는 확인하지 않았다. 키워드 검색 p95도 10월(306ms)보다 느렸는데(548ms) 이 식과는 무관한 경로라 이 원인으로 설명되지 않는다. 쿼리는 `scripts/perf/explain-product-search.sql`로 재현한다. 할인 상품이 있는 데이터가 아니므로(`discount_rate > 0`인 행 0건) 이 식은 결과를 바꾸지 않고 계획만 바꾼다.
+
 ![재측정 Before 대시보드](images/remeasure-before-2026-11-05.jpg)
 ![재측정 인덱스 후 대시보드](images/remeasure-index-2026-11-05.jpg)
 
