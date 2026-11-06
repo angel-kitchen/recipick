@@ -106,8 +106,11 @@ class RefundWebhookConcurrencyTest extends PaymentFlowIntegrationSupport {
         assertThat(orderStatusHistoryRepository.findAllByOrderId(flow.orderId()))
             .filteredOn(history -> OrderStatus.REFUNDED.name().equals(history.getToStatus()))
             .hasSize(1);
-        // 확정 결과라 환불 재확인을 예약하지 않았다
-        assertThat(scoreOf(PaymentDelayTask.refundReconcile(refunds.get(0).getId()))).isNull();
+        // 큐에 남은 재확인은 취소 API가 PortOne POST 전에 걸어 둔 5분 뒤 안전망뿐이다 — 확정 결과라 즉시 재확인은 잡지 않았다.
+        // 그 재확인이 돌아도 끝난 환불을 보고 건너뛴다
+        Double reconcileAt = scoreOf(PaymentDelayTask.refundReconcile(refunds.get(0).getId()));
+        assertThat(reconcileAt).isNotNull();
+        assertThat(reconcileAt.longValue()).isGreaterThan(clock.instant().toEpochMilli());
         verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
     }
 }

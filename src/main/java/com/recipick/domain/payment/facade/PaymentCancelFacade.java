@@ -58,6 +58,9 @@ public class PaymentCancelFacade {
         PaymentCancelResult result = preparation.finishedResult();
 
         if (preparation.requiresPortOneCall()) {
+            // PortOne을 부르기 전에 재확인을 먼저 예약한다. POST 직전에 서버가 죽거나 연결이 끊겨 TX2에 못 가도
+            // 환불이 REQUESTED로 남은 채 큐에서 사라지지 않는다. 취소가 바로 끝나면 재확인은 끝난 환불을 보고 건너뛴다
+            scheduleRefundReconcile(preparation.refundId());
             // TX1은 커밋되고 잠금은 풀렸다. 여기서 PortOne을 기다려도 같은 결제의 다른 요청이 락에 묶이지 않는다
             PortOneCancelResult portOneResult = portOnePaymentClient.cancelPayment(
                 preparation.portonePaymentId(),

@@ -200,7 +200,7 @@
 - 멤버십 결제 ID(`mpay_`)는 `MembershipWebhookReconciliationFacade`로 분기해 같은 결제 ID 재조회(`MembershipChargeExecutor.reconcile`)로 넘긴다. 취소 계열은 멤버십 환불 정합화로 넘긴다.
 
 **상품 환불**
-- 회원 환불: `RefundReconciliationFacade.reconcile`가 요청 5분 뒤부터 10분 간격으로 요청 후 3시간까지 다시 묻는다. 취소 POST는 하지 않고 이미 시작된 취소의 상태만 본다. 반영은 `PaymentCancelProcessor.apply`(PAYMENT 잠금).
+- 회원 환불: `RefundReconciliationFacade.reconcile`가 요청 5분 뒤부터 10분 간격으로 요청 후 3시간까지 다시 묻는다. 취소 API는 PortOne POST 전에 이 재확인을 먼저 예약한다 — POST 직전에 서버가 죽어도 큐에 남는다. 재확인은 이미 시작된 취소의 상태를 보는 것이 기본이고, GET으로 이 환불의 서버 API 취소가 없음을 확인했을 때만(`RefundCancellationRules.selectCurrentApiCancellation`이 NONE) 같은 서버 키 `recipick-refund-{환불 ID}`로 취소 POST를 다시 보낸다. 조건: 스위치 `payment.member-refund-recovery.auto-repost-enabled`(운영 기본 false) · PG 결제 PAID · 결제 ID·주문 ID 일치 · KRW·원수납액·누적 취소액 0이 환불 금액과 일치 · 비API 취소 없음 · 최초 접수 후 2시간 55분 미만 · POST 직전 재조회에서 여전히 REQUESTED·취소 ID 없음. 그 밖은 POST하지 않고 다시 예약하거나 운영 확인(`MANUAL_REVIEW`)으로 넘긴다. 반영은 `PaymentCancelProcessor.apply`(PAYMENT 잠금).
 - `SYSTEM` 환불·마트 거절 환불: `SystemRefundExecutionFacade`·`AdminRefundExecutionFacade`가 취소 POST 전에 항상 GET으로 이미 접수된 취소를 확인한다. 환불 행마다 고정된 멱등 키(`recipick-refund-` 접두)를 써서 동시에 요청돼도 PortOne에서 한 건이다. 재실행 간격 10분, 고빈도 구간 3시간.
 - 고빈도 구간이 끝난 건은 Fallback Sweep이 1시간마다 다시 넣는다(4-4와 같은 Sweep).
 - 상품 결제에는 운영자 재조회 API가 없다. `/api/admin/payments`는 조회(GET)만 있다.

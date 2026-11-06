@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -138,7 +139,7 @@ class PaymentCancelFacadeTest {
     }
 
     @Test
-    @DisplayName("PortOne 호출이 필요하면 TX1 → PortOne(서버 키 recipick-refund-{refundId}) → TX2 순으로 부르고 TX2 결과를 돌려준다")
+    @DisplayName("PortOne 호출이 필요하면 TX1 → 재확인 예약 → PortOne(서버 키 recipick-refund-{refundId}) → TX2 순으로 부르고 TX2 결과를 돌려준다")
     void callsPortOneBetweenTransactions() {
         // given
         given(paymentCancelProcessor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON))
@@ -150,18 +151,20 @@ class PaymentCancelFacadeTest {
         // when
         PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
 
-        // then — 클라이언트 키는 PortOne에 가지 않는다
+        // then — 클라이언트 키는 PortOne에 가지 않는다. 재확인 예약은 POST보다 앞이다 — POST 직전에 죽어도 큐에 남는다
         assertThat(result).isSameAs(CANCELED_RESULT);
-        InOrder inOrder = inOrder(paymentCancelProcessor, portOnePaymentClient);
+        InOrder inOrder = inOrder(paymentCancelProcessor, paymentDelayQueue, portOnePaymentClient);
         inOrder.verify(paymentCancelProcessor).prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON);
+        inOrder.verify(paymentDelayQueue).enqueueIfEarlier(
+            PaymentDelayTask.refundReconcile(REFUND_ID), NOW_INSTANT.plus(Duration.ofMinutes(5)));
         inOrder.verify(portOnePaymentClient).cancelPayment("pay_1", "recipick-refund-55", REASON, 23800L);
         inOrder.verify(paymentCancelProcessor).apply(PAYMENT_ID, REFUND_ID, PORTONE_SUCCEEDED);
-        // 확정됐으니 환불 재확인을 예약하지 않는다
-        verifyNoInteractions(paymentDelayQueue);
+        // 확정됐으니 TX2 뒤에는 다시 예약하지 않는다. POST 전 예약 한 번뿐이다
+        verify(paymentDelayQueue, times(1)).enqueueIfEarlier(any(), any());
     }
 
     @Test
-    @DisplayName("TX2가 PENDING이면 5분 뒤 환불 재확인(REFUND_RECONCILE)을 예약하고 PENDING을 그대로 돌려준다")
+    @DisplayName("TX2가 PENDING이면 POST 전 예약에 더해 5분 뒤 환불 재확인(REFUND_RECONCILE)을 다시 예약하고 PENDING을 그대로 돌려준다")
     void schedulesRefundReconcileWhenPending() {
         // given
         given(paymentCancelProcessor.prepare(MEMBER_ID, PAYMENT_ID, KEY, REASON))
@@ -173,9 +176,9 @@ class PaymentCancelFacadeTest {
         // when
         PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
 
-        // then
+        // then — 같은 작업을 같은 시각으로 두 번 등록한다. ZADD LT라 더 이른 예약을 늦추지 않는다
         assertThat(result).isSameAs(PENDING_RESULT);
-        verify(paymentDelayQueue).enqueueIfEarlier(
+        verify(paymentDelayQueue, times(2)).enqueueIfEarlier(
             PaymentDelayTask.refundReconcile(REFUND_ID), NOW_INSTANT.plus(Duration.ofMinutes(5)));
     }
 
@@ -194,8 +197,10 @@ class PaymentCancelFacadeTest {
         // when
         PaymentCancelResult result = facade.cancel(MEMBER_ID, PAYMENT_ID, KEY, REASON);
 
-        // then
+        // then — POST 전 예약이 실패해도 PortOne은 부르고, TX2 뒤 예약도 다시 시도한다
         assertThat(result).isSameAs(PENDING_RESULT);
+        verify(portOnePaymentClient).cancelPayment("pay_1", "recipick-refund-55", REASON, 23800L);
+        verify(paymentDelayQueue, times(2)).enqueueIfEarlier(any(), any());
     }
 
     @Test

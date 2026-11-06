@@ -29,6 +29,7 @@ import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.infra.portone.dto.PortOneCancelOutcome;
 import com.recipick.infra.portone.dto.PortOneCancelResult;
 import com.recipick.infra.portone.dto.PortOneCancellationStatus;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -205,7 +206,10 @@ class PaymentCancelLockFailureTest extends PaymentFlowIntegrationSupport {
         }
         verify(portOnePaymentClient, times(1)).cancelPayment(anyString(), anyString(), anyString(), anyLong());
 
-        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 서버가 요청한 SUCCEEDED 취소가 보인다
+        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 서버가 요청한 SUCCEEDED 취소가 보인다.
+        // 실제로는 TX1 커밋 뒤에 POST하므로 PortOne의 취소 요청 시각이 환불 접수보다 뒤다. 조회 픽스처의 취소 시각(6분 전)에 맞춰
+        // 환불 접수를 그보다 앞으로 옮긴다 — 재확인은 환불보다 먼저 요청된 취소를 이 환불의 것으로 묶지 않는다
+        moveRefundRequestedAt(onlyRefund(flow).getId(), Duration.ofMinutes(7));
         given(portOnePaymentClient.getPayment(flow.portonePaymentId()))
             .willReturn(portOneWithCancellation(flow, cancellationIdOf(flow), PortOneCancellationStatus.SUCCEEDED));
         pollOnly(PaymentDelayTask.refundReconcile(onlyRefund(flow).getId()));
@@ -240,7 +244,8 @@ class PaymentCancelLockFailureTest extends PaymentFlowIntegrationSupport {
             assertThat(onlyRefund(flow).getFailureType()).isNull();
         }
 
-        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 같은 ID의 FAILED 취소 내역이 있다
+        // when — 잠금이 풀린 뒤 재확인. PortOne 조회에 같은 ID의 FAILED 취소 내역이 있다(취소 요청 시각은 환불 접수 뒤여야 한다)
+        moveRefundRequestedAt(onlyRefund(flow).getId(), Duration.ofMinutes(7));
         given(portOnePaymentClient.getPayment(flow.portonePaymentId()))
             .willReturn(portOneWithCancellation(flow, cancellationIdOf(flow), PortOneCancellationStatus.FAILED));
         pollOnly(PaymentDelayTask.refundReconcile(onlyRefund(flow).getId()));

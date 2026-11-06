@@ -100,6 +100,10 @@ payment:
     withdrawal-enabled: ${BILLING_KEY_DELETION_WITHDRAWAL_ENABLED:false}
     # 삭제 전용 HTTP 읽기 제한. 삭제 조회·DELETE는 지연 큐 밖(전용 스케줄러)에서만 돈다
     read-timeout: 60s
+  member-refund-recovery:
+    # 회원 환불 재확인이 PortOne에 이 환불의 취소가 없음을 확인하면 같은 서버 멱등 키로 취소 POST를 다시 보내는 스위치.
+    # 꺼져 있으면 조회만 하고 다시 예약한다. 운영 기본 false — 실 DB 검증 뒤 명시적으로 켠다
+    auto-repost-enabled: ${MEMBER_REFUND_AUTO_REPOST_ENABLED:false}
 ---
 spring:
   config:
