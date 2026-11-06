@@ -2,6 +2,8 @@ package com.recipick.domain.recipe.repository;
 
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.recipick.domain.recipe.entity.CuisineType;
@@ -54,11 +56,9 @@ public class RecipeRepositoryImpl implements RecipeRepositoryCustom {
         if (!StringUtils.hasText(keyword)) {
             return null;
         }
-        String trimmed = keyword.trim();
-        if (Choseong.isChoseongOnly(trimmed)) {
-            return recipe.nameChoseong.contains(trimmed);
-        }
-        return recipe.name.contains(trimmed);
+        String query = keyword.replace(" ", "");
+        StringExpression source = Choseong.isChoseongOnly(query) ? recipe.nameChoseong : recipe.name;
+        return Expressions.stringTemplate("replace({0}, ' ', '')", source).contains(query);
     }
 
     private BooleanExpression cuisineEq(CuisineType cuisineType) {
