@@ -18,7 +18,7 @@ export default function Login() {
   const [saveState, setSaveState] = useState('idle');
   // 개발 모드에서 효과가 두 번 돌아도 같은 배송지가 두 번 저장되지 않게 한다
   const saveStarted = useRef(false);
-  const destination = location.state?.from ?? '/recipes';
+  const destination = location.state?.from ?? '/';
 
   useEffect(() => {
     if (!member) return;
