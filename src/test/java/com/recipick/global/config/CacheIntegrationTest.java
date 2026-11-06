@@ -2,6 +2,7 @@ package com.recipick.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.service.CategoryService;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.domain.product.service.ProductService;
+import com.recipick.domain.recipe.service.RecipeService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +41,8 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     private MartService martService;
     @Autowired
     private ProductService productService;
+    @Autowired
+    private RecipeService recipeService;
 
     @MockitoSpyBean
     private CategoryRepository categoryRepository;
@@ -116,6 +120,31 @@ class CacheIntegrationTest extends IntegrationTestSupport {
         productService.searchProducts(1L, new ProductSearchRequest("양파", null, null, null, null), page);
         verify(productRepository, times(2)).searchMemberProducts(any(), any());
     }
+
+    @Test
+    @DisplayName("같은 검색어의 상품 자동완성은 두 번째부터 DB를 거치지 않고, 검색어가 다르면 따로 저장한다")
+    void productSuggestions_isCachedPerKeyword() {
+        var first = productService.findSuggestions(1L, "대파");
+        var second = productService.findSuggestions(1L, "대파");
+        assertThat(second).isEqualTo(first);
+        verify(productRepository, times(1)).findSuggestions(any(), any(), anyInt());
+
+        productService.findSuggestions(1L, "양파");
+        verify(productRepository, times(2)).findSuggestions(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("50자를 넘는 자동완성 검색어는 캐시에 저장하지 않는다")
+    void suggestions_longKeywordIsNotCached() {
+        String longKeyword = "가".repeat(51);
+
+        productService.findSuggestions(1L, longKeyword);
+        recipeService.findSuggestions(longKeyword);
+
+        assertThat(cacheManager.getCache(CacheConfig.PRODUCT_SUGGESTIONS).get(1L + ":" + longKeyword)).isNull();
+        assertThat(cacheManager.getCache(CacheConfig.RECIPE_SUGGESTIONS).get(longKeyword)).isNull();
+    }
+
     @org.junit.jupiter.api.AfterEach
     void clearAuthentication() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();

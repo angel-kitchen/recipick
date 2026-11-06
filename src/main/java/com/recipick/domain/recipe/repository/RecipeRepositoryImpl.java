@@ -8,6 +8,7 @@ import com.recipick.domain.recipe.entity.CuisineType;
 import com.recipick.domain.recipe.entity.DishType;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeStatus;
+import com.recipick.global.common.Choseong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,7 +51,14 @@ public class RecipeRepositoryImpl implements RecipeRepositoryCustom {
     }
 
     private BooleanExpression nameContains(String keyword) {
-        return StringUtils.hasText(keyword) ? recipe.name.contains(keyword.trim()) : null;
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (Choseong.isChoseongOnly(trimmed)) {
+            return recipe.nameChoseong.contains(trimmed);
+        }
+        return recipe.name.contains(trimmed);
     }
 
     private BooleanExpression cuisineEq(CuisineType cuisineType) {

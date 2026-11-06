@@ -3,6 +3,8 @@ package com.recipick.domain.product.service;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+
+import com.recipick.domain.product.dto.response.ProductSuggestionResponse;
 import com.recipick.global.audit.AdminAuditAction;
 import com.recipick.global.audit.AdminAuditChange;
 import com.recipick.global.audit.AdminAuditCommand;
@@ -44,6 +46,7 @@ import com.recipick.global.response.PageResponse;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -394,6 +397,25 @@ public class ProductService {
             productRepository.searchMemberProducts(condition, pageable)
                 .map(product -> ProductSearchResponse.from(product, now))
         );
+    }
+
+    private static final int SUGGESTION_LIMIT = 8;
+    private static final int MAX_SUGGESTION_KEYWORD_LENGTH = 50;
+
+    // 키 입력마다 오는 요청이라 30초 캐시한다. 비교는 DB에서 하고 8건만 가져온다
+    @Cacheable(
+        cacheNames = CacheConfig.PRODUCT_SUGGESTIONS,
+        key = "#martId + ':' + #keyword",
+        condition = "#keyword != null && #keyword.length() <= 50"
+    )
+    public List<ProductSuggestionResponse> findSuggestions(Long martId, String keyword) {
+        String query = keyword == null ? "" : keyword.replace(" ", "").toLowerCase(Locale.ROOT);
+        if (query.isEmpty() || query.length() > MAX_SUGGESTION_KEYWORD_LENGTH) {
+            return List.of();
+        }
+        return productRepository.findSuggestions(martId, query, SUGGESTION_LIMIT).stream()
+            .map(ProductSuggestionResponse::from)
+            .toList();
     }
 
     public ProductDetailResponse getProduct(Long martId, Long productId) {

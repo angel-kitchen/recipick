@@ -10,6 +10,7 @@ import DealsStrip from '../components/DealsStrip';
 import { expireDiscount } from '../discount';
 import PriceTag from '../components/PriceTag';
 import Pager from '../components/Pager';
+import ProductSearchInput from '../components/ProductSearchInput';
 import RecentViews from '../components/RecentViews';
 import { CardSkeletons } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
@@ -193,9 +194,7 @@ export default function Products() {
 
         <div className="catalog__main">
           <div className="filters">
-            <input
-              className="field__input"
-              placeholder="상품 이름 검색"
+            <ProductSearchInput
               value={keyword}
               onChange={(e) => {
                 setPage(0);

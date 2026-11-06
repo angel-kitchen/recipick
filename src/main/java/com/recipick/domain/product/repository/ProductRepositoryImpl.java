@@ -9,6 +9,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.recipick.domain.product.entity.Product;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.recipick.domain.product.repository.dto.MemberProductSearchCondition;
+import com.recipick.global.common.Choseong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,7 +69,14 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
     }
 
     private BooleanExpression nameContains(String keyword) {
-        return StringUtils.hasText(keyword) ? product.name.contains(keyword) : null;
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (Choseong.isChoseongOnly(trimmed)) {
+            return product.nameChoseong.contains(trimmed);
+        }
+        return product.name.contains(keyword);
     }
 
     private BooleanExpression categoryIdEq(Long categoryId) {
@@ -80,6 +89,22 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 
     private BooleanExpression statusEq(ProductStatus status) {
         return status == null ? null : product.status.eq(status);
+    }
+
+    @Override
+    public List<Product> findSuggestions(Long martId, String query, int limit) {
+        StringExpression source = Choseong.isChoseongOnly(query) ? product.nameChoseong : product.name;
+        StringExpression target = Expressions.stringTemplate("replace({0}, ' ', '')", source).lower();
+        NumberExpression<Integer> prefixRank = new CaseBuilder()
+            .when(target.startsWith(query)).then(0)
+            .otherwise(1);
+
+        return queryFactory
+            .selectFrom(product)
+            .where(product.deleted.isFalse(), martIdEq(martId), target.contains(query))
+            .orderBy(prefixRank.asc(), product.name.asc(), product.id.asc())
+            .limit(limit)
+            .fetch();
     }
 
     @Override

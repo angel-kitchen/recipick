@@ -4,6 +4,7 @@ import com.recipick.domain.product.entity.Product;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -52,5 +53,12 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
     boolean existsByMartIdAndNameAndBrandAndDeletedFalseAndIdNot(Long martId, String name, String brand, Long id);
 
     List<Product> findAllByIdInAndMartIdAndDeletedFalse(Collection<Long> ids, Long martId);
+
+    List<Product> findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
+
+    // 초성은 이름에서 파생한 값이라 상품 내용이 바뀐 게 아니므로 updated_at(마지막 수정 시각)은 갱신하지 않는다
+    @Modifying
+    @Query("update Product p set p.nameChoseong = :nameChoseong where p.id = :id")
+    void updateNameChoseong(@Param("id") Long id, @Param("nameChoseong") String nameChoseong);
 
 }

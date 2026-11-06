@@ -1,6 +1,7 @@
 package com.recipick.domain.recipe.entity;
 
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
+import com.recipick.global.common.Choseong;
 import com.recipick.global.entity.BaseTimeEntity;
 import com.recipick.global.exception.BusinessException;
 import jakarta.persistence.Column;
@@ -40,6 +41,9 @@ public class Recipe extends BaseTimeEntity {
 
     @Column(length = 50)
     private String name;
+
+    @Column(length = 50)
+    private String nameChoseong;
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")
@@ -89,6 +93,7 @@ public class Recipe extends BaseTimeEntity {
         String youtubeVideoId
     ) {
         this.name = name;
+        this.nameChoseong = Choseong.of(name);
         this.cuisine = cuisine;
         this.dishType = dishType;
         this.baseServings = baseServings;
@@ -142,6 +147,7 @@ public class Recipe extends BaseTimeEntity {
         String youtubeVideoId
     ) {
         this.name = name;
+        this.nameChoseong = Choseong.of(name);
         this.cuisine = cuisine;
         this.dishType = dishType;
         this.baseServings = baseServings;

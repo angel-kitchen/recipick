@@ -1,6 +1,7 @@
 package com.recipick.domain.product.entity;
 
 import com.recipick.domain.product.exception.ProductErrorCode;
+import com.recipick.global.common.Choseong;
 import com.recipick.global.common.SaleUnit;
 import com.recipick.global.entity.BaseTimeEntity;
 import com.recipick.global.exception.BusinessException;
@@ -71,6 +72,9 @@ public class Product extends BaseTimeEntity {
     private String name;
 
     @Column(length = 50)
+    private String nameChoseong;
+
+    @Column(length = 50)
     private String brand;
 
     @Column(columnDefinition = "text")
@@ -121,6 +125,7 @@ public class Product extends BaseTimeEntity {
         this.category = category;
         this.ingredientId = ingredientId;
         this.name = name;
+        this.nameChoseong = Choseong.of(name);
         this.brand = brand;
         this.description = description;
         this.saleUnitAmount = saleUnitAmount;
@@ -160,6 +165,7 @@ public class Product extends BaseTimeEntity {
             this.category = category;
             this.ingredientId = ingredientId;
             this.name = name;
+            this.nameChoseong = Choseong.of(name);
             this.brand = brand;
             this.description = description;
             this.saleUnitAmount = saleUnitAmount;

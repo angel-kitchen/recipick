@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Transactional
 class ProductRepositoryTest extends IntegrationTestSupport {
@@ -122,6 +123,117 @@ class ProductRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(result.getContent()).extracting(Product::getName).containsExactly("애호박");
+    }
+
+    @Test
+    @DisplayName("초성만 입력하면 상품명 초성으로 검색된다")
+    void filterByChoseong() {
+        // given
+        AdminProductSearchCondition condition = condition(martA.getId(), "ㅇㅎㅂ", null, null, null);
+
+        // when
+        Page<Product> result = productRepository.searchAdminProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getContent()).extracting(Product::getName).containsExactly("애호박");
+    }
+
+    @Test
+    @DisplayName("초성 검색도 상품명 일부 초성으로 찾고 삭제된 상품과 다른 마트 상품은 뺀다")
+    void filterByChoseong_partialAndScope() {
+        // given
+        AdminProductSearchCondition partial = condition(martA.getId(), "ㅎㅂ", null, null, null);
+        AdminProductSearchCondition deleted = condition(martA.getId(), "ㅇㅍ", null, null, null);
+
+        // when
+        Page<Product> partialResult = productRepository.searchAdminProducts(partial, PageRequest.of(0, 20));
+        Page<Product> deletedResult = productRepository.searchAdminProducts(deleted, PageRequest.of(0, 20));
+
+        // then
+        assertThat(partialResult.getContent()).extracting(Product::getName).containsExactly("애호박");
+        assertThat(deletedResult.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("초성과 글자가 섞인 검색어는 상품명 그대로 비교한다")
+    void filterByKeyword_mixedWithChoseong() {
+        // given
+        AdminProductSearchCondition condition = condition(martA.getId(), "애ㅎㅂ", null, null, null);
+
+        // when
+        Page<Product> result = productRepository.searchAdminProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("자동완성 : 이름이 검색어로 시작하는 상품을 먼저 보여 준다")
+    void findSuggestions_prefixFirst() {
+        // given
+        saveProduct(martA, vegetable, "호박고구마", 5L, false);
+        em.flush();
+        em.clear();
+
+        // when
+        List<Product> result = productRepository.findSuggestions(martA.getId(), "호박", 8);
+
+        // then
+        assertThat(result).extracting(Product::getName).containsExactly("호박고구마", "애호박");
+    }
+
+    @Test
+    @DisplayName("자동완성 : 띄어쓰기와 영문 대소문자는 무시하고 비교한다")
+    void findSuggestions_ignoresSpacesAndCase() {
+        // given
+        saveProduct(martA, vegetable, "Olive Oil", 5L, false);
+        em.flush();
+        em.clear();
+
+        // when
+        List<Product> result = productRepository.findSuggestions(martA.getId(), "oliveoil", 8);
+
+        // then
+        assertThat(result).extracting(Product::getName).containsExactly("Olive Oil");
+    }
+
+    @Test
+    @DisplayName("자동완성 : 초성만 입력하면 상품명 초성으로 찾는다")
+    void findSuggestions_choseong() {
+        // given
+        // when
+        List<Product> result = productRepository.findSuggestions(martA.getId(), "ㅊㅇㄱㅊ", 8);
+
+        // then
+        assertThat(result).extracting(Product::getName).containsExactly("청양고추");
+    }
+
+    @Test
+    @DisplayName("자동완성 : 삭제된 상품과 다른 마트 상품은 나오지 않는다")
+    void findSuggestions_excludesDeletedAndOtherMart() {
+        // given
+        // when
+        List<Product> hobak = productRepository.findSuggestions(martA.getId(), "호박", 8);
+        List<Product> onion = productRepository.findSuggestions(martA.getId(), "양파", 8);
+
+        // then
+        assertThat(hobak).extracting(Product::getName).containsExactly("애호박");
+        assertThat(onion).isEmpty();
+    }
+
+    @Test
+    @DisplayName("자동완성 : 지정한 개수까지만 돌려준다")
+    void findSuggestions_limit() {
+        // given
+        saveProduct(martA, vegetable, "호박고구마", 5L, false);
+        em.flush();
+        em.clear();
+
+        // when
+        List<Product> result = productRepository.findSuggestions(martA.getId(), "호박", 1);
+
+        // then
+        assertThat(result).hasSize(1);
     }
 
     @Test
@@ -283,6 +395,20 @@ class ProductRepositoryTest extends IntegrationTestSupport {
         assertThat(result.getTotalElements()).isEqualTo(3);
         assertThat(result.getContent()).extracting(Product::getName)
             .containsExactlyInAnyOrder("애호박", "청양고추", "삼겹살");
+    }
+
+    @Test
+    @DisplayName("회원 검색 : 초성만 입력하면 이용 마트 상품을 초성으로 찾는다")
+    void searchMemberProducts_choseong() {
+        // given
+        MemberProductSearchCondition condition =
+            new MemberProductSearchCondition(martA.getId(), "ㅊㅇㄱㅊ", null, null, null, LocalDateTime.now());
+
+        // when
+        Page<Product> result = productRepository.searchMemberProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getContent()).extracting(Product::getName).containsExactly("청양고추");
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.recipick.domain.recipe.service;
+package com.recipick.global.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,5 +24,14 @@ class ChoseongTest {
         assertThat(Choseong.isChoseongOnly("김ㅊ")).isFalse();
         assertThat(Choseong.isChoseongOnly("ㅏ")).isFalse();
         assertThat(Choseong.isChoseongOnly("")).isFalse();
+    }
+
+    @Test
+    @DisplayName("null이면 null을 돌려준다")
+    void of_returnsNullForNull() {
+        // given
+        // when
+        // then
+        assertThat(Choseong.of(null)).isNull();
     }
 }

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,6 +22,7 @@ import com.recipick.domain.product.dto.response.ProductPriceResponse;
 import com.recipick.domain.product.dto.request.ProductPriceUpdateRequest;
 import com.recipick.domain.product.dto.request.ProductSearchRequest;
 import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductSuggestionResponse;
 import com.recipick.domain.product.dto.response.ProductStatusResponse;
 import com.recipick.domain.product.dto.request.ProductStatusUpdateRequest;
 import com.recipick.domain.product.dto.ProductSummary;
@@ -1090,6 +1092,39 @@ public class ProductServiceTest {
         assertThat(result.content().get(0).soldOut()).isFalse();
         assertThat(result.content().get(1).soldOut()).isTrue();
         assertThat(result.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("자동완성 : 띄어쓰기를 지우고 소문자로 바꿔 최대 8건을 조회한다")
+    void findSuggestions() {
+        // given
+        given(productRepository.findSuggestions(any(), any(), anyInt())).willReturn(List.of(product(1L, 1L)));
+
+        // when
+        List<ProductSuggestionResponse> result = productService.findSuggestions(1L, " Olive Oil ");
+
+        // then
+        verify(productRepository).findSuggestions(1L, "oliveoil", 8);
+        assertThat(result).extracting(ProductSuggestionResponse::name).containsExactly("애호박");
+        assertThat(result.get(0).productId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("자동완성 : 검색어가 비었거나 50자를 넘으면 조회하지 않고 빈 목록을 돌려준다")
+    void findSuggestions_invalidKeyword() {
+        // given
+        String tooLong = "가".repeat(51);
+
+        // when
+        List<ProductSuggestionResponse> nullResult = productService.findSuggestions(1L, null);
+        List<ProductSuggestionResponse> blankResult = productService.findSuggestions(1L, "   ");
+        List<ProductSuggestionResponse> longResult = productService.findSuggestions(1L, tooLong);
+
+        // then
+        assertThat(nullResult).isEmpty();
+        assertThat(blankResult).isEmpty();
+        assertThat(longResult).isEmpty();
+        verifyNoInteractions(productRepository);
     }
 
     @Test

@@ -291,6 +291,7 @@ Table PRODUCT {
   category_id bigint
   ingredient_id bigint
   name varchar(50)
+  name_choseong varchar(50) [note: '검색용 초성(name에서 파생)']
   brand varchar(50)
   description text
   sale_unit_amount decimal(10,2)
@@ -356,6 +357,7 @@ Table RECIPE_INGREDIENT {
 Table RECIPE {
   id bigint [pk]
   name varchar(50)
+  name_choseong varchar(50) [note: '검색용 초성(name에서 파생)']
   cuisine varchar(20)
   dish_type varchar(20)
   base_servings int
