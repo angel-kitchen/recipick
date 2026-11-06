@@ -34,4 +34,9 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long>, RecipeRep
     int increaseViewCount(@Param("id") Long id);
 
     List<Recipe> findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
+
+    // 초성은 이름에서 파생한 값이라 레시피 내용이 바뀐 게 아니므로 updated_at(마지막 수정 시각)은 갱신하지 않는다
+    @Modifying
+    @Query("update Recipe r set r.nameChoseong = :nameChoseong where r.id = :id")
+    void updateNameChoseong(@Param("id") Long id, @Param("nameChoseong") String nameChoseong);
 }

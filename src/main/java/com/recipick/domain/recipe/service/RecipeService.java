@@ -86,7 +86,7 @@ public class RecipeService {
 
     // 검색창 자동완성. 활성 레시피가 100개 남짓이라 이름 비교는 메모리에서 하고, 키 입력마다 오는 요청은 30초 캐시한다.
     // 사람은 앞글자부터 치므로 이름이 검색어로 시작하는 레시피를 먼저, 같은 순위는 많이 본 레시피를 먼저 보여 준다
-    @Cacheable(cacheNames = CacheConfig.RECIPE_SUGGESTIONS, key = "#keyword", condition = "#keyword != null")
+    @Cacheable(cacheNames = CacheConfig.RECIPE_SUGGESTIONS, key = "#keyword", condition = "#keyword != null && #keyword.length() <= 50")
     public List<RecipeSuggestionResponse> findSuggestions(String keyword) {
         String query = keyword == null ? "" : withoutSpaces(keyword).toLowerCase(Locale.ROOT);
         if (query.isEmpty() || query.length() > MAX_SUGGESTION_KEYWORD_LENGTH) {

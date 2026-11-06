@@ -158,10 +158,6 @@ public class Recipe extends BaseTimeEntity {
         this.youtubeVideoId = youtubeVideoId;
     }
 
-    public void fillNameChoseong() {
-        this.nameChoseong = Choseong.of(this.name);
-    }
-
     public void changeStatus(RecipeStatus status) {
         this.status = status;
         if (status == RecipeStatus.INACTIVE) {

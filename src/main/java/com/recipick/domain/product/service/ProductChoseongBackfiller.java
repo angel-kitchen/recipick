@@ -3,6 +3,7 @@ package com.recipick.domain.product.service;
 
 import com.recipick.domain.product.entity.Product;
 import com.recipick.domain.product.repository.ProductRepository;
+import com.recipick.global.common.Choseong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -28,7 +29,8 @@ public class ProductChoseongBackfiller implements ApplicationRunner {
             Integer count = transactionTemplate.execute(status -> {
                 List<Product> batch =
                     productRepository.findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
-                batch.forEach(Product::fillNameChoseong);
+                batch.forEach(product ->
+                    productRepository.updateNameChoseong(product.getId(), Choseong.of(product.getName())));
                 return batch.size();
             });
             updated = count == null ? 0 : count;
