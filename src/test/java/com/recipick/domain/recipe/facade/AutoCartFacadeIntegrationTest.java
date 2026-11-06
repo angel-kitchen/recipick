@@ -272,6 +272,9 @@ class AutoCartFacadeIntegrationTest extends IntegrationTestSupport {
             .extracting(CartAddHistory::getSource, CartAddHistory::getAutoCartRequestId,
                 CartAddHistory::getQuantity)
             .containsExactly(tuple(CartAddSource.AUTO_CART, autoCartRequestId, 2));
+        // 응답은 메모리의 요청 객체에서 만들어지므로, 이미 담긴 상품에 합산해도 확정이 DB에 저장됐는지 따로 확인한다
+        assertThat(autoCartRequestRepository.findById(autoCartRequestId).orElseThrow().getStatus())
+            .isEqualTo(AutoCartStatus.CONFIRMED);
     }
 
     @Test

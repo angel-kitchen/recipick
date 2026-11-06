@@ -139,7 +139,7 @@ class OrderFacadeTest {
         assertThat(result.response().amount()).isEqualTo(5_000L);
         InOrder inOrder = inOrder(memberService, membershipService, pointPolicyService, orderService,
             pointCommandService, productStockService, paymentCommandService);
-        inOrder.verify(memberService).getMemberForUpdate(MEMBER_ID);
+        inOrder.verify(memberService).lockActiveMember(MEMBER_ID);
         inOrder.verify(orderService).findByIdempotencyKey(MEMBER_ID, IDEMPOTENCY_KEY);
         inOrder.verify(membershipService).getTypeAt(MEMBER_ID, NOW);
         inOrder.verify(pointPolicyService).resolveRate(Optional.empty());
@@ -258,7 +258,7 @@ class OrderFacadeTest {
         assertThat(result.created()).isFalse();
         assertThat(result.response().orderId()).isEqualTo(ORDER_ID);
         InOrder inOrder = inOrder(memberService, orderService);
-        inOrder.verify(memberService).getMemberForUpdate(MEMBER_ID);
+        inOrder.verify(memberService).lockActiveMember(MEMBER_ID);
         inOrder.verify(orderService).findByIdempotencyKey(MEMBER_ID, IDEMPOTENCY_KEY);
         verify(membershipService, never()).getTypeAt(anyLong(), any());
         verify(membershipService, never()).isActive(anyLong());

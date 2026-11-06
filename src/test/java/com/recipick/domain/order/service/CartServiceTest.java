@@ -88,9 +88,11 @@ class CartServiceTest {
     void addCartItemMerge() {
         // given
         given(cartItemRepository.findByMemberIdAndProductId(MEMBER_ID, PRODUCT_ID))
-                .willReturn(Optional.of(cartItem(2)), Optional.of(cartItem(5)));
+                .willReturn(Optional.of(cartItem(2)));
         given(cartItemRepository.increaseQuantity(
                 eq(MEMBER_ID), eq(PRODUCT_ID), eq(3), eq(50), any(LocalDateTime.class))).willReturn(1);
+        given(cartItemRepository.findQuantityByMemberIdAndProductId(MEMBER_ID, PRODUCT_ID))
+                .willReturn(Optional.of(5));
 
         // when
         CartItemAddResponse response = cartService.addCartItem(MEMBER_ID, PRODUCT_ID, 3, 50);

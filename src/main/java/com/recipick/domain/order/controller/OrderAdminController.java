@@ -13,6 +13,7 @@ import com.recipick.domain.order.facade.OrderQueryFacade;
 import com.recipick.domain.payment.dto.MartRejectionPaymentResult;
 import com.recipick.domain.payment.dto.response.MartRejectionResponse;
 import com.recipick.domain.payment.facade.MartRejectionFacade;
+import com.recipick.domain.payment.service.MartRejectionOutcome;
 import com.recipick.global.response.ApiResponse;
 import com.recipick.global.response.PageResponse;
 import com.recipick.global.security.AuthPrincipal;
@@ -100,7 +101,7 @@ public class OrderAdminController {
     ) {
         MartRejectionPaymentResult result = martRejectionFacade.retry(AdminRole.valueOf(principal.role()),
             principal.martId(), orderId, refundId, idempotencyKey);
-        return result.outcome() == com.recipick.domain.payment.service.MartRejectionOutcome.PENDING
+        return result.outcome() == MartRejectionOutcome.PENDING
             ? ResponseEntity.accepted().body(ApiResponse.success("환불 결과를 확인하고 있습니다.", result.response()))
             : ResponseEntity.ok(ApiResponse.success("환불 재처리가 완료되었습니다.", result.response()));
     }
