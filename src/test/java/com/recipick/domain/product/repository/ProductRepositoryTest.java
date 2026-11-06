@@ -155,6 +155,38 @@ class ProductRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("검색어와 상품명의 띄어쓰기는 무시하고 검색한다")
+    void filterByKeyword_ignoresSpaces() {
+        // given
+        saveProduct(martA, vegetable, "대파 뿌리", 5L, false);
+        em.flush();
+        em.clear();
+        AdminProductSearchCondition spacedKeyword = condition(martA.getId(), "대 파뿌", null, null, null);
+        AdminProductSearchCondition noSpaceKeyword = condition(martA.getId(), "대파뿌리", null, null, null);
+
+        // when
+        Page<Product> spacedResult = productRepository.searchAdminProducts(spacedKeyword, PageRequest.of(0, 20));
+        Page<Product> noSpaceResult = productRepository.searchAdminProducts(noSpaceKeyword, PageRequest.of(0, 20));
+
+        // then
+        assertThat(spacedResult.getContent()).extracting(Product::getName).containsExactly("대파 뿌리");
+        assertThat(noSpaceResult.getContent()).extracting(Product::getName).containsExactly("대파 뿌리");
+    }
+
+    @Test
+    @DisplayName("띄어쓰기가 섞인 초성 검색어도 초성으로 검색한다")
+    void filterByChoseong_ignoresSpaces() {
+        // given
+        AdminProductSearchCondition condition = condition(martA.getId(), "ㅇ ㅎㅂ", null, null, null);
+
+        // when
+        Page<Product> result = productRepository.searchAdminProducts(condition, PageRequest.of(0, 20));
+
+        // then
+        assertThat(result.getContent()).extracting(Product::getName).containsExactly("애호박");
+    }
+
+    @Test
     @DisplayName("초성과 글자가 섞인 검색어는 상품명 그대로 비교한다")
     void filterByKeyword_mixedWithChoseong() {
         // given

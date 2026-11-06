@@ -68,6 +68,30 @@ class RecipeSearchRepositoryTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("검색어와 레시피명의 띄어쓰기는 무시하고 검색한다")
+    void searchByName_ignoresSpaces() {
+        // given
+        // when
+        Page<Recipe> spaced = search("된 장찌개");
+        Page<Recipe> noSpace = search("초성검색된장");
+
+        // then
+        assertThat(spaced.getContent()).extracting(Recipe::getName).containsExactly("초성검색 된장찌개");
+        assertThat(noSpace.getContent()).extracting(Recipe::getName).containsExactly("초성검색 된장찌개");
+    }
+
+    @Test
+    @DisplayName("띄어쓰기가 섞인 초성 검색어도 초성으로 검색한다")
+    void searchByChoseong_ignoresSpaces() {
+        // given
+        // when
+        Page<Recipe> result = search("ㄱㅊ ㅉㄱ");
+
+        // then
+        assertThat(result.getContent()).extracting(Recipe::getName).containsExactly("초성검색 김치찌개");
+    }
+
+    @Test
     @DisplayName("글자 검색은 기존처럼 레시피명 일부로 찾는다")
     void searchByName() {
         // given

@@ -68,15 +68,18 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
         return martId == null ? null : product.mart.id.eq(martId);
     }
 
+    // 자동완성과 같은 기준으로 이름과 검색어의 띄어쓰기를 모두 지우고 비교한다
+    private StringExpression withoutSpaces(StringExpression source) {
+        return Expressions.stringTemplate("replace({0}, ' ', '')", source);
+    }
+
     private BooleanExpression nameContains(String keyword) {
         if (!StringUtils.hasText(keyword)) {
             return null;
         }
-        String trimmed = keyword.trim();
-        if (Choseong.isChoseongOnly(trimmed)) {
-            return product.nameChoseong.contains(trimmed);
-        }
-        return product.name.contains(keyword);
+        String query = keyword.replace(" ", "");
+        StringExpression source = Choseong.isChoseongOnly(query) ? product.nameChoseong : product.name;
+        return withoutSpaces(source).contains(query);
     }
 
     private BooleanExpression categoryIdEq(Long categoryId) {
@@ -94,7 +97,7 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
     @Override
     public List<Product> findSuggestions(Long martId, String query, int limit) {
         StringExpression source = Choseong.isChoseongOnly(query) ? product.nameChoseong : product.name;
-        StringExpression target = Expressions.stringTemplate("replace({0}, ' ', '')", source).lower();
+        StringExpression target = withoutSpaces(source).lower();
         NumberExpression<Integer> prefixRank = new CaseBuilder()
             .when(target.startsWith(query)).then(0)
             .otherwise(1);
