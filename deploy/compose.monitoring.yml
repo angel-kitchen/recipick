@@ -39,6 +39,8 @@ services:
       # 로그인 화면이 인터넷에 열리므로 비밀번호 없이는 뜨지 않게 한다. 이 값은 첫 기동 때만 적용된다(이후 변경은 README 8절)
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD가 비었다}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # API의 Basic 인증은 nginx 로그인 제한(/grafana/login)을 거치지 않아 끈다. 화면 로그인만 쓴다
+      GF_AUTH_BASIC_ENABLED: "false"
       # nginx가 /grafana/ 를 떼지 않고 그대로 넘기므로 Grafana가 하위 경로에서 직접 응답한다
       GF_SERVER_ROOT_URL: https://recipick.shop/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
