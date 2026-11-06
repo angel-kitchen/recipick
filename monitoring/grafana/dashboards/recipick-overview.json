@@ -113,8 +113,10 @@
           "unit": "percentunit",
           "custom": {
             "lineWidth": 1,
-            "fillOpacity": 10
-          }
+            "fillOpacity": 10,
+            "axisSoftMax": 0.05
+          },
+          "min": 0
         },
         "overrides": []
       },
@@ -368,7 +370,9 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10
-          }
+          },
+          "max": 1,
+          "min": 0
         },
         "overrides": []
       },
