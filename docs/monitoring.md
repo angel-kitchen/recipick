@@ -130,7 +130,7 @@
 보민님의 AI 지표는 같은 Prometheus에 수집되므로 이 대시보드에 패널로 추가한다.
 
 ### 트레이드오프
-- 이 구성은 **로컬 측정용**이다. 수집 주소가 `host.docker.internal:8081`(호스트에서 실행 중인 앱)이라 서버(AWS) 배포 구성에서는 그대로 쓸 수 없다. 서버에서의 수집 구성은 운영 Compose(배포 기반 구성)와 맞춰 별도로 정한다.
+- 이 구성은 **로컬 측정용**이다. 수집 주소가 `host.docker.internal:8081`(호스트에서 실행 중인 앱)이라 서버(AWS) 배포 구성에서는 그대로 쓸 수 없다. 서버에서는 같은 대시보드 파일을 `deploy/compose.monitoring.yml`이 읽고, Prometheus가 도커 네트워크 안에서 `app:8081`을 수집하며, Grafana는 `https://recipick.shop/grafana/`로 접속한다(`docs/deploy-implementation.md` 7-4, `deploy/README.md` 8절).
 - 관리 포트는 인증이 없으므로(1절) 서버에서 Prometheus가 있는 내부 대역에만 열어야 한다.
 - Prometheus는 최근 지표를 로컬 볼륨에 저장한다. `down -v`로 지우면 이전 측정값이 사라지므로, Before/After 수치는 스크린샷과 `docs/performance/`의 문서에 별도로 남긴다.
 - Grafana 기본 계정은 로컬 전용이다. 서버에 올릴 때는 반드시 비밀번호를 변경한다.

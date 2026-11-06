@@ -193,8 +193,11 @@ S3의 백업은 관리자 그룹(`aws-setup.md` 10절)만 내려받을 수 있�
 | --- | --- |
 | 앱 로그 | `docker logs -f recipick-app` |
 | 현재 태그 | `grep ^IMAGE_TAG= /opt/recipick/.env` |
-| 모니터링 올리기 | `docker compose -f compose.monitoring.yml up -d` |
-| Grafana 접속 | 로컬에서 `aws ssm start-session --target <INSTANCE_ID> --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host=<grafana 컨테이너 IP>,portNumber=3000,localPortNumber=3000` 후 `http://localhost:3000`. 컨테이너 IP는 `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' recipick-grafana` |
+| 모니터링 처음 올리기 | `.env`에 `GRAFANA_ADMIN_PASSWORD`를 넣은 뒤 `docker compose -f compose.monitoring.yml up -d`. 재부팅 뒤에는 자동으로 다시 뜬다. 올린 뒤 `free -m`으로 여유 메모리를 확인한다 |
+| Grafana 접속 | `https://recipick.shop/grafana/`, 계정 `admin`. Grafana가 꺼져 있으면 이 경로만 502다 |
+| 모니터링 설정 변경 반영 | 배포는 서버의 파일만 바꾸고 모니터링 컨테이너는 건드리지 않는다. `compose.monitoring.yml`을 바꿨으면 `docker compose -f compose.monitoring.yml up -d`, `monitoring/prometheus.yml`을 바꿨으면 `docker compose -f compose.monitoring.yml restart prometheus`. 대시보드 파일은 Grafana가 주기적으로 다시 읽는다 |
+| Grafana 비밀번호 변경 | `.env` 값은 첫 기동 때만 적용된다. 이후에는 `docker exec recipick-grafana grafana cli admin reset-admin-password <새 비밀번호>` |
+| 수집 대상 확인 | `docker exec recipick-prometheus wget -qO- http://localhost:9090/api/v1/targets`에서 `"health":"up"` |
 | infra 설정 변경 적용 | `docker compose -f compose.infra.yml up -d`. 해당 서비스가 잠깐 재시작되므로 시연 시간을 피한다 |
 | 메모리·디스크 확인 | `docker stats --no-stream`, `df -h /`, `docker system df` |
 
