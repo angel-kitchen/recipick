@@ -59,6 +59,7 @@ SQL 스크립트를 선택했다. `RAND()`를 쓰지 않고 상품 번호 `n`으
    ```sql
    SELECT mart_id, COUNT(*), SUM(deleted), SUM(status = 'STOPPED') FROM product GROUP BY mart_id;
    ```
+5. 초성 검색(#511)을 쓰려면 앱을 `recipick_perf`에 한 번 더 띄운다. `seed-products.sql`은 `name_choseong`을 넣지 않아 시드 직후에는 NULL이고, 앱 시작 때 `ProductChoseongBackfiller`가 NULL인 행을 500건씩 채운다(상품 100,661건에 6분 23초, 2026-11-06 로컬). 채우기 전에는 초성 검색에 잡히지 않고 글자 검색과 자동완성(이름 기준)은 동작한다. 한 번 채우면 다음 기동부터는 바로 끝난다. 시드 스크립트를 다시 돌려 상품을 새로 만들면 새 행이 다시 NULL이 된다.
 
 ## 5. 결과(2026-10-26, 로컬)
 
