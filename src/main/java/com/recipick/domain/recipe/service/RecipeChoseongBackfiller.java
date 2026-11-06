@@ -2,6 +2,7 @@ package com.recipick.domain.recipe.service;
 
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.repository.RecipeRepository;
+import com.recipick.global.common.Choseong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -27,7 +28,8 @@ public class RecipeChoseongBackfiller implements ApplicationRunner {
             Integer count = transactionTemplate.execute(status -> {
                 List<Recipe> batch =
                     recipeRepository.findTop500ByNameChoseongIsNullAndNameIsNotNullOrderByIdAsc();
-                batch.forEach(Recipe::fillNameChoseong);
+                batch.forEach(recipe ->
+                    recipeRepository.updateNameChoseong(recipe.getId(), Choseong.of(recipe.getName())));
                 return batch.size();
             });
             updated = count == null ? 0 : count;

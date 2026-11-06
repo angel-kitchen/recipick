@@ -174,10 +174,6 @@ public class Product extends BaseTimeEntity {
 
     }
 
-    public void fillNameChoseong() {
-        this.nameChoseong = Choseong.of(name);
-    }
-
     public void changePrice(Long price) {
         if (price == null) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT);
