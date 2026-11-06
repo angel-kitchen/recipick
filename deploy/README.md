@@ -36,7 +36,7 @@ nginx는 `/api/`만 앱으로 넘기고 나머지는 정적 파일로 준다. �
 | ECR | 저장소 `recipick`. 수명 정책으로 최근 10개만 유지 |
 | S3 | 버킷 하나. `deploy/`(설정 묶음)와 `backups/`(nightly 덤프). 퍼블릭 접근 차단, 30일 뒤 만료 |
 | GitHub OIDC | 배포 역할 `recipick-github-deploy`. 신뢰 정책은 dev·main 브랜치만. ECR push, `s3:PutObject`(`deploy/*`), `ssm:SendCommand`, `ssm:GetCommandInvocation` |
-| 팀원 | 관리자 그룹(배포 담당 + 대리 1명)만 Session Manager와 백업 다운로드. 나머지는 Actions 로그로 본다(`aws-setup.md` 10절) |
+| 팀원 | 배포 담당과 관리자 그룹(나머지 팀원 4명)이 Session Manager와 백업 다운로드를 쓴다(`aws-setup.md` 10절) |
 
 ## 3. 레포 변수 (Settings → Secrets and variables → Actions → Variables)
 

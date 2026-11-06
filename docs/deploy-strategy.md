@@ -269,7 +269,7 @@ CodeDeploy는 중간 선택지다. EC2에서 블루그린을 하려면 ALB가 �
 AWS·파이프라인
 
 - [x] GitHub OIDC 공급자, 배포용 IAM 역할(ECR push, SSM SendCommand), EC2 인스턴스 프로파일(ECR pull, SSM 관리 인스턴스)
-- [ ] 관리자 IAM 그룹(배포 담당 + 대리 1명, Session Manager·Grafana 포트 포워딩·백업 다운로드). 나머지 팀원은 Actions 로그로 본다(`deploy/aws-setup.md` 10절)
+- [x] 관리자 IAM 그룹(배포 담당을 뺀 팀원 4명, Session Manager·Grafana 포트 포워딩·백업 다운로드). 11/5 생성, 전원 MFA·셸·백업 다운로드 확인(`deploy/aws-setup.md` 10절)
 - [x] EC2 Ubuntu t3.medium, 루트 볼륨 30GB gp3, Elastic IP, 보안 그룹 80·443. Docker·Compose 설치, `/opt/recipick`과 `.env`(권한 600)
 - [x] compose 파일 3개(`restart: unless-stopped`, 로그 로테이션, 메모리 제한)와 nginx 설정. 10/26 작성, 로컬에서 빈 DB 첫 기동·IP 변경 재배포 검증
 - [x] 서버 `.env` 작성(`deploy/README.md` 4절)
@@ -331,4 +331,4 @@ AWS·파이프라인
 - 스케줄 작업 단일 실행 보장 규칙을 컨벤션에 넣을지. 정윤의 갱신 결제 재시도와 직결되므로 3차 범위 논의와 함께 다룬다
 - 블루그린 도입 시점. 필수 8~11 착수 후 여유를 보고 판단한다
 - 제출 시 기본 브랜치를 dev에서 main으로 바꿀지
-- AWS 계정은 준희 개인 계정(무료 크레딧 100달러)으로 진행(10/26, 콘솔 작업 순서는 `deploy/aws-setup.md`). 남은 것은 관리자 그룹의 대리 1명 지정과 비용 정산용 영수증 보관(지원금은 사비 선지출 후 정산)
+- AWS 계정은 준희 개인 계정(무료 크레딧 100달러)으로 진행(10/26, 콘솔 작업 순서는 `deploy/aws-setup.md`). 남은 것은 비용 정산용 영수증 보관(지원금은 사비 선지출 후 정산)
