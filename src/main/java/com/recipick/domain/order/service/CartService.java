@@ -60,11 +60,11 @@ public class CartService {
     private CartItemAddResponse addCartItem(
             Long memberId, Long productId, int quantity, int stock, CartAddSource source, Long autoCartRequestId) {
         // 없는 행을 UPDATE하면 MySQL이 갭 락을 잡아 동시 insert끼리 데드락이 나므로, 있을 때만 UPDATE한다.
-        CartItem cartItem = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
+        CartItemAddResponse response = cartItemRepository.findByMemberIdAndProductId(memberId, productId)
                 .map(existing -> increaseQuantity(existing, quantity, stock))
                 .orElseGet(() -> {
                     validateQuantity(quantity, stock);
-                    return insertCartItem(memberId, productId, quantity);
+                    return CartItemAddResponse.from(insertCartItem(memberId, productId, quantity));
                 });
         cartAddHistoryRepository.save(CartAddHistory.builder()
                 .memberId(memberId)
@@ -73,7 +73,7 @@ public class CartService {
                 .autoCartRequestId(autoCartRequestId)
                 .quantity(quantity)
                 .build());
-        return CartItemAddResponse.from(cartItem);
+        return response;
     }
 
     // 담은 순서대로 돌려준다. 같은 상품을 다시 담아 합산해도 행이 그대로라 위치가 바뀌지 않는다
@@ -141,7 +141,7 @@ public class CartService {
         cartItemRepository.deleteByMemberId(memberId);
     }
 
-    private CartItem increaseQuantity(CartItem existing, int quantity, int stock) {
+    private CartItemAddResponse increaseQuantity(CartItem existing, int quantity, int stock) {
         LocalDateTime now = LocalDateTime.now(TimeConstants.ZONE_ID);
         int maxQuantity = Math.min(MAX_QUANTITY, stock);
         if (cartItemRepository.increaseQuantity(
@@ -150,8 +150,11 @@ public class CartService {
             // 읽은 뒤 다른 요청이 수량을 바꾸거나 항목을 지웠으므로, 현재 장바구니를 보고 다시 판단하게 한다.
             throw new BusinessException(OrderErrorCode.CART_CONCURRENT_MODIFICATION);
         }
-        return cartItemRepository.findByMemberIdAndProductId(existing.getMemberId(), existing.getProductId())
+        // existing은 합산 전 수량 그대로라 최종 수량은 값으로 다시 읽는다
+        int totalQuantity = cartItemRepository
+                .findQuantityByMemberIdAndProductId(existing.getMemberId(), existing.getProductId())
                 .orElseThrow();
+        return new CartItemAddResponse(existing.getId(), existing.getProductId(), totalQuantity);
     }
 
     private void validateQuantity(int totalQuantity, int stock) {
