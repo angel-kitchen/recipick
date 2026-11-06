@@ -12,6 +12,7 @@ import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.enums.CancelReasonCode;
 import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
+import com.recipick.domain.order.service.OrderRequestValidator;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.facade.PointsOnlyPaymentProcessor;
@@ -31,12 +32,10 @@ import com.recipick.global.exception.CommonErrorCode;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -47,7 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderFacade {
 
     private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 64;
-    private static final Pattern LEGAL_DONG_CODE = Pattern.compile("\\d{10}");
 
     private final OrderService orderService;
     private final CartService cartService;
@@ -67,14 +65,12 @@ public class OrderFacade {
     @Transactional
     public OrderCreateResult createOrder(Long memberId, String idempotencyKey, OrderCreateRequest request) {
         String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
-        if (new HashSet<>(request.cartItemIds()).size() != request.cartItemIds().size()) {
-            throw new BusinessException(OrderErrorCode.DUPLICATE_ORDER_ITEM);
-        }
+        OrderRequestValidator.validateNoDuplicateItems(request.cartItemIds());
         String requestHash = request.requestHash();
 
         // 탈퇴와 겹쳐도 한쪽만 성공하도록 첫 DB 작업으로 회원 행을 잠근다(락 순서는 MEMBER가 맨 앞).
         // 스냅샷이 잠금 뒤에 만들어져 아래 중복·결제 대기 확인이 앞선 요청의 커밋 결과를 본다
-        memberService.getMemberForUpdate(memberId);
+        memberService.lockActiveMember(memberId);
         // 재시도가 결제 대기 제한에 걸리지 않도록 같은 요청인지 먼저 확인한다
         Optional<Order> existing = orderService.findByIdempotencyKey(memberId, normalizedKey);
         if (existing.isPresent()) {
@@ -172,9 +168,7 @@ public class OrderFacade {
 
     // 배송 가능 여부는 배송지 법정동이 이용 마트의 법정동과 같은지로 판정한다
     private Long getDeliveryRegionId(String legalDongCode, Long martRegionId) {
-        if (legalDongCode == null || !LEGAL_DONG_CODE.matcher(legalDongCode).matches()) {
-            throw new BusinessException(OrderErrorCode.INVALID_DELIVERY_INFORMATION);
-        }
+        OrderRequestValidator.validateLegalDongCode(legalDongCode);
         return regionService.getRegionIdByLegalDongCode(legalDongCode)
             .filter(martRegionId::equals)
             .orElseThrow(() -> new BusinessException(OrderErrorCode.OUTSIDE_DELIVERY_AREA));

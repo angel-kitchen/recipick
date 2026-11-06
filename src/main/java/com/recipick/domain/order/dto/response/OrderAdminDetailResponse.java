@@ -12,8 +12,8 @@ import com.recipick.domain.order.entity.enums.OrderStatusType;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// 결제 정보는 회원 상세와 같은 이유로 넣지 않는다. cancelable은 회원 취소 버튼용이라 빼고,
-// 수락·거절 가능 여부는 그 기능을 구현할 때 넣는다
+// 결제 정보는 회원 상세와 같은 이유로 넣지 않는다. cancelable은 회원 취소 버튼용이라 뺀다.
+// 수락·거절 가능 여부 필드는 두지 않고 화면이 status·martStatus(PAID·RECEIVED)로 판단한다
 public record OrderAdminDetailResponse(
         Long orderId,
         String orderNumber,

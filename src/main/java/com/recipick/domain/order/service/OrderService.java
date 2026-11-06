@@ -60,8 +60,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class OrderService {
 
-    private final AdminAuditRecorder auditRecorder;
-
     // 결제 전 회원 취소도 결제 실패와 같은 종료 흐름을 탄다. 마트 거절은 결제 후 환불 흐름을 타므로 이 메서드로 종료하면 안 된다
     private static final Set<CancelReasonCode> BEFORE_PAYMENT_CLOSE_REASONS = EnumSet.of(
         CancelReasonCode.PAYMENT_FAILED, CancelReasonCode.PAYMENT_TIMEOUT, CancelReasonCode.AMOUNT_MISMATCH,
@@ -70,6 +68,7 @@ public class OrderService {
     // 외부 취소로 종료할 때 재고를 복구하는 마트 처리 상태. 배송이 시작되면 상품이 마트에 없어 재고를 더하면 실물보다 많아진다
     private static final Set<MartStatus> STOCK_STILL_IN_MART = EnumSet.of(MartStatus.RECEIVED, MartStatus.PREPARING);
 
+    private final AdminAuditRecorder auditRecorder;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
@@ -182,7 +181,6 @@ public class OrderService {
 
     // MART_ADMIN은 토큰의 마트로 범위를 고정하고, SUPER_ADMIN은 martId를 생략하면 전체 마트를 본다.
     // 마트 존재 여부와 감사 기록은 도메인을 조립하는 OrderQueryFacade에서 처리한다.
-    @Transactional(readOnly = true)
     public PageResponse<OrderAdminSummaryResponse> searchAdminOrders(
         AdminRole role, Long adminMartId, OrderAdminSearchRequest request, Pageable pageable) {
         Long martId = resolveMartId(role, adminMartId, request.martId());

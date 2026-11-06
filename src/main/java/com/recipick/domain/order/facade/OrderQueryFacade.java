@@ -21,29 +21,23 @@ import com.recipick.domain.order.dto.response.OrderPreviewResponse.PendingOrder;
 import com.recipick.domain.order.dto.response.OrderPreviewResponse.UnorderableReason;
 import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.Order;
-import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderAmount;
+import com.recipick.domain.order.service.OrderRequestValidator;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
 import com.recipick.domain.payment.service.PaymentService;
 import com.recipick.domain.product.dto.response.MartResponse;
-import com.recipick.domain.product.dto.ProductSummary;
 import com.recipick.domain.product.entity.MartStatus;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.domain.product.service.ProductService;
-import com.recipick.global.exception.BusinessException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.data.domain.Pageable;
@@ -53,8 +47,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 public class OrderQueryFacade {
-
-    private static final Pattern LEGAL_DONG_CODE = Pattern.compile("\\d{10}");
 
     private final AdminAuditRecorder auditRecorder;
     private final MemberService memberService;
@@ -80,12 +72,8 @@ public class OrderQueryFacade {
     }
 
     public OrderPreviewResponse previewOrder(Long memberId, OrderPreviewRequest request) {
-        if (new HashSet<>(request.cartItemIds()).size() != request.cartItemIds().size()) {
-            throw new BusinessException(OrderErrorCode.DUPLICATE_ORDER_ITEM);
-        }
-        if (request.legalDongCode() == null || !LEGAL_DONG_CODE.matcher(request.legalDongCode()).matches()) {
-            throw new BusinessException(OrderErrorCode.INVALID_DELIVERY_INFORMATION);
-        }
+        OrderRequestValidator.validateNoDuplicateItems(request.cartItemIds());
+        OrderRequestValidator.validateLegalDongCode(request.legalDongCode());
         Set<UnorderableReason> reasons = EnumSet.noneOf(UnorderableReason.class);
 
         Long martId = memberService.getMartId(memberId).orElse(null);
@@ -103,7 +91,9 @@ public class OrderQueryFacade {
             reasons.add(UnorderableReason.DELIVERY_UNAVAILABLE);
         }
 
-        List<CartItemResponse> items = toItems(cartService.findCartItems(memberId, request.cartItemIds()), martId);
+        List<CartItem> cartItems = cartService.findCartItems(memberId, request.cartItemIds());
+        List<CartItemResponse> items = CartItemResponse.listOf(cartItems,
+                productService.findProducts(cartItems.stream().map(CartItem::getProductId).toList()), martId);
         if (items.stream().anyMatch(item -> item.status() == CartItemStatus.PREVIOUS_MART)) {
             reasons.add(UnorderableReason.HAS_PREVIOUS_MART_ITEMS);
         }
@@ -138,16 +128,6 @@ public class OrderQueryFacade {
         return regionId.flatMap(id -> martService.findOpenMarts(id).stream().findFirst())
                 .map(mart -> new Delivery(DeliveryStatus.OTHER_MART_AREA, mart.name()))
                 .orElseGet(() -> new Delivery(DeliveryStatus.OUTSIDE_SERVICE_AREA, null));
-    }
-
-    // 상품은 소프트 삭제만 하므로 담긴 상품은 삭제 표시가 된 채로라도 항상 조회된다
-    private List<CartItemResponse> toItems(List<CartItem> cartItems, Long martId) {
-        Map<Long, ProductSummary> products = productService.findProducts(
-                        cartItems.stream().map(CartItem::getProductId).toList()).stream()
-                .collect(Collectors.toMap(ProductSummary::productId, Function.identity()));
-        return cartItems.stream()
-                .map(cartItem -> CartItemResponse.of(cartItem, products.get(cartItem.getProductId()), martId))
-                .toList();
     }
 
     private PendingOrder toPendingOrder(Order order) {
