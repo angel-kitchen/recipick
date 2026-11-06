@@ -163,6 +163,25 @@ AWS 서버(EC2 t3.medium 1대, `recipick.shop`)에서 `docs/deploy-strategy.md` 
 
 로컬에서 못 본 것은 실제 인증서와 브라우저 화면이다. 서버에서 기동한 뒤 로그인·대시보드 표시와 `free -m`을 확인한다(`docs/deploy-strategy.md` 10절).
 
+### 7-5. 운영 모니터링 기동 확인 (서버, 2026-11-06)
+
+7-4의 설정이 배포된 뒤(#530) 서버에서 `.env`에 `GRAFANA_ADMIN_PASSWORD`를 넣고 `docker compose -f compose.monitoring.yml up -d`로 올렸다. 앱·nginx는 재시작하지 않았다. 7-4 뒤에 리뷰로 더한 것은 로그인 주소의 요청 수 제한(nginx, IP별 분당 10회·여유 5회)과 API Basic 인증 끄기다.
+
+| 확인 | 결과 |
+| --- | --- |
+| 기동 전 `/grafana/`, `/grafana` | 502, 301 (배포는 성공, 다른 경로 영향 없음) |
+| 컨테이너 상태 | `recipick-prometheus`, `recipick-grafana` Up. 호스트 포트 없음 |
+| 수집 대상(서버 안에서 조회) | `"health":"up"` |
+| 메모리 | grafana 100MiB / 192MiB, prometheus 59MiB / 384MiB. `free -m` 여유 2054MiB → 1817MiB |
+| 밖에서 `/grafana/`, `/grafana/login` | 302 → 로그인, 200 `<base href="/grafana/">` (실제 인증서) |
+| 로그인 없이 `/grafana/api/search`, `/grafana/metrics` | 401, 302(로그인으로 보냄) |
+| `/grafana/login` 연속 9회 | 6회 200 뒤 429 |
+| 브라우저 로그인 후 대시보드 | `Recipick / Recipick 개요` 표시 |
+| `GET /api/categories` 초당 1건 4분(240건) | 모두 200. 요청 수 패널 초당 1건, p95 5~8ms, 5xx 0%, 커넥션 사용 0·대기 0, CPU 5% 미만 |
+| Explore에서 `up` | `up{instance="app:8081", job="recipick"}` = 1 |
+
+운영 값으로 처음 본 화면에서 비율 패널의 세로축이 어긋나 있었다. 5xx 에러율과 AI 실패율은 값이 0뿐일 때 축이 10000%까지 잡혔다. 5xx는 0%에서 시작해 5%까지는 항상 보이고 넘으면 늘어나게, AI 실패율은 CPU 패널처럼 0~100%로 고정했다.
+
 ## 8. 트러블슈팅 메모
 
 - **정상 배포가 실패로 끝났다(10/27 검토에서 발견).** 성공 후 옛 이미지를 지우는 파이프라인에서, 지울 이미지가 없으면 `grep -v`가 종료 코드 1을 낸다. `set -euo pipefail` 때문에 앱이 정상인데도 스크립트가 1로 끝났다. 서버에 현재·이전 태그만 남은 평상시가 바로 이 경우라 두 번째 배포부터 매번 실패로 표시될 뻔했다. 10/26 검증은 지울 다른 태그가 남아 있던 상태라 통과했다. grep의 "없음"을 정상으로 처리하고 정리 단계 전체를 배포 결과와 분리했다. 교훈은 성공 경로도 "정리할 것이 없는" 상태로 한 번 더 돌려야 한다는 것이다.

@@ -240,6 +240,7 @@ CodeDeploy는 중간 선택지다. EC2에서 블루그린을 하려면 ALB가 �
 | 메모리 예산(상한) | app 1280m, mysql 1g, redis 256m, prometheus 384m, grafana 192m, exporter 합계 약 128m. 합계 약 3.2GiB. OS·도커·nginx 몫을 빼면 남는 것이 거의 없어 앱 두 개를 동시에 띄울 수 없다 |
 | 실측(로컬, 앱 1개, 부하 없음, 10/27) | app 348MiB, mysql 474MiB, redis 9MiB, nginx 4MiB. 부하 테스트는 로컬로 옮겼지만 블루그린 판단은 운영 서버의 여유 메모리로 해야 하므로 로컬 값으로 대신하지 않는다. 운영 서버에서 부하 없이 `docker stats --no-stream`과 `free -m`으로 앱 1개(+ 모니터링)를 재고, 남는 메모리가 앱 상한(1280m)보다 넉넉할 때만 블루그린을 검토한다 |
 | 실측(운영, 부하 없음, 모니터링 기동 전, 11/5) | `free -m` 기준 전체 3832MiB, 사용 1879MiB, 여유(available) 1952MiB, 스왑 없음. 모니터링 상한 합계(약 704MiB)를 다 써도 들어가므로 서버를 늘리거나 모니터링 서버를 따로 두지 않는다. 모니터링을 올린 뒤 다시 재서 블루그린 판단에 쓴다 |
+| 실측(운영, 부하 없음, 모니터링 기동 후, 11/6) | `free -m` 기준 사용 2014MiB, 여유(available) 1817MiB, 스왑 없음(기동 직전 2054MiB에서 237MiB 감소). `docker stats` 기준 grafana 100MiB / 192MiB, prometheus 59MiB / 384MiB, app 451MiB, mysql 620MiB, redis 5MiB, nginx 6MiB. 여유가 앱 상한(1280m)보다 크지만 차이가 약 540MiB라, 블루그린을 검토한다면 부하가 있을 때의 값을 다시 잰다 |
 | 디스크 예산 | 이미지(현재·이전 2개) 약 1GB, MySQL 수 GB, Prometheus 상한 2GB(`retention.size`), 로그 컨테이너당 30MB, 덤프 수십 MB. 30GB 안에서 여유가 크다. `df -h /`를 10-1에서 확인한다 |
 | 루트 볼륨 | 30GB gp3. 기본 8GB는 부족하고 추가 비용은 월 수천 원 |
 | 10/27 ~ 11/13 약 18일 | EC2 단가만 약 $23. EBS·공인 IPv4·ECR·S3를 더한 전체는 약 $27. CPU를 오래 높게 쓰면 T3 추가 CPU(unlimited 모드) 요금이 붙을 수 있다. 항목별 표는 `deploy/aws-setup.md` 1-2 |
@@ -288,7 +289,7 @@ AWS·파이프라인
 - [ ] 11/9: dev → main 최종 승격, 변수 main, 태그. 배포 역할의 신뢰 정책에서 dev 제거(dev 머지로 시연 서버에 명령을 보낼 수 없게)
 - [ ] 여유가 있을 때: 블루그린 교체 스크립트(이전 색은 관찰 후 중지). 선행 조건은 스케줄 작업 중복 실행 방어·검증 규칙
 - [x] 운영 모니터링 구성: Grafana 데이터소스·대시보드 연결, 수집 job 이름 정렬, `/grafana/` 프록시. 11/6 로컬 검증(`docs/deploy-implementation.md` 7-4)
-- [ ] 서버에서 모니터링 기동과 확인(`deploy/README.md` 8절): `.env` 비밀번호, 기동, 메모리 재측정, 로그인·수집 대상 UP
+- [x] 서버에서 모니터링 기동과 확인(`deploy/README.md` 8절): `.env` 비밀번호, 기동, 메모리 재측정, 로그인·수집 대상 UP. 11/6 완료(`docs/deploy-implementation.md` 7-5)
 - [ ] 이후: 호스트·MySQL·Redis exporter 추가(앱 지표만으로는 병목 분석이 안 된다)
 
 문서
