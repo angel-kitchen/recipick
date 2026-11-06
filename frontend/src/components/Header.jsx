@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import useRecipeSuggestions from '../hooks/useRecipeSuggestions';
 import Icon from './Icon';
+import Logo from './Logo';
 
 export default function Header() {
   const { member, logout } = useAuth();
@@ -58,8 +59,8 @@ export default function Header() {
   return (
     <header className="header header--shop">
       <div className="header__inner container">
-        <Link to="/" className="header__logo">
-          Recipick
+        <Link to="/" className="header__logo" aria-label="Recipick 홈">
+          <Logo />
         </Link>
         {member?.currentAddress && (
           <Link to="/addresses" className="header__address" title="배송지 변경">
