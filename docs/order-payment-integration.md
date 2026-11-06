@@ -30,7 +30,7 @@
 
 12. 결제 승인·웹훅·5분 만료는 결제 도메인이 상태 확정의 주 진입점이 된다.
 
-13. 여러 도메인을 함께 변경하는 흐름은 Facade가 PaymentCommandService와 OrderCommandService를 조립한다.
+13. 여러 도메인을 함께 변경하는 흐름은 Facade가 결제 쪽 서비스와 주문 쪽 OrderService·OrderFacade를 조립한다.
 
 14. 주문 서비스와 결제 서비스는 서로 직접 주입하지 않는다.
 
@@ -489,16 +489,24 @@ webhook_id, portone_cancellation_id UNIQUE로 같은 사건을 한 번만 반영
 
 | 메서드 | 주문 도메인의 역할 | 호출 시점 |
 |---|---|---|
-| markPaid(orderId) | 주문 PAID, 마트 RECEIVED, pending_member_id 해제, 이력. 재고 변경 없음. 멱등 | 결제 확정 API·결제 완료 웹훅 |
-| closeByPaymentFailure(orderId, reasonCode, reasonDetail) | 주문 CANCELED, 최초 차감 재고 복구, pending 해제, 사유·이력 저장. 멱등 | 결제 전 취소·5분 만료·결제 실패·금액 불일치 |
-| markMemberCancelRequested(orderId, reasonDetail) | 주문 PAID → CANCEL_REQUESTED, MEMBER_CANCELED 사유 저장. 재고 변경 없음. 멱등 | 회원 취소 시작 |
-| requestMartRejection(role, adminMartId, adminId, orderId, reasonDetail) | OrderService, MANDATORY(결제 TX1 안에서만 호출, 단독 호출 거부). 주문 행 FOR UPDATE → 마트 NONE이면 ORDER-012, MART_ADMIN 소속 검사 AUTH-005(둘은 예외로 TX1 롤백) → 마트 REJECTED면 ALREADY_REJECTED, PAID+RECEIVED 아니면 NOT_REJECTABLE 반환 → 주문 PAID → CANCEL_REQUESTED, 마트 RECEIVED → REJECTED, MART_REJECTED 사유 저장, 이력 2건(ORDER·MART, actor MART, changedByAdminId), REJECTED 반환. 재고 변경 없음. 응답 코드는 결제 쪽이 정한다. 같은 키 재전송은 결제 Idempotency-Key가 먼저 거른다 | 마트 거절 접수 |
-| restorePaidAfterMemberCancelFailure(orderId) | 주문 CANCEL_REQUESTED → PAID, 마트 RECEIVED 유지. 재고 변경 없음 | 회원 취소가 명확히 실패 |
-| markRefunded(orderId) | 주문 CANCEL_REQUESTED → REFUNDED, 최초 차감 재고 복구, 이력. 멱등 | 회원 취소 또는 마트 거절의 PG 환불 성공(외부 취소로 확인된 경우 포함) |
-| closeByExternalCancel(orderId, reasonDetail) | 주문 PAID → REFUNDED, EXTERNAL_CANCELED 사유·이력 저장, 마트 RECEIVED·PREPARING일 때만 최초 차감 재고 복구. 마트 상태 변경 없음. 멱등 | 외부 취소 감지(주문이 PAID) |
-| findByIdForUpdate(orderId) | 주문 행 FOR UPDATE 조회 | 회원 취소·마트 거절·마트 상태 변경 |
+| OrderService.markPaid(orderId, paidAt) | 주문 PAID, 마트 RECEIVED, 결제 시각 저장, pending_member_id 해제, 이력 2건(ORDER·MART). 재고 변경 없음. 결제 완료 장바구니 정리용 `OrderPaidEvent`를 발행하고 정리는 커밋 뒤 리스너가 처리. 이미 PAID면 아무것도 하지 않음(멱등) | 결제 확정 API·결제 완료 웹훅·만료 재조회, 0원 결제(주문 생성 트랜잭션) |
+| OrderFacade.closeByPaymentFailure(orderId, reasonCode, reasonDetail) | MANDATORY. 주문 CANCELED, pending 해제, 사유·이력 저장 뒤 복구할 상품(`StockQuantity`)을 반환. 재고는 직접 복구하지 않음. 이미 CANCELED면 빈 목록(멱등, 최초 사유 유지). 이력 주체는 MEMBER_CANCELED면 MEMBER, 그 밖은 SYSTEM | 결제 전 취소·5분 만료·결제 실패·금액 불일치 |
+| OrderService.markMemberCancelRequested(orderId, reasonDetail) | 주문 PAID·마트 RECEIVED면 CANCEL_REQUESTED로 바꾸고 MEMBER_CANCELED 사유를 저장한 뒤 REQUESTED 반환. PAID가 아니면 INVALID_ORDER_STATUS, 마트가 준비를 시작했으면 MART_ALREADY_PREPARING을 반환하고 상태를 바꾸지 않음. 주문은 같은 요청인지 알 수 없으므로 반복 요청은 결제 Idempotency-Key가 먼저 거름. 재고 변경 없음. 응답 코드는 결제 쪽이 정한다 | 회원 취소 시작 |
+| OrderService.requestMartRejection(role, adminMartId, adminId, orderId, reasonDetail) | MANDATORY(결제 TX1 안에서만 호출, 단독 호출 거부). 주문 행 FOR UPDATE → 마트 NONE이면 ORDER-012, MART_ADMIN 소속 검사 AUTH-005(둘은 예외로 TX1 롤백) → 마트 REJECTED면 ALREADY_REJECTED, PAID+RECEIVED 아니면 NOT_REJECTABLE 반환 → 주문 PAID → CANCEL_REQUESTED, 마트 RECEIVED → REJECTED, MART_REJECTED 사유 저장, 이력 2건(ORDER·MART, actor MART, changedByAdminId), REJECTED 반환. 재고 변경 없음. 응답 코드는 결제 쪽이 정한다. 같은 키 재전송은 결제 Idempotency-Key가 먼저 거른다 | 마트 거절 접수 |
+| OrderService.validateMartRefundRetry(role, adminMartId, orderId) | MANDATORY. 주문 행 FOR UPDATE → MART_ADMIN 소속 검사 AUTH-005 → 주문 CANCEL_REQUESTED·마트 REJECTED·사유 MART_REJECTED가 아니면 ORDER-015. 상태를 바꾸지 않음 | 마트 거절 환불 재처리 접수 |
+| OrderService.restorePaidAfterMemberCancelFailure(orderId) | 주문 CANCEL_REQUESTED → PAID, 취소 사유 비움, 마트 RECEIVED 유지. 재고 변경 없음. 이미 PAID면 아무것도 하지 않음(멱등) | 회원 취소가 명확히 실패 |
+| OrderFacade.markRefunded(orderId) | MANDATORY. 주문 CANCEL_REQUESTED → REFUNDED, 이력 저장 뒤 복구할 상품을 반환. 이미 REFUNDED면 빈 목록(멱등) | 회원 취소 또는 마트 거절의 PG 환불 성공(외부 취소로 확인된 경우 포함) |
+| OrderFacade.closeByExternalCancel(orderId, reasonDetail) | MANDATORY. 주문 PAID → REFUNDED, EXTERNAL_CANCELED 사유·이력 저장. 마트 RECEIVED·PREPARING일 때만 복구할 상품을 반환하고, 배송이 시작됐으면 빈 목록과 WARN 로그. 마트 상태 변경 없음. 이미 REFUNDED면 빈 목록(멱등) | 외부 취소 감지(주문이 PAID) |
+| OrderFacade.restoreStock(items) | MANDATORY. closeByPaymentFailure·markRefunded·closeByExternalCancel이 돌려준 상품의 재고를 복구. 빈 목록이면 아무것도 하지 않음. 잠금 순서(주문 → 포인트 → 재고)를 지키려고 주문 종료와 나눔 | 결제 Facade가 주문 종료 → 포인트 복구 뒤에 호출 |
+| OrderService.getMemberIdOf(orderId)·getMartIdOf(orderId) | 주문의 회원·마트 ID만 값으로 조회. 주문 엔티티를 영속성 컨텍스트에 올리지 않아 같은 트랜잭션의 뒤이은 주문 잠금 조회가 최신 상태를 읽음 | 결제 Facade가 주문을 잠그기 전의 소유자·마트 확인 |
 | Order.isCancelableByMember() | orderStatus == PAID && martStatus == RECEIVED일 때만 true | 회원 취소 판단 |
 | Order.isRejectableByMart() | orderStatus == PAID && martStatus == RECEIVED일 때만 true | 마트 거절 판단 |
+
+위 표는 2026-11-06 코드 기준으로 갱신했다(#543). 처음 확정안과 달라진 점은 세 가지다.
+
+- 주문 종료 메서드는 재고를 직접 복구하지 않고 복구할 상품만 돌려준다. 결제 Facade가 같은 트랜잭션에서 주문 종료 → 포인트 복구 → `restoreStock` 순으로 호출한다. 2차 포인트가 들어오며 잠금 순서(주문 → MEMBER_POINT → POINT_EARNING → 재고)에서 포인트 복구가 주문과 재고 사이에 놓이게 됐기 때문이다. 재고 복구 시점(11절)은 바뀌지 않았다.
+- 주문 행 잠금(`findByIdForUpdate`)은 위 메서드들이 내부에서 수행한다. 결제 쪽이 주문 리포지토리를 직접 부르지 않는다.
+- 마트 거절 환불 재처리(`validateMartRefundRetry`)와 잠금 전 값 조회(`getMemberIdOf`·`getMartIdOf`)가 추가됐다.
 
 closeByExternalCancel()을 위해 주문 상태 전이에 PAID → REFUNDED를 추가한다. 이 전이는 외부 취소에만 쓴다.
 

@@ -25,10 +25,18 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     @Query("select c.productId from CartItem c where c.memberId = :memberId")
     List<Long> findProductIdsByMemberId(@Param("memberId") Long memberId);
 
+    // 엔티티로 읽으면 벌크 UPDATE 전에 읽어 둔 엔티티의 이전 수량을 그대로 받으므로 값만 조회한다
+    @Query("select c.quantity from CartItem c where c.memberId = :memberId and c.productId = :productId")
+    Optional<Integer> findQuantityByMemberIdAndProductId(
+            @Param("memberId") Long memberId,
+            @Param("productId") Long productId
+    );
+
     // 조회 후 합산하면 동시 요청끼리 수량을 덮어쓰므로, 한 문장으로 더하고 갱신 건수로 판단한다.
     // 벌크 UPDATE는 Auditing을 거치지 않아 updated_at을 직접 갱신한다.
-    // 먼저 읽어 둔 엔티티가 갱신 전 수량으로 남지 않도록 영속성 컨텍스트를 비운다.
-    @Modifying(clearAutomatically = true)
+    // 영속성 컨텍스트는 비우지 않는다. 비우면 같은 트랜잭션에서 호출한 쪽이 잠가 둔 엔티티(자동 구성 요청 등)까지
+    // 분리돼 그 뒤의 변경이 저장되지 않는다. 합산 결과는 findQuantityByMemberIdAndProductId로 읽는다
+    @Modifying
     @Query("update CartItem c set c.quantity = c.quantity + :quantity, c.updatedAt = :now "
             + "where c.memberId = :memberId and c.productId = :productId and c.quantity + :quantity <= :maxQuantity")
     int increaseQuantity(

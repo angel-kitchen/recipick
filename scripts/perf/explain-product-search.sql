@@ -7,17 +7,17 @@
 
 SET @now = NOW();
 
--- 1) 키워드 검색 목록: 기본 정렬(최신순). idx_product_mart_created를 거꾸로 읽다가 20건에서 멈추는지 본다.
+-- 1) 키워드 검색 목록(#532 이후 띄어쓰기를 지우고 비교): 기본 정렬(최신순). idx_product_mart_created를 거꾸로 읽다가 20건에서 멈추는지 본다.
 EXPLAIN ANALYZE
 SELECT p.id FROM product p
-WHERE p.deleted = 0 AND p.mart_id = 1 AND p.name LIKE '%대파%'
+WHERE p.deleted = 0 AND p.mart_id = 1 AND REPLACE(p.name, ' ', '') LIKE '%대파%'
 ORDER BY p.created_at DESC, p.id DESC
 LIMIT 20;
 
--- 2) 키워드 검색 개수: LIKE '%…%'는 인덱스를 못 써서 마트 상품 전체를 훑는다(개선되지 않은 부분).
+-- 2) 키워드 검색 개수(#532 이후 띄어쓰기를 지우고 비교): LIKE '%…%'는 인덱스를 못 써서 마트 상품 전체를 훑는다(개선되지 않은 부분).
 EXPLAIN ANALYZE
 SELECT COUNT(*) FROM product p
-WHERE p.deleted = 0 AND p.mart_id = 1 AND p.name LIKE '%대파%';
+WHERE p.deleted = 0 AND p.mart_id = 1 AND REPLACE(p.name, ' ', '') LIKE '%대파%';
 
 -- 3) 필터 검색 목록(현재 앱 코드 모양): 가격 조건과 정렬이 판매가 CASE 식(#494)이라 price 컬럼 인덱스의 범위·정렬을 못 쓴다.
 EXPLAIN ANALYZE
@@ -46,3 +46,21 @@ WHERE p.deleted = 0 AND p.mart_id = 1 AND p.category_id = 5
             THEN FLOOR(p.price * (100 - p.discount_rate) / 100.0) ELSE p.price END) >= 1000
   AND (CASE WHEN p.discount_rate > 0 AND p.discount_end_at > @now
             THEN FLOOR(p.price * (100 - p.discount_rate) / 100.0) ELSE p.price END) <= 20000;
+
+-- 6) 키워드 검색 개수(#532 이전 모양, 비교용): 띄어쓰기를 지우지 않고 name을 그대로 비교한다.
+EXPLAIN ANALYZE
+SELECT COUNT(*) FROM product p
+WHERE p.deleted = 0 AND p.mart_id = 1 AND p.name LIKE '%대파%';
+
+-- 7) 초성 검색 개수(#511): 검색어가 초성만이면 name_choseong을 비교한다.
+-- 전제: 앱이 recipick_perf에 한 번 떠서 name_choseong이 채워져 있다(첫 기동 상품 10만 건 약 6분).
+EXPLAIN ANALYZE
+SELECT COUNT(*) FROM product p
+WHERE p.deleted = 0 AND p.mart_id = 1 AND REPLACE(p.name_choseong, ' ', '') LIKE '%ㄷㅍ%';
+
+-- 8) 자동완성(#511): 이름이 검색어로 시작하면 먼저, 그다음 이름순·ID순으로 8건. 일치한 행을 모두 정렬한다.
+EXPLAIN ANALYZE
+SELECT p.id FROM product p
+WHERE p.deleted = 0 AND p.mart_id = 1 AND LOWER(REPLACE(p.name, ' ', '')) LIKE '%대파%' ESCAPE '!'
+ORDER BY CASE WHEN LOWER(REPLACE(p.name, ' ', '')) LIKE '대파%' ESCAPE '!' THEN 0 ELSE 1 END, p.name, p.id
+LIMIT 8;
