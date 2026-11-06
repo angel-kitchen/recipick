@@ -35,6 +35,7 @@ import com.recipick.infra.portone.dto.PortOneCancellationStatus;
 import com.recipick.infra.portone.dto.PortOneCancellationTrigger;
 import com.recipick.infra.portone.dto.PortOnePayment;
 import com.recipick.infra.portone.dto.PortOnePaymentStatus;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -126,6 +127,8 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
     protected JdbcTemplate jdbcTemplate;
     @Autowired
     protected TransactionTemplate transactionTemplate;
+    @Autowired
+    private EntityManager entityManager;
     @Autowired
     protected Clock clock;
 
@@ -404,9 +407,14 @@ abstract class PaymentFlowIntegrationSupport extends IntegrationTestSupport {
             LocalDateTime.now(clock).minus(ago), webhookEventId);
     }
 
+    // 접수 시각은 앱과 같은 저장 경로(Hibernate, jdbc.time_zone=Asia/Seoul)로 바꾼다. JDBC로 직접 쓰고 JPA로 읽으면
+    // 테스트 JVM 시간대가 UTC일 때(CI) 9시간 어긋나 자동 POST 시간 창 판정이 틀어진다
     protected void moveRefundRequestedAt(Long refundId, Duration ago) {
-        jdbcTemplate.update("UPDATE refund SET requested_at = ? WHERE id = ?",
-            LocalDateTime.now(clock).minus(ago), refundId);
+        transactionTemplate.executeWithoutResult(status -> entityManager
+            .createQuery("UPDATE Refund r SET r.requestedAt = :t WHERE r.id = :id")
+            .setParameter("t", LocalDateTime.now(clock).minus(ago))
+            .setParameter("id", refundId)
+            .executeUpdate());
     }
 
     // ---------- 조회 ----------
