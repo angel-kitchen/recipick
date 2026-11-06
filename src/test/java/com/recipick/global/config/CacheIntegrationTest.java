@@ -2,6 +2,7 @@ package com.recipick.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -116,6 +117,19 @@ class CacheIntegrationTest extends IntegrationTestSupport {
         productService.searchProducts(1L, new ProductSearchRequest("양파", null, null, null, null), page);
         verify(productRepository, times(2)).searchMemberProducts(any(), any());
     }
+
+    @Test
+    @DisplayName("같은 검색어의 상품 자동완성은 두 번째부터 DB를 거치지 않고, 검색어가 다르면 따로 저장한다")
+    void productSuggestions_isCachedPerKeyword() {
+        var first = productService.findSuggestions(1L, "대파");
+        var second = productService.findSuggestions(1L, "대파");
+        assertThat(second).isEqualTo(first);
+        verify(productRepository, times(1)).findSuggestions(any(), any(), anyInt());
+
+        productService.findSuggestions(1L, "양파");
+        verify(productRepository, times(2)).findSuggestions(any(), any(), anyInt());
+    }
+
     @org.junit.jupiter.api.AfterEach
     void clearAuthentication() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();

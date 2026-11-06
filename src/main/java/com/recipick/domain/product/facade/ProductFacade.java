@@ -5,6 +5,7 @@ import com.recipick.domain.order.service.OrderSalesService;
 import com.recipick.domain.product.dto.request.ProductSearchRequest;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
 import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductSuggestionResponse;
 import com.recipick.domain.product.exception.ProductErrorCode;
 import com.recipick.domain.product.service.ProductService;
 import com.recipick.global.common.RankingPeriod;
@@ -56,5 +57,9 @@ public class ProductFacade {
         List<Long> rankedIds = orderSalesService.findBestSellingProductIds(
             martId, from, ProductService.BEST_PRODUCT_LIMIT);
         return productService.findBestProducts(martId, rankedIds, pageable);
+    }
+
+    public List<ProductSuggestionResponse> findSuggestions(Long memberId, String keyword) {
+        return productService.findSuggestions(findMartId(memberId), keyword);
     }
 }

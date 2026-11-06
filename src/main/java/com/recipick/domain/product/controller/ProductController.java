@@ -3,6 +3,7 @@ package com.recipick.domain.product.controller;
 import com.recipick.domain.product.dto.response.ProductDetailResponse;
 import com.recipick.domain.product.dto.request.ProductSearchRequest;
 import com.recipick.domain.product.dto.response.ProductSearchResponse;
+import com.recipick.domain.product.dto.response.ProductSuggestionResponse;
 import com.recipick.domain.product.facade.ProductFacade;
 import com.recipick.global.common.RankingPeriod;
 import com.recipick.global.response.ApiResponse;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/products")
@@ -34,6 +37,15 @@ public class ProductController {
         ) {
         return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
             productFacade.searchProducts(memberId, request, pageable)));
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<ApiResponse<List<ProductSuggestionResponse>>> findSuggestions(
+        @LoginMember Long memberId,
+        @RequestParam(required = false) String keyword
+    ) {
+        return ResponseEntity.ok(ApiResponse.success("조회되었습니다.",
+            productFacade.findSuggestions(memberId, keyword)));
     }
 
     @GetMapping("/{productId}")
