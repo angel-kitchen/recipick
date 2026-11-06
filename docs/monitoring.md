@@ -197,3 +197,31 @@ AI 요청은 HTTP 요청보다 훨씬 드물어 1분 구간으로는 그래프�
 ### 결과
 - `AiRequestMetricsTest`(단위 4개): 결과 상태·실패 사유별 건수, 응답 시간 합계, 토큰 종류별 합계, 받지 못한 토큰 제외, Prometheus 이름(`_total`, `_bucket`), 요청 전 0 등록을 확인했다.
 - `AiRequestLogServiceMetricsTest`(통합 2개): 커밋되면 지표가 한 번 기록되고, 바깥 트랜잭션이 롤백되면 이력과 지표가 모두 남지 않는 것을 확인했다.
+
+## 5. 캐시·요청 수 제한 지표
+
+### 캐시 적중률
+- `CacheConfig`가 `enableStatistics()`를 켜서 Spring Cache 지표를 Prometheus에 내보낸다. 별도 코드는 필요 없다.
+- 지표: `cache_gets_total`(누적 카운터). 라벨 `cache`는 `categories`·`openMarts`·`productSearch`·`recipeSuggestions`, 라벨 `result`는 `hit`·`miss`·`pending`이다. 앱을 다시 띄우면 0부터 다시 센다.
+- 적중률 쿼리(캐시별, 최근 5분):
+
+```promql
+sum by (cache) (increase(cache_gets_total{result="hit"}[5m]))
+  / sum by (cache) (increase(cache_gets_total{result=~"hit|miss"}[5m]))
+```
+
+- 부하 구간 전체의 값이 필요하면 측정 시작·종료 시각의 `cache_gets_total`을 각각 조회해 뺀다(`increase`는 구간 경계에서 값을 추정해서 건수가 정확하지 않을 수 있다). [캐시 보고서](performance/product/caching.md)의 적중률은 이 방식으로 계산했다.
+- 이 지표는 아직 "Recipick 개요" 대시보드에 패널이 없다. Grafana의 Explore에서 위 쿼리를 직접 실행해 본다.
+- 캐시가 꺼져 있으면(`recipick.cache.enabled=false`) 이 지표 자체가 나오지 않는다. 값이 없다고 적중률 0%로 해석하지 않는다.
+
+### 요청 수 제한과 Redis 타임아웃
+- 요청 수 제한은 거부 건수를 세는 전용 지표가 **없다**(`rate_limit_rejected_total` 없음). 거부는 요청 로그의 `status=429`로 확인한다. `/api/**` 앞 필터에서 응답하므로 `http_server_requests_seconds_count`에 429가 잡히는지는 확인하지 않았다.
+- 정책: 로그인류 분당 10회, 그 외 `/api/**` 분당 120회(IP별), 웹훅 제외. 값은 `recipick.rate-limit.{window, auth-limit, api-limit}`이다. 자세한 내용은 [요청 수 제한 보고서](performance/product/rate-limit.md).
+- Redis 타임아웃은 `spring.data.redis.timeout`(명령 응답 대기 500ms)과 `connect-timeout`(연결 1s)이다. 로그인 잠금·리프레시 토큰·조회 캐시·요청 수 제한이 모두 이 값을 쓴다.
+- Redis가 느리거나 멈추면 캐시는 `CacheErrorHandler`가 오류를 로그(WARN)로만 남기고 DB로 넘어가고, 요청 수 제한은 제한 없이 통과(fail-open)한다. 이 경우 캐시 적중이 줄어 DB 커넥션 풀 대기(`hikaricp_connections_pending`)가 늘 수 있으니 "DB 커넥션 풀" 패널을 함께 본다.
+
+### 부하 테스트 때 대시보드 보는 법
+1. 시간 범위를 측정 구간(시작 시각 ~ 종료 시각)에 맞추고 자동 새로고침은 끈다. 기본 5초 새로고침은 과거 구간을 볼 때 범위를 바꿀 수 있다.
+2. 먼저 "응답 시간 p95·p99"와 "5xx 에러율"로 결과를 확인하고, 느리면 "DB 커넥션 풀"의 `pending`(대기 요청)이 쌓였는지 본다. 풀이 가득 차 있으면 쿼리가 연결을 오래 쥐는 것이 원인 후보다.
+3. 캐시를 켠 측정이면 위 적중률 쿼리로 캐시가 실제로 쓰였는지 확인한다.
+4. 캡처의 p95·p99는 1분 구간 히스토그램 계산이라 k6의 전체 백분위와 정확히 일치하지 않는다. 보고서의 수치는 k6 결과를 쓰고 대시보드는 흐름을 보여 주는 용도로 쓴다.
