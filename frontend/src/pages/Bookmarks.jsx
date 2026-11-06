@@ -55,7 +55,6 @@ export default function Bookmarks() {
         <EmptyState
           icon="heart"
           title="찜한 레시피가 없어요"
-          hint="마음에 드는 레시피의 하트를 눌러 두면 여기에 모여요."
           actions={[{ to: '/recipes', label: '레시피 보러 가기' }]}
         />
       )}

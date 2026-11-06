@@ -8,7 +8,7 @@ export default function RecipeSearchInput({ value, onChange, onCompositionStart,
     <div className="suggest">
       <input
         className="field__input"
-        placeholder="레시피 이름 검색 (초성도 돼요: ㄱㅊ)"
+        placeholder="레시피 이름 검색"
         value={value}
         maxLength={50}
         aria-label="레시피 이름 검색"
