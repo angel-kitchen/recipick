@@ -39,7 +39,7 @@
 | 인증·인가 | [선택 근거·검증](adr/authentication.md) | 채빈 | 검증·리뷰: 인증·비밀번호 변경·탈퇴 12개 클래스·177건 및 지급·체험·구독 API 3개 클래스·57건의 기존 실행 근거. C-17·체험/구독 진입점·멤버십 정산 Checker 반영 |
 | 동시성 | [전략·검증 결과](concurrency.md) | 각 도메인, 회원 부분 채빈, 레시피 부분 보민, 결제 부분 정윤 | 회원 부분 검증·리뷰: 인증·기존 경합·추가 멤버십 32개 클래스·366건의 기존 실행 근거. 체험 API 동시 요청·구독 멱등·정산 잠금·충돌 계약 반영. 회원·상품·레시피·주문·결제 근거 연결. 실제 전체 정산·운영 성공 검증과 과거 실행 기록은 구분 |
 | 결제·웹훅·환불 정합성 | [선택 근거](adr/payment-consistency.md) · [동시성 결제 절](concurrency.md#6-결제-도메인-승인만료취소웹훅포인트) · [결제 API 명세](payment-api.md) · [회원·멤버십 ↔ 결제 연동](member-payment-integration.md) · [결제 추적성 검토](payment-observability.md) | 정윤, 주문 연동 준희 | 검증·리뷰: 웹훅 재조회·지연 큐와 Fallback·PG 호출과 트랜잭션 분리·잠금/UNIQUE/멱등 키 역할·늦은 승인과 SYSTEM 환불·자동청구 선점. 결제 패키지 136개 클래스·1,673건 통과(2026-11-04 `9172f6d`, 작성자 작업 환경의 로컬 MySQL 8.0 실행, CI는 Testcontainers MySQL 8.4. 근거·재현 명령은 [동시성 6-5절](concurrency.md#6-5-실제-동시-요청실패-결과)). 추적성 개선은 도입 검토 단계 |
-| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v4 및 냉장고 파먹기 Tool Calling v5 평가 기록 반영. SDK Tool로 구현됐으며 과제 문구의 `@Tool` 해석 확인은 ADR에 남김 |
+| 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) · [평가](ai/evaluation.md) · [모델 선택](ai/model-selection.md) · [프롬프트 이력](ai/prompt-history.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·기능별 모델 지정(조건 추천·식단 Sonnet, 장보기·냉장고 파먹기 Haiku)·프롬프트 v1~v9 기록 반영(v9 포함 재료는 실제 AI 평가 전). SDK Tool로 구현됐으며 과제 문구의 `@Tool` 해석 확인은 ADR에 남김 |
 | 상품 조회·성능·재고·순위 | [선택 근거·검증](adr/product-domain.md) | 태헌, 레시피 순위 보민 확인 | 작성: 검색 인덱스·캐시·요청 수 제한·재고 잠금·순위 집계·모니터링 공개 규칙, 초성 검색·자동완성·할인 판매가·마트·카테고리·상품 등록 규칙(D12~D19, 2026-11-06 추가). 순위 인덱스 EXPLAIN과 요청 수 제한 부하 수치는 측정해 ADR 5절에 기록 |
 | 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [로컬 100명 결과](performance/local-100-users.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 로컬 100명 혼합 검증·API별 지연·정합성 결과 추가. 기존 병목·캐싱 보고서는 유지하며 2026-11-05 재측정과 최종 Before/After 요약은 [성능 보고서 목차](performance/README.md)에 있고, 서버(AWS) 측정·제출 수치는 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
@@ -90,7 +90,7 @@
 ## 추가 설계·문제 해결 기록
 
 - 주문: [설계 결정·검증](adr/cart-order.md) · [추적성 도입 검토](order-observability.md).
-- AI·데이터: [초기 Spring AI 설계 검토](ai-design-review.md)(과거 제안) · [유튜브 레시피 적재 계획](recipe-youtube-import.md)(데이터 작업 계획). 현재 AI 구현·평가는 [AI ADR](adr/recipe-ai.md) 기준입니다.
+- AI·데이터: [초기 Spring AI 설계 검토](ai-design-review.md)(과거 제안) · [유튜브 레시피 적재 계획](recipe-youtube-import.md)(데이터 작업 계획). 현재 AI 구현·평가는 [AI ADR](adr/recipe-ai.md)과 [평가](ai/evaluation.md)·[모델 선택](ai/model-selection.md)·[프롬프트 이력](ai/prompt-history.md) 기준입니다.
 - 주문 트러블슈팅: [회원 잠금 테스트 오판](troubleshooting/order-member-lock-test-false-pass.md) · [잠금 전 선조회](troubleshooting/order-stale-entity-before-lock.md) · [결제 후 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md).
 - 결제 트러블슈팅: [지연 큐 복구](troubleshooting/payment-delay-queue-recovery.md) · [포인트 gap lock 교착](troubleshooting/payment-point-gap-lock-deadlock.md) · [스케줄러 자동 설정](troubleshooting/payment-scheduler-autoconfiguration.md).
 
