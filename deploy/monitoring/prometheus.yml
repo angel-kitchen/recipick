@@ -1,15 +1,16 @@
-# 태헌의 Actuator 설정(관리 포트·경로)에 맞춰 targets를 고친다. 앱과 같은 recipick 네트워크라 서비스 이름으로 접근한다.
+# 앱과 같은 recipick 네트워크라 서비스 이름으로 접근한다. 바꾼 뒤에는 서버에서 prometheus를 재시작한다(README 8절).
 global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: recipick-app
+  # 대시보드 쿼리가 job="recipick"으로 거른다(monitoring/grafana/dashboards). 로컬 수집 설정과 같은 이름을 쓴다
+  - job_name: recipick
     metrics_path: /actuator/prometheus
     static_configs:
       # 관리 포트 분리 후의 값. 블루그린 도입 후에는 app-blue:8081, app-green:8081
       - targets: ["app:8081"]
 
-  # 태헌이 exporter를 compose.monitoring.yml에 추가하면 주석을 푼다. 병목 분석에 앱 지표만으로는 부족하다
+  # exporter를 compose.monitoring.yml에 추가하면 주석을 푼다. 호스트·MySQL·Redis 지표는 앱 지표만으로 볼 수 없다
   # - job_name: node
   #   static_configs:
   #     - targets: ["node-exporter:9100"]

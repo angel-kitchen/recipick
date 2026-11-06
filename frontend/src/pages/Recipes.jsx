@@ -164,17 +164,6 @@ export default function Recipes() {
       <div className="row-actions"><Link to="/recipes/rankings" className="btn btn--outline">레시피 순위</Link><Link to="/auto-carts/new" className="btn btn--outline">여러 메뉴로 장보기</Link></div>
       <AiAutoCartBox />
       <RecentViews type="recipe" title="최근 본 레시피" toPath={(id) => `/recipes/${id}`} />
-      <div className="filters">
-        <RecipeSearchInput
-          value={keywordInput}
-          onChange={(e) => setKeywordInput(e.target.value)}
-          onCompositionStart={() => setComposing(true)}
-          onCompositionEnd={(e) => {
-            setKeywordInput(e.target.value);
-            setComposing(false);
-          }}
-        />
-      </div>
 
       <div className="catalog">
         <aside className="catalog__side" aria-label="레시피 조건">
@@ -192,6 +181,17 @@ export default function Recipes() {
           />
         </aside>
         <div className="catalog__main">
+          <div className="filters">
+            <RecipeSearchInput
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={(e) => {
+                setKeywordInput(e.target.value);
+                setComposing(false);
+              }}
+            />
+          </div>
           <div className="sort-bar" role="group" aria-label="정렬">
             <button type="button" className={`sort-bar__item ${sort ? '' : 'is-on'}`} aria-pressed={!sort} onClick={() => update(filters, true)}>
               {sort ? '' : '✓ '}이름순

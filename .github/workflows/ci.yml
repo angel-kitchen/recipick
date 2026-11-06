@@ -156,6 +156,9 @@ jobs:
 
       - name: 서버 설정 파일 업로드 (deploy/ → S3)
         run: |
+          # Grafana 데이터소스·대시보드는 로컬 compose와 함께 쓰는 루트 monitoring/grafana/ 한 벌만 둔다.
+          # deploy/에 복사본을 커밋하면 대시보드 수정이 운영에 빠지므로 묶을 때만 담는다(compose.monitoring.yml이 읽는 경로)
+          cp -R monitoring/grafana deploy/monitoring/grafana
           tar -czf deploy.tar.gz -C deploy --exclude=.env --exclude=backups --exclude=certbot --exclude=releases --exclude=.deploy.lock .
           aws s3 cp deploy.tar.gz "s3://$DEPLOY_BUCKET/deploy/$GITHUB_SHA.tar.gz"
 

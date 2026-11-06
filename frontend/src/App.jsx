@@ -37,6 +37,7 @@ import MembershipIntro from './pages/MembershipIntro';
 import MyPage from './pages/MyPage';
 import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/Orders';
+import Policy from './pages/Policy';
 import ProductDetail from './pages/ProductDetail';
 import Products from './pages/Products';
 import RecipeDetail from './pages/RecipeDetail';
@@ -73,6 +74,9 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/start" element={<Start />} />
         <Route path="/membership-info" element={<MembershipIntro />} />
+        <Route path="/privacy" element={<Policy kind="privacy" />} />
+        <Route path="/terms" element={<Policy kind="terms" />} />
+        <Route path="/support" element={<Policy kind="support" />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/recipes/rankings" element={<Rankings />} />
           <Route path="/auto-carts/new" element={<AutoCartBuilder />} />
