@@ -95,6 +95,19 @@
 .header__logo {
   color: var(--jungle);
   letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.header__logo .logo {
+  display: block;
+  height: 22px;
+  width: auto;
+}
+
+.logo__spoon {
+  fill: #8cc63f;
+  transition: fill 0.33s;
 }
 
 .header__nav .header__item {
