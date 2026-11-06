@@ -18,6 +18,7 @@ import com.recipick.domain.product.repository.ProductRepository;
 import com.recipick.domain.product.service.CategoryService;
 import com.recipick.domain.product.service.MartService;
 import com.recipick.domain.product.service.ProductService;
+import com.recipick.domain.recipe.service.RecipeService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +41,8 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     private MartService martService;
     @Autowired
     private ProductService productService;
+    @Autowired
+    private RecipeService recipeService;
 
     @MockitoSpyBean
     private CategoryRepository categoryRepository;
@@ -128,6 +131,18 @@ class CacheIntegrationTest extends IntegrationTestSupport {
 
         productService.findSuggestions(1L, "양파");
         verify(productRepository, times(2)).findSuggestions(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("50자를 넘는 자동완성 검색어는 캐시에 저장하지 않는다")
+    void suggestions_longKeywordIsNotCached() {
+        String longKeyword = "가".repeat(51);
+
+        productService.findSuggestions(1L, longKeyword);
+        recipeService.findSuggestions(longKeyword);
+
+        assertThat(cacheManager.getCache(CacheConfig.PRODUCT_SUGGESTIONS).get(1L + ":" + longKeyword)).isNull();
+        assertThat(cacheManager.getCache(CacheConfig.RECIPE_SUGGESTIONS).get(longKeyword)).isNull();
     }
 
     @org.junit.jupiter.api.AfterEach

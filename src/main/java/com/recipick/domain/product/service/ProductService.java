@@ -406,7 +406,7 @@ public class ProductService {
     @Cacheable(
         cacheNames = CacheConfig.PRODUCT_SUGGESTIONS,
         key = "#martId + ':' + #keyword",
-        condition = "#keyword != null"
+        condition = "#keyword != null && #keyword.length() <= 50"
     )
     public List<ProductSuggestionResponse> findSuggestions(Long martId, String keyword) {
         String query = keyword == null ? "" : keyword.replace(" ", "").toLowerCase(Locale.ROOT);
