@@ -40,10 +40,10 @@
 | 동시성 | [전략·검증 결과](concurrency.md) | 각 도메인, 회원 부분 채빈, 레시피 부분 보민, 결제 부분 정윤 | 회원 부분 검증·리뷰: 인증·기존 경합·추가 멤버십 32개 클래스·366건의 기존 실행 근거. 체험 API 동시 요청·구독 멱등·정산 잠금·충돌 계약 반영. 회원·상품·레시피·주문·결제 근거 연결. 실제 전체 정산·운영 성공 검증과 과거 실행 기록은 구분 |
 | 결제·웹훅·환불 정합성 | [선택 근거](adr/payment-consistency.md) · [동시성 결제 절](concurrency.md#6-결제-도메인-승인만료취소웹훅포인트) · [결제 API 명세](payment-api.md) · [회원·멤버십 ↔ 결제 연동](member-payment-integration.md) · [결제 추적성 검토](payment-observability.md) | 정윤, 주문 연동 준희 | 검증·리뷰: 웹훅 재조회·지연 큐와 Fallback·PG 호출과 트랜잭션 분리·잠금/UNIQUE/멱등 키 역할·늦은 승인과 SYSTEM 환불·자동청구 선점. 결제 패키지 136개 클래스·1,673건 통과(2026-11-04 `9172f6d`, 작성자 작업 환경의 로컬 MySQL 8.0 실행, CI는 Testcontainers MySQL 8.4. 근거·재현 명령은 [동시성 6-5절](concurrency.md#6-5-실제-동시-요청실패-결과)). 추적성 개선은 도입 검토 단계 |
 | 자동 구성·AI | [선택 근거·검증](adr/recipe-ai.md) | 보민, AI 공동 | 작성 중: 서버 계산·AI 역할·선택 근거·AI 필수 항목 점검 작성. 실제 Claude 평가(모델 3개)·모델 확정(Sonnet)·프롬프트 v4 및 냉장고 파먹기 Tool Calling v5 평가 기록 반영. SDK Tool로 구현됐으며 과제 문구의 `@Tool` 해석 확인은 ADR에 남김 |
-| 상품 조회·성능·재고·순위 | [선택 근거·검증](adr/product-domain.md) | 태헌, 레시피 순위 보민 확인 | 작성: 검색 인덱스·캐시·요청 수 제한·재고 잠금·순위 집계·모니터링 공개 규칙. 순위 인덱스 EXPLAIN과 요청 수 제한 부하 수치는 측정 예정 |
-| 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [로컬 100명 결과](performance/local-100-users.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 로컬 100명 혼합 검증·API별 지연·정합성 결과 추가. 기존 병목·캐싱 보고서는 유지하며 운영 측정·제출 수치는 담당자 확인 |
+| 상품 조회·성능·재고·순위 | [선택 근거·검증](adr/product-domain.md) | 태헌, 레시피 순위 보민 확인 | 작성: 검색 인덱스·캐시·요청 수 제한·재고 잠금·순위 집계·모니터링 공개 규칙, 초성 검색·자동완성·할인 판매가·마트·카테고리·상품 등록 규칙(D12~D19, 2026-11-06 추가). 순위 인덱스 EXPLAIN과 요청 수 제한 부하 수치는 측정해 ADR 5절에 기록 |
+| 부하·병목·캐싱·호출 제한 | [부하 테스트](performance/product/load-test.md) · [로컬 100명 결과](performance/local-100-users.md) · [병목 개선](performance/product/bottleneck.md) · [캐싱](performance/product/caching.md) | 태헌, 각 도메인 협조 | 로컬 100명 혼합 검증·API별 지연·정합성 결과 추가. 기존 병목·캐싱 보고서는 유지하며 2026-11-05 재측정과 최종 Before/After 요약은 [성능 보고서 목차](performance/README.md)에 있고, 서버(AWS) 측정·제출 수치는 담당자 확인 |
 | 배포·운영·모니터링 | [배포 선택 근거](deploy-strategy.md) · [구현 기록](deploy-implementation.md) · [운영 절차](../deploy/README.md) · [모니터링](monitoring.md) | 배포 준희, 모니터링 태헌, 보안 채빈 | 기존 문서로 연결. HTTPS·프론트 쿠키·운영 브라우저 검증 결과는 담당자와 갱신 |
-| 트러블슈팅 | [로컬 k6 타임아웃](troubleshooting/k6-docker-host-timeout.md) · 레시피·AI: [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) · 주문: [잠금 전 엔티티 조회로 변경 덮어씀](troubleshooting/order-stale-entity-before-lock.md) · [회원 잠금 테스트 경합 없이 통과](troubleshooting/order-member-lock-test-false-pass.md) · [결제 완료 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md) · 상품: [재고 증가 오버플로](troubleshooting/product-stock-increase-overflow.md) · [캐시 스위치 오타](troubleshooting/product-cache-switch-typo.md) · [커밋 후 캐시 삭제의 Redis 오류](troubleshooting/product-cache-after-commit-redis-error.md) · [베스트 상품 삭제 상품 페이지](troubleshooting/product-best-products-deleted-paging.md) · [조회수 증가 락 대기](troubleshooting/product-view-count-lock-wait.md) · [Prometheus 수집 23초](troubleshooting/product-prometheus-scrape-slow.md) · [요청 수 제한 테스트 IP 구분](troubleshooting/product-rate-limit-test-client-ip.md) · [순위 인덱스 미사용](troubleshooting/product-ranking-index-not-used.md) | 문제를 해결한 담당자 | 로컬 k6 실행 경로 분리·임시 대응(Docker 내부 원인은 미확정으로 구분), 레시피·AI 1건, 주문 3건, 상품 8건 작성 |
+| 트러블슈팅 | [로컬 k6 타임아웃](troubleshooting/k6-docker-host-timeout.md) · 레시피·AI: [AI 조건 추천 무관한 추천](troubleshooting/recipe-ai-recommend-no-match.md) · 주문: [잠금 전 엔티티 조회로 변경 덮어씀](troubleshooting/order-stale-entity-before-lock.md) · [회원 잠금 테스트 경합 없이 통과](troubleshooting/order-member-lock-test-false-pass.md) · [결제 완료 장바구니 정리](troubleshooting/order-paid-cart-cleanup.md) · 상품: [재고 증가 오버플로](troubleshooting/product-stock-increase-overflow.md) · [캐시 스위치 오타](troubleshooting/product-cache-switch-typo.md) · [커밋 후 캐시 삭제의 Redis 오류](troubleshooting/product-cache-after-commit-redis-error.md) · [베스트 상품 삭제 상품 페이지](troubleshooting/product-best-products-deleted-paging.md) · [조회수 증가 락 대기](troubleshooting/product-view-count-lock-wait.md) · [Prometheus 수집 23초](troubleshooting/product-prometheus-scrape-slow.md) · [요청 수 제한 테스트 IP 구분](troubleshooting/product-rate-limit-test-client-ip.md) · [순위 인덱스 미사용](troubleshooting/product-ranking-index-not-used.md) · [초성 채우기와 수정 시각](troubleshooting/product-choseong-backfill-updated-at.md) · [판매가 식과 가격 인덱스](troubleshooting/product-sale-price-index-not-used.md) | 문제를 해결한 담당자 | 로컬 k6 실행 경로 분리·임시 대응(Docker 내부 원인은 미확정으로 구분), 레시피·AI 1건, 주문 3건, 상품 10건 작성(마트 파트는 실제로 겪은 문제가 아직 없어 기록 없음) |
 
 위 표는 현재 문서 위치와 기록된 검증 범위를 안내합니다. 담당·측정 범위가 달라지면 갱신합니다.
 개별 기술 선택 문서는 해당 양식을 쓰고, 여러 도메인의 동시성 결과는 공통 문서의 도메인별 절로 모읍니다.
@@ -61,6 +61,20 @@
 | 관리자 감사 기록 | 기록·조회·만료 정리와 기존 상품·레시피·주문 API 호출 연결. 결제의 MartRejectionProcessor에도 ORDER_REJECT 호출이 있으며 멤버십 결제 목록·상세·재조회 감사 호출도 #380에서 연결. 멤버십 환불 재조회·재실행 감사 기록도 연결 |
 | 3차 멤버십 | 해지 예약·관리자 이력 API, 활성화·유예 판정, 결제 반영·소유 회원 매핑 계약, [체험 시작 API](api/membership-trial-start.md)와 활성 카드·C-17 검사, 관리자 지급 C-17 연결 반영. [유료 구독 API](api/membership-subscribe.md) 연결 반영. [즉시 해지 API](api/membership-terminate.md) 연결 반영. 탈퇴 준비·최종 처리 연결 완료. 실제 원격 카드 정리와 정상 탈퇴 성공 검증은 별도 |
 | API 명세·SA·AI 활용 기록 | 팀 노션에서 갱신. 저장소 문서 수정만으로 노션 반영 완료 처리하지 않음 |
+
+## 상품·마트 기능 문서 반영 상태
+
+구현 상태는 2026-11-06 `dev` `8c1faac4`(#533 병합 뒤) 기준으로 대조했습니다. 노션 API 명세는 같은 날 갱신했고, 저장소 문서와 노션을 함께 확인합니다.
+
+| 항목 | 현재 상태·다음 반영 |
+| --- | --- |
+| 상품 검색·상세·베스트 | 구현. [요구사항](requirement.md)·[ERD](erd.dbml)·[선택 근거](adr/product-domain.md) D1~D11·[성능 보고서](performance/README.md) 반영. 2026-11-05 재측정과 원인 후보까지 기록 |
+| 이름 초성 검색·검색어 자동완성(#511, #532) | 구현(PR #531·#533 병합). 요구사항·ERD·선택 근거 D12~D15·[성능 5-2절](performance/product/bottleneck.md)·트러블슈팅 반영. 노션 API 명세에 상품 자동완성 추가, 검색 규칙 갱신 |
+| 할인·판매가(#494) | 구현. 요구사항·ERD·선택 근거 D16 반영. 노션 API 명세에 할인 지정·해제·일괄 지정 추가, 검색·상세·베스트·관리자 목록 응답 필드 갱신. 판매가 식과 가격 인덱스 문제는 [트러블슈팅](troubleshooting/product-sale-price-index-not-used.md)에 원인 후보와 보류 사유 기록 |
+| 마트·카테고리 관리 | 구현. 요구사항·선택 근거 D17·D18 반영, 노션 API 명세 기존 작성분 유지. 영업 중 마트 캐시 효과는 부하 시나리오에 호출이 없어 측정하지 못함 |
+| 재고 조정·이력 | 구현. 선택 근거 D6·D7과 [동시성 7절](concurrency.md) 연결 |
+| 성능·모니터링 | 보고서 5종과 재측정 반영. 서버(AWS) 환경 측정은 하지 않았음 |
+| 남은 확인 | 첫 기동 초성 채우기 시간(상품 10만 건 6분 23초)과 운영 상품 수 확인, 서버 측정, 마트 트러블슈팅(해당 사례 없음) |
 
 ## 구현된 API의 저장소 참고 계약
 
