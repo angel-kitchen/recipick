@@ -33,7 +33,7 @@ JVM 옵션으로 `-Duser.timezone=Asia/Seoul`을 명시했다. 컨벤션이 시�
 
 ## 4. 서버 구성 (`deploy/compose*.yml`)
 
-compose 파일은 역할별로 셋이다. 앱과 프록시(`compose.yml`), MySQL과 Redis(`compose.infra.yml`), 모니터링 스켈레톤(`compose.monitoring.yml`). 파일마다 compose 프로젝트 이름이 다르고, 미리 만든 외부 네트워크 `recipick`을 공유한다. 배포 명령이 읽는 파일은 `compose.yml`뿐이라 어떤 실수로도 DB 컨테이너를 재생성하거나 지울 수 없고, RDS로 옮길 때는 인프라 파일을 지우고 접속 정보만 바꾸면 된다.
+compose 파일은 역할별로 셋이다. 앱과 프록시(`compose.yml`), MySQL과 Redis(`compose.infra.yml`), 모니터링(`compose.monitoring.yml`, 7-4). 파일마다 compose 프로젝트 이름이 다르고, 미리 만든 외부 네트워크 `recipick`을 공유한다. 배포 명령이 읽는 파일은 `compose.yml`뿐이라 어떤 실수로도 DB 컨테이너를 재생성하거나 지울 수 없고, RDS로 옮길 때는 인프라 파일을 지우고 접속 정보만 바꾸면 된다.
 
 MySQL·Redis·앱은 호스트에 포트를 노출하지 않는다. 밖으로 열린 것은 nginx의 80·443뿐이다. 앱 컨테이너에는 `.env`의 값 중 앱이 쓰는 것만 명시적으로 넘겨서 MySQL 루트 비밀번호 같은 값이 앱 프로세스 환경에 들어가지 않게 했다. 메모리 상한은 앱 1280m, MySQL 1g(버퍼 풀 512MB), Redis 256m으로, 나중에 블루그린 교체 순간 앱이 둘 떠도 4GB 인스턴스 안에 들어오는 크기다. 모든 서비스에 `restart: unless-stopped`와 json-file 로그 로테이션(10MB × 3)을 두어 루트 볼륨이 로그로 차지 않게 했다. MySQL은 복제도 시점 복구도 쓰지 않으므로 binlog를 꺼서 디스크와 쓰기 비용을 줄였다. 백업은 덤프로 한다.
 
@@ -133,6 +133,36 @@ AWS 서버(EC2 t3.medium 1대, `recipick.shop`)에서 `docs/deploy-strategy.md` 
 
 실패 배포 테스트는 프로덕션에 일부러 실패를 넣는 일이라, 깨뜨릴 곳을 헬스 체크 하나로 좁히고 테스트용 묶음을 반드시 지웠다. 남겨 두면 나중에 그 SHA로 수동 롤백할 때 깨진 설정이 깔린다.
 
+### 7-4. 운영 모니터링 구성 (로컬, 2026-11-06)
+
+`compose.monitoring.yml`은 10/27에 자원 상한만 정한 뼈대였다. 그대로 올리면 Grafana는 뜨지만 데이터소스와 대시보드가 없고, 수집 job 이름(`recipick-app`)이 대시보드 쿼리(`job="recipick"`)와 달라 패널이 모두 빈다. 운영에서 대시보드가 바로 보이도록 다음을 맞췄다.
+
+- 데이터소스·대시보드 파일은 로컬 compose와 함께 쓰는 루트 `monitoring/grafana/` 한 벌만 둔다. `deploy/`에 복사본을 커밋하면 대시보드를 고쳐도 운영에 빠지므로, 워크플로가 배포 묶음을 만들 때만 `monitoring/grafana/`로 담는다. `monitoring/`이 바뀌면 백엔드 배포가 돌아 서버 파일이 갱신된다.
+- 수집 job 이름을 `recipick`으로 맞췄다. 대시보드 파일은 고치지 않는다.
+- Grafana 접근은 `https://recipick.shop/grafana/`다(선택 근거는 `docs/deploy-strategy.md` 11절). nginx는 경로를 떼지 않고 넘기고 Grafana가 하위 경로에서 응답한다(`GF_SERVER_SERVE_FROM_SUB_PATH`).
+- nginx의 `/grafana/` 블록은 주소를 변수에 담아 요청 때 이름을 찾는다. 이름을 직접 적으면 Grafana 컨테이너가 없을 때 `nginx -t`가 실패하고, 배포 스크립트가 그것을 배포 실패로 보고 롤백한다. 모니터링은 배포 스크립트가 띄우지 않으므로 이 설정이 처음 배포되는 시점에는 Grafana가 없다. `^~`로 잡은 것은 "확장자가 있는 경로는 프론트 파일" 규칙이 Grafana의 JS·CSS 요청을 404로 만들지 않게 하기 위해서다.
+- 로그인 화면이 인터넷에 열리므로 관리자 비밀번호가 비면 기동하지 않게 하고(`${GRAFANA_ADMIN_PASSWORD:?}`), 가입을 끄고, 로그인 없이 열리는 Grafana 자체 지표 주소를 껐다. 웹소켓을 쓰는 실시간 연결도 껐다. nginx에 업그레이드 설정을 더하지 않기 위해서다. Prometheus(9090)와 관리 포트(8081)는 열지 않는다.
+
+검증은 워크플로와 같은 방식으로 만든 묶음, 자체 서명 인증서, 운영 nginx 설정 그대로(`nginx:1.28-alpine`, 443)로 했다. 앱 자리는 호스트에서 띄운 앱의 관리 포트를 `app` 이름으로 중계했다.
+
+| 확인 | 결과 |
+| --- | --- |
+| 묶음에 `monitoring/grafana/`(데이터소스·대시보드 3개 파일) 포함 | 포함됨 |
+| Grafana 컨테이너가 없을 때 `nginx -t` | 통과 |
+| Grafana가 없을 때 `/grafana/` | 502 (다른 경로는 영향 없음) |
+| `/grafana` (끝 슬래시 없음) | 301 → `/grafana/` |
+| nginx를 먼저 띄우고 Grafana를 나중에 띄운 뒤 `/grafana/login` | 200, `<base href="/grafana/">` |
+| Grafana 정적 파일(`/grafana/public/build/*.js`) | 200 `text/javascript` |
+| 로그인 없이 `/grafana/api/search`, 틀린 비밀번호 | 401, 401 |
+| `/grafana/metrics` | 302(로그인으로 보냄, 지표 노출 없음) |
+| 로그인 후 대시보드 목록 | `Recipick / Recipick 개요` 자동 등록 |
+| 수집 대상 | `recipick` `app:8081` UP |
+| 대시보드 쿼리(`job="recipick"`) | 값 반환 |
+| 비밀번호 없이 compose 실행 | `GRAFANA_ADMIN_PASSWORD가 비었다`로 중단 |
+| 메모리(패널 질의 150회 반복 뒤) | grafana 117MiB / 192MiB, prometheus 31MiB / 384MiB, 재시작·OOM 없음 |
+
+로컬에서 못 본 것은 실제 인증서와 브라우저 화면이다. 서버에서 기동한 뒤 로그인·대시보드 표시와 `free -m`을 확인한다(`docs/deploy-strategy.md` 10절).
+
 ## 8. 트러블슈팅 메모
 
 - **정상 배포가 실패로 끝났다(10/27 검토에서 발견).** 성공 후 옛 이미지를 지우는 파이프라인에서, 지울 이미지가 없으면 `grep -v`가 종료 코드 1을 낸다. `set -euo pipefail` 때문에 앱이 정상인데도 스크립트가 1로 끝났다. 서버에 현재·이전 태그만 남은 평상시가 바로 이 경우라 두 번째 배포부터 매번 실패로 표시될 뻔했다. 10/26 검증은 지울 다른 태그가 남아 있던 상태라 통과했다. grep의 "없음"을 정상으로 처리하고 정리 단계 전체를 배포 결과와 분리했다. 교훈은 성공 경로도 "정리할 것이 없는" 상태로 한 번 더 돌려야 한다는 것이다.
@@ -169,9 +199,9 @@ AWS 서버(EC2 t3.medium 1대, `recipick.shop`)에서 `docs/deploy-strategy.md` 
 
 - ~~`deploy/aws-setup.md`대로 AWS 리소스를 만들고(예산 알림 먼저) `deploy/README.md` 4절대로 서버를 세운다.~~ 10/27 완료.
 - ~~10/30 HTTPS 전환과 자동 배포 확인, 실서버에서 일부러 실패 배포 1회, nightly 백업과 복원 1회, 10-1 체크리스트 통과~~ 10/30 완료(7-3, 10-1은 웹훅 제외).
-- PortOne 웹훅 시크릿: 서버 `.env`와 앱 컨테이너에 없다(10/30 확인). 결제 담당에게 받아 넣고 앱을 다시 만든 뒤 웹훅 주소를 등록한다. 그 전에는 운영 앱이 모든 웹훅을 거절한다.
-- `ALERT_WEBHOOK_URL`: 비어 있다. 이 값이 없으면 `backup.sh`는 실패해도 알림을 보내지 않고 로그(`/var/log/recipick-backup.log`)에만 남긴다. 디스코드나 슬랙 웹훅 주소를 넣는다.
-- 관리자 IAM 그룹(배포 담당 + 대리 1명): 만들지 않았다. 지금은 배포 담당만 Session Manager·백업 다운로드가 가능하다. 대리 1명을 정한 뒤 `deploy/aws-setup.md` 10절대로 만든다.
+- ~~PortOne 웹훅 시크릿: 서버 `.env`와 앱 컨테이너에 없다(10/30 확인). 결제 담당에게 받아 넣고 앱을 다시 만든 뒤 웹훅 주소를 등록한다. 그 전에는 운영 앱이 모든 웹훅을 거절한다.~~ 11/2 완료(서버 `.env` 설정, 웹훅 URL 전달·콘솔 등록).
+- ~~`ALERT_WEBHOOK_URL`: 비어 있다. 이 값이 없으면 `backup.sh`는 실패해도 알림을 보내지 않고 로그(`/var/log/recipick-backup.log`)에만 남긴다. 디스코드나 슬랙 웹훅 주소를 넣는다.~~ 11/2 완료(Slack 웹훅, 테스트 전송 확인).
+- ~~관리자 IAM 그룹(배포 담당 + 대리 1명): 만들지 않았다. 지금은 배포 담당만 Session Manager·백업 다운로드가 가능하다. 대리 1명을 정한 뒤 `deploy/aws-setup.md` 10절대로 만든다.~~ 11/5 완료. 대리 1명 대신 배포 담당을 뺀 팀원 4명을 모두 넣었고, 전원 MFA·셸·백업 다운로드를 확인했다.
 - 블루그린은 운영 서버에서 부하 없이 앱 1개와 모니터링의 실제 메모리를 재고(`docker stats`, `free -m`), 앱 두 개가 들어갈 여유가 있을 때만 검토한다. 부하 테스트는 로컬 측정으로 옮겨 이 판단에 쓰지 않는다. 스케줄 작업 단일 실행 규칙이 컨벤션에 들어간 것도 선행 조건이다.
 
 ## 10. 3차 2단계 스키마 변경 (Expand → Contract)

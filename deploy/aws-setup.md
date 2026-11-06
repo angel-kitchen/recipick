@@ -239,20 +239,20 @@ gh api repos/angel-kitchen/recipick/actions/oidc/customization/sub --jq .sub_cla
 1. **Systems Manager → Fleet Manager**(또는 Session Manager → Start session)에서 `recipick-server`가 **Online**으로 보여야 한다. 인스턴스 기동 후 몇 분 걸릴 수 있다. 보이지 않으면 5절의 IAM instance profile이 붙어 있는지 확인하고 인스턴스를 재부팅한다.
 2. **Start session**으로 셸이 열리면 `sudo -i` 후 `README.md` 4절(서버 초기화)로 넘어간다.
 
-## 10. 나중에: 팀원 접속과 백업 다운로드 (팀 결정 후)
+## 10. 팀원 접속과 백업 다운로드
 
-Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 나눌 수 없다. `docker logs`를 쓰려면 docker 그룹이 필요하고 그것이 사실상 root이기 때문이다. 그래서 권한을 두 단계로 둔다.
+Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 나눌 수 없다. `docker logs`를 쓰려면 docker 그룹이 필요하고 그것이 사실상 root이기 때문이다. 처음에는 대리 1명만 관리자로 두려 했으나, 담당자가 없을 때도 팀원 누구나 로그 확인과 장애 대응을 할 수 있도록 배포 담당을 뺀 팀원 4명을 모두 관리자 그룹에 넣었다(11/5). 서버를 고칠 수 있는 사람이 많아지는 대신 아래 팀 규칙으로 변경을 통제한다.
 
 | 그룹 | 사람 | 할 수 있는 것 |
 | --- | --- | --- |
-| `recipick-admin` | 배포 담당과 1명(대리) | 서버 셸(Session Manager), 백업 내려받기 |
-| 나머지 팀원 | 4명 | IAM 사용자를 만들지 않는다. 배포 결과와 서버 출력은 Actions 로그(deploy 작업의 "서버 표준 출력")에서 본다. 그 밖의 로그가 필요하면 관리자에게 요청한다 |
+| `recipick-admin` | 배포 담당을 뺀 팀원 4명(1인 1사용자) | 서버 셸(Session Manager), 백업 내려받기 |
+| (그룹 없음) | 배포 담당 | AWS 계정 소유자라 IAM 사용자를 따로 만들지 않는다 |
 
-로그만 따로 열어야 할 만큼 요청이 잦아지면, `docker logs`만 실행하는 사용자 정의 SSM 문서를 만들어 그 문서에 대한 `ssm:SendCommand`만 허용하는 그룹을 추가한다.
+팀 규칙: 조회는 자유롭게 하고, 서버를 바꾸는 작업은 한 사람이 팀에 공지한 뒤 한다. 아이디는 한 사람에 하나만 쓰고, 내려받은 백업 덤프는 확인이 끝나면 바로 지운다.
 
 셸 문서 `SSM-SessionManagerRunShell`은 계정 안에 생기는 문서라 ARN에 `ACCOUNT_ID`가 들어간다. 포트 포워딩 문서 `AWS-StartPortForwardingSessionToRemoteHost`는 AWS 공용 문서라 계정 자리가 비어 있는 것이 맞다. 세션 데이터 채널(`ssmmessages:OpenDataChannel`)도 허용해야 셸이 열린다.
 
-`recipick-admin` 그룹에 아래 정책을 붙인다. 콘솔 로그인만 주고 액세스 키는 만들지 않는다. MFA를 켜게 한다. 백업 내려받기는 콘솔의 S3 화면에서 `backups/` 아래 파일을 받는다.
+정책 이름은 `recipick-admin-policy`다. `recipick-admin` 그룹에 이 정책과 AWS 관리형 `IAMUserChangePassword`(첫 로그인 비밀번호 변경용)를 붙인다. 콘솔 로그인만 주고 액세스 키는 만들지 않는다. MFA를 켜게 하며, 본인 MFA 등록에 필요한 IAM 권한을 정책 끝에 넣었다(`GetMFADevice`가 없으면 MFA 할당 화면에서 거부된다). 백업 내려받기는 콘솔의 S3 화면에서 `backups/` 아래 파일을 받는다.
 
 ```json
 {
@@ -280,7 +280,23 @@ Session Manager 셸은 로그만 보는 권한과 서버를 고치는 권한을 
     },
     { "Effect": "Allow", "Action": ["s3:ListAllMyBuckets", "s3:GetBucketLocation"], "Resource": "*" },
     { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::BUCKET", "Condition": { "StringLike": { "s3:prefix": ["", "backups/", "backups/*"] } } },
-    { "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET/backups/*" }
+    { "Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET/backups/*" },
+    { "Effect": "Allow", "Action": "iam:ListVirtualMFADevices", "Resource": "*" },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateVirtualMFADevice", "iam:DeleteVirtualMFADevice", "iam:GetMFADevice", "iam:ListMFADeviceTags",
+        "iam:EnableMFADevice", "iam:ResyncMFADevice", "iam:ListMFADevices", "iam:GetUser", "iam:GetLoginProfile"
+      ],
+      "Resource": ["arn:aws:iam::ACCOUNT_ID:mfa/*", "arn:aws:iam::ACCOUNT_ID:user/${aws:username}"]
+    }
   ]
 }
 ```
+
+팀원 안내와 알려진 증상:
+
+- 순서: 계정 로그인 URL로 접속 → 비밀번호 변경 → MFA 등록 → Session Manager에서 셸 열기 → S3 `backups/`에서 파일 하나 내려받고 지우기.
+- 첫 로그인 비밀번호 변경이 일반 창에서 넘어가지 않으면 시크릿 창에서 한다(확장 프로그램·쿠키 영향으로 추정).
+- 셸은 `ssm-user`로 열린다. `docker ps`가 permission denied이면 `sudo docker ps`처럼 `sudo`를 붙인다.
+- 보안 자격 증명 페이지의 액세스 키 칸에 뜨는 `iam:ListAccessKeys` 거부는 의도된 것이다.

@@ -9,7 +9,7 @@
 
 ## 1. 결론
 
-- 서버 1대(EC2)에 Docker Compose로 올린다. 리버스 프록시(기본 nginx, 제품 선택은 11절)가 80·443을 받고, 앱·MySQL·Redis는 같은 호스트의 컨테이너로 둔다. Prometheus·Grafana는 앱 배포가 안정된 뒤 태헌의 구성을 같은 호스트에 추가한다.
+- 서버 1대(EC2)에 Docker Compose로 올린다. 리버스 프록시(기본 nginx, 제품 선택은 11절)가 80·443을 받고, 앱·MySQL·Redis는 같은 호스트의 컨테이너로 둔다. Prometheus·Grafana도 같은 호스트에 올리고(8절 실측), Grafana만 `/grafana/` 경로로 내보낸다(11절).
 - dev 병합 시 자동 배포한다. 2026-11-09에 병합을 동결하고 main으로 승격해 같은 서버에 시연 배포한다.
 - 자동 파이프라인은 재시작 방식으로 먼저 완성한다. 첫 배포(10/28)는 수동이고, 10/30까지 "이미지 교체 → 헬스 체크 → 실패 시 이전 SHA 복구"를 dev 병합마다 자동 실행한다. CI/CD 증거와 서버 측정을 늦추지 않기 위해서다.
 - nginx 업스트림 교체 블루그린은 고도화 사다리 1단계로 둔다. 필수 항목(부하 테스트·병목·캐싱·모니터링)에 착수한 뒤 여유가 있을 때 도입하고, 전환 후 이전 색은 짧은 관찰 뒤 중지한다. 스케줄 작업의 중복 실행 방어·검증 규칙과, 앱 1개·모니터링의 실제 메모리 사용량을 잰 뒤 앱 두 개가 들어갈 여유가 확인되는 것이 선행 조건이다.
@@ -56,7 +56,7 @@ B와 C를 지금 택하지 않는 이유는 둘이 주는 것(데이터 안전, 
 | app (블루그린 도입 후 app-blue / app-green) | Spring Boot | 없음 | 상시 1개. 블루그린에서도 교체와 짧은 관찰 시간에만 둘 다 실행하고 이전 색은 중지한다 |
 | mysql | 데이터 | 없음 | named volume, 배포 때 재시작하지 않음 |
 | redis | 리프레시 토큰, 로그인 실패 횟수 | 없음 | named volume |
-| prometheus / grafana | 지표 수집·대시보드 | 없음 | 첫 배포에 포함하지 않는다. 태헌의 구성이 준비되면 `compose.monitoring.yml`로 추가. 접근 방식은 11절 미결 |
+| prometheus / grafana | 지표 수집·대시보드 | 없음 | `compose.monitoring.yml`. Grafana는 nginx가 `https://recipick.shop/grafana/`로 내보낸다. Prometheus는 인증이 없어 밖으로 열지 않는다 |
 
 로컬용 `docker-compose.yml`은 3306·6379를 호스트에 노출하지만 운영 compose에서는 포트 매핑을 두지 않는다. 보안 그룹은 80·443만 연다. 서버 접속은 SSM Session Manager로 하고 22번은 열지 않는다.
 
@@ -72,7 +72,7 @@ Actuator 관리 포트는 앱 포트와 분리해 호스트에 노출하지 않�
 | --- | --- | --- |
 | `compose.yml` | nginx, app (블루그린 도입 후 app-blue, app-green) | 배포 스크립트가 이 파일만 다룬다. DB를 건드리는 사고를 막는다 |
 | `compose.infra.yml` | mysql, redis | RDS로 옮길 때 이 파일을 지우고 환경 변수만 바꾼다 |
-| `compose.monitoring.yml` | prometheus, grafana (+ 태헌이 추가할 node·mysqld·redis exporter) | 첫 배포에는 없다. 태헌의 구성을 나중에 이 파일로 추가한다. 부하 테스트는 로컬에서 하므로(7절) 운영에서는 시연과 상시 확인용이다 |
+| `compose.monitoring.yml` | prometheus, grafana (node·mysqld·redis exporter는 아직 없다) | 배포 스크립트가 다루지 않는다. 처음 기동과 설정 변경 반영은 서버에서 직접 한다(`deploy/README.md` 8절). 부하 테스트는 로컬에서 하므로(7절) 운영에서는 시연과 상시 확인용이다 |
 
 배포 때 `docker compose down`을 쓰지 않는다. 앱 서비스만 교체해야 MySQL·Redis 볼륨과 리프레시 토큰이 유지된다. 모든 서비스에 `restart: unless-stopped`와 json-file 로그 로테이션(`max-size` 10m, `max-file` 3)을 둔다. 로테이션이 없으면 루트 볼륨이 로그로 찬다.
 
@@ -239,6 +239,7 @@ CodeDeploy는 중간 선택지다. EC2에서 블루그린을 하려면 ALB가 �
 | t3.medium (4GB) 권장 | 시간당 약 $0.052. 상시 JVM 1개 + MySQL + Redis + 프록시 + 모니터링 기준. 한 단계 위는 단가가 두 배 |
 | 메모리 예산(상한) | app 1280m, mysql 1g, redis 256m, prometheus 384m, grafana 192m, exporter 합계 약 128m. 합계 약 3.2GiB. OS·도커·nginx 몫을 빼면 남는 것이 거의 없어 앱 두 개를 동시에 띄울 수 없다 |
 | 실측(로컬, 앱 1개, 부하 없음, 10/27) | app 348MiB, mysql 474MiB, redis 9MiB, nginx 4MiB. 부하 테스트는 로컬로 옮겼지만 블루그린 판단은 운영 서버의 여유 메모리로 해야 하므로 로컬 값으로 대신하지 않는다. 운영 서버에서 부하 없이 `docker stats --no-stream`과 `free -m`으로 앱 1개(+ 모니터링)를 재고, 남는 메모리가 앱 상한(1280m)보다 넉넉할 때만 블루그린을 검토한다 |
+| 실측(운영, 부하 없음, 모니터링 기동 전, 11/5) | `free -m` 기준 전체 3832MiB, 사용 1879MiB, 여유(available) 1952MiB, 스왑 없음. 모니터링 상한 합계(약 704MiB)를 다 써도 들어가므로 서버를 늘리거나 모니터링 서버를 따로 두지 않는다. 모니터링을 올린 뒤 다시 재서 블루그린 판단에 쓴다 |
 | 디스크 예산 | 이미지(현재·이전 2개) 약 1GB, MySQL 수 GB, Prometheus 상한 2GB(`retention.size`), 로그 컨테이너당 30MB, 덤프 수십 MB. 30GB 안에서 여유가 크다. `df -h /`를 10-1에서 확인한다 |
 | 루트 볼륨 | 30GB gp3. 기본 8GB는 부족하고 추가 비용은 월 수천 원 |
 | 10/27 ~ 11/13 약 18일 | EC2 단가만 약 $23. EBS·공인 IPv4·ECR·S3를 더한 전체는 약 $27. CPU를 오래 높게 쓰면 T3 추가 CPU(unlimited 모드) 요금이 붙을 수 있다. 항목별 표는 `deploy/aws-setup.md` 1-2 |
@@ -269,7 +270,7 @@ CodeDeploy는 중간 선택지다. EC2에서 블루그린을 하려면 ALB가 �
 AWS·파이프라인
 
 - [x] GitHub OIDC 공급자, 배포용 IAM 역할(ECR push, SSM SendCommand), EC2 인스턴스 프로파일(ECR pull, SSM 관리 인스턴스)
-- [ ] 관리자 IAM 그룹(배포 담당 + 대리 1명, Session Manager·Grafana 포트 포워딩·백업 다운로드). 나머지 팀원은 Actions 로그로 본다(`deploy/aws-setup.md` 10절)
+- [x] 관리자 IAM 그룹(배포 담당을 뺀 팀원 4명, Session Manager·Grafana 포트 포워딩·백업 다운로드). 11/5 생성, 전원 MFA·셸·백업 다운로드 확인(`deploy/aws-setup.md` 10절)
 - [x] EC2 Ubuntu t3.medium, 루트 볼륨 30GB gp3, Elastic IP, 보안 그룹 80·443. Docker·Compose 설치, `/opt/recipick`과 `.env`(권한 600)
 - [x] compose 파일 3개(`restart: unless-stopped`, 로그 로테이션, 메모리 제한)와 nginx 설정. 10/26 작성, 로컬에서 빈 DB 첫 기동·IP 변경 재배포 검증
 - [x] 서버 `.env` 작성(`deploy/README.md` 4절)
@@ -286,7 +287,9 @@ AWS·파이프라인
 - [ ] 파이프라인 완성 후: dev → main 따라잡기 승격, 변수 main으로 배포 리허설 1회, 변수 dev로 복귀 확인
 - [ ] 11/9: dev → main 최종 승격, 변수 main, 태그. 배포 역할의 신뢰 정책에서 dev 제거(dev 머지로 시연 서버에 명령을 보낼 수 없게)
 - [ ] 여유가 있을 때: 블루그린 교체 스크립트(이전 색은 관찰 후 중지). 선행 조건은 스케줄 작업 중복 실행 방어·검증 규칙
-- [ ] 이후: 태헌의 모니터링 구성을 `compose.monitoring.yml`로 추가. 호스트·MySQL·Redis exporter를 포함하도록 요청(앱 지표만으로는 병목 분석이 안 된다)
+- [x] 운영 모니터링 구성: Grafana 데이터소스·대시보드 연결, 수집 job 이름 정렬, `/grafana/` 프록시. 11/6 로컬 검증(`docs/deploy-implementation.md` 7-4)
+- [ ] 서버에서 모니터링 기동과 확인(`deploy/README.md` 8절): `.env` 비밀번호, 기동, 메모리 재측정, 로그인·수집 대상 UP
+- [ ] 이후: 호스트·MySQL·Redis exporter 추가(앱 지표만으로는 병목 분석이 안 된다)
 
 문서
 
@@ -327,8 +330,8 @@ AWS·파이프라인
 - 프록시와 인증서 자동 발급 방식: nginx + certbot 또는 Caddy. 블루그린 절차는 같다. certbot 경험자가 없으면 Caddy 권장
 - 운영 관리자 계정 생성 방법. 업무 전달 권장은 서버에서 SQL로 한 번 생성(로컬 시드의 해시를 쓰지 않는다). `data-admin-local.sql`은 운영에서 실행되지 않는다
 - `data.sql` 시연 시드(지역 2·마트 2)가 운영에서도 실행되는 것이 의도인지. 네 문장 모두 `WHERE NOT EXISTS`라 반복 실행은 안전하다(10/27 확인). 운영 관리자는 이와 별도로 SQL로 만든다
-- Grafana 접근 방식. SSM 포트 포워딩을 권장한다. 외부에 아무것도 열지 않고 인증이 IAM으로 끝난다(`deploy/README.md` 8절). 시연 때 화면을 보여 줄 노트북에서 포워딩한다
+- ~~Grafana 접근 방식~~ 11/6 확정: `https://recipick.shop/grafana/`로 연다. SSM 포트 포워딩은 외부에 아무것도 열지 않지만 보는 사람마다 AWS CLI·플러그인·액세스 키를 설정해야 해서 발표와 팀 확인에 맞지 않는다. 밖으로 열리는 것은 Grafana 로그인 화면뿐이다(비밀번호 필수, 가입·자체 지표 주소 끔). Prometheus와 관리 포트는 열지 않는다(`deploy/README.md` 8절)
 - 스케줄 작업 단일 실행 보장 규칙을 컨벤션에 넣을지. 정윤의 갱신 결제 재시도와 직결되므로 3차 범위 논의와 함께 다룬다
 - 블루그린 도입 시점. 필수 8~11 착수 후 여유를 보고 판단한다
 - 제출 시 기본 브랜치를 dev에서 main으로 바꿀지
-- AWS 계정은 준희 개인 계정(무료 크레딧 100달러)으로 진행(10/26, 콘솔 작업 순서는 `deploy/aws-setup.md`). 남은 것은 관리자 그룹의 대리 1명 지정과 비용 정산용 영수증 보관(지원금은 사비 선지출 후 정산)
+- AWS 계정은 준희 개인 계정(무료 크레딧 100달러)으로 진행(10/26, 콘솔 작업 순서는 `deploy/aws-setup.md`). 남은 것은 비용 정산용 영수증 보관(지원금은 사비 선지출 후 정산)
