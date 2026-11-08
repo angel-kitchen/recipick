@@ -25,7 +25,10 @@ export default function Pager({ page, totalPages, onChange }) {
 
   if (totalPages <= 1) return null;
 
-  const start = Math.floor(page / WINDOW_SIZE) * WINDOW_SIZE;
+  // 항목을 지워 현재 쪽이 전체 쪽 수를 넘으면 마지막 쪽으로 보고 그린다
+  const current = Math.min(page, totalPages - 1);
+
+  const start = Math.floor(current / WINDOW_SIZE) * WINDOW_SIZE;
   const numbers = Array.from({ length: Math.min(WINDOW_SIZE, totalPages - start) }, (_, i) => start + i);
 
   // 범위(1~전체)를 벗어나거나 소수·빈 값이면 입력 칸의 기본 검증이 제출을 막는다
@@ -37,16 +40,16 @@ export default function Pager({ page, totalPages, onChange }) {
 
   return (
     <nav className="pager" aria-label="페이지 이동">
-      <button type="button" className="pager__step" disabled={page <= 0} onClick={() => onChange(page - 1)}>
+      <button type="button" className="pager__step" disabled={current <= 0} onClick={() => onChange(current - 1)}>
         ‹ 이전
       </button>
       {numbers.map((n) => (
         <button
           key={n}
           type="button"
-          className={n === page ? 'pager__num pager__num--current' : 'pager__num'}
+          className={n === current ? 'pager__num pager__num--current' : 'pager__num'}
           aria-label={`${n + 1}쪽`}
-          aria-current={n === page ? 'page' : undefined}
+          aria-current={n === current ? 'page' : undefined}
           onClick={() => onChange(n)}
         >
           {n + 1}
@@ -60,7 +63,7 @@ export default function Pager({ page, totalPages, onChange }) {
             aria-label="원하는 쪽으로 이동"
             aria-expanded={jumpOpen}
             onClick={() => {
-              setJumpValue(String(page + 1));
+              setJumpValue(String(current + 1));
               setJumpOpen((open) => !open);
             }}
           >
@@ -87,7 +90,7 @@ export default function Pager({ page, totalPages, onChange }) {
           )}
         </span>
       )}
-      <button type="button" className="pager__step" disabled={page + 1 >= totalPages} onClick={() => onChange(page + 1)}>
+      <button type="button" className="pager__step" disabled={current + 1 >= totalPages} onClick={() => onChange(current + 1)}>
         다음 ›
       </button>
     </nav>
