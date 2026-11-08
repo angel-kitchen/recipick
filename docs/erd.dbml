@@ -478,7 +478,9 @@ Table CART_ADD_HISTORY {
 Table BILLING_KEY {
   id bigint [pk]
   member_id bigint
-  portone_billing_key varchar(255)
+  portone_billing_key varchar(255) [note: '옛 평문 컬럼. 암호화 백필 뒤 Contract에서 제거 예정, 엔티티 매핑 없음']
+  portone_billing_key_ciphertext varchar(512) [note: 'AES-256-GCM, v1:<IV>:<암호문+태그> Base64']
+  portone_billing_key_hash varchar(64) [note: '원문 HMAC-SHA256 hex. 같은 키 조회·UNIQUE']
   status varchar(20)
   issued_at datetime
   delete_requested_at datetime
@@ -486,7 +488,8 @@ Table BILLING_KEY {
   created_at datetime
   updated_at datetime
   indexes {
-    (portone_billing_key) [unique, name: 'uk_billing_key_portone_billing_key']
+    (portone_billing_key_hash) [unique, name: 'uk_billing_key_portone_billing_key_hash']
+    (portone_billing_key) [unique, name: 'uk_billing_key_portone_billing_key', note: '옛 평문 컬럼 UNIQUE. Contract에서 제거']
     (member_id, status) [name: 'idx_billing_key_member_id_status']
   }
 }

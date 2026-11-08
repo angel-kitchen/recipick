@@ -693,6 +693,7 @@
     - 자동 청구 시 멤버십 도메인에 자동청구 대상·동의 여부 확인
 - **카드 등록** (담당: 정윤)
     - 카드번호·CVC는 저장하지 않고 PortOne 빌링키만 관리
+    - 빌링키 원문은 AES-256-GCM 암호문(`portone_billing_key_ciphertext`, `v1:<IV>:<암호문+태그>`)과 HMAC-SHA256 지문(`portone_billing_key_hash`, UNIQUE·같은 키 조회)으로만 저장. 암호화 키·지문 키는 환경변수(`BILLING_KEY_ENCRYPTION_SECRET`·`BILLING_KEY_HMAC_SECRET`)로 분리하고 로컬은 자동 생성. 기존 평문 행은 기동 백필(재실행·동시 실행 안전, 미완료 시 기동 실패)로 채우고 평문 컬럼 제거는 별도 승인. 암호문·지문은 로그·`toString`·응답에 넣지 않음
     - 회원당 `ACTIVE` BillingKey 최대 1개
     - 새 카드 등록 시 기존 ACTIVE 키는 `REPLACED`, 새 키는 `ACTIVE`
     - 동일 ACTIVE BillingKey 재등록은 새 행을 만들지 않고 기존 결과 반환

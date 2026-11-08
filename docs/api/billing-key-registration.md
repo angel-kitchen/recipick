@@ -1,6 +1,7 @@
 # 카드(빌링키) 등록
 
-PortOne V2 + KG이니시스 테스트 채널의 카드 빌링키를 회원에게 등록합니다. 카드번호·CVC는 저장하지 않고 빌링키만 저장합니다.
+PortOne V2 + KG이니시스 테스트 채널의 카드 빌링키를 회원에게 등록합니다. 카드번호·CVC는 저장하지 않고 빌링키만 저장하며,
+빌링키 원문은 암호문과 지문으로만 DB에 남습니다(아래 "빌링키 저장 암호화").
 3차 2단계(PR-2a) 기준이며, 실제 청구는 4단계, 삭제는 6단계에서 열립니다.
 
 ## API
@@ -37,15 +38,16 @@ PortOne V2 + KG이니시스 테스트 채널의 카드 빌링키를 회원에게
 ## 운영 차단
 
 - 2단계 코드는 **테스트 채널(TEST) 빌링키만 등록**합니다. 운영 PortOne 설정이 실채널이면 어떤 설정으로도 등록이 성공하지 않습니다
-  (`BillingKeyIssuanceVerifier.ALLOWED_CHANNEL_TYPE`). 실채널 허용은 빌링키 암호화·키 관리를 적용하는 PR에서 코드로만 엽니다.
+  (`BillingKeyIssuanceVerifier.ALLOWED_CHANNEL_TYPE`). 실채널 허용은 빌링키 암호화 적용(#553)·평문 컬럼 제거(Contract)가 끝난 뒤
+  별도 PR에서 코드로만 엽니다 — 검증기의 허용 채널 유형과 삭제 클라이언트의 TEST 채널 검사(`PortOneBillingKeyDeletionClient`)를 함께 바꿉니다.
 - 기능 플래그 `recipick.billing-key.registration-enabled`(환경변수 `BILLING_KEY_REGISTRATION_ENABLED`, 운영 기본 false)는
   보조 스위치입니다. 꺼져 있으면 등록 API 두 개가 `503 BILLING-008`입니다.
 - 운영 등록 활성화 조건(모두 충족 + 검수 GO 뒤에만)
-    1. 빌링키 암호화·키 관리 설계 검수·적용, 같은 PR에서 허용 채널 유형을 검증된 설정으로 전환
+    1. 빌링키 암호화·키 관리 적용(#553, 완료)과 평문 컬럼 제거(Contract) 뒤, 별도 PR에서 허용 채널 유형을 검증된 설정으로 전환
     2. 테스트 채널 실연동 E-1(SDK 발급)·E-2(조회 응답에 우리 채널 `type == TEST`, `issueId` 그대로, `customer.id`) 확인
     3. 아래 실연동 절차 R-1 통과, 미검증 항목에 코드 리뷰 확인 기록
-    4. 운영 DB에서 `billing_key` 원문 컬럼을 읽을 수 있는 계정 최소화, 운영 로깅에 `org.springframework.web.client` DEBUG 없음
-       (빌링키가 요청 URL 경로에 들어갑니다)
+    4. 운영 DB에서 `billing_key`를 읽을 수 있는 계정과 `BILLING_KEY_ENCRYPTION_SECRET`을 볼 수 있는 사람을 최소화, 운영 로깅에
+       `org.springframework.web.client` DEBUG 없음(빌링키가 요청 URL 경로에 들어갑니다)
     5. 기존 DB 반영(아래) 완료
 
 ## 실연동 절차 R-1 (로컬 앱, 플래그 true, KG이니시스 테스트 채널)
@@ -73,10 +75,40 @@ PortOne V2 + KG이니시스 테스트 채널의 카드 빌링키를 회원에게
 | 실채널(LIVE) 빌링키 거절 | 검증기 단위 테스트 | 실채널 없어 재현 불가 | 단위 테스트 + E-2 |
 | 실제 KG이니시스 응답의 `issueId`·`customer.id` | 없음 | E-2 | 활성화 조건 2 |
 
+## 빌링키 저장 암호화 (#553)
+
+- `billing_key.portone_billing_key_ciphertext`: 원문을 AES-256-GCM으로 암호화한 값. 저장마다 새 IV(12바이트)·태그 128비트이고
+  형식은 `v1:<IV Base64>:<암호문+태그 Base64>`입니다. `v1` 외 버전·변조·형식 오류는 복호화 예외(메시지에 입력값 없음)입니다.
+  키 교체(v2)는 아직 없습니다.
+- `billing_key.portone_billing_key_hash`: 원문의 HMAC-SHA256 hex 64자. 같은 키 조회와 UNIQUE(`uk_billing_key_portone_billing_key_hash`)는
+  암호문이 아니라 이 값으로 합니다(암호문은 매번 달라집니다).
+- 엔티티 `BillingKey.portoneBillingKey`는 `BillingKeyCiphertextConverter`(JPA `AttributeConverter`)가 쓰기에 암호화·읽기에 복호화하므로
+  청구·삭제·재확인 호출부는 그대로 원문 getter를 씁니다. 옛 평문 컬럼 `portone_billing_key`는 매핑하지 않습니다.
+- 키 2개는 분리합니다. `BILLING_KEY_ENCRYPTION_SECRET`(Base64, 디코딩 후 정확히 32바이트)·`BILLING_KEY_HMAC_SECRET`(Base64,
+  32바이트 이상). 로컬 외 환경에서 비어 있으면 기동하지 않고, `local` 단일 프로필은 `~/.recipick/billing-key-encryption-secret`·
+  `~/.recipick/billing-key-hmac-secret`를 자동 생성합니다(`BillingKeyCryptoConfig`, `TrialBlockConfig`와 같은 규칙). 지문 키를 바꾸면
+  기존 지문과 맞지 않고, 암호화 키를 잃으면 저장된 빌링키를 복구할 수 없습니다.
+- 기존 평문 행은 기동 때 `BillingKeyCiphertextBackfiller`(`ApplicationRunner`)가 500건씩 조건부 UPDATE로 채웁니다. 평문은 지우지
+  않으며(Contract 전 롤백 대비), 다시 실행하거나 두 서버가 동시에 실행해도 한 번만 채웁니다. 채우지 못한 행이 남으면 기동이
+  실패합니다. 평문 컬럼이 없는 DB(로컬 신규·테스트·Contract 뒤)에서는 아무것도 하지 않습니다.
+- 평문 컬럼·옛 UNIQUE 제거(Contract)와 러너 삭제는 별도 승인 PR입니다(`docs/deploy-implementation.md` 10-J).
+
 ## 기존 DB 반영
 
 운영은 `ddl-auto: update`지만 아래 DDL을 먼저 적용하고, 앱 기동 뒤 Hibernate가 추가로 바꾼 것이 없는지 확인합니다.
 절차·되돌리기 문장·확인 SQL은 `docs/deploy-implementation.md` 10절을 따릅니다. 지우는 문장은 없습니다.
+
+#553(빌링키 암호화) Expand DDL — 머지 전에 적용하고, 운영 `.env`에 키 2개를 먼저 넣습니다(10-J).
+
+```sql
+ALTER TABLE billing_key
+  ADD COLUMN portone_billing_key_ciphertext VARCHAR(512) NULL,
+  ADD COLUMN portone_billing_key_hash VARCHAR(64) NULL;
+ALTER TABLE billing_key
+  ADD UNIQUE INDEX uk_billing_key_portone_billing_key_hash (portone_billing_key_hash);
+```
+
+PR-2a(#308) 당시 DDL은 아래와 같습니다(적용 완료).
 
 ```sql
 ALTER TABLE billing_key
@@ -108,16 +140,20 @@ CREATE TABLE billing_key_issue_request (
 
 ## 보안 메모
 
-- 빌링키 원문은 응답·로그·`toString`·예외 cause에 넣지 않습니다.
-- UNIQUE 충돌: MySQL은 위반 메시지에 중복 값(키 원문)을 넣습니다(`Duplicate entry '<값>' for key '<테이블>.<제약>'`). Logback TurboFilter
+- 빌링키 원문은 응답·로그·`toString`·예외 cause에 넣지 않습니다. 지문도 `toString`·로그에 넣지 않습니다.
+- DB에는 암호문·지문만 저장합니다(위 "빌링키 저장 암호화"). 통합 테스트
+  `BillingKeyRegistrationIntegrationTest.storesCiphertextAndFingerprintOnly`가 저장 행 어느 컬럼에도 원문이 없음을 확인합니다.
+- UNIQUE 충돌: MySQL은 위반 메시지에 중복 값(지문 컬럼이면 지문, 옛 평문 컬럼이면 원문)을 넣습니다
+  (`Duplicate entry '<값>' for key '<테이블>.<제약>'`). Logback TurboFilter
   `BillingKeyLogMaskingFilter`가 출력 전에 판정합니다 — 메시지의 `for key` 뒤 제약 식별자를 꺼내(테이블 접두어·따옴표·대소문자 정규화)
-  `uk_billing_key_portone_billing_key`·`uk_billing_key_issue_request_issue_id`와 **정확히 같을 때만** 막습니다.
+  `uk_billing_key_portone_billing_key_hash`·`uk_billing_key_portone_billing_key`·`uk_billing_key_issue_request_issue_id`와
+  **정확히 같을 때만** 막습니다.
   ① Hibernate `SqlExceptionHelper`가 예외 변환 전에 남기는 메시지 줄은 그 로거에 한해 막고, ② 예외 객체를 함께 넘기는 줄
-  (`GlobalExceptionHandler` 등)은 로거와 관계없이 cause·suppressed 체인에 두 제약 위반이 있으면 막은 뒤 원문 없는 진단 한 줄
+  (`GlobalExceptionHandler` 등)은 로거와 관계없이 cause·suppressed 체인에 위 제약 위반이 있으면 막은 뒤 원문 없는 진단 한 줄
   (`…BillingKeyLogMasking` 로거: 원래 로거·예외 클래스·제약 이름)을 남깁니다. 오류 코드·SQLState 줄(`SQL Error: 1062, SQLState: 23000`),
   다른 제약의 충돌(중복 값에 같은 글자가 들어 있어도), 그 밖의 SQL 오류는 그대로 남습니다.
 - 필터를 달 수 없는 환경(Logback이 아님)이면 애플리케이션이 기동하지 않습니다. 원문 차단이 카드 등록의 필수 조건이기 때문입니다.
 - 실제 충돌을 유도한 테스트(`BillingKeyRegistrationConcurrencyTest.uniqueConflictLeavesNoKeyInLogs`)가 로그 메시지와 예외의 중첩
-  cause까지 원문이 없음을 확인합니다.
-- 빌링키 UNIQUE 위반만 `BILLING-002`로 바꿉니다(제약 이름 `uk_billing_key_portone_billing_key`). 다른 무결성 오류는 그대로 올립니다.
+  cause까지 원문과 지문이 없음을 확인합니다.
+- 빌링키 UNIQUE 위반만 `BILLING-002`로 바꿉니다(제약 이름 `uk_billing_key_portone_billing_key_hash`). 다른 무결성 오류는 그대로 올립니다.
 - 토큰 `issueId`는 발급 응답에만 실리고 `Cache-Control: no-store`로 내려갑니다. 요청·응답 DTO의 `toString`은 가려집니다.
