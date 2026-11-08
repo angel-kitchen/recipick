@@ -56,6 +56,9 @@ services:
       PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET:-}
       # 회원 환불 취소 POST 자동 재요청 스위치. 기본 false — 실 DB 검증 뒤 .env에서 켠다
       MEMBER_REFUND_AUTO_REPOST_ENABLED: ${MEMBER_REFUND_AUTO_REPOST_ENABLED:-false}
+      # 카드 등록·멤버십 자동결제 스위치. 기본 false — 켜기 전 운영 DB·PG 채널 점검 뒤 단계적으로 켠다
+      BILLING_KEY_REGISTRATION_ENABLED: ${BILLING_KEY_REGISTRATION_ENABLED:-false}
+      MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}
       AI_CLIENT: ${AI_CLIENT:-fake}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:

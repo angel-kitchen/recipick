@@ -139,7 +139,7 @@ READY 만료 → CANCELED (실패하면 최신 상태별 결과: IN_PROGRESS / U
 2. 4-B: 웹훅 라우팅(`mpay_`), 전체 복구 Sweep·마감 놓친 이용권 탐색, UNKNOWN W 초과 처리, 확정 시도의 예상 밖 수납 정정, 빌링키 REVOKED, 탈퇴 MEMBERSHIP_PAYMENT Checker (4-A 월 갱신은 `docs/api/membership-renewal.md`)
 3. 5단계: SYSTEM 환불 PG 실행·정합화
 4. 회원 도메인 구독 API 연결, 2a 운영 인덱스·보안 게이트
-5. 배포 Compose `app.environment`에 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달 추가(배포 담당과 함께). 지금은 전달하지 않으므로 운영 `.env`만 바꿔서는 켜지지 않는다
+5. 배포 Compose `app.environment`에 `MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}` 전달 추가 완료(#551). 운영 `.env`에서 `MEMBERSHIP_BILLING_ENABLED=true`로 켠다
 
 ## 자동 테스트로 재현하지 못한 것(미검증 🟣)
 
