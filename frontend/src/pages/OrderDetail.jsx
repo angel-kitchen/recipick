@@ -158,6 +158,9 @@ export default function OrderDetail() {
   if (error) {
     return (
       <div className="container page">
+        <p className="page__sub">
+          <Link to="/orders">← 주문 내역</Link>
+        </p>
         <ErrorNotice error={error} />
       </div>
     );
