@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import { ListSkeleton } from '../components/Skeleton';
 import LocationPickerModal from '../components/LocationPickerModal';
+import MartList from '../components/MartList';
 
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
 
@@ -287,6 +288,12 @@ export default function Addresses() {
               </section>
             ))}
           </div>
+
+          <section className="card" style={{ marginTop: 24 }}>
+            <h2 className="tile__title">가맹 마트</h2>
+            <p className="field__hint">배송지가 속한 지역에 가맹 마트가 있어야 이용할 수 있어요. 아래 목록에서 우리 동네에 있는지 확인해 보세요.</p>
+            <MartList />
+          </section>
 
           <section className="card" style={{ marginTop: 24 }}>
             {adding ? (
