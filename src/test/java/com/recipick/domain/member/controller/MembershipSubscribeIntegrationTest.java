@@ -15,6 +15,8 @@ import com.recipick.domain.member.entity.Member;
 import com.recipick.domain.member.facade.MembershipSubscribeFacade;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.payment.facade.MembershipChargeExecutor;
+import com.recipick.domain.payment.service.BillingKeyCipher;
+import com.recipick.domain.payment.service.BillingKeyFingerprint;
 import com.recipick.domain.payment.service.MembershipChargeOutcome;
 import com.recipick.global.security.JwtTokenProvider;
 import java.time.LocalDateTime;
@@ -45,6 +47,8 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
     @Autowired ObjectMapper mapper;
     @Autowired MembershipSubscribeFacade facade;
     @Autowired TransactionTemplate tx;
+    @Autowired BillingKeyCipher cipher;
+    @Autowired BillingKeyFingerprint fingerprint;
     @MockitoBean MembershipChargeExecutor executor;
 
     Member member;
@@ -57,12 +61,15 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 20);
         member = members.saveAndFlush(Member.builder().email(suffix + "@sub.test")
-                .phone(suffix).name("구독 회원").passwordHash("hash").build());
+            .phone(suffix).name("구독 회원").passwordHash("hash").build());
         token = tokens.createMemberTokens(member.getId()).accessToken();
+        // 빌링키는 암호문·지문으로 저장된다 — 접수 흐름이 키 행을 읽어도 복호화되도록 실제 암호화기로 만든다
+        String key = UUID.randomUUID().toString();
         jdbc.update("""
-                INSERT INTO billing_key(member_id, portone_billing_key, status, issued_at, created_at, updated_at)
-                VALUES (?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """, member.getId(), UUID.randomUUID().toString());
+                INSERT INTO billing_key(member_id, portone_billing_key_ciphertext, portone_billing_key_hash, status,
+                                        issued_at, created_at, updated_at)
+                VALUES (?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, member.getId(), cipher.encrypt(key), fingerprint.of(key));
         given(executor.execute(anyLong(), anyLong())).willReturn(MembershipChargeOutcome.NOT_DISPATCHED);
     }
 
@@ -75,7 +82,7 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
                 """, member.getId());
         jdbc.update("DELETE p FROM membership_payment p JOIN membership m ON p.membership_id = m.id "
                 + "WHERE m.member_id = ?",
-                member.getId());
+            member.getId());
         jdbc.update("DELETE FROM membership WHERE member_id = ?", member.getId());
         jdbc.update("DELETE FROM billing_key WHERE member_id = ?", member.getId());
         members.deleteById(member.getId());
@@ -83,7 +90,7 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
 
     MockHttpServletResponse subscribe(String key, String body) throws Exception {
         var request = post("/api/memberships/subscribe").header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON).content(body);
+            .contentType(MediaType.APPLICATION_JSON).content(body);
         if (key != null) {
             request.header("Idempotency-Key", key);
         }
@@ -105,11 +112,11 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
         assertThat(data.path("status").asText()).isEqualTo("IN_PROGRESS");
         long id = data.path("membershipId").asLong();
         assertThat(jdbc.queryForObject("SELECT activated_at FROM membership WHERE id = ?",
-                LocalDateTime.class, id)).isNull();
+            LocalDateTime.class, id)).isNull();
         assertThat(jdbc.queryForObject("SELECT consented_amount FROM membership WHERE id = ?", Long.class, id))
-                .isEqualTo(3900L);
+            .isEqualTo(3900L);
         assertThat(jdbc.queryForObject("SELECT autopay_consented_at FROM membership WHERE id = ?",
-                LocalDateTime.class, id)).isNotNull();
+            LocalDateTime.class, id)).isNotNull();
     }
 
     @Test
@@ -123,7 +130,7 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
         assertThat(second).isEqualTo(first);
         assertThat(countMemberships()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM membership_payment WHERE idempotency_key = ?",
-                Long.class, member.getId() + ":sub-1")).isEqualTo(1);
+            Long.class, member.getId() + ":sub-1")).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM membership_payment_attempt a JOIN membership_payment p
                 ON a.membership_payment_id = p.id WHERE p.idempotency_key = ?
@@ -137,14 +144,14 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
         // given
         subscribe("sub-1", BODY);
         jdbc.update("UPDATE membership_payment SET status = ? WHERE idempotency_key = ?",
-                stored, member.getId() + ":sub-1");
+            stored, member.getId() + ":sub-1");
         clearInvocations(executor);
         // when
         var response = subscribe("sub-1", BODY);
         // then
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(mapper.readTree(response.getContentAsString()).path("data").path("status").asText())
-                .isEqualTo(expected);
+            .isEqualTo(expected);
         verifyNoInteractions(executor);
         assertThat(countMemberships()).isEqualTo(1);
     }
@@ -168,7 +175,7 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
     void rejectsInvalidConsentVersion(String version) throws Exception {
         // given
         String body = mapper.writeValueAsString(Map.of("autopayAgreed", true,
-                "consentedAmount", 3900, "consentTextVersion", version));
+            "consentedAmount", 3900, "consentTextVersion", version));
         // when
         var response = subscribe("sub-1", body);
         // then
@@ -194,8 +201,8 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
     void rejectsOuterTransaction() {
         // given, when, then
         assertThatThrownBy(() -> tx.execute(status -> facade.subscribe(member.getId(),
-                new MembershipSubscribeRequest(true, 3900L, "v1"), "sub-1")))
-                .isInstanceOf(IllegalTransactionStateException.class);
+            new MembershipSubscribeRequest(true, 3900L, "v1"), "sub-1")))
+            .isInstanceOf(IllegalTransactionStateException.class);
         assertThat(countMemberships()).isZero();
         verifyNoInteractions(executor);
     }
@@ -229,7 +236,7 @@ class MembershipSubscribeIntegrationTest extends IntegrationTestSupport {
     void requiresAuthentication() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/memberships/subscribe").header("Idempotency-Key", "sub-1")
-                .contentType(MediaType.APPLICATION_JSON).content(BODY)).andReturn().getResponse();
+            .contentType(MediaType.APPLICATION_JSON).content(BODY)).andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(countMemberships()).isZero();

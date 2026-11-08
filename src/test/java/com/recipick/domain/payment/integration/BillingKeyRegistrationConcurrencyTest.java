@@ -16,6 +16,7 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.facade.BillingKeyRegistrationProcessor;
 import com.recipick.domain.payment.repository.BillingKeyIssueRequestRepository;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
+import com.recipick.domain.payment.service.BillingKeyFingerprint;
 import com.recipick.domain.payment.service.BillingKeyRegistration;
 import com.recipick.domain.payment.service.BillingKeyRegistrationOutcome;
 import com.recipick.domain.payment.service.BillingKeyService;
@@ -67,6 +68,9 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
 
     @Autowired
     BillingKeyIssueRequestRepository issueRequests;
+
+    @Autowired
+    BillingKeyFingerprint fingerprint;
 
     @Autowired
     MemberRepository members;
@@ -166,8 +170,8 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
         // then
         assertThat(results).containsExactlyInAnyOrder(
             BillingKeyRegistrationOutcome.REGISTERED, PaymentErrorCode.BILLING_KEY_ALREADY_USED);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM billing_key WHERE portone_billing_key = ?",
-            Long.class, key)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM billing_key WHERE portone_billing_key_hash = ?",
+            Long.class, fingerprint.of(key))).isEqualTo(1L);
     }
 
     @RepeatedTest(3)
@@ -211,7 +215,7 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("같은 키 사전 조회가 끝난 뒤 다른 회원이 그 키를 커밋하면 UNIQUE 충돌이 실제로 나고, BILLING-002가 되며 로그 어디에도 키 원문이 없다")
+    @DisplayName("같은 키 사전 조회가 끝난 뒤 다른 회원이 그 키를 커밋하면 UNIQUE 충돌이 실제로 나고, BILLING-002가 되며 로그 어디에도 키 원문·지문이 없다")
     void uniqueConflictLeavesNoKeyInLogs() throws Exception {
         // given — 두 회원, 같은 키. 늦은 쪽의 사전 조회가 먼저 끝나도록 순서를 고정한다(동시 출발만으로는 조회에서 걸러질 수 있다)
         Member late = saveMember();
@@ -219,6 +223,7 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
         BillingKeyIssueRequest lateRequest = requested(late.getId());
         BillingKeyIssueRequest earlyRequest = requested(early.getId());
         String key = newKey();
+        String hash = fingerprint.of(key);
         CountDownLatch lateLookedUp = new CountDownLatch(1);
         CountDownLatch earlyCommitted = new CountDownLatch(1);
         ListAppender<ILoggingEvent> rootAppender = new ListAppender<>();
@@ -228,7 +233,7 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
         // 늦은 회원: 회원 잠금 → 같은 키 조회(여기서 스냅숏이 만들어져 뒤에 커밋된 행을 보지 못한다) → 대기 → 등록 → INSERT가 UNIQUE에 걸린다
         Callable<Object> lateRegistration = () -> transactionTemplate.execute(status -> {
             memberService.lockActiveMember(late.getId());
-            assertThat(billingKeys.findIdByPortoneBillingKey(key)).isEmpty();
+            assertThat(billingKeys.findIdByPortoneBillingKeyHash(hash)).isEmpty();
             lateLookedUp.countDown();
             await(earlyCommitted);
             try {
@@ -258,16 +263,17 @@ class BillingKeyRegistrationConcurrencyTest extends IntegrationTestSupport {
         // then — 결과
         assertThat(results.get(0)).isEqualTo(PaymentErrorCode.BILLING_KEY_ALREADY_USED);
         assertThat(results.get(1)).isEqualTo(BillingKeyRegistrationOutcome.REGISTERED);
-        assertThat(jdbc.queryForObject("SELECT member_id FROM billing_key WHERE portone_billing_key = ?",
-            Long.class, key)).isEqualTo(early.getId());
+        assertThat(jdbc.queryForObject("SELECT member_id FROM billing_key WHERE portone_billing_key_hash = ?",
+            Long.class, hash)).isEqualTo(early.getId());
         assertThat(countOf(late.getId(), BillingKeyStatus.ACTIVE)).isZero();
 
-        // then — 로그. 키 원문은 0건, 오류 코드(Hibernate WARN)와 제약 이름(서비스 WARN)은 남는다
+        // then — 로그. 키 원문·지문은 0건, 오류 코드(Hibernate WARN)와 제약 이름(서비스 WARN)은 남는다
         List<String> messages = rootAppender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
-        assertThat(messages).noneMatch(message -> message.contains(key));
-        assertThat(rootAppender.list).noneMatch(event -> throwableContains(event.getThrowableProxy(), key));
+        assertThat(messages).noneMatch(message -> message.contains(key) || message.contains(hash));
+        assertThat(rootAppender.list).noneMatch(event -> throwableContains(event.getThrowableProxy(), key)
+            || throwableContains(event.getThrowableProxy(), hash));
         assertThat(messages).anyMatch(message -> message.contains("SQL Error: 1062"));
-        assertThat(messages).anyMatch(message -> message.contains("uk_billing_key_portone_billing_key"));
+        assertThat(messages).anyMatch(message -> message.contains("uk_billing_key_portone_billing_key_hash"));
     }
 
     // ---------- 실행 ----------

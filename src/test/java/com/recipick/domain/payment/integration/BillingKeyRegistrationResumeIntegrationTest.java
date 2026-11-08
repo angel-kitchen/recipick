@@ -13,6 +13,7 @@ import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.entity.enums.MembershipPaymentStatus;
 import com.recipick.domain.payment.facade.BillingKeyRegistrationFacade;
 import com.recipick.domain.payment.repository.BillingKeyIssueRequestRepository;
+import com.recipick.domain.payment.service.BillingKeyFingerprint;
 import com.recipick.domain.payment.service.BillingKeyIssueRequestService;
 import com.recipick.global.security.JwtTokenProvider;
 import java.util.UUID;
@@ -34,6 +35,7 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
     @Autowired BillingKeyIssueRequestService issueRequests;
     @Autowired BillingKeyIssueRequestRepository issueRequestRepository;
     @Autowired BillingKeyRegistrationFacade registrationFacade;
+    @Autowired BillingKeyFingerprint fingerprint;
 
     @AfterEach
     void cleanUpIssueRequests() {
@@ -98,8 +100,8 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
         renewalFacade.runOnce();
 
         // then
-        assertThat(jdbc.queryForObject("SELECT status FROM billing_key WHERE portone_billing_key = ?", String.class,
-            newKey)).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT status FROM billing_key WHERE portone_billing_key_hash = ?",
+            String.class, fingerprint.of(newKey))).isEqualTo("ACTIVE");
         assertThat(afterRegistration).isEqualTo(MembershipPaymentStatus.PAYMENT_METHOD_REQUIRED);
         assertThat(payments.findById(waiting.getId()).orElseThrow().getStatus())
             .isEqualTo(MembershipPaymentStatus.PAID);
@@ -118,8 +120,8 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
         assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(
             s -> registrationFacade.register(member.getId(), new BillingKeyRegisterRequest(issueId, newKey))))
             .isInstanceOf(IllegalTransactionStateException.class);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM billing_key WHERE portone_billing_key = ?", Long.class,
-            newKey)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM billing_key WHERE portone_billing_key_hash = ?",
+            Long.class, fingerprint.of(newKey))).isZero();
         assertThat(PORTONE.totalRequests()).isZero();
     }
 

@@ -14,6 +14,7 @@ class BillingKeyIssueRequestTest {
     private static final String ISSUE_ID = "rcp-bk-0f8a1c2e-6d4b-4a1e-9c3f-1234567890ab";
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 31, 14, 0);
     private static final String KEY = "billing-key-test-0001";
+    private static final String HASH = "0123456789abcdef".repeat(4);
 
     @Test
     @DisplayName("발급 요청은 REQUESTED로 시작하고 30분 뒤에 만료된다")
@@ -51,7 +52,7 @@ class BillingKeyIssueRequestTest {
     void markUsed() {
         // given
         BillingKeyIssueRequest request = BillingKeyIssueRequest.requested(MEMBER_ID, ISSUE_ID, NOW);
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, NOW);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, NOW);
 
         // when
         request.markUsed(key, NOW.plusMinutes(1));
@@ -84,7 +85,7 @@ class BillingKeyIssueRequestTest {
     void markUsedTwice() {
         // given
         BillingKeyIssueRequest request = BillingKeyIssueRequest.requested(MEMBER_ID, ISSUE_ID, NOW);
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, NOW);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, NOW);
         request.markUsed(key, NOW);
 
         // when
@@ -111,7 +112,7 @@ class BillingKeyIssueRequestTest {
     void usedAllowsOnlyBoundKey() {
         // given
         BillingKeyIssueRequest request = BillingKeyIssueRequest.requested(MEMBER_ID, ISSUE_ID, NOW);
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, NOW);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, NOW);
         request.markUsed(key, NOW);
 
         // then
@@ -124,7 +125,7 @@ class BillingKeyIssueRequestTest {
     void usedActiveKeyIgnoresValidity() {
         // given
         BillingKeyIssueRequest request = BillingKeyIssueRequest.requested(MEMBER_ID, ISSUE_ID, NOW);
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, NOW);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, NOW);
         request.markUsed(key, NOW);
 
         // then
@@ -136,7 +137,7 @@ class BillingKeyIssueRequestTest {
     void usedReplacedKeyRequiresValidity() {
         // given
         BillingKeyIssueRequest request = BillingKeyIssueRequest.requested(MEMBER_ID, ISSUE_ID, NOW);
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, NOW);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, NOW);
         request.markUsed(key, NOW);
         key.replace();
 
