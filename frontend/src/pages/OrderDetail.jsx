@@ -158,6 +158,9 @@ export default function OrderDetail() {
   if (error) {
     return (
       <div className="container page">
+        <p className="page__sub">
+          <Link to="/orders">← 주문 내역</Link>
+        </p>
         <ErrorNotice error={error} />
       </div>
     );
@@ -170,6 +173,9 @@ export default function OrderDetail() {
 
   return (
     <div className="container page">
+      <p className="page__sub">
+        <Link to="/orders">← 주문 내역</Link>
+      </p>
       <h1 className="page__title">{order.status === 'PENDING_PAYMENT' ? '주문이 생성되었습니다' : '주문 정보'}</h1>
       {notice && (
         <div className={notice.info ? 'notice notice--info' : 'notice'} role="status">
