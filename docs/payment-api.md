@@ -735,7 +735,7 @@
     "issueName": "레시픽 멤버십 자동결제 카드 등록",
     "storeId": "store-00000000-0000-0000-0000-000000000000",
     "channelKey": "channel-key-00000000-0000-0000-0000-000000000000",
-    "customerId": "7",
+    "customerId": "member-7",
     "displayAmount": 3900,
     "currency": "KRW",
     "expiresAt": "2026-11-04T22:00:00+09:00"
@@ -748,7 +748,7 @@
 | issueId | String | 일회성 카드 등록 토큰(`rcp-bk-` + UUID). SDK `requestIssueBillingKey`의 `issueId`에 그대로 넣음 |
 | issueName | String | 발급 창 이름(고정 문구) |
 | storeId / channelKey | String | PortOne 상점 ID · 카드 등록 전용 정기결제 채널 키(`portone.billing-channel-key`). 주문 결제의 `GET /api/config/portone`이 주는 일반결제 채널 키와 다르다 |
-| customerId | String | 회원 ID 문자열. SDK `customer.customerId`에 그대로 넣음 |
+| customerId | String | PortOne 고객 ID(`member-` + 회원 ID). 토스페이먼츠 customerKey 규칙(2자 이상)에 맞춘 값으로, SDK `customer.customerId`에 그대로 넣음 |
 | displayAmount | Long | 발급 창 표시 금액(3,900원). 실제 청구 금액이 아님 |
 | currency | String | KRW |
 | expiresAt | String | 토큰 만료 시각(생성 + 30분) |
