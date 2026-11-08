@@ -381,9 +381,77 @@
 .pager {
   margin-top: var(--space-5);
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: var(--space-3);
+  gap: 4px;
+}
+
+.pager__step,
+.pager__num {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pager__step {
+  padding: 6px 10px;
+}
+
+.pager__num {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.pager__step:hover:not(:disabled),
+.pager__num:hover {
+  color: var(--green-brand);
+}
+
+.pager__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 지금 보는 쪽은 테두리로 표시한다 */
+.pager__num--current {
+  border-color: var(--green-brand);
+  color: var(--green-brand);
+}
+
+.pager__jump {
+  position: relative;
+  display: inline-flex;
+}
+
+/* '…' 위에 뜨는 쪽 번호 입력 창. 오른쪽 끝을 맞춰서 좁은 화면에서도 화면 밖으로 나가지 않는다 */
+.pager__popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+.pager__input {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
 }
 
 /* 입력칸 */
