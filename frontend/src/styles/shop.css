@@ -202,6 +202,21 @@
   gap: 6px;
 }
 
+.mart-list__tier {
+  margin-left: 8px;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.mart-list__more {
+  margin-top: var(--space-3);
+}
+
+.mart-list__more summary {
+  cursor: pointer;
+  color: var(--text-soft);
+}
+
 /* 검색·필터 줄 */
 .filters {
   display: flex;
