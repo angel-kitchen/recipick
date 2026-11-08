@@ -14,6 +14,7 @@ import com.recipick.domain.payment.service.BillingKeyIssuanceVerifier.RejectReas
 import com.recipick.domain.payment.service.BillingKeyIssueRequestService;
 import com.recipick.domain.payment.service.BillingKeyRegistration;
 import com.recipick.domain.payment.service.BillingKeyService;
+import com.recipick.domain.payment.service.PortOneCustomerId;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.global.exception.CommonErrorCode;
 import com.recipick.infra.portone.PortOneBillingClient;
@@ -67,7 +68,7 @@ public class BillingKeyRegistrationFacade {
             ISSUE_NAME,
             portOneProperties.storeId(),
             portOneProperties.billingChannelKey(),
-            String.valueOf(memberId),
+            PortOneCustomerId.of(memberId),
             DISPLAY_AMOUNT,
             CURRENCY,
             request.getExpiresAt()

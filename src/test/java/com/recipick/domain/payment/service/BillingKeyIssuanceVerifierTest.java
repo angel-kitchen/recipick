@@ -35,7 +35,8 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("ISSUED·키·상점·테스트 채널·issueId·customer.id·카드 수단이 모두 맞으면 통과한다")
     void passes() {
         // when
-        Optional<RejectReason> reason = verify(info(List.of(OTHER_LIVE_CHANNEL, OUR_TEST_CHANNEL), "7", ISSUE_ID));
+        Optional<RejectReason> reason =
+            verify(info(List.of(OTHER_LIVE_CHANNEL, OUR_TEST_CHANNEL), "member-7", ISSUE_ID));
 
         // then
         assertThat(reason).isEmpty();
@@ -56,7 +57,7 @@ class BillingKeyIssuanceVerifierTest {
     void notIssued() {
         // given
         PortOneBillingKeyInfo info = new PortOneBillingKeyInfo(PortOneBillingKeyStatus.DELETED, KEY, STORE_ID,
-            List.of(OUR_TEST_CHANNEL), "7", ISSUE_ID, true, ISSUED_AT, ISSUED_AT.plusHours(1));
+            List.of(OUR_TEST_CHANNEL), "member-7", ISSUE_ID, true, ISSUED_AT, ISSUED_AT.plusHours(1));
 
         // then
         assertThat(verify(info)).contains(RejectReason.NOT_ISSUED);
@@ -67,7 +68,7 @@ class BillingKeyIssuanceVerifierTest {
     void keyMismatch() {
         // given
         PortOneBillingKeyInfo info = new PortOneBillingKeyInfo(PortOneBillingKeyStatus.ISSUED, "another-key",
-            STORE_ID, List.of(OUR_TEST_CHANNEL), "7", ISSUE_ID, true, ISSUED_AT, null);
+            STORE_ID, List.of(OUR_TEST_CHANNEL), "member-7", ISSUE_ID, true, ISSUED_AT, null);
 
         // then
         assertThat(verify(info)).contains(RejectReason.KEY_MISMATCH);
@@ -78,7 +79,7 @@ class BillingKeyIssuanceVerifierTest {
     void storeMismatch() {
         // given
         PortOneBillingKeyInfo info = new PortOneBillingKeyInfo(PortOneBillingKeyStatus.ISSUED, KEY,
-            "other-store", List.of(OUR_TEST_CHANNEL), "7", ISSUE_ID, true, ISSUED_AT, null);
+            "other-store", List.of(OUR_TEST_CHANNEL), "member-7", ISSUE_ID, true, ISSUED_AT, null);
 
         // then
         assertThat(verify(info)).contains(RejectReason.STORE_MISMATCH);
@@ -88,22 +89,24 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("우리 채널 키가 없으면 CHANNEL_MISMATCH다 — 채널 배열이 비어 있어도 같다")
     void channelMismatch() {
         // then
-        assertThat(verify(info(List.of(OTHER_TEST_CHANNEL), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
-        assertThat(verify(info(List.of(), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
+        assertThat(verify(info(List.of(OTHER_TEST_CHANNEL), "member-7", ISSUE_ID)))
+            .contains(RejectReason.CHANNEL_MISMATCH);
+        assertThat(verify(info(List.of(), "member-7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
     }
 
     @Test
     @DisplayName("주문 일반결제 채널에서 발급된 키는 같은 상점의 TEST 채널이어도 CHANNEL_MISMATCH다")
     void orderChannelKeyIsNotBillingChannel() {
         // then
-        assertThat(verify(info(List.of(ORDER_TEST_CHANNEL), "7", ISSUE_ID))).contains(RejectReason.CHANNEL_MISMATCH);
+        assertThat(verify(info(List.of(ORDER_TEST_CHANNEL), "member-7", ISSUE_ID)))
+            .contains(RejectReason.CHANNEL_MISMATCH);
     }
 
     @Test
     @DisplayName("우리 채널 키의 채널이 LIVE면 거절한다 — 다른 채널이 TEST여도 증거가 아니다")
     void liveChannelBlocked() {
         // then
-        assertThat(verify(info(List.of(OUR_LIVE_CHANNEL, OTHER_TEST_CHANNEL), "7", ISSUE_ID)))
+        assertThat(verify(info(List.of(OUR_LIVE_CHANNEL, OTHER_TEST_CHANNEL), "member-7", ISSUE_ID)))
             .contains(RejectReason.LIVE_CHANNEL_BLOCKED);
     }
 
@@ -111,9 +114,9 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("우리 채널의 type이 없거나 모르는 값이면 TEST가 아니므로 거절한다")
     void unknownChannelTypeBlocked() {
         // then
-        assertThat(verify(info(List.of(new Channel(CHANNEL_KEY, null)), "7", ISSUE_ID)))
+        assertThat(verify(info(List.of(new Channel(CHANNEL_KEY, null)), "member-7", ISSUE_ID)))
             .contains(RejectReason.LIVE_CHANNEL_BLOCKED);
-        assertThat(verify(info(List.of(new Channel(CHANNEL_KEY, "SANDBOX")), "7", ISSUE_ID)))
+        assertThat(verify(info(List.of(new Channel(CHANNEL_KEY, "SANDBOX")), "member-7", ISSUE_ID)))
             .contains(RejectReason.LIVE_CHANNEL_BLOCKED);
     }
 
@@ -121,9 +124,9 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("PortOne이 issueId를 돌려주지 않으면 customer.id가 맞아도 소유를 증명할 수 없어 거절한다")
     void ownershipUnverifiable() {
         // then
-        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "7", null)))
+        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "member-7", null)))
             .contains(RejectReason.OWNERSHIP_UNVERIFIABLE);
-        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "7", " ")))
+        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "member-7", " ")))
             .contains(RejectReason.OWNERSHIP_UNVERIFIABLE);
     }
 
@@ -131,7 +134,7 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("issueId가 서버가 발급한 토큰과 다르면 ISSUE_ID_MISMATCH다")
     void issueIdMismatch() {
         // then
-        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "7", "rcp-bk-someone-else")))
+        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "member-7", "rcp-bk-someone-else")))
             .contains(RejectReason.ISSUE_ID_MISMATCH);
     }
 
@@ -139,7 +142,8 @@ class BillingKeyIssuanceVerifierTest {
     @DisplayName("customer.id가 있는데 로그인 회원과 다르면 CUSTOMER_MISMATCH다")
     void customerMismatch() {
         // then
-        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "8", ISSUE_ID))).contains(RejectReason.CUSTOMER_MISMATCH);
+        assertThat(verify(info(List.of(OUR_TEST_CHANNEL), "member-8", ISSUE_ID)))
+            .contains(RejectReason.CUSTOMER_MISMATCH);
     }
 
     @Test
@@ -147,7 +151,7 @@ class BillingKeyIssuanceVerifierTest {
     void notCard() {
         // given
         PortOneBillingKeyInfo info = new PortOneBillingKeyInfo(PortOneBillingKeyStatus.ISSUED, KEY, STORE_ID,
-            List.of(OUR_TEST_CHANNEL), "7", ISSUE_ID, false, ISSUED_AT, null);
+            List.of(OUR_TEST_CHANNEL), "member-7", ISSUE_ID, false, ISSUED_AT, null);
 
         // then
         assertThat(verify(info)).contains(RejectReason.NOT_CARD);
@@ -161,7 +165,7 @@ class BillingKeyIssuanceVerifierTest {
 
         // when
         Optional<RejectReason> reason = unconfigured.verify(MEMBER_ID, KEY, ISSUE_ID,
-            info(List.of(OUR_TEST_CHANNEL), "7", ISSUE_ID));
+            info(List.of(OUR_TEST_CHANNEL), "member-7", ISSUE_ID));
 
         // then
         assertThat(reason).contains(RejectReason.STORE_MISMATCH);

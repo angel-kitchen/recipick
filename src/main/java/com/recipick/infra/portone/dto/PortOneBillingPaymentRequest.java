@@ -18,7 +18,7 @@ public record PortOneBillingPaymentRequest(
     // KG이니시스 V2 빌링키 결제 필수. 멤버십은 상품 한 건이라 항상 1
     public static final int PRODUCT_COUNT = 1;
 
-    // id는 2a 카드 등록의 customerId와 같은 값(String.valueOf(memberId))이라 PortOne 쪽 고객이 하나로 묶인다
+    // id는 2a 카드 등록의 customerId와 같은 값(PortOneCustomerId.of(memberId) = "member-{회원ID}")이라 PortOne 쪽 고객이 하나로 묶인다
     public record Customer(String id, Name name, String email, String phoneNumber) {
 
         @Override
