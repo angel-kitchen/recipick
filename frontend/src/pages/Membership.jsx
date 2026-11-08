@@ -19,7 +19,7 @@ import { MEMBERSHIP_SOURCE, MEMBERSHIP_STATUS, MEMBERSHIP_TYPE, formatDateTime, 
 const PAID_SOURCES = ['SUBSCRIBE', 'TRIAL_CONVERT'];
 
 export default function Membership() {
-  const { member } = useAuth();
+  const { member, reloadMember } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [membership, setMembership] = useState(null);
@@ -44,6 +44,13 @@ export default function Membership() {
       setError(e);
     }
   }, []);
+
+  // 멤버십이 바뀌는 일이 끝나면 이 화면과 헤더 등 다른 화면의 회원 정보를 함께 다시 읽는다.
+  // 결제·해지는 이미 처리됐으므로 회원 정보를 못 읽어도 처리가 실패한 것처럼 보이지 않게 한다
+  const refresh = async () => {
+    await load();
+    await reloadMember().catch(() => {});
+  };
 
   // 모바일 카드 등록은 이 페이지로 리디렉션하며 billingKey 또는 code·message를 쿼리로 붙인다
   useEffect(() => {
@@ -97,7 +104,7 @@ export default function Membership() {
       await startTrial();
       setModal(null);
       setNotice({ message: '무료 체험이 시작됐어요.' });
-      await load();
+      await refresh();
     });
 
   const doSubscribe = () =>
@@ -113,6 +120,8 @@ export default function Membership() {
       setModal(null);
       if (result.status === 'IN_PROGRESS' || result.status === 'UNKNOWN') {
         setNotice({ message: '첫 결제를 확인하고 있어요. 잠시 뒤 결과를 다시 확인해 주세요.', checking: 'subscribe' });
+        // 처리 중이어도 서버에는 결제 대기 이용권이 생겼을 수 있어 상태를 다시 읽는다
+        await refresh();
         return;
       }
       subscribeKey.current = null;
@@ -121,7 +130,7 @@ export default function Membership() {
           ? { message: '구독이 시작됐어요.' }
           : { message: '첫 결제에 실패했어요. 카드를 확인하고 다시 구독해 주세요.' },
       );
-      await load();
+      await refresh();
     });
 
   const doReserve = (target) =>
@@ -129,7 +138,7 @@ export default function Membership() {
       await reserveCancellation(target.membershipId);
       setModal(null);
       setNotice({ message: '해지 예약했어요. 다음 자동 결제부터 멈춰요.' });
-      await load();
+      await refresh();
     });
 
   const doTerminate = (target) =>
@@ -155,7 +164,7 @@ export default function Membership() {
             ? `해지했어요. ${formatWon(result.refundAmount)}을 환불했어요.${review}`
             : `환불에 실패해 멤버십을 그대로 유지했어요. 다시 해지해 주세요.${review}`,
       });
-      await load();
+      await refresh();
     });
 
   if (!membership) {
