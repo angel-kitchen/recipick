@@ -208,6 +208,22 @@
   font-size: 15px;
 }
 
+.mart-list__sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.mart-list__heading {
+  margin: var(--space-4) 0 0;
+  font-weight: 600;
+}
+
+.mart-list__heading + .mart-list {
+  margin-top: var(--space-2);
+}
+
 .mart-list__more {
   margin-top: var(--space-3);
 }
