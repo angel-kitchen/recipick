@@ -18,6 +18,7 @@ import com.recipick.domain.payment.service.MembershipReconciliationResult;
 import com.recipick.domain.payment.service.MembershipReconciliationTrigger;
 import com.recipick.domain.payment.service.MembershipRefundExecutionResult;
 import com.recipick.domain.payment.service.PgObservation;
+import com.recipick.domain.payment.service.PortOneCustomerId;
 import com.recipick.global.exception.BusinessException;
 import com.recipick.infra.portone.PortOneBillingClient;
 import com.recipick.infra.portone.PortOnePaymentClient;
@@ -110,7 +111,7 @@ public class MembershipChargeExecutor {
                 : MembershipChargeOutcome.IN_PROGRESS;
         }
         PortOneBillingPaymentResult response = portOneBillingClient.payWithBillingKey(ticket.portonePaymentId(),
-            PortOneBillingPaymentRequest.of(ticket.billingKey(), ticket.amount(), String.valueOf(memberId),
+            PortOneBillingPaymentRequest.of(ticket.billingKey(), ticket.amount(), PortOneCustomerId.of(memberId),
                 profile.name(), profile.email(), profile.phone()));
         log.info("빌링키 청구 호출 완료(재조회로 확정): attemptId={}, outcome={}", attemptId, response.outcome());
         // 여기부터는 플래그가 꺼져도 멈추지 않는다 — PG에 도착했을 수 있다

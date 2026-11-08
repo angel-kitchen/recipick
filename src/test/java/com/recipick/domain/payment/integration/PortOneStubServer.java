@@ -1,5 +1,6 @@
 package com.recipick.domain.payment.integration;
 
+import com.recipick.domain.payment.service.PortOneCustomerId;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -313,7 +314,7 @@ public final class PortOneStubServer {
                                  LocalDateTime issuedAtKst) {
         billingKeyStubs.put(billingKey, new Stub(200, "{\"status\":\"ISSUED\",\"billingKey\":\"" + billingKey
             + "\",\"storeId\":\"" + storeId + "\",\"channels\":[{\"type\":\"TEST\",\"key\":\"" + channelKey
-            + "\"}],\"customer\":{\"id\":\"" + memberId + "\"},"
+            + "\"}],\"customer\":{\"id\":\"" + PortOneCustomerId.of(memberId) + "\"},"
             + "\"methods\":[{\"type\":\"BillingKeyPaymentMethodCard\"}],\"issueId\":\"" + issueId
             + "\",\"issuedAt\":\"" + iso(issuedAtKst) + "\"}"));
     }

@@ -49,7 +49,7 @@ public final class BillingKeyIssuanceVerifier {
             return Optional.of(RejectReason.ISSUE_ID_MISMATCH);
         }
         if (info.customerId() != null && !info.customerId().isBlank()
-            && !String.valueOf(memberId).equals(info.customerId())) {
+            && !PortOneCustomerId.of(memberId).equals(info.customerId())) {
             return Optional.of(RejectReason.CUSTOMER_MISMATCH);
         }
         if (!info.cardMethod()) {

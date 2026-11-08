@@ -17,6 +17,7 @@ import com.recipick.domain.payment.entity.BillingKey;
 import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.domain.payment.repository.BillingKeyIssueRequestRepository;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
+import com.recipick.domain.payment.service.PortOneCustomerId;
 import com.recipick.global.security.JwtTokenProvider;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -97,7 +98,7 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
             .andExpect(jsonPath("$.data.issueName").value("레시픽 멤버십 자동결제 카드 등록"))
             .andExpect(jsonPath("$.data.storeId").value("test-store-id"))
             .andExpect(jsonPath("$.data.channelKey").value("test-billing-channel-key"))
-            .andExpect(jsonPath("$.data.customerId").value(String.valueOf(member.getId())))
+            .andExpect(jsonPath("$.data.customerId").value(PortOneCustomerId.of(member.getId())))
             .andExpect(jsonPath("$.data.displayAmount").value(3900))
             .andExpect(jsonPath("$.data.currency").value("KRW"))
             .andExpect(jsonPath("$.data.expiresAt").isString())
