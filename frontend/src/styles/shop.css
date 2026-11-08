@@ -224,6 +224,33 @@
   margin-top: var(--space-2);
 }
 
+.mart-box {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 2px solid var(--green-brand);
+  border-radius: 12px;
+  background: var(--green-light);
+}
+
+.mart-box__title {
+  margin: 0 0 var(--space-2);
+  color: var(--green-brand);
+  font-weight: 600;
+}
+
+.mart-box__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mart-box__sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
 .mart-list__more {
   margin-top: var(--space-3);
 }

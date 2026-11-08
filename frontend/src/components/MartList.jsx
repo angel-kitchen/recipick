@@ -40,8 +40,28 @@ function MartRow({ mart, mine, tier, address, busy, onSwitch }) {
   );
 }
 
+// 내가 지금 이용하는 마트. 가까운 마트 목록과 별개로 항상 아래에 따로 보여 준다
+function MyMartBox({ mart, currentAddress }) {
+  const open = mart.status === 'OPEN';
+  return (
+    <div className="mart-box">
+      <p className="mart-box__title">내 이용 마트</p>
+      <div className="mart-box__main">
+        <strong>{mart.name}</strong>
+        <span className={open ? 'badge' : 'badge badge--warn'}>{open ? '가맹 마트 운영 중' : '준비 중'}</span>
+      </div>
+      {currentAddress && (
+        <p className="mart-box__sub">
+          현재 배송지: {currentAddress.label ? `${currentAddress.label} · ` : ''}
+          {currentAddress.address}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // 가맹 마트 목록(GET /api/config/marts, 로그인 불필요).
-// 배송지가 있으면 가까운 지역의 마트를 최대 5곳까지 보여 주고, 내 이용 마트가 그 안에 없으면 아래에 따로 보여 준다.
+// 배송지가 있으면 가까운 지역의 마트를 최대 5곳까지 보여 주고, 내 이용 마트는 그 아래 박스에 따로 보여 준다.
 // 내 저장 배송지 중 그 마트 지역에 해당하는 것이 있으면 바로 그 배송지를 선택해 이용 마트를 바꿀 수 있다
 export default function MartList({ onChanged }) {
   const { member, reloadMember } = useAuth();
@@ -171,11 +191,14 @@ export default function MartList({ onChanged }) {
     if (marts.length === 0) return <p className="field__hint">표시할 마트가 아직 없어요.</p>;
     if (myCode && rank === 'loading') return <p className="field__hint">가까운 마트를 찾고 있어요.</p>;
 
-    // 배송지가 없거나 단계를 구하지 못하면 내 이용 마트와 운영 중인 마트를 앞에 두고 5곳까지만 보여 준다
+    // 내 이용 마트는 목록에 섞지 않고 아래 박스에서만 보여 준다
+    const myMart = marts.find(isMine);
+    const others = marts.filter((mart) => !isMine(mart));
+    const myMartBox = myMart && <MyMartBox mart={myMart} currentAddress={member?.currentAddress} />;
+
+    // 배송지가 없거나 단계를 구하지 못하면 운영 중인 마트를 앞에 두고 5곳까지만 보여 준다
     if (!myCode || rank !== 'done') {
-      const ordered = [...marts].sort(
-        (a, b) => Number(isMine(b)) - Number(isMine(a)) || Number(b.status === 'OPEN') - Number(a.status === 'OPEN'),
-      );
+      const ordered = [...others].sort((a, b) => Number(b.status === 'OPEN') - Number(a.status === 'OPEN'));
       const rest = ordered.slice(NEAR_LIMIT);
       return (
         <>
@@ -191,23 +214,21 @@ export default function MartList({ onChanged }) {
               <ul className="mart-list">{rest.map((mart) => row(mart))}</ul>
             </details>
           )}
+          {myMartBox}
         </>
       );
     }
 
     const tierOfMart = (mart) => tierOf(myCode, codes[mart.martId]);
-    // 운영 중인 마트, 가까운 단계, 내 이용 마트 순으로 5곳을 고른다
-    const near = marts
+    // 운영 중인 마트, 가까운 단계 순으로 5곳을 고른다
+    const near = others
       .filter((mart) => tierOfMart(mart) !== 'FAR')
       .sort(
         (a, b) =>
           Number(b.status === 'OPEN') - Number(a.status === 'OPEN') ||
-          TIER_ORDER[tierOfMart(a)] - TIER_ORDER[tierOfMart(b)] ||
-          Number(isMine(b)) - Number(isMine(a)),
+          TIER_ORDER[tierOfMart(a)] - TIER_ORDER[tierOfMart(b)],
       )
       .slice(0, NEAR_LIMIT);
-    const myMart = marts.find(isMine);
-    const myMartShown = near.some(isMine);
 
     return (
       <>
@@ -217,12 +238,7 @@ export default function MartList({ onChanged }) {
         ) : (
           <p className="field__hint">내 배송지와 가까운 지역에는 가맹 마트가 아직 없어요.</p>
         )}
-        {myMart && !myMartShown && (
-          <>
-            <p className="mart-list__heading">내 이용 마트</p>
-            <ul className="mart-list">{row(myMart)}</ul>
-          </>
-        )}
+        {myMartBox}
       </>
     );
   };
