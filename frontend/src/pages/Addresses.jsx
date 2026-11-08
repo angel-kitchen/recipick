@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { kakaoAvailable } from '../address/kakao';
 import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode';
 import { api } from '../api/client';
@@ -291,7 +292,9 @@ export default function Addresses() {
 
           <section className="card" style={{ marginTop: 24 }}>
             <h2 className="tile__title">가맹 마트</h2>
-            <p className="field__hint">배송지가 속한 지역에 가맹 마트가 있어야 이용할 수 있어요. 아래 목록에서 우리 동네에 있는지 확인해 보세요.</p>
+            <p className="field__hint">
+              배송지가 속한 지역에 가맹 마트가 있어야 이용할 수 있어요. 마트의 위치는 <Link to="/marts">가맹 마트 지도</Link>에서 볼 수 있어요.
+            </p>
             <MartList />
           </section>
 

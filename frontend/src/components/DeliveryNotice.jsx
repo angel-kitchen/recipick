@@ -7,7 +7,7 @@ export default function DeliveryNotice() {
   const { member } = useAuth();
   const { pathname } = useLocation();
   const block = member ? deliveryBlock(member) : null;
-  // 홈은 영상이 화면을 채우고, 배송지·시작 화면은 같은 안내를 이미 보여 준다
+  // 홈은 영상이 화면을 채우고, 배송지·시작 화면은 같은 안내를 이미 보여 준다. 마트 화면은 마트 안내가 본문이라 띠를 겹쳐 보이지 않는다
   if (!block || pathname === '/' || pathname.startsWith('/addresses') || pathname.startsWith('/start') || pathname === '/marts') return null;
 
   return (

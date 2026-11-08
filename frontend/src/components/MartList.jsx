@@ -15,7 +15,7 @@ export default function MartList() {
         return res.json();
       })
       .then((json) => {
-        if (!ignore) setMarts(json.data);
+        if (!ignore) setMarts(json.data ?? []);
       })
       .catch(() => {
         if (!ignore) setFailed(true);
