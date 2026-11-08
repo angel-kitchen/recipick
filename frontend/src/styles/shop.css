@@ -1069,6 +1069,18 @@
   gap: var(--space-3);
 }
 
+/* 안내 문장이 길어도 버튼 묶음이 한 칸으로 줄지 않게 하고, 좁은 화면에서는 문장 아래로 내린다 */
+.notice--action .row-actions {
+  flex: none;
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .notice--action {
+    flex-wrap: wrap;
+  }
+}
+
 .info-list__row {
   display: flex;
   align-items: center;
