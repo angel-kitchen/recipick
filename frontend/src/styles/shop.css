@@ -176,6 +176,90 @@
   color: var(--red);
 }
 
+/* 가맹 마트 목록 */
+.mart-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.mart-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mart-list__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mart-list__tier {
+  margin-left: 8px;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.mart-list__sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.mart-list__heading {
+  margin: var(--space-4) 0 0;
+  font-weight: 600;
+}
+
+.mart-list__heading + .mart-list {
+  margin-top: var(--space-2);
+}
+
+.mart-box {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 2px solid var(--green-brand);
+  border-radius: 12px;
+  background: var(--green-light);
+}
+
+.mart-box__title {
+  margin: 0 0 var(--space-2);
+  color: var(--green-brand);
+  font-weight: 600;
+}
+
+.mart-box__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mart-box__sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.mart-list__more {
+  margin-top: var(--space-3);
+}
+
+.mart-list__more summary {
+  cursor: pointer;
+  color: var(--text-soft);
+}
+
 /* 검색·필터 줄 */
 .filters {
   display: flex;
@@ -1041,6 +1125,18 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+/* 안내 문장이 길어도 버튼 묶음이 한 칸으로 줄지 않게 하고, 좁은 화면에서는 문장 아래로 내린다 */
+.delivery-notice .notice--action .row-actions {
+  flex: none;
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .delivery-notice .notice--action {
+    flex-wrap: wrap;
+  }
 }
 
 .info-list__row {

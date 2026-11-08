@@ -5,6 +5,7 @@ const LINKS = [
   { to: '/terms', label: '서비스 이용약관' },
   { to: '/support', label: '고객센터' },
   { to: '/membership-info', label: '멤버십 안내' },
+  { to: '/marts', label: '가맹 마트' },
 ];
 
 export default function Footer() {

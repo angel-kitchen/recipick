@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { kakaoAvailable } from '../address/kakao';
 import { DEMO_REGIONS, openPostcode, useServiceArea } from '../address/postcode';
 import { api } from '../api/client';
@@ -6,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import ErrorNotice from '../components/ErrorNotice';
 import { ListSkeleton } from '../components/Skeleton';
 import LocationPickerModal from '../components/LocationPickerModal';
+import MartList from '../components/MartList';
 
 const EMPTY = { label: '', address: '', detailAddress: '', legalDongCode: '' };
 
@@ -287,6 +289,14 @@ export default function Addresses() {
               </section>
             ))}
           </div>
+
+          <section className="card" style={{ marginTop: 24 }}>
+            <h2 className="tile__title">가맹 마트</h2>
+            <p className="field__hint">
+              배송지가 속한 지역에 가맹 마트가 있어야 이용할 수 있어요. 마트의 위치는 <Link to="/marts">가맹 마트 지도</Link>에서 볼 수 있어요.
+            </p>
+            <MartList onChanged={refresh} />
+          </section>
 
           <section className="card" style={{ marginTop: 24 }}>
             {adding ? (
