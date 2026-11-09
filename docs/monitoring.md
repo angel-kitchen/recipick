@@ -225,3 +225,63 @@ sum by (cache) (increase(cache_gets_total{result="hit"}[5m]))
 2. 먼저 "응답 시간 p95·p99"와 "5xx 에러율"로 결과를 확인하고, 느리면 "DB 커넥션 풀"의 `pending`(대기 요청)이 쌓였는지 본다. 풀이 가득 차 있으면 쿼리가 연결을 오래 쥐는 것이 원인 후보다.
 3. 캐시를 켠 측정이면 위 적중률 쿼리로 캐시가 실제로 쓰였는지 확인한다.
 4. 캡처의 p95·p99는 1분 구간 히스토그램 계산이라 k6의 전체 백분위와 정확히 일치하지 않는다. 보고서의 수치는 k6 결과를 쓰고 대시보드는 흐름을 보여 주는 용도로 쓴다.
+
+## 6. 장애 감지 확인(MySQL 정지)
+
+### 상황
+- DB 장애가 나면 지금 구성으로 알아챌 수 있는지, 원인 요청의 로그를 찾을 수 있는지 확인한다.
+- 코드와 대시보드는 바꾸지 않고 기존 구성만으로 확인한다.
+
+### 방법
+로컬에서 2026-11-09에 실행했다(기준 커밋 `e5a67434`).
+
+1. MySQL·Redis와 3절의 Prometheus·Grafana를 띄운다.
+2. 운영과 같은 JSON 로그를 켜서 앱을 실행한다.
+   ```bash
+   export JWT_SECRET="$(openssl rand -base64 48)"
+   LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash ./gradlew bootRun --args='--spring.profiles.active=local'
+   ```
+3. DB를 조회하는 공개 API에 3초 간격으로 요청을 보낸다.
+   ```bash
+   curl -i -H 'Content-Type: application/json' -d '{"legalDongCode":"1168010100"}' \
+     http://localhost:8080/api/service-area/check
+   ```
+4. 정상 요청 30초 → `docker stop recipick-mysql` 후 90초 → `docker start recipick-mysql` 후 45초 순서로 진행한다.
+5. 응답의 `X-Request-Id` 값으로 앱 로그를 검색한다.
+
+### 결과
+| 구간 | 요청 수 | 응답 | 평균 응답 시간 |
+| --- | --- | --- | --- |
+| 정상 | 10 | 200 | 0.06초 |
+| MySQL 정지 | 30 | 500(`COMMON-500`) | 30.07초 |
+| MySQL 재시작 후 | 15 | 200 | 0.04초 |
+
+| 확인 항목 | 결과 |
+| --- | --- |
+| 5xx 에러율 패널 | 0% → 100%, 복구 후 0% |
+| ERROR 로그 | 500 응답 30건 모두 `GlobalExceptionHandler`와 `RequestLoggingFilter`에 기록 |
+| `X-Request-Id`로 로그 찾기 | 값 하나로 DB 연결 실패부터 500 응답까지 15줄 확인 |
+| 지표 수집 | 장애 중에도 `up=1`, 수집 공백 없음 |
+
+MySQL 정지(19:21:17) 후 감지까지 걸린 시간은 다음과 같다.
+
+| 시각 | 경과 | 일어난 일 |
+| --- | --- | --- |
+| 19:21:52 | 35초 | 첫 500 응답 |
+| 19:22:05 | 48초 | 패널이 처음 0%에서 오름(55%) |
+| 19:22:15 | 58초 | 패널 100% |
+
+![MySQL 정지 구간의 5xx 에러율](performance/images/local-mysql-outage-5xx-2026-11-09.png)
+
+![MySQL 정지 구간의 DB 커넥션 풀](performance/images/local-mysql-outage-db-pool-2026-11-09.png)
+
+- 첫 500이 늦은 이유는 HikariCP `connection-timeout`을 따로 설정하지 않아 기본값 30초를 기다린 뒤 실패하기 때문이다(로그: `request timed out after 30012ms`).
+- 패널이 더 늦은 이유는 500 지표가 처음 생긴 수집 시점에는 `rate`를 계산할 수 없어 다음 수집부터 값이 잡히기 때문이다.
+- DB 커넥션 풀의 대기 요청은 첫 500보다 먼저 늘어 최대 11까지 올랐다. 이 구간에 5xx 패널은 0%이므로 두 패널을 함께 본다.
+- 패널은 1분 구간으로 계산해서 복구 후에도 약 1분간 수치가 남는다. 첫 정상 응답은 19:23:30, 패널 0%는 19:24:32쯤이었다.
+
+### 한계
+- 로컬 확인이며 운영 서버에서는 실행하지 않았다.
+- 대시보드를 봐야 알 수 있다. 알림(Alert)은 이번 확인 범위에 없다.
+- 로컬 기본 로그 형식에서 traceId가 찍히는지는 확인하지 않았다.
+- 장애 중 멤버십 스케줄러에서도 DB 연결 실패 ERROR가 1건 났으며, 재시작 후 이 작업의 정상 재실행 여부는 확인하지 않았다.
