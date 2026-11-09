@@ -61,6 +61,9 @@ services:
       # 카드 등록·멤버십 자동결제 스위치. 기본 false — 켜기 전 운영 DB·PG 채널 점검 뒤 단계적으로 켠다
       BILLING_KEY_REGISTRATION_ENABLED: ${BILLING_KEY_REGISTRATION_ENABLED:-false}
       MEMBERSHIP_BILLING_ENABLED: ${MEMBERSHIP_BILLING_ENABLED:-false}
+      # 카드 정리·탈퇴 연결 스위치. 기본 false — 둘 다 켜야 탈퇴가 열리고 PortOne 원격 삭제는 되돌릴 수 없어 삭제 검증 뒤 켠다
+      BILLING_KEY_DELETION_ENABLED: ${BILLING_KEY_DELETION_ENABLED:-false}
+      BILLING_KEY_DELETION_WITHDRAWAL_ENABLED: ${BILLING_KEY_DELETION_WITHDRAWAL_ENABLED:-false}
       AI_CLIENT: ${AI_CLIENT:-fake}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:

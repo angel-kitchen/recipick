@@ -785,11 +785,11 @@ DROP TABLE billing_key_deletion;
 | 기동 뒤 10-B 스냅숏 diff | 테이블 1개 추가 외 변경 없음 |
 | 운영 `.env`의 `BILLING_KEY_DELETION_ENABLED`·`BILLING_KEY_DELETION_WITHDRAWAL_ENABLED` | 없음 또는 `false`(기본 false). 6단계 머지는 원격 삭제·탈퇴 개방이 아니다 |
 
-#### 환경변수 2개 (기본 OFF, 켤 때만 전달)
+#### 환경변수 2개 (기본 OFF)
 
 `application.yml`의 `payment.billing-key-deletion.enabled` ← `BILLING_KEY_DELETION_ENABLED`, `payment.billing-key-deletion.withdrawal-enabled`
-← `BILLING_KEY_DELETION_WITHDRAWAL_ENABLED`. 현재 Compose `app.environment`는 두 값을 전달하지 않으므로 운영 `.env`만 바꿔서는 켜지지 않는다
-(기본 false 유지). 켤 때 `BILLING_KEY_DELETION_ENABLED: ${BILLING_KEY_DELETION_ENABLED:-false}` 식으로 전달을 함께 추가한다.
+← `BILLING_KEY_DELETION_WITHDRAWAL_ENABLED`. Compose `app.environment`가 두 값을 기본 false로 전달한다(#569). 운영 `.env`에서 켜고 재배포하면 적용되므로,
+이 전달이 처음 배포되기 전에 운영 `.env`의 두 값이 없거나 `false`인지 확인한다.
 
 켜는 순서: ① 이 테이블 적용 → 기본 OFF로 배포 → 스냅숏 diff ② PortOne 테스트 상점에서 시험 키로 GET → DELETE → GET(DELETED), 정확한 404의 의미,
 이미 삭제한 키 재요청, DELETE 응답 유실 뒤 GET 복구, **키 삭제 뒤 기존 결제 ID 조회·환불 가능 여부**를 확인 ③ 확인되면 `BILLING_KEY_DELETION_ENABLED`만
