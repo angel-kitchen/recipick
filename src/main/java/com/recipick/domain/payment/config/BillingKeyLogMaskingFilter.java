@@ -13,8 +13,10 @@ import org.slf4j.Marker;
 
 // 빌링키·토큰 원문이 로그에 남는 경로를 막는다.
 // MySQL은 UNIQUE 위반 메시지에 중복 값을 그대로 넣는다("Duplicate entry '<값>' for key '<테이블>.<제약>'").
-// 판정은 메시지 전체가 아니라 "for key" 뒤의 제약 식별자를 꺼내 아래 두 제약과 정확히 비교한다 — 중복 값 쪽에 같은 글자가
+// 판정은 메시지 전체가 아니라 "for key" 뒤의 제약 식별자를 꺼내 아래 제약들과 정확히 비교한다 — 중복 값 쪽에 같은 글자가
 // 들어 있어도(예: 회원 이메일이 uk_billing_key_로 시작) 다른 제약의 충돌은 막지 않는다.
+// 지문 컬럼 UNIQUE의 중복 값은 원문이 아니라 HMAC 지문이지만 키를 식별하는 값이라 같은 정책으로 막는다. 옛 평문 컬럼 제약은
+// Contract에서 지울 때까지 운영 DB에 남아 있어 목록에 유지한다.
 // 1) Hibernate SqlExceptionHelper가 예외 변환 전에 남기는 메시지 줄: 그 로거에 한해 메시지로 판정해 DENY
 // 2) 예외 객체를 함께 넘기는 줄(GlobalExceptionHandler 등): 로거와 관계없이 cause 체인에 두 제약 위반이 있으면 DENY하고,
 //    대신 원문 없는 진단 한 줄(로거·예외 클래스·제약 이름)을 남긴다. 다른 SQL 오류와 오류 코드·SQLState 줄은 그대로 남는다
@@ -23,6 +25,7 @@ public final class BillingKeyLogMaskingFilter extends TurboFilter {
     static final String HIBERNATE_SQL_EXCEPTION_LOGGER = "org.hibernate.engine.jdbc.spi.SqlExceptionHelper";
     static final String MASKING_LOGGER = "com.recipick.domain.payment.config.BillingKeyLogMasking";
     static final Set<String> SENSITIVE_CONSTRAINTS = Set.of(
+        "uk_billing_key_portone_billing_key_hash",
         "uk_billing_key_portone_billing_key",
         "uk_billing_key_issue_request_issue_id");
 

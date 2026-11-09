@@ -12,9 +12,10 @@ import org.springframework.data.repository.query.Param;
 public interface BillingKeyRepository extends JpaRepository<BillingKey, Long> {
 
     // 등록. 같은 키 행의 ID만 읽는다 — 행이 없으면 아무것도 잠그지 않는다(UNIQUE 빈 구간 잠금 없음).
-    // 엔티티를 잠금 전에 올려 두면 잠금 조회가 영속성 컨텍스트의 옛 인스턴스를 돌려주므로 ID만 꺼낸다
-    @Query("SELECT b.id FROM BillingKey b WHERE b.portoneBillingKey = :portoneBillingKey")
-    Optional<Long> findIdByPortoneBillingKey(@Param("portoneBillingKey") String portoneBillingKey);
+    // 엔티티를 잠금 전에 올려 두면 잠금 조회가 영속성 컨텍스트의 옛 인스턴스를 돌려주므로 ID만 꺼낸다.
+    // 비교는 지문 컬럼으로 한다 — 암호문 컬럼을 조건에 쓰면 파라미터가 새 IV로 암호화돼 절대 일치하지 않는다
+    @Query("SELECT b.id FROM BillingKey b WHERE b.portoneBillingKeyHash = :hash")
+    Optional<Long> findIdByPortoneBillingKeyHash(@Param("hash") String hash);
 
     // 등록. 현재 ACTIVE 행의 ID만 읽는다. 첫 등록 회원은 empty — (member_id, status) 빈 구간에 갭 잠금을 걸지 않는다
     @Query("SELECT b.id FROM BillingKey b WHERE b.memberId = :memberId AND b.status = :status")

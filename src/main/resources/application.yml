@@ -84,6 +84,11 @@ recipick:
     # 카드 등록 API 스위치. 운영 기본 false — 테스트 채널 환경에서만 BILLING_KEY_REGISTRATION_ENABLED=true로 켠다.
     # 실채널 차단은 이 값과 무관하게 코드가 한다(docs/api/billing-key-registration.md)
     registration-enabled: ${BILLING_KEY_REGISTRATION_ENABLED:false}
+    # 빌링키 저장 암호화 키(AES-256, Base64 디코딩 후 정확히 32바이트)와 지문 키(HMAC-SHA256, Base64 디코딩 후 32바이트 이상).
+    # 로컬 외 환경에서 필수 — 비어 있으면 기동하지 않는다. 로컬은 ~/.recipick/billing-key-*-secret 파일을 자동 생성한다.
+    # 지문 키를 바꾸면 기존 지문과 맞지 않고, 암호화 키를 잃으면 저장된 빌링키를 복구할 수 없다(docs/api/billing-key-registration.md)
+    encryption-secret: ${BILLING_KEY_ENCRYPTION_SECRET:}
+    hmac-secret: ${BILLING_KEY_HMAC_SECRET:}
   membership-billing:
     # 멤버십 자동결제 신규 청구 스위치. 운영 기본 false
     # 꺼져 있어도 이미 생긴 결제의 재조회·결과 반영·복구·갱신 회차 정리는 계속 돈다(docs/api/membership-first-charge.md,

@@ -22,6 +22,9 @@ class BillingKeyLogMaskingFilterTest {
     private static final String KEY = "billing-key-test-0001";
     private static final String KEY_DUPLICATE =
         "Duplicate entry '" + KEY + "' for key 'billing_key.uk_billing_key_portone_billing_key'";
+    private static final String HASH = "0123456789abcdef".repeat(4);
+    private static final String HASH_DUPLICATE =
+        "Duplicate entry '" + HASH + "' for key 'billing_key.uk_billing_key_portone_billing_key_hash'";
     private static final String TOKEN_DUPLICATE =
         "Duplicate entry 'rcp-bk-0f8a1c2e' for key 'billing_key_issue_request.uk_billing_key_issue_request_issue_id'";
     private static final String MEMBER_DUPLICATE = "Duplicate entry 'a@b.c' for key 'member.uk_member_email'";
@@ -48,6 +51,25 @@ class BillingKeyLogMaskingFilterTest {
     @DisplayName("Hibernate SQL 예외 로거의 빌링키 UNIQUE 충돌 메시지는 막는다")
     void deniesBillingKeyDuplicate() {
         assertThat(decide(hibernate, KEY_DUPLICATE, null)).isEqualTo(FilterReply.DENY);
+    }
+
+    @Test
+    @DisplayName("지문 컬럼 UNIQUE 충돌 메시지(중복 값이 지문)도 막고, 진단 줄에 지문을 남기지 않는다")
+    void deniesFingerprintDuplicate() {
+        // given
+        Throwable nested = new DataIntegrityViolationException("could not execute statement",
+            new SQLIntegrityConstraintViolationException(HASH_DUPLICATE, "23000", 1062));
+
+        // when
+        FilterReply hibernateReply = decide(hibernate, HASH_DUPLICATE, null);
+        FilterReply handlerReply = decide(handler, "Unhandled exception", nested);
+
+        // then
+        assertThat(hibernateReply).isEqualTo(FilterReply.DENY);
+        assertThat(handlerReply).isEqualTo(FilterReply.DENY);
+        assertThat(maskingAppender.list).hasSize(1);
+        assertThat(maskingAppender.list.get(0).getFormattedMessage())
+            .contains("uk_billing_key_portone_billing_key_hash").doesNotContain(HASH);
     }
 
     @Test

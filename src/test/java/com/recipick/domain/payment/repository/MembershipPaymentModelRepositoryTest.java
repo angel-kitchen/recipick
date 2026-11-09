@@ -147,7 +147,7 @@ class MembershipPaymentModelRepositoryTest extends IntegrationTestSupport {
 
         // then
         assertThat(names).contains(
-            "uk_billing_key_portone_billing_key",
+            "uk_billing_key_portone_billing_key_hash",
             "idx_billing_key_member_id_status",
             "uk_billing_key_issue_request_issue_id",
             "uk_membership_payment_membership_id_period_start_date",

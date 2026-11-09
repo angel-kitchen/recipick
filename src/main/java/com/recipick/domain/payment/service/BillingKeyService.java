@@ -27,11 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class BillingKeyService {
 
-    // 엔티티 @UniqueConstraint 이름. 운영 DDL이 기존 인덱스를 이 이름으로 바꾼다
-    static final String BILLING_KEY_UNIQUE_CONSTRAINT = "uk_billing_key_portone_billing_key";
+    // 엔티티 @UniqueConstraint 이름(지문 컬럼). 운영 Expand DDL이 같은 이름으로 먼저 만든다
+    static final String BILLING_KEY_UNIQUE_CONSTRAINT = "uk_billing_key_portone_billing_key_hash";
 
     private final BillingKeyRepository billingKeyRepository;
     private final BillingKeyIssueRequestRepository billingKeyIssueRequestRepository;
+    private final BillingKeyFingerprint fingerprint;
     private final Clock clock;
 
     // C-10. 회원 탈퇴 Facade가 회원 잠금 뒤 부른다(0단계 계약 시그니처)
@@ -57,8 +58,9 @@ public class BillingKeyService {
             .filter(request -> request.isOwnedBy(memberId))
             .orElseThrow(() -> new BusinessException(PaymentErrorCode.BILLING_KEY_ISSUE_REQUEST_INVALID));
 
-        // (a) 같은 키 행 — ID만 읽고, 있으면 PK로 잠그며 다시 읽는다. 없으면 아무것도 잠그지 않는다
-        Optional<BillingKey> sameKey = billingKeyRepository.findIdByPortoneBillingKey(portoneBillingKey)
+        // (a) 같은 키 행 — 지문으로 ID만 읽고, 있으면 PK로 잠그며 다시 읽는다. 없으면 아무것도 잠그지 않는다
+        String hash = fingerprint.of(portoneBillingKey);
+        Optional<BillingKey> sameKey = billingKeyRepository.findIdByPortoneBillingKeyHash(hash)
             .flatMap(billingKeyRepository::findByIdForUpdate);
         requireIssueRequestUsable(issueRequest, portoneBillingKey, sameKey, now);
         if (sameKey.isPresent() && !sameKey.get().getMemberId().equals(memberId)) {
@@ -73,7 +75,7 @@ public class BillingKeyService {
         // (c) 분기표
         if (sameKey.isEmpty()) {
             active.ifPresent(BillingKey::replace);
-            BillingKey saved = saveNew(memberId, portoneBillingKey, issuedAt);
+            BillingKey saved = saveNew(memberId, portoneBillingKey, hash, issuedAt);
             issueRequest.markUsed(saved, now);
             return new BillingKeyRegistration(saved.getId(), active.isPresent()
                 ? BillingKeyRegistrationOutcome.REPLACED
@@ -116,11 +118,11 @@ public class BillingKeyService {
 
     // 두 회원이 같은 키를 동시에 등록하면 서로 다른 MEMBER를 잠가 둘 다 여기 오고, UNIQUE가 한 명만 통과시킨다.
     // 즉시 flush해 충돌을 여기서 받는다(기존 requestMemberRefund·SignupService와 같은 방식).
-    // 빌링키 UNIQUE(uk_billing_key_portone_billing_key) 위반만 BILLING-002로 바꾸고 다른 무결성 오류는 그대로 올린다.
-    // 원인 예외의 메시지에는 중복 값(키 원문)이 있어 cause로 넘기지 않고, 로그에는 제약 이름만 남긴다
-    private BillingKey saveNew(Long memberId, String portoneBillingKey, LocalDateTime issuedAt) {
+    // 빌링키 UNIQUE(uk_billing_key_portone_billing_key_hash) 위반만 BILLING-002로 바꾸고 다른 무결성 오류는 그대로 올린다.
+    // 원인 예외의 메시지에는 중복 값(키 지문)이 있어 cause로 넘기지 않고, 로그에는 제약 이름만 남긴다
+    private BillingKey saveNew(Long memberId, String portoneBillingKey, String hash, LocalDateTime issuedAt) {
         try {
-            return billingKeyRepository.saveAndFlush(BillingKey.issued(memberId, portoneBillingKey, issuedAt));
+            return billingKeyRepository.saveAndFlush(BillingKey.issued(memberId, portoneBillingKey, hash, issuedAt));
         } catch (DataIntegrityViolationException e) {
             String constraint = violatedConstraintNameOf(e);
             if (constraint == null || !constraint.contains(BILLING_KEY_UNIQUE_CONSTRAINT)) {

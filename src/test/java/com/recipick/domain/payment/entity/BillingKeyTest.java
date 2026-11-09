@@ -14,19 +14,21 @@ class BillingKeyTest {
 
     private static final Long MEMBER_ID = 7L;
     private static final String KEY = "billing-key-test-0001";
+    private static final String HASH = "0123456789abcdef".repeat(4);
     private static final LocalDateTime ISSUED_AT = LocalDateTime.of(2026, 10, 31, 14, 0);
 
     @Test
     @DisplayName("발급된 키로 만든 새 행은 ACTIVE이고 PortOne 발급 시각을 그대로 갖는다")
     void issued() {
         // when
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, ISSUED_AT);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, ISSUED_AT);
 
         // then
         assertThat(key.getStatus()).isEqualTo(BillingKeyStatus.ACTIVE);
         assertThat(key.isActive()).isTrue();
         assertThat(key.getMemberId()).isEqualTo(MEMBER_ID);
         assertThat(key.getPortoneBillingKey()).isEqualTo(KEY);
+        assertThat(key.getPortoneBillingKeyHash()).isEqualTo(HASH);
         assertThat(key.getIssuedAt()).isEqualTo(ISSUED_AT);
         assertThat(key.getDeleteRequestedAt()).isNull();
         assertThat(key.getDeletedAt()).isNull();
@@ -36,7 +38,7 @@ class BillingKeyTest {
     @DisplayName("ACTIVE 키를 교체하면 REPLACED가 되고 true를 돌려준다")
     void replaceActive() {
         // given
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, ISSUED_AT);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, ISSUED_AT);
 
         // when
         boolean changed = key.replace();
@@ -94,7 +96,7 @@ class BillingKeyTest {
     @DisplayName("이미 ACTIVE인 키의 되살리기는 바꾸지 않고 false다")
     void reactivateIsIdempotent() {
         // given
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, ISSUED_AT);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, ISSUED_AT);
 
         // when
         boolean changed = key.reactivate();
@@ -120,17 +122,26 @@ class BillingKeyTest {
     }
 
     @Test
-    @DisplayName("toString에 빌링키 원문이 없다 — 예외 메시지와 로그에 섞이는 문자열이다")
+    @DisplayName("toString에 빌링키 원문과 지문이 없다 — 예외 메시지와 로그에 섞이는 문자열이다")
     void toStringHidesKey() {
         // given
-        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, ISSUED_AT);
+        BillingKey key = BillingKey.issued(MEMBER_ID, KEY, HASH, ISSUED_AT);
 
         // when
         String text = key.toString();
 
         // then
-        assertThat(text).doesNotContain(KEY);
+        assertThat(text).doesNotContain(KEY).doesNotContain(HASH);
         assertThat(text).contains("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("지문 없이 또는 64자가 아닌 지문으로는 등록 행을 만들 수 없다 — 지문이 없으면 같은 키 조회와 UNIQUE가 비게 된다")
+    void issuedRequiresHash() {
+        assertThat(catchThrowable(() -> BillingKey.issued(MEMBER_ID, KEY, null, ISSUED_AT)))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(catchThrowable(() -> BillingKey.issued(MEMBER_ID, KEY, "abc", ISSUED_AT)))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static BillingKey withStatus(BillingKeyStatus status) {

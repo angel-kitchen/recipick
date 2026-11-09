@@ -20,6 +20,7 @@ import com.recipick.domain.payment.exception.PaymentErrorCode;
 import com.recipick.domain.payment.facade.BillingKeyRegistrationProcessor;
 import com.recipick.domain.payment.repository.BillingKeyIssueRequestRepository;
 import com.recipick.domain.payment.repository.BillingKeyRepository;
+import com.recipick.domain.payment.service.BillingKeyFingerprint;
 import com.recipick.domain.payment.service.BillingKeyRegistration;
 import com.recipick.domain.payment.service.BillingKeyRegistrationOutcome;
 import com.recipick.domain.payment.service.BillingKeyService;
@@ -67,6 +68,9 @@ class BillingKeyRegistrationIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     BillingKeyIssueRequestRepository issueRequests;
+
+    @Autowired
+    BillingKeyFingerprint fingerprint;
 
     @Autowired
     MemberRepository members;
@@ -386,7 +390,7 @@ class BillingKeyRegistrationIntegrationTest extends IntegrationTestSupport {
         assertThat(firstRegistration).anyMatch(sql -> selectsBillingKey(sql)
             && whereClauseOf(sql).contains("member_id") && !sql.contains("for update"));
         assertThat(firstRegistration).anyMatch(sql -> selectsBillingKey(sql)
-            && whereClauseOf(sql).contains("portone_billing_key") && !sql.contains("for update"));
+            && whereClauseOf(sql).contains("portone_billing_key_hash") && !sql.contains("for update"));
 
         // when — 교체
         register(requested(), newKey());
@@ -400,6 +404,35 @@ class BillingKeyRegistrationIntegrationTest extends IntegrationTestSupport {
         assertThat(lockingSql).allMatch(sql -> PRIMARY_KEY_CONDITION.matcher(whereClauseOf(sql)).matches());
         assertThat(lockingSql).noneMatch(sql -> whereClauseOf(sql).contains("member_id"));
         assertThat(lockingSql).noneMatch(sql -> whereClauseOf(sql).contains("portone_billing_key"));
+    }
+
+    @Test
+    @DisplayName("DB에는 암호문과 지문만 남고 원문은 없다. 엔티티로 읽으면 원문이 복원되고, 바뀐 것이 없는 재요청은 UPDATE를 내지 않는다")
+    void storesCiphertextAndFingerprintOnly() {
+        // given
+        BillingKeyIssueRequest request = requested();
+        String key = newKey();
+
+        // when
+        Long id = register(request, key).billingKeyId();
+        sqlAppender.list.clear();
+        register(request, key);
+        List<String> repeated = capturedSql();
+
+        // then — 저장값
+        var row = jdbc.queryForMap(
+            "SELECT portone_billing_key_ciphertext AS ciphertext, portone_billing_key_hash AS hash "
+                + "FROM billing_key WHERE id = ?", id);
+        String ciphertext = (String) row.get("ciphertext");
+        assertThat(ciphertext).startsWith("v1:").doesNotContain(key);
+        assertThat(ciphertext.split(":")).hasSize(3);
+        assertThat(row.get("hash")).isEqualTo(fingerprint.of(key));
+        assertThat(jdbc.queryForList("SELECT * FROM billing_key WHERE id = ?", id).get(0).values())
+            .noneMatch(value -> value != null && value.toString().contains(key));
+
+        // then — 복호화와 더티 체크. 암호문은 저장마다 달라지지만 도메인 값이 같으면 UPDATE가 없다
+        assertThat(billingKeys.findById(id).orElseThrow().getPortoneBillingKey()).isEqualTo(key);
+        assertThat(repeated).noneMatch(sql -> sql.startsWith("update billing_key "));
     }
 
     @Test
@@ -476,17 +509,20 @@ class BillingKeyRegistrationIntegrationTest extends IntegrationTestSupport {
 
     private BillingKey saveKey(Long memberId, String key, BillingKeyStatus status) {
         return billingKeys.saveAndFlush(BillingKey.builder()
-            .memberId(memberId).portoneBillingKey(key).status(status).issuedAt(ISSUED_AT).build());
+            .memberId(memberId).portoneBillingKey(key).portoneBillingKeyHash(fingerprint.of(key)).status(status)
+            .issuedAt(ISSUED_AT).build());
     }
 
     // ---------- 조회 ----------
 
     private String statusOf(String key) {
-        return jdbc.queryForObject("SELECT status FROM billing_key WHERE portone_billing_key = ?", String.class, key);
+        return jdbc.queryForObject("SELECT status FROM billing_key WHERE portone_billing_key_hash = ?", String.class,
+            fingerprint.of(key));
     }
 
     private Long ownerOf(String key) {
-        return jdbc.queryForObject("SELECT member_id FROM billing_key WHERE portone_billing_key = ?", Long.class, key);
+        return jdbc.queryForObject("SELECT member_id FROM billing_key WHERE portone_billing_key_hash = ?", Long.class,
+            fingerprint.of(key));
     }
 
     private Long countKeysOf(Long memberId) {

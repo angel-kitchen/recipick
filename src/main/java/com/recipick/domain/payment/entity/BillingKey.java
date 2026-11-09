@@ -3,6 +3,7 @@ package com.recipick.domain.payment.entity;
 import com.recipick.domain.payment.entity.enums.BillingKeyStatus;
 import com.recipick.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,14 +26,18 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "billing_key",
     // 이름을 명시해야 UNIQUE 충돌을 제약 이름으로 식별할 수 있다(BillingKeyService.saveNew).
+    // UNIQUE는 암호문이 아니라 지문에 건다 — 암호문은 저장마다 달라진다
     uniqueConstraints = @UniqueConstraint(
-        name = "uk_billing_key_portone_billing_key",
-        columnNames = "portone_billing_key"
+        name = "uk_billing_key_portone_billing_key_hash",
+        columnNames = "portone_billing_key_hash"
     ),
     indexes = @Index(name = "idx_billing_key_member_id_status", columnList = "member_id, status")
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class BillingKey extends BaseTimeEntity {
+
+    // HMAC-SHA256 hex 길이. 컬럼 정의가 상수 식이어야 해서 BillingKeyFingerprint.LENGTH를 직접 참조하지 않는다
+    static final int BILLING_KEY_HASH_LENGTH = 64;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,7 +45,15 @@ public class BillingKey extends BaseTimeEntity {
 
     private Long memberId;
 
+    // 원문은 메모리에만 있고 DB에는 암호문(v1:IV:암호문+태그)만 간다. 옛 평문 컬럼 portone_billing_key는 백필·Contract까지
+    // 남지만 매핑하지 않는다. 운영 DDL은 Expand 단계라 NULL 허용이고, 기동 백필이 채운 뒤에만 요청을 받는다
+    @Convert(converter = BillingKeyCiphertextConverter.class)
+    @Column(name = "portone_billing_key_ciphertext", length = 512)
     private String portoneBillingKey;
+
+    // 원문의 HMAC 지문. 같은 키 조회와 UNIQUE는 이 값으로 한다
+    @Column(name = "portone_billing_key_hash", length = BILLING_KEY_HASH_LENGTH)
+    private String portoneBillingKeyHash;
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")
@@ -55,18 +68,24 @@ public class BillingKey extends BaseTimeEntity {
     // PortOne이 삭제를 확인한 시각.
     private LocalDateTime deletedAt;
 
-    // 테스트 픽스처용. 운영 코드는 issued()로만 새 행을 만든다
+    // 테스트 픽스처용. 운영 코드는 issued()로만 새 행을 만든다. 지문 없이 만든 픽스처는 같은 키 조회에 걸리지 않는다
     @Builder
-    private BillingKey(Long memberId, String portoneBillingKey, BillingKeyStatus status, LocalDateTime issuedAt) {
+    private BillingKey(Long memberId, String portoneBillingKey, String portoneBillingKeyHash, BillingKeyStatus status,
+                       LocalDateTime issuedAt) {
         this.memberId = memberId;
         this.portoneBillingKey = portoneBillingKey;
+        this.portoneBillingKeyHash = portoneBillingKeyHash;
         this.status = status;
         this.issuedAt = issuedAt;
     }
 
-    // 등록의 새 행. 상태는 항상 ACTIVE로 시작한다
-    public static BillingKey issued(Long memberId, String portoneBillingKey, LocalDateTime issuedAt) {
-        return new BillingKey(memberId, portoneBillingKey, BillingKeyStatus.ACTIVE, issuedAt);
+    // 등록의 새 행. 상태는 항상 ACTIVE로 시작한다. 지문은 서비스가 원문으로 만들어 넘긴다 — 엔티티는 지문 키를 모른다
+    public static BillingKey issued(Long memberId, String portoneBillingKey, String portoneBillingKeyHash,
+                                    LocalDateTime issuedAt) {
+        if (portoneBillingKeyHash == null || portoneBillingKeyHash.length() != BILLING_KEY_HASH_LENGTH) {
+            throw new IllegalArgumentException("빌링키 지문이 올바르지 않습니다.");
+        }
+        return new BillingKey(memberId, portoneBillingKey, portoneBillingKeyHash, BillingKeyStatus.ACTIVE, issuedAt);
     }
 
     public boolean isActive() {
@@ -142,7 +161,7 @@ public class BillingKey extends BaseTimeEntity {
         return true;
     }
 
-    // 키 원문을 뺀다. 예외 메시지·로그에 이 문자열이 섞인다
+    // 키 원문과 지문을 뺀다. 예외 메시지·로그에 이 문자열이 섞인다
     @Override
     public String toString() {
         return "BillingKey[id=" + id + ", memberId=" + memberId + ", status=" + status + "]";

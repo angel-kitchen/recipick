@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Propagation;
 import com.recipick.domain.member.entity.enums.MembershipType;
 import com.recipick.domain.member.repository.MemberRepository;
 import com.recipick.domain.member.repository.MembershipRepository;
+import com.recipick.domain.payment.service.BillingKeyCipher;
+import com.recipick.domain.payment.service.BillingKeyFingerprint;
 import com.recipick.global.security.JwtTokenProvider;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -37,6 +39,8 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
     @Autowired JwtTokenProvider tokens;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @Autowired BillingKeyCipher cipher;
+    @Autowired BillingKeyFingerprint fingerprint;
     Member member;
     String token;
     static final String REQUEST = """
@@ -47,20 +51,23 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 20);
         member = members.saveAndFlush(Member.builder().email(suffix + "@trial.test")
-                .phone(suffix).name("체험 회원").passwordHash("hash").build());
+            .phone(suffix).name("체험 회원").passwordHash("hash").build());
         token = tokens.createMemberTokens(member.getId()).accessToken();
     }
 
+    // 빌링키는 암호문·지문으로 저장된다 — 체험 시작 흐름이 키 행을 읽어도 복호화되도록 실제 암호화기로 만든다
     void card(String status) {
+        String key = UUID.randomUUID().toString();
         jdbc.update("""
-                INSERT INTO billing_key(member_id, portone_billing_key, status, issued_at, created_at, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """, member.getId(), UUID.randomUUID().toString(), status);
+                INSERT INTO billing_key(member_id, portone_billing_key_ciphertext, portone_billing_key_hash, status,
+                                        issued_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, member.getId(), cipher.encrypt(key), fingerprint.of(key), status);
     }
 
     MockHttpServletResponse start(String body) throws Exception {
         return mvc.perform(post("/api/memberships/trial").header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
+            .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse();
     }
 
     void error(MockHttpServletResponse response, int status, String code) throws Exception {
@@ -87,7 +94,7 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
         assertThat(saved.getConsentedAmount()).isEqualTo(3900L);
         assertThat(saved.getGraceEndAt()).isNull();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM membership_payment WHERE membership_id = ?",
-                Long.class, id)).isZero();
+            Long.class, id)).isZero();
         assertThat(start(REQUEST).getStatus()).isEqualTo(409);
         assertThat(memberships.findIdsByMemberId(member.getId())).hasSize(1);
     }
@@ -111,9 +118,9 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "{\"autopayAgreed\":false,\"consentedAmount\":3900,\"consentTextVersion\":\"v1\"}",
-            "{\"autopayAgreed\":true,\"consentedAmount\":100,\"consentTextVersion\":\"v1\"}",
-            "{\"autopayAgreed\":true,\"consentedAmount\":3900,\"consentTextVersion\":\"\"}"})
+        "{\"autopayAgreed\":false,\"consentedAmount\":3900,\"consentTextVersion\":\"v1\"}",
+        "{\"autopayAgreed\":true,\"consentedAmount\":100,\"consentTextVersion\":\"v1\"}",
+        "{\"autopayAgreed\":true,\"consentedAmount\":3900,\"consentTextVersion\":\"\"}"})
     @DisplayName("자동결제 동의가 올바르지 않으면 체험을 생성하지 않는다")
     void rejectsInvalidConsent(String body) throws Exception {
         // given
@@ -124,13 +131,13 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
 
     @ParameterizedTest
     @ValueSource(strings = {"v 1", " v1", "v1 ", "v\t1", "v\u00a01", "v\u30001",
-            "123456789012345678901"})
+        "123456789012345678901"})
     @DisplayName("동의 문구 버전의 공백·길이 위반은 동일한 동의 오류로 거절한다")
     void rejectsWhitespaceAndLongVersion(String version) throws Exception {
         // given
         card("ACTIVE");
         String body = mapper.writeValueAsString(java.util.Map.of(
-                "autopayAgreed", true, "consentedAmount", 3900, "consentTextVersion", version));
+            "autopayAgreed", true, "consentedAmount", 3900, "consentTextVersion", version));
         // when, then
         error(start(body), 400, "MEMBERSHIP-004");
     }
@@ -213,7 +220,7 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
             go.countDown();
             // then
             assertThat(java.util.List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS)))
-                    .containsExactlyInAnyOrder(201, 409);
+                .containsExactlyInAnyOrder(201, 409);
             assertThat(memberships.findIdsByMemberId(member.getId())).hasSize(1);
         } finally {
             go.countDown();
@@ -230,7 +237,7 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
     void requiresAuthentication() throws Exception {
         // given, when
         var response = mvc.perform(post("/api/memberships/trial").contentType(MediaType.APPLICATION_JSON)
-                .content(REQUEST)).andReturn().getResponse();
+            .content(REQUEST)).andReturn().getResponse();
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(memberships.findIdsByMemberId(member.getId())).isEmpty();

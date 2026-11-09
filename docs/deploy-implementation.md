@@ -808,3 +808,64 @@ true(교체·폐기 키 정리) ④ 회원 탈퇴 연동(찜·장바구니·포�
   `ALTER TABLE billing_key_deletion ALTER COLUMN claim_token SET DEFAULT 0;`·`... claim_count SET DEFAULT 0;`을 실행했다(각 0.01s, `exit=0`).
   두 컬럼 `IS_NULLABLE = NO`, `COLUMN_DEFAULT = 0` 확인.
 - #396 기동 로그는 #399 재배포로 컨테이너가 바뀌어 확인하지 못했고, 테이블 구조 조회로 대신했다.
+
+### 10-J. 빌링키 암호화(#553) — billing_key 컬럼 2개·UNIQUE 1개 + 환경변수 2개 (추가만, Contract는 별도 승인)
+
+`billing_key.portone_billing_key`(평문)를 `portone_billing_key_ciphertext`(AES-256-GCM)·`portone_billing_key_hash`(HMAC 지문, UNIQUE)로
+옮긴다(`docs/api/billing-key-registration.md` "빌링키 저장 암호화"). 운영 `billing_key`는 2026-11-01 0행이고 카드 등록 스위치가 꺼져 있어
+이중 쓰기 단계 없이 한 번에 전환한다. **머지 전 조건:** ① 운영 `.env`에 키 2개 추가(`deploy.sh`가 빈 값이면 멈춘다) ② 아래 J-2 적용
+③ `SELECT COUNT(*) FROM billing_key`와 `BILLING_KEY_REGISTRATION_ENABLED`·`MEMBERSHIP_BILLING_ENABLED` 값 기록.
+
+```sql
+-- J-0 백업
+--   backup.sh pre-deploy ddl-553
+-- J-1 사전 확인 (평문 UNIQUE 이름이 uk_billing_key_portone_billing_key 하나인지, 새 컬럼이 없는지)
+SHOW CREATE TABLE billing_key;
+SELECT COUNT(*) AS total, SUM(portone_billing_key IS NOT NULL) AS plaintext_rows FROM billing_key;
+
+-- J-2 Expand. NULL 허용이라 구 앱이 떠 있어도 영향이 없고, 지문이 NULL인 행이 여러 개여도 UNIQUE에 걸리지 않는다.
+--     이름·자료형은 엔티티(BillingKey)와 같아 기동 때 Hibernate가 같은 인덱스로 인식한다
+ALTER TABLE billing_key                                               -- J-2-1
+  ADD COLUMN portone_billing_key_ciphertext VARCHAR(512) NULL,
+  ADD COLUMN portone_billing_key_hash VARCHAR(64) NULL;
+ALTER TABLE billing_key                                               -- J-2-2
+  ADD UNIQUE INDEX uk_billing_key_portone_billing_key_hash (portone_billing_key_hash);
+
+-- J-3 기동 뒤 확인 (둘 다 0이어야 한다. 러너가 못 채우면 앱이 기동하지 않는다)
+SELECT COUNT(*) FROM billing_key WHERE portone_billing_key IS NOT NULL AND portone_billing_key_ciphertext IS NULL;
+SELECT COUNT(*) FROM billing_key WHERE portone_billing_key_ciphertext IS NOT NULL AND portone_billing_key_hash IS NULL;
+```
+
+| 순번 | 문장 | 실행 시각 | 결과 | 되돌리기 |
+| --- | --- | --- | --- | --- |
+| J-2-1 | `ADD COLUMN` 2개 | | | `ALTER TABLE billing_key DROP COLUMN portone_billing_key_ciphertext, DROP COLUMN portone_billing_key_hash;`(J-2-2를 먼저 되돌린 뒤. 신 앱이 떠 있으면 금지) |
+| J-2-2 | `ADD UNIQUE INDEX` | | | `ALTER TABLE billing_key DROP INDEX uk_billing_key_portone_billing_key_hash;` |
+
+#### 환경변수 2개 (필수, 없으면 배포·기동 모두 멈춘다)
+
+`BILLING_KEY_ENCRYPTION_SECRET`(`openssl rand -base64 32`, 디코딩 후 정확히 32바이트)·`BILLING_KEY_HMAC_SECRET`(`openssl rand -base64 48`,
+32바이트 이상). `deploy/compose.yml`이 `:?`로 전달하고 `deploy.sh check_env`가 빈 값을 검사한다. 암호화 키는 잃으면 저장된 빌링키를
+복구할 수 없으므로 비밀 저장소에 사본을 둔다. 지문 키는 바꾸면 기존 지문과 맞지 않으므로 처음 값을 계속 쓴다.
+
+#### 반영 순서
+
+1. 키 2개 생성 → 서버 `.env`(600)에 추가 → 비밀 저장소에 사본.
+2. J-0 백업 → J-1 기록 → J-2 적용 → 10-B 스냅숏 ①(`billing_key` 포함).
+3. PR 머지 → 자동 배포. 기동 로그에 `빌링키 암호문 백필 완료: N건`(평문 행이 있을 때만), `alter table`·`create index` 없음.
+4. 스냅숏 ② diff 없음(`portone_billing_key_hash` UNIQUE 1개, 평문 UNIQUE 1개 그대로), J-3 둘 다 0.
+5. 스모크 `GET /api/billing-keys/me` 200(복호화 경로). 스위치가 켜진 환경이면 R-1의 3~5와 테스트 채널 청구 1건으로
+   암호문 → 복호화 → PortOne 호출을 확인하고 앱 로그를 키 문자열로 grep → 0건.
+
+#### 롤백
+
+- Contract 전 이전 이미지 복귀: 백필은 평문을 지우지 않으므로 기존 행은 구 앱이 그대로 읽는다. **신 앱이 만든 행**(평문 NULL)은 구 앱이
+  청구·중복 판정에 쓸 수 없어 해당 회원은 재등록해야 한다 — 카드 등록 스위치가 꺼져 있으면 그런 행이 생기지 않아 무손실이다.
+- DDL만 되돌리기: 위 표의 되돌리기 문장(신 앱이 떠 있으면 금지).
+- 키 오설정: 기동 직후 `/me`가 500이다. `.env`를 고치고 `docker compose up -d --no-deps app`.
+
+#### Contract (별도 승인. 10-D와 같은 조건)
+
+조건: 배포 뒤 앱 정상·스모크 통과, J-3 둘 다 0, 새 백업, 승인 기록, 실행 기록표. 순서: ① `BillingKeyCiphertextBackfiller` 삭제 PR 머지
+(컬럼을 지우기 전에 러너부터 없앤다) ② `ALTER TABLE billing_key DROP INDEX uk_billing_key_portone_billing_key, DROP COLUMN portone_billing_key;`
+③ 스냅숏 diff ④ `BillingKeyLogMaskingFilter`·`docs/erd.dbml`에서 옛 제약 이름 정리 ⑤ 평문이 든 과거 덤프(nightly·pre-deploy)의 보존 기간 결정.
+Contract 뒤에는 암호화 이전 앱으로 돌아갈 수 없다(Contract 직전 덤프 복원만 가능).
