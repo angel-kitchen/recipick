@@ -241,12 +241,21 @@ sum by (cache) (increase(cache_gets_total{result="hit"}[5m]))
    export JWT_SECRET="$(openssl rand -base64 48)"
    LOGGING_STRUCTURED_FORMAT_CONSOLE=logstash ./gradlew bootRun --args='--spring.profiles.active=local'
    ```
-3. DB를 조회하는 공개 API에 3초 간격으로 요청을 보낸다.
+3. DB를 조회하는 공개 API에 3초 간격으로 요청을 보낸다. 장애 중에는 응답이 약 30초 걸리므로
+   이전 응답을 기다리지 않고 백그라운드로 보내고, 응답 헤더는 요청마다 따로 저장한다. 끝낼 때는 Ctrl+C로 멈춘다.
    ```bash
-   curl -i -H 'Content-Type: application/json' -d '{"legalDongCode":"1168010100"}' \
-     http://localhost:8080/api/service-area/check
+   mkdir -p outage
+   while true; do
+     curl -s -m 45 -D "outage/$(date +%H%M%S).headers" -o /dev/null -w '%{http_code} %{time_total}\n' \
+       -H 'Content-Type: application/json' -d '{"legalDongCode":"1168010100"}' \
+       http://localhost:8080/api/service-area/check &
+     sleep 3
+   done
    ```
-4. 정상 요청 30초 → `docker stop recipick-mysql` 후 90초 → `docker start recipick-mysql` 후 45초 순서로 진행한다.
+4. 다음 순서로 진행한다.
+   - 정상 요청 30초
+   - `docker stop recipick-mysql` 후 요청 90초, 진행 중인 응답을 약 30초 더 기다림(실제 정지 122초, 19:21:17~19:23:19)
+   - `docker start recipick-mysql`, healthy 확인(19:23:30) 후 요청 45초
 5. 응답의 `X-Request-Id` 값으로 앱 로그를 검색한다.
 
 ### 결과
@@ -283,5 +292,6 @@ MySQL 정지(19:21:17) 후 감지까지 걸린 시간은 다음과 같다.
 ### 한계
 - 로컬 확인이며 운영 서버에서는 실행하지 않았다.
 - 대시보드를 봐야 알 수 있다. 알림(Alert)은 이번 확인 범위에 없다.
+- 같은 경로·상태의 첫 5xx가 한 건만 나고 끝나면 `rate`가 0이라 패널에 나타나지 않을 수 있다. 이번 테스트에서도 지표가 처음 잡힌 시점의 2건은 증가분으로 계산되지 않았다. 드문 5xx는 ERROR 로그로 확인한다.
 - 로컬 기본 로그 형식에서 traceId가 찍히는지는 확인하지 않았다.
 - 장애 중 멤버십 스케줄러에서도 DB 연결 실패 ERROR가 1건 났으며, 재시작 후 이 작업의 정상 재실행 여부는 확인하지 않았다.
