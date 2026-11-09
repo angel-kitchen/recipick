@@ -279,6 +279,6 @@
 | 결제 만료 구현 방식 | 정윤 | 결정·구현됨. Redis 지연 큐 + DB Fallback Sweep(4-4) |
 | 포인트 만료 배치 정책 | 정윤 | 구현됨(4-5) |
 | PortOne 결제 ID 규칙 | 정윤 | 시도마다 새 ID(`mpay_` + UUID)로 정함(4-6 ③). 남은 것: PortOne 실험 E-3(`mpay_` ID 허용·`paidAt` 표기), E-4(거절 결제의 GET 응답), E-6(같은 ID 재POST 응답). 확인 필요 |
-| 멤버십 자동결제·빌링키 정리 플래그 | 정윤, 배포 | `MEMBERSHIP_BILLING_ENABLED`·`BILLING_KEY_DELETION_ENABLED` 모두 기본 `false`. `MEMBERSHIP_BILLING_ENABLED`는 `deploy/compose.yml`로 전달된다(#551). `BILLING_KEY_DELETION_ENABLED`는 여전히 `deploy/`와 `docker-compose.yml`에서 넘기지 않아 켤 때 배포 설정 추가가 필요하다 |
+| 멤버십 자동결제·빌링키 정리 플래그 | 정윤, 배포 | `MEMBERSHIP_BILLING_ENABLED`·`BILLING_KEY_DELETION_ENABLED` 모두 기본 `false`. `MEMBERSHIP_BILLING_ENABLED`(#551)와 `BILLING_KEY_DELETION_ENABLED`(#569)는 `deploy/compose.yml`로 전달된다 |
 | TRIAL_BLOCK upsert | 채빈 | 구현됨. 활성화 이력일 때만 호출하고 GREATEST로 기간 유지·연장(4-2) |
 | 일반 전환 판정 시점 | 채빈 | 구현됨. MembershipService·Repository의 시각 조건으로 혜택 판정. 별도 일반 전환 배치 없음 |
