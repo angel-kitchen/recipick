@@ -1,6 +1,6 @@
 # 정적 분석(SonarQube·JaCoCo)
 
-백엔드 코드를 로컬 SonarQube로 분석하고, JaCoCo 테스트 커버리지를 함께 확인하는 방법과 첫 분석 결과를 정리한다. 진행 현황은 #424에서 추적한다.
+백엔드 코드를 로컬 SonarQube로 분석하고, JaCoCo 테스트 커버리지를 함께 확인하는 방법과 첫 분석·재분석 결과를 정리한다. 진행 현황은 #424에서 추적한다.
 
 ## 1. 구성
 
@@ -84,3 +84,39 @@ export SONAR_TOKEN=<발급한 토큰>                              # 토큰은 �
 S4502(CSRF)·S2068(하드코딩 비밀번호)은 예전 버전에서는 Security Hotspot 규칙이지만, 이번에 쓴 `sonarqube:community`(Sonar way core)에서는 Vulnerability로 보고되어 표에도 그대로 옮겼다(Hotspot 0건). Safe 처리는 분류와 관계없이 같다.
 
 로컬 SonarQube는 사람마다 따로 띄우므로 Won't Fix·Safe 표시가 공유되지 않는다. 다시 분석하면 위 11건이 계속 보이는 것이 정상이며, 판단 근거는 이 표를 기준으로 한다.
+
+## 6. 재분석 결과 (2026-11-10, `dev` `ee7d242d`)
+
+첫 분석 뒤 `src/main/java`의 208개 파일이 바뀌어(+4,394줄, -663줄) 같은 방법으로 다시 분석했다. 테스트 3,603개는 모두 통과했다(건너뜀 6개).
+
+| 구분 | 파일 | 코드 줄 | Bug | Vulnerability | Code Smell | Hotspot | 커버리지 | 중복률 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 첫 분석 | 664 | 30,113 | 8 | 2 | 5 | 0 | 88.6% | 0.8% |
+| 재분석 | 725 | 33,109 | 6 | 2 | 7 | 0 | 88.5% | 0.6% |
+
+재분석 커버리지는 라인 92.1%, 브랜치 81.2%다.
+
+이슈는 15건이고 구성은 아래와 같다. Bug, Vulnerability, Code Smell High 이상은 새로 생기지 않았다.
+
+- 사라진 4건: #425에서 수정한 S8696, S3655, S1845, S2699(`CategoryServiceTest`)
+- 그대로인 11건: 5절 표에서 Safe·Won't Fix·오탐·미룸으로 처리한 항목. 판단 근거는 5절과 같다
+- 새로 생긴 4건: 모두 S8786 정규식 백트래킹(Medium)이라 처리 기준에 따라 미룬다(#424)
+
+| 규칙 | 위치 | 들어온 변경 | 처리 | 근거 |
+| --- | --- | --- | --- | --- |
+| S8786 정규식 백트래킹 ×2 | `FakeAiClient`(`BUDGET_MAN_WON`, `BUDGET_WON`) | #484 | 미룸 | Medium, 테스트·시연용 가짜 클라이언트 |
+| S8786 정규식 백트래킹 | `FakeAiClient`(`MEAL_COUNT`) | #477 | 미룸 | 위와 같음 |
+| S8786 정규식 백트래킹 | `ClaudeAiEvaluationTest`(`WON`) | AI 평가 테스트 추가 | 미룸 | Medium, 테스트 코드 |
+
+이로써 S8786은 `FakeAiClient` 5건, `ClaudeAiEvaluationTest` 1건으로 모두 6건이다.
+
+미커버 줄이 많은 파일은 멤버십 결제·갱신 쪽에 몰려 있다. 첫 분석 때는 파일별 수치를 남기지 않아 전후 비교는 아니다.
+
+| 파일 | 커버리지 | 미커버 줄 |
+| --- | --- | --- |
+| `MembershipChargeResultProcessor` | 75.9% | 83 |
+| `ClaudeAiClient` | 73.2% | 48 |
+| `PortOneBillingClient` | 66.5% | 39 |
+| `MembershipRenewalFacade` | 66.7% | 32 |
+| `MartRejectionFacade` | 58.8% | 20 |
+| `BillingKeyDeletionProcessor` | 69.5% | 19 |
