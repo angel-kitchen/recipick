@@ -9,6 +9,7 @@ import PriceTag from '../components/PriceTag';
 import MembershipInfoModal from '../components/MembershipInfoModal';
 import Pictogram from '../components/Pictogram';
 import KoreaMap from '../components/KoreaMap';
+import { isDiscountEnded } from '../discount';
 import { CUISINE, DIFFICULTY } from '../labels';
 
 // 띠 한 장마다 글·링크·그림(BandScenes)이 있고 바탕색은 모두 같다
@@ -282,7 +283,8 @@ function FreshProducts() {
   useEffect(() => {
     let ignore = false;
     api
-      .get('/api/products', { onSale: true, sort: 'discountEndAt,asc', page: 0, size: 4 })
+      // 품절·판매 중지 상품을 거르고도 4개가 남도록 넉넉히 받는다
+      .get('/api/products', { onSale: true, sort: 'discountEndAt,asc', page: 0, size: 8 })
       .then((data) => !ignore && setProducts(data.content))
       .catch(() => !ignore && setProducts([]));
     return () => {
@@ -290,7 +292,11 @@ function FreshProducts() {
     };
   }, []);
 
-  if (products.length === 0) return null;
+  // 서버의 검색 결과 캐시 때문에 방금 끝난 할인이 올 수 있어, 끝난 할인은 보여 주지 않는다
+  const deals = products
+    .filter((product) => !product.soldOut && product.status !== 'STOPPED' && !isDiscountEnded(product))
+    .slice(0, 4);
+  if (deals.length === 0) return null;
   return (
     <section className="hm-section">
       <div className="container">
@@ -304,7 +310,7 @@ function FreshProducts() {
           </Link>
         </div>
         <div className="hm-grid">
-          {products.map((product) => (
+          {deals.map((product) => (
             <Link key={product.productId} to={`/products/${product.productId}`} className="hm-card">
               <div className="hm-card__image">
                 {product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <ImagePlaceholder />}
