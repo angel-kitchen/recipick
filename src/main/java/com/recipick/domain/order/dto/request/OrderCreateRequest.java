@@ -16,7 +16,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 // 법정동 코드 형식 오류는 요구사항상 ORDER-006으로 응답해야 해서 여기서 검증하지 않고 Facade가 검증한다.
-// 사용 포인트는 필드를 보내지 않으면 0이다. 상품금액 초과 여부는 재고를 잠근 뒤의 가격으로만 알 수 있어 OrderAmount가 검증한다
+// 사용 포인트는 필드를 보내지 않으면 0이다. 상품금액 초과 여부는 재고를 잠근 뒤의 가격으로만 알 수 있어 OrderAmount가 검증한다.
+// expectedPayAmount는 주문서에서 확인한 결제금액으로, 서버가 계산한 금액과 비교하는 데만 쓴다. 보내지 않으면 비교하지 않는다
 public record OrderCreateRequest(
     @NotEmpty @Size(max = 100) List<@NotNull Long> cartItemIds,
     @NotBlank @Size(max = 50) String receiverName,
@@ -24,8 +25,15 @@ public record OrderCreateRequest(
     @NotBlank @Size(max = 255) String address,
     @Size(max = 255) String detailAddress,
     String legalDongCode,
-    @PositiveOrZero long usedPoint
+    @PositiveOrZero long usedPoint,
+    @PositiveOrZero Long expectedPayAmount
 ) {
+
+    // 확인한 금액을 보내지 않는 요청. 금액 대조 전부터 있던 호출부가 그대로 비교 없이 주문을 만든다
+    public OrderCreateRequest(List<Long> cartItemIds, String receiverName, String receiverPhone, String address,
+                              String detailAddress, String legalDongCode, long usedPoint) {
+        this(cartItemIds, receiverName, receiverPhone, address, detailAddress, legalDongCode, usedPoint, null);
+    }
 
     // 포인트를 쓰지 않는 요청. 포인트 연동 전부터 있던 호출부가 그대로 0P 주문을 만든다
     public OrderCreateRequest(List<Long> cartItemIds, String receiverName, String receiverPhone, String address,
@@ -33,7 +41,7 @@ public record OrderCreateRequest(
         this(cartItemIds, receiverName, receiverPhone, address, detailAddress, legalDongCode, 0L);
     }
 
-    // 금액은 서버가 계산하므로 넣지 않고, 항목 순서만 다른 재시도는 같은 요청으로 본다
+    // 금액은 서버가 계산하므로 확인한 금액(expectedPayAmount)도 넣지 않고, 항목 순서만 다른 재시도는 같은 요청으로 본다
     public String requestHash() {
         String sortedCartItemIds = cartItemIds.stream()
             .sorted()

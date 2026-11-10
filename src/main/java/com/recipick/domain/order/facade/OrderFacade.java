@@ -106,6 +106,11 @@ public class OrderFacade {
         // 상품 판매 상태·재고 검증과 차감을 잠근 상태에서 한 번에 하고, 그때의 가격으로 금액을 계산한다
         List<ProductSummary> products = productStockService.decreaseStocks(martId, quantities);
         List<OrderItem> items = orderService.completePendingOrder(order, products, quantities, membershipActive);
+        // 주문서에서 확인한 금액과 달라졌으면 결제를 만들기 전에 거절해 다시 확인받는다.
+        // 예약한 포인트·차감한 재고·저장한 주문은 이 예외로 함께 롤백된다
+        if (request.expectedPayAmount() != null && !request.expectedPayAmount().equals(order.getPayAmount())) {
+            throw new BusinessException(OrderErrorCode.ORDER_AMOUNT_CHANGED);
+        }
         // 기존 자산 잠금 순서 POINT → STOCK은 그대로 지킨다. 적립 예정 건은 현재 가격으로 정한 상품금액이 있어야 만들 수 있어
         // 재고 잠금 뒤에 INSERT한다. 드문 gap-lock 경합은 DB가 한 트랜잭션을 롤백하고 COMMON-010 재시도로 처리된다
         pointCommandService.createPendingEarning(
