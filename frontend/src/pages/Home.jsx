@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import BandScene from '../components/BandScenes';
-import DealsStrip from '../components/DealsStrip';
 import Icon from '../components/Icon';
 import ImagePlaceholder from '../components/ImagePlaceholder';
+import PriceTag from '../components/PriceTag';
 import MembershipInfoModal from '../components/MembershipInfoModal';
 import Pictogram from '../components/Pictogram';
 import KoreaMap from '../components/KoreaMap';
-import { CUISINE, DIFFICULTY, formatWon } from '../labels';
+import { CUISINE, DIFFICULTY } from '../labels';
 
 // 띠 한 장마다 글·링크·그림(BandScenes)이 있고 바탕색은 모두 같다
 const BAND_SLIDES = [
@@ -282,7 +282,7 @@ function FreshProducts() {
   useEffect(() => {
     let ignore = false;
     api
-      .get('/api/products', { page: 0, size: 4 })
+      .get('/api/products', { onSale: true, sort: 'discountEndAt,asc', page: 0, size: 4 })
       .then((data) => !ignore && setProducts(data.content))
       .catch(() => !ignore && setProducts([]));
     return () => {
@@ -299,8 +299,8 @@ function FreshProducts() {
             <p className="hm-eyebrow">FRESH TODAY</p>
             <h2 className="hm-title">오늘의 식재료</h2>
           </div>
-          <Link to="/products" className="hm-more">
-            장보기 바로가기 →
+          <Link to="/products?onSale=true" className="hm-more">
+            할인 상품 더 보기 →
           </Link>
         </div>
         <div className="hm-grid">
@@ -311,7 +311,9 @@ function FreshProducts() {
               </div>
               <span className="hm-card__meta">{product.brand}</span>
               <strong className="hm-card__name">{product.name}</strong>
-              <span className="hm-card__price">{formatWon(product.price)}</span>
+              <span className="hm-card__price">
+                <PriceTag price={product.price} salePrice={product.salePrice} discountRate={product.discountRate} />
+              </span>
             </Link>
           ))}
         </div>
@@ -349,14 +351,6 @@ export default function Home() {
       {member && <WeeklyRecipes />}
 
       {member && <PopularRanking />}
-
-      {member && (
-        <section className="hm-section">
-          <div className="container">
-            <DealsStrip limit={8} moreTo="/products?onSale=true" />
-          </div>
-        </section>
-      )}
 
       {!isActiveMember && (
         <section className="hm-apple" aria-labelledby="hm-apple-title">
