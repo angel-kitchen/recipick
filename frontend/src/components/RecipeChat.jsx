@@ -313,7 +313,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
       </div>
       <div className="chat-composer">
         <button type="button" className="chat-more" aria-expanded={detailOpen} onClick={onToggleDetail}>
-          {detailOpen ? '자세히 찾기 닫기' : '자세히 찾기 · 메뉴 / 가진 재료 / 식단'}
+          {detailOpen ? '자세히 찾기 닫기' : '자세히 찾기 · 메뉴 / 냉장고 파먹기 / 식단'}
         </button>
         {/* 자세히 찾기 안에도 입력칸이 있어서, 펼친 동안은 이 입력칸을 숨겨 입력칸이 두 개 보이지 않게 한다 */}
         {!detailOpen && (
