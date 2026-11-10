@@ -459,7 +459,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 14px 6px;
+  padding: 14px;
 }
 
 .hm-rank__no {
@@ -487,16 +487,6 @@
 .hm-rank__info small {
   font-size: 13px;
   color: rgba(29, 29, 31, 0.65);
-}
-
-.hm-rank__likes {
-  margin: 6px 14px 14px;
-  padding: 7px 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--white);
-  font-size: 14px;
-  text-align: center;
 }
 
 .hm-rank__next {

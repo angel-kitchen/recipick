@@ -162,14 +162,9 @@ function PopularRanking() {
                       <span className="hm-rank__no">{i + 1}</span>
                       <span className="hm-rank__info">
                         <strong>{recipe.name}</strong>
-                        <small>
-                          {[CUISINE[recipe.cuisineType], recipe.cookingTimeMinutes ? `${recipe.cookingTimeMinutes}분` : null]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </small>
+                        <small>{CUISINE[recipe.cuisineType]}</small>
                       </span>
                     </span>
-                    <span className="hm-rank__likes">찜 {recipe.bookmarkCount.toLocaleString('ko-KR')}</span>
                   </Link>
                 </li>
               ))}
