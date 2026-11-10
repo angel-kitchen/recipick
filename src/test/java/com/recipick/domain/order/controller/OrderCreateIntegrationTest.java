@@ -323,6 +323,59 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("주문서를 본 뒤 가격이 바뀌면 확인한 금액과 달라 ORDER-011로 거절하고 주문·결제·재고 변경을 모두 롤백한다")
+    void createOrder_amountChanged() throws Exception {
+        // given — 주문서에서는 1,500원 2개 + 배송비 3,000원 = 6,000원을 봤고, 그 뒤 가격이 1,800원으로 올랐다
+        Product zucchini = product(MART_ID, "애호박", 1500L, 10);
+        CartItem cartItem = cartItem(zucchini, 2);
+        zucchini.changePrice(1800L);
+        productRepository.save(zucchini);
+
+        // when
+        MockHttpServletResponse response = createOrder("key-1", request(List.of(cartItem.getId()), 6000L));
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(code(response)).isEqualTo("ORDER-011");
+        assertThat(orderRepository.findIdsByMemberId(member.getId())).isEmpty();
+        assertThat(stockOf(zucchini)).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("주문서를 본 뒤 가격이 내려도 확인한 금액과 다르면 ORDER-011로 거절한다")
+    void createOrder_amountChangedByPriceDrop() throws Exception {
+        // given
+        Product zucchini = product(MART_ID, "애호박", 1500L, 10);
+        CartItem cartItem = cartItem(zucchini, 2);
+        zucchini.changePrice(1200L);
+        productRepository.save(zucchini);
+
+        // when
+        MockHttpServletResponse response = createOrder("key-1", request(List.of(cartItem.getId()), 6000L));
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(code(response)).isEqualTo("ORDER-011");
+        assertThat(stockOf(zucchini)).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("주문서에서 확인한 금액이 서버가 계산한 결제금액과 같으면 주문을 만든다")
+    void createOrder_amountMatches() throws Exception {
+        // given
+        Product zucchini = product(MART_ID, "애호박", 1500L, 10);
+        CartItem cartItem = cartItem(zucchini, 2);
+
+        // when
+        MockHttpServletResponse response = createOrder("key-1", request(List.of(cartItem.getId()), 6000L));
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(201);
+        assertThat(data(response).path("amount").asLong()).isEqualTo(6000L);
+        assertThat(stockOf(zucchini)).isEqualTo(8);
+    }
+
+    @Test
     @DisplayName("판매 중지 상품이 있으면 PRODUCT-003으로 거절한다")
     void createOrder_productNotSelling() throws Exception {
         // given
@@ -362,6 +415,11 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
     private OrderCreateRequest request(List<Long> cartItemIds) {
         return new OrderCreateRequest(cartItemIds, "홍길동", "01012345678", "서울 종로구 삼청로 1", "101호",
             MART_LEGAL_DONG_CODE);
+    }
+
+    private OrderCreateRequest request(List<Long> cartItemIds, long expectedPayAmount) {
+        return new OrderCreateRequest(cartItemIds, "홍길동", "01012345678", "서울 종로구 삼청로 1", "101호",
+            MART_LEGAL_DONG_CODE, 0L, expectedPayAmount);
     }
 
     private MockHttpServletResponse createOrder(String idempotencyKey, OrderCreateRequest request) throws Exception {

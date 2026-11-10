@@ -1,6 +1,7 @@
 package com.recipick.domain.order.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -18,6 +19,7 @@ import com.recipick.domain.order.entity.CartItem;
 import com.recipick.domain.order.entity.Order;
 import com.recipick.domain.order.entity.OrderItem;
 import com.recipick.domain.order.entity.enums.CancelReasonCode;
+import com.recipick.domain.order.exception.OrderErrorCode;
 import com.recipick.domain.order.service.CartService;
 import com.recipick.domain.order.service.OrderService;
 import com.recipick.domain.payment.dto.PaymentCreated;
@@ -35,6 +37,7 @@ import com.recipick.domain.product.service.MartService;
 import com.recipick.domain.product.service.ProductService;
 import com.recipick.domain.product.service.ProductStockService;
 import com.recipick.global.common.SaleUnit;
+import com.recipick.global.exception.BusinessException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -183,6 +186,48 @@ class OrderFacadeTest {
         inOrder.verify(pointCommandService).createPendingEarning(MEMBER_ID, ORDER_ID, 40_000L, 40_000L, POINT_RATE);
         inOrder.verify(pointsOnlyPaymentProcessor).complete(ORDER_ID);
         verify(paymentCommandService, never()).create(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("주문서에서 확인한 금액이 확정한 결제금액과 다르면 ORDER-011로 거절하고 적립 예정·결제를 만들지 않는다")
+    void createOrder_amountChanged() {
+        // given — 주문서에서는 2,000원 상품 2개(7,000원)를 봤지만 주문 시점 가격은 2,500원이라 결제금액이 8,000원이다
+        OrderCreateRequest request = new OrderCreateRequest(List.of(CART_ITEM_ID), "홍길동", "01012345678",
+            "서울 종로구 삼청로 1", "101호", LEGAL_DONG_CODE, 0L, 7_000L);
+        List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
+        List<ProductSummary> products = List.of(product(2_500L));
+        Order order = pendingOrder(5_000L, 3_000L, 0L, 8_000L, POINT_RATE);
+        givenOrderCreation(request, quantities, products, order, Optional.empty(), POINT_RATE);
+
+        // when & then
+        assertThatThrownBy(() -> orderFacade.createOrder(MEMBER_ID, IDEMPOTENCY_KEY, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting("errorCode")
+            .isEqualTo(OrderErrorCode.ORDER_AMOUNT_CHANGED);
+        verify(pointCommandService, never()).createPendingEarning(anyLong(), anyLong(), anyLong(), anyLong(), any());
+        verify(paymentCommandService, never()).create(anyLong(), anyLong());
+        verify(pointsOnlyPaymentProcessor, never()).complete(any());
+    }
+
+    @Test
+    @DisplayName("주문서에서 확인한 금액이 확정한 결제금액과 같으면 주문을 만든다")
+    void createOrder_amountMatches() {
+        // given
+        OrderCreateRequest request = new OrderCreateRequest(List.of(CART_ITEM_ID), "홍길동", "01012345678",
+            "서울 종로구 삼청로 1", "101호", LEGAL_DONG_CODE, 0L, 8_000L);
+        List<StockQuantity> quantities = List.of(new StockQuantity(PRODUCT_ID, 2));
+        List<ProductSummary> products = List.of(product(2_500L));
+        Order order = pendingOrder(5_000L, 3_000L, 0L, 8_000L, POINT_RATE);
+        givenOrderCreation(request, quantities, products, order, Optional.empty(), POINT_RATE);
+        given(paymentCommandService.create(ORDER_ID, 8_000L)).willReturn(
+            new PaymentCreated(30L, "pay_test", 8_000L, LocalDateTime.of(2026, 10, 29, 12, 5)));
+
+        // when
+        OrderCreateResult result = orderFacade.createOrder(MEMBER_ID, IDEMPOTENCY_KEY, request);
+
+        // then
+        assertThat(result.created()).isTrue();
+        assertThat(result.response().amount()).isEqualTo(8_000L);
     }
 
     @Test

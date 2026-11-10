@@ -330,6 +330,28 @@ class OrderCreatePointIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("포인트 예약·재고 차감 뒤 확인한 금액이 결제금액과 다르면 ORDER-011로 거절하고 주문·포인트·재고를 모두 롤백한다")
+    void rollbackEverythingWhenPayAmountChanged() throws Exception {
+        // given — 상품 5,000 + 배송비 3,000 − 3,000P = 5,000원인데 주문서에서는 4,000원을 확인했다
+        givenHeldPoint();
+        Product product = product(UNIT_PRICE, STOCK);
+        CartItem cartItem = cartItem(product, ORDER_QUANTITY);
+        OrderCreateRequest request = new OrderCreateRequest(List.of(cartItem.getId()), "홍길동", "01012345678",
+            "서울 종로구 삼청로 1", "101호", MART_LEGAL_DONG_CODE, 3_000L, 4_000L);
+
+        // when
+        MockHttpServletResponse response = createOrder("key-1", request);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(code(response)).isEqualTo("ORDER-011");
+        assertNothingCreated();
+        assertThat(balance()).isEqualTo(HELD_POINT);
+        assertThat(lotRemaining()).isEqualTo(HELD_POINT);
+        assertThat(stockOf(product)).isEqualTo(STOCK);
+    }
+
+    @Test
     @DisplayName("같은 키로 같은 사용 포인트를 다시 보내면 기존 주문을 200으로 돌려주고 포인트를 다시 예약·적립하지 않는다")
     void sameKeyRetryDoesNotReservePointAgain() throws Exception {
         // given

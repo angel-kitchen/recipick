@@ -603,7 +603,8 @@
   "address": "서울특별시 강남구 테헤란로 10",
   "detailAddress": "101동 1001호",
   "legalDongCode": "1168010100",
-  "usedPoint": 1000
+  "usedPoint": 1000,
+  "expectedPayAmount": 6000
 }
 ```
 
@@ -616,6 +617,7 @@
 | detailAddress | String | X | 상세 주소, 최대 255자 |
 | legalDongCode | String | O | 배송지 법정동 코드, 숫자 10자리 |
 | usedPoint | Long | X | 사용할 포인트(원 단위, 0 이상). 생략하면 0. 상품 합계를 넘을 수 없고 배송비에는 쓸 수 없음 |
+| expectedPayAmount | Long | X | 주문서에서 확인한 결제 금액(미리보기 payAmount − usedPoint, 0 이상). 서버가 계산한 결제 금액과 다르면 ORDER-011. 생략하면 비교하지 않음 |
 
 ### Response `201 Created` (신규 생성) / `200 OK` (같은 Idempotency-Key 재시도)
 
@@ -675,6 +677,7 @@
 | 409 | CART-006 (CART_HAS_PREVIOUS_MART_ITEMS) | 선택 항목에 이전 마트 상품이 있음 |
 | 409 | PRODUCT-003 (PRODUCT_NOT_SELLING) | 판매 중이 아닌 상품이 있음 |
 | 409 | STOCK-001 (INSUFFICIENT_STOCK) | 재고가 부족한 상품이 있음 |
+| 409 | ORDER-011 (ORDER_AMOUNT_CHANGED) | expectedPayAmount가 재고를 잠근 시점 가격으로 계산한 결제 금액과 다름(가격 · 장바구니 수량 · 멤버십 변경). 금액이 내려간 경우 포함 |
 | 409 | POINT-001 (INSUFFICIENT_POINT_BALANCE) | 사용 가능한 포인트가 usedPoint보다 적음. 포인트 예약이 금액 확정보다 먼저라 상품 합계 초과(ORDER-019)보다 먼저 판정 |
 | 409 | COMMON-006 (DUPLICATE_REQUEST_IN_PROGRESS) | 같은 Idempotency-Key의 첫 요청이 아직 처리 중 |
 | 409 | COMMON-011 (IDEMPOTENCY_KEY_PAYLOAD_MISMATCH) | 같은 Idempotency-Key에 다른 요청 본문 |
@@ -693,11 +696,12 @@
   8. 주문 행 저장(PENDING_PAYMENT, martStatus NONE, pending_member_id = 회원 ID) 후 즉시 flush. UNIQUE 충돌이면 멱등 키 충돌은 COMMON-006, 그 밖은 ORDER-003
   9. 사용 포인트 예약(잔액 부족이면 POINT-001). 잠금 순서 MEMBER → ORDERS → MEMBER_POINT → POINT_EARNING → 재고를 지키기 위해 재고보다 먼저 예약
   10. 상품 ID 오름차순으로 비관적 락을 잡고 삭제 · 마트(PRODUCT-001), 판매 상태(PRODUCT-003), 재고(STOCK-001)를 검증한 뒤 실제 재고를 즉시 차감(예약 재고 없음)
-  11. 잠근 시점의 상품명 · 단가 · 판매 단위 · 수량 · 줄 금액을 ORDER_ITEM에 스냅샷으로 저장하고 금액 확정. 배송비는 포인트 차감 전 상품 합계가 무료배송 기준(멤버십 이용 중 15,000원, 아니면 40,000원) 이상이면 0, 아니면 3,000원. usedPoint가 상품 합계를 넘으면 ORDER-019
+  11. 잠근 시점의 상품명 · 단가 · 판매 단위 · 수량 · 줄 금액을 ORDER_ITEM에 스냅샷으로 저장하고 금액 확정. 배송비는 포인트 차감 전 상품 합계가 무료배송 기준(멤버십 이용 중 15,000원, 아니면 40,000원) 이상이면 0, 아니면 3,000원. usedPoint가 상품 합계를 넘으면 ORDER-019. expectedPayAmount가 있고 확정한 결제 금액과 다르면 ORDER-011
   12. 적립 예정 포인트 생성(적립률은 주문 시점 멤버십 기준으로 주문에 저장)
   13. 결제 행 생성(IN_PROGRESS, 만료 = 생성 + 5분). 결제 금액이 0원이면 PG 없이 결제 완료(POINTS_ONLY) · 주문 PAID · 사용 포인트 확정까지 이 트랜잭션에서 처리
 - 하나라도 실패하면 주문 · 항목 · 재고 · 포인트 예약 · 결제가 모두 롤백되고 Idempotency-Key도 저장되지 않습니다. 같은 키로 재시도하면 처음부터 다시 검증합니다.
-- 금액은 서버가 계산하며 클라이언트가 보낸 금액을 받지 않습니다. 미리보기 금액과 달라졌는지는 클라이언트가 응답 금액으로 확인합니다.
+- 금액은 서버가 계산합니다. expectedPayAmount는 주문서에서 확인한 금액과 달라졌는지 비교하는 데만 쓰고 주문에 저장하지 않습니다. 다르면 금액이 오르든 내리든 ORDER-011로 거절하며, 클라이언트는 미리보기를 다시 불러와 바뀐 금액을 확인받습니다.
+- expectedPayAmount는 request_hash에 넣지 않습니다. 같은 키 재시도는 금액을 비교하지 않고 기존 주문을 반환합니다.
 - 미리보기와 달리 구매 불가 상품이 하나라도 있으면 제외하지 않고 거절합니다. 사용자가 확인하지 않은 금액으로 결제가 만들어지지 않게 하기 위함입니다.
 - request_hash는 정렬한 cartItemIds, receiverName, receiverPhone, address, detailAddress, legalDongCode와 usedPoint(0보다 클 때만)를 각 값 앞에 `길이:`를 붙여 이은 문자열의 SHA-256(hex 64자)입니다. 항목 순서만 다른 재시도는 같은 요청으로, 구분자가 섞인 서로 다른 값은 다른 요청으로 봅니다.
 - 포인트를 쓰지 않는 요청은 usedPoint를 해시에 넣지 않아 포인트 도입 전과 같은 해시가 나옵니다. 배포 직전에 만든 결제 대기 주문의 같은 키 재시도가 COMMON-011이 되지 않게 하기 위함입니다. 같은 키로 usedPoint만 바꾸면 다른 결제 요청이라 COMMON-011입니다.
@@ -1255,7 +1259,7 @@ TX1에서 결제·주문을 잠그고 거절 상태·ADMIN 환불 접수·`ORDER
 | ORDER-008 | 400 | 배송 가능한 지역이 아닙니다. | 주문 생성 |
 | ORDER-009 | 409 | 주문 가능한 상품이 없습니다. | 정의만(구매 불가 상품은 PRODUCT-001 · PRODUCT-003 · STOCK-001로 응답) |
 | ORDER-010 | 409 | 상품 재고가 부족하여 주문을 생성할 수 없습니다. | 정의만(STOCK-001로 응답) |
-| ORDER-011 | 409 | 주문 금액이 변경되었습니다. 다시 확인해 주세요. | 정의만(클라이언트 금액을 받지 않음) |
+| ORDER-011 | 409 | 주문 금액이 변경되었습니다. 다시 확인해 주세요. | 주문 생성 |
 | ORDER-012 | 404 | 주문을 찾을 수 없습니다. | 주문 상세, 관리자 주문 상세, 주문 수락, 주문 거절, 배송 상태 변경 |
 | ORDER-013 | 409 | 현재 취소할 수 없는 주문입니다. | 결제 도메인의 회원 취소 흐름(엔티티 방어) |
 | ORDER-014 | 409 | 현재 수락할 수 없는 주문입니다. | 주문 수락 |
