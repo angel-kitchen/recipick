@@ -128,7 +128,7 @@ class OrderCreateMembershipRateIntegrationTest extends IntegrationTestSupport {
             .passwordHash("hash")
             .martId(MART_ID)
             .build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         now = LocalDateTime.now(clock);
     }
 
@@ -384,7 +384,7 @@ class OrderCreateMembershipRateIntegrationTest extends IntegrationTestSupport {
     }
 
     private MockHttpServletResponse changeDeliveryStatus(long orderId, String status) throws Exception {
-        String adminToken = tokens.createTokens(
+        String adminToken = testAdminTokens(
             new AuthPrincipal(SubjectType.ADMIN, admin.getId(), "MART_ADMIN", MART_ID)).accessToken();
         MockHttpServletResponse response = mockMvc.perform(
                 patch("/api/admin/orders/{orderId}/delivery-status", orderId)

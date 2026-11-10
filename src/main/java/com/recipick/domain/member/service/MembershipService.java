@@ -35,7 +35,8 @@ public class MembershipService {
         Optional<Membership> membership = findActive(memberId, now);
         MembershipMeResponse.Current current = membership.map(value -> new MembershipMeResponse.Current(
                 value.getId(), value.getType().name(), value.getSource().name(), value.getStartAt(), value.getEndAt(),
-                value.isAutoRenew(), value.getBillingAnchorDate(), value.getCancelReservedAt())).orElse(null);
+                value.isAutoRenew(), value.getBillingAnchorDate(), value.getCancelReservedAt(),
+                value.getGraceEndAt(), value.effectiveEnd(), !now.isBefore(value.getEndAt()))).orElse(null);
         MembershipMeResponse.Pending pending = current == null
                 ? membershipRepository.findPendingMemberships(memberId, now, PageRequest.of(0, 1)).stream()
                         .findFirst()
@@ -68,7 +69,8 @@ public class MembershipService {
 
     public MembershipSummary getSummary(Long memberId, LocalDateTime now) {
         return findActive(memberId, now)
-                .map(membership -> new MembershipSummary(true, membership.getType().name(), membership.getEndAt()))
+                .map(membership -> new MembershipSummary(true, membership.getType().name(), membership.getEndAt(),
+                        membership.effectiveEnd(), !now.isBefore(membership.getEndAt())))
                 .orElseGet(() -> new MembershipSummary(false, null, null));
     }
 

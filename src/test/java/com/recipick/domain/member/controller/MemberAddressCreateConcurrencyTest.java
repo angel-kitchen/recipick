@@ -66,7 +66,7 @@ class MemberAddressCreateConcurrencyTest extends IntegrationTestSupport {
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("동시 등록 검증")
                 .passwordHash("test-password-hash").build());
         memberId = member.getId();
-        token = tokens.createMemberTokens(memberId).accessToken();
+        token = testMemberTokens(memberId).accessToken();
     }
 
     @AfterEach

@@ -25,8 +25,10 @@
 - 로그인 회원은 `@LoginMember Long memberId`, 관리자는 `@LoginAdmin Long adminId`
 - 회원 토큰과 관리자 토큰은 서로의 API를 호출할 수 없다.
 - 회원 토큰 인증·로그인·재발급에서 DB 탈퇴 상태를 확인한다. `global/security`의 인터페이스를 member가 구현하며, Redis 정리 실패 시에도 DB 상태로 차단한다.
-- 비밀번호 변경은 모든 기기 리프레시 토큰을 폐기하되 기존 액세스 토큰은 만료까지 유효하고, 탈퇴는 기존 액세스 토큰으로도 회원 API를 이용할 수 없다.
-- 회원 재발급은 JWT의 refreshVersion과 MEMBER.refresh_token_version을 비교한다(기존 토큰 누락은 0). 비밀번호 해시·버전은 같은 DB 트랜잭션에서 갱신하고, Redis 키 정리는 잠금 밖에서 한다. 액세스 토큰에는 버전 검사를 적용하지 않는다.
+- 비밀번호 변경은 회원 버전으로 이전 액세스·리프레시 모두 차단한다. 로그아웃은 해당 sid만 폐기하고 업무 인증은 DB 상태·버전 및 Redis 세션을 확인한다.
+- 회원 액세스 tokenVersion·리프레시 refreshVersion은 MEMBER.refresh_token_version과 비교한다. 기존 스키마는 재로그인하며 최초 로그인 14일의 sessionExpiresAt을 회전 시 유지한다.
+- 회원·관리자는 별도 리프레시 Cookie·재발급·로그아웃 경로를 쓴다. Cookie 인증 POST에는 CSRF를 적용하고 Bearer 업무 API·웹훅과 범위를 분리한다. [상세](api/auth-session-hardening.md)
+- 관리자 인증은 현재 활성 상태·역할·소속 마트를 확인한다. 비밀번호 변경·탈퇴 재인증 실패 제한은 일반 로그인과 분리한다.
 - MART_ADMIN은 요청한 마트가 토큰의 `martId`와 같은지 서버에서 검사한다.
 - SUPER_ADMIN 전용 API는 `@PreAuthorize("hasRole('SUPER_ADMIN')")`
 - 다른 회원 소유 리소스는 403 대신 그 도메인의 404 코드로 응답한다.

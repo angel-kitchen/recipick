@@ -405,7 +405,7 @@ class MembershipWebhookAdminIntegrationTest extends MembershipRenewalFlowSupport
         // given
         Long membershipId = activeMembership();
         Long attemptId = renewalProcessor.accept(member.getId(), membershipId).attemptId();
-        String memberToken = tokens.createTokens(new AuthPrincipal(SubjectType.MEMBER, member.getId(), null, null))
+        String memberToken = testAdminTokens(new AuthPrincipal(SubjectType.MEMBER, member.getId(), null, null))
             .accessToken();
 
         // when
@@ -447,7 +447,7 @@ class MembershipWebhookAdminIntegrationTest extends MembershipRenewalFlowSupport
     }
 
     private String superAdminToken() {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, superAdminId, "SUPER_ADMIN", null))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, superAdminId, "SUPER_ADMIN", null))
             .accessToken();
     }
 

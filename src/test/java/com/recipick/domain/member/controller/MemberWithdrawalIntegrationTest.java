@@ -87,6 +87,9 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
     Product product;
     String access;
     String hash;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.recipick.domain.member.service.SensitivePasswordGuard passwordGuard;
+
     final String password = "Original1!";
 
     @BeforeEach
@@ -95,7 +98,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(suffix + "@t.dev").phone(suffix.substring(0, 20))
                 .name("테스트").passwordHash(encoder.encode(password)).build());
         hash = hasher.hash(member.getPhone());
-        access = tokens.createMemberTokens(member.getId()).accessToken();
+        access = testMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach
@@ -127,7 +130,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
             }
         });
         return new MemberWithdrawalProcessor(memberService, orders, carts, memberships, trialBlocks, withdrawal,
-                factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
+                factory.getBeanProvider(WithdrawalSettlementChecker.class), passwordGuard, clock);
     }
 
     private void withdraw(WithdrawalSettlementChecker checker) {
@@ -262,7 +265,20 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
             var adding = executor.submit(() ->
                     cartFacade.addCartItem(member.getId(), new CartItemAddRequest(product.getId(), 1)));
             // 담기가 회원 잠금에서 기다리는지 본다. 대기 시간 초과(5초)보다 짧게 둔다
-            Thread.sleep(500);
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
+            boolean waiting = false;
+            while (System.nanoTime() < deadline) {
+                Integer count = jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                                + "WHERE ID <> CONNECTION_ID() AND INFO LIKE '%from member %for update%'",
+                        Integer.class);
+                if (count != null && count > 0) {
+                    waiting = true;
+                    break;
+                }
+                Thread.sleep(20);
+            }
+            assertThat(waiting).as("담기 요청이 실제 회원 FOR UPDATE에서 대기해야 한다").isTrue();
             assertThat(adding.isDone()).isFalse();
             release.countDown();
             withdrawing.get(15, java.util.concurrent.TimeUnit.SECONDS);
@@ -403,7 +419,7 @@ class MemberWithdrawalIntegrationTest extends IntegrationTestSupport {
         assertThat(unchanged.getRefreshTokenVersion()).isEqualTo(member.getRefreshTokenVersion());
         assertThat(unchanged.getEmail()).isEqualTo(member.getEmail());
         assertThat(sessions.findSessionKeys("MEMBER", member.getId())).containsExactlyElementsOf(beforeSessions);
-        assertThat(response.getHeaders("Set-Cookie")).isEmpty();
+        assertThat(response.getHeaders("Set-Cookie").stream().filter(value -> value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).isEmpty();
     }
 
     @ParameterizedTest

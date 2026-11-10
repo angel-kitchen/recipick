@@ -46,7 +46,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         throws ServletException, IOException {
 
         String uri = request.getRequestURI();
-        boolean auth = uri.startsWith(AUTH_PATH_PREFIX) || uri.startsWith(ADMIN_AUTH_PATH_PREFIX);
+        // 보호 정보 조회는 인증 시도 자체가 아니므로 일반 한도를 사용한다.
+        boolean auth = !uri.equals("/api/auth/csrf")
+            && (uri.startsWith(AUTH_PATH_PREFIX) || uri.startsWith(ADMIN_AUTH_PATH_PREFIX));
         String policy = auth ? "auth" : "api";
         int limit = auth ? properties.authLimit() : properties.apiLimit();
         String key = "recipick:rate:" + policy + ":" + request.getRemoteAddr();

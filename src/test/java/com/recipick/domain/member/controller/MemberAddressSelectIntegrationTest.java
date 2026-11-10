@@ -48,7 +48,7 @@ class MemberAddressSelectIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@as.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("배송지 선택 검증")
                 .passwordHash("test-password-hash").build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @Test
@@ -146,7 +146,7 @@ class MemberAddressSelectIntegrationTest extends IntegrationTestSupport {
     void rejectsNonMemberTokens() throws Exception {
         // given
         MemberAddress address = address(member, "1111014000");
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when
         MockHttpServletResponse anonymous = select(address.getId(), null);
@@ -163,7 +163,7 @@ class MemberAddressSelectIntegrationTest extends IntegrationTestSupport {
     void rejectsMissingMember() throws Exception {
         // given
         MemberAddress address = address(member, "1111014000");
-        String missingMember = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+        String missingMember = testMemberTokens(Long.MAX_VALUE).accessToken();
 
         // when
         MockHttpServletResponse response = select(address.getId(), missingMember);

@@ -91,7 +91,7 @@ class OrderDeliveryPointIntegrationTest extends IntegrationTestSupport {
             .martId(MART_ID)
             .active(true)
             .build());
-        adminToken = tokenProvider.createTokens(
+        adminToken = testAdminTokens(
             new AuthPrincipal(SubjectType.ADMIN, admin.getId(), "MART_ADMIN", MART_ID)).accessToken();
     }
 

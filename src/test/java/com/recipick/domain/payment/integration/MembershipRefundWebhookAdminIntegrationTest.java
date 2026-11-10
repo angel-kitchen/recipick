@@ -482,11 +482,11 @@ class MembershipRefundWebhookAdminIntegrationTest extends MembershipRefundFlowSu
         clock.fixAt(DAY_10);
         MembershipRefundResult completed = requestRefund(membershipId, newKey());
         int getsBefore = PORTONE.totalGetCount();
-        String memberToken = tokens.createTokens(new AuthPrincipal(SubjectType.MEMBER, member.getId(), null, null))
+        String memberToken = testAdminTokens(new AuthPrincipal(SubjectType.MEMBER, member.getId(), null, null))
             .accessToken();
         Long martAdminId = admins.saveAndFlush(Admin.builder().loginId(UUID.randomUUID().toString()).name("마트 운영")
             .passwordHash("hash").role(AdminRole.MART_ADMIN).martId(1L).active(true).build()).getId();
-        String martAdminToken = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, martAdminId, "MART_ADMIN", 1L))
+        String martAdminToken = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, martAdminId, "MART_ADMIN", 1L))
             .accessToken();
 
         try {
@@ -613,7 +613,7 @@ class MembershipRefundWebhookAdminIntegrationTest extends MembershipRefundFlowSu
     }
 
     private String superAdminToken() {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, superAdminId, "SUPER_ADMIN", null))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, superAdminId, "SUPER_ADMIN", null))
             .accessToken();
     }
 

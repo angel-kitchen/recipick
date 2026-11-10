@@ -105,7 +105,7 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
         assertThat(claims(refresh).getId()).isNotEqualTo(original.refreshTokenId());
         assertThat(claims(refresh).get("sid", String.class)).isEqualTo(originalSession);
         assertThat(tokens.parseAccessToken(data.path("accessToken").asText()).sessionId()).isEqualTo(originalSession);
-        assertThat(response.getHeader(HttpHeaders.SET_COOKIE))
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null))
                 .contains("HttpOnly", "Secure", "SameSite=Strict", "Path=/api/auth", "Max-Age=1209600");
         assertThat(redis.getExpire(sessionKey())).isBetween(1209590L, 1209600L);
         assertError(reissue(original.refreshToken()), 401, "AUTH-011");
@@ -162,7 +162,7 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
         // when
         MockHttpServletResponse response = mockMvc.perform(post("/api/auth/reissue")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + access)
-                .cookie(new Cookie("refreshToken", original.refreshToken()))).andReturn().getResponse();
+                .cookie(new Cookie("memberRefreshToken", original.refreshToken()))).andReturn().getResponse();
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -222,8 +222,8 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(first.getStatus()).isEqualTo(204);
         assertThat(first.getContentAsString()).isEmpty();
-        assertThat(first.getHeader(HttpHeaders.SET_COOKIE))
-                .contains("refreshToken=;", "Max-Age=0", "Path=/api/auth", "HttpOnly", "Secure", "SameSite=Strict");
+        assertThat(first.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null))
+                .contains("memberRefreshToken=;", "Max-Age=0", "Path=/api/auth", "HttpOnly", "Secure", "SameSite=Strict");
         assertThat(second.getStatus()).isEqualTo(204);
         assertThat(redis.hasKey(sessionKey())).isFalse();
         assertError(reissue(original.refreshToken()), 401, "AUTH-011");
@@ -356,7 +356,7 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("sid 도입 전 발급된 토큰도 재발급하고 이전 액세스·쿠키로 로그아웃할 수 있다")
+    @DisplayName("새 보안 스키마가 없는 기존 토큰은 거절해 재로그인을 요구한다")
     void supportsLegacyTokens() throws Exception {
         // given
         String refreshId = UUID.randomUUID().toString();
@@ -370,10 +370,8 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse loggedOut = logout(legacyAccess, legacyRefresh);
 
         // then
-        assertThat(rotated.getStatus()).isEqualTo(200);
-        assertThat(loggedOut.getStatus()).isEqualTo(204);
-        assertThat(claims(refreshCookie(rotated)).get("sid", String.class)).isEqualTo(refreshId);
-        assertError(reissue(refreshCookie(rotated)), 401, "AUTH-011");
+        assertError(rotated, 401, "AUTH-011");
+        assertError(loggedOut, 401, "AUTH-002");
     }
 
     @Test
@@ -443,7 +441,7 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
     }
 
     private JwtTokenPair startSession(AuthPrincipal principal) {
-        JwtTokenPair pair = tokens.createTokens(principal);
+        JwtTokenPair pair = testAdminTokens(principal);
         store.save(principal.type().name(), principal.id(), pair.refreshTokenId(), pair.refreshToken(),
                 pair.refreshExpiration());
         return pair;
@@ -457,28 +455,30 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
     }
 
     private MockHttpServletResponse reissue(String refreshToken) throws Exception {
-        MockHttpServletRequestBuilder request = post("/api/auth/reissue");
+        boolean admin = isAdminToken(refreshToken);
+        MockHttpServletRequestBuilder request = post(admin ? "/api/admin/auth/reissue" : "/api/auth/reissue");
         if (refreshToken != null) {
-            request.cookie(new Cookie("refreshToken", refreshToken));
+            request.cookie(new Cookie(admin ? "adminRefreshToken" : "memberRefreshToken", refreshToken));
         }
         return mockMvc.perform(request).andReturn().getResponse();
     }
 
     private MockHttpServletResponse logout(String accessToken, String refreshToken) throws Exception {
-        MockHttpServletRequestBuilder request = post("/api/auth/logout");
+        boolean admin = isAdminToken(accessToken) || isAdminToken(refreshToken);
+        MockHttpServletRequestBuilder request = post(admin ? "/api/admin/auth/logout" : "/api/auth/logout");
         if (accessToken != null) {
             request.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         }
         if (refreshToken != null) {
-            request.cookie(new Cookie("refreshToken", refreshToken));
+            request.cookie(new Cookie(admin ? "adminRefreshToken" : "memberRefreshToken", refreshToken));
         }
         return mockMvc.perform(request).andReturn().getResponse();
     }
 
     private String refreshCookie(MockHttpServletResponse response) {
-        String cookie = response.getHeader(HttpHeaders.SET_COOKIE);
-        assertThat(cookie).startsWith("refreshToken=");
-        return cookie.substring("refreshToken=".length(), cookie.indexOf(';'));
+        String cookie = response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null);
+        assertThat(cookie).matches("^(memberRefreshToken|adminRefreshToken)=.*");
+        return cookie.substring(cookie.indexOf('=') + 1, cookie.indexOf(';'));
     }
 
     private String sessionKey() {
@@ -498,6 +498,18 @@ class TokenManagementIntegrationTest extends IntegrationTestSupport {
     private void assertError(MockHttpServletResponse response, int status, String code) throws Exception {
         assertThat(response.getStatus()).isEqualTo(status);
         assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo(code);
-        assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
+    }
+
+    private boolean isAdminToken(String token) {
+        if (token == null) {
+            return false;
+        }
+        try {
+            return "ADMIN".equals(mapper.readTree(java.util.Base64.getUrlDecoder()
+                    .decode(token.split("\\.")[1])).path("type").asText());
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 }

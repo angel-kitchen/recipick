@@ -69,7 +69,7 @@ class MembershipGrantConcurrencyTest extends IntegrationTestSupport {
         Admin admin = admins.saveAndFlush(Admin.builder().loginId(UUID.randomUUID().toString())
                 .passwordHash("hash").role(AdminRole.SUPER_ADMIN).active(true).build());
         adminId = admin.getId();
-        token = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, "SUPER_ADMIN", null)).accessToken();
+        token = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, "SUPER_ADMIN", null)).accessToken();
     }
 
     @AfterEach

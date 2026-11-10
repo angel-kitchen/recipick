@@ -90,9 +90,9 @@ class MemberLoginIntegrationTest extends IntegrationTestSupport {
         assertThat(data.path("memberId").asLong()).isEqualTo(member.getId());
         assertThat(data.path("accessTokenExpiresIn").asLong()).isEqualTo(1800);
         assertThat(data.has("refreshToken")).isFalse();
-        String cookie = response.getHeader(HttpHeaders.SET_COOKIE);
+        String cookie = response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null);
         assertThat(cookie).contains("HttpOnly", "Secure", "SameSite=Strict", "Path=/api/auth", "Max-Age=1209600");
-        String refreshToken = cookie.substring("refreshToken=".length(), cookie.indexOf(';'));
+        String refreshToken = cookie.substring("memberRefreshToken=".length(), cookie.indexOf(';'));
         Claims access = claims(data.path("accessToken").asText());
         Claims refresh = claims(refreshToken);
         assertThat(access.getSubject()).isEqualTo(member.getId().toString());
@@ -122,8 +122,8 @@ class MemberLoginIntegrationTest extends IntegrationTestSupport {
         // then
         assertError(missing, 401, "AUTH-007");
         assertError(incorrect, 401, "AUTH-007");
-        assertThat(missing.getHeader(HttpHeaders.SET_COOKIE)).isNull();
-        assertThat(incorrect.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+        assertThat(missing.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
+        assertThat(incorrect.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
     }
 
     @Test

@@ -41,6 +41,10 @@ public class RedisRefreshTokenStore {
         return result == 1;
     }
 
+    public boolean exists(String subjectType, Long subjectId, String sessionId) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key(subjectType, subjectId, sessionId)));
+    }
+
     public void delete(String subjectType, Long subjectId, String sessionId) {
         // 회전 중에도 같은 세션 키를 삭제하므로 로그아웃 뒤 새 토큰이 남지 않는다.
         redisTemplate.delete(key(subjectType, subjectId, sessionId));

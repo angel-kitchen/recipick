@@ -73,7 +73,7 @@ class MemberAddressSelectionOrderIntegrationTest extends IntegrationTestSupport 
         otherAddress = address("하안 저장 주소", "4121010300");
         member.selectAddress(firstAddress, 1L);
         members.flush();
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @Test

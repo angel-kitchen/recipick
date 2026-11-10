@@ -17,7 +17,11 @@ public record MemberMeResponse(Long memberId, String email, String name, String 
         }
     }
 
-    public record MembershipSummary(boolean active, String type, LocalDateTime endAt) {
+    public record MembershipSummary(boolean active, String type, LocalDateTime endAt,
+            LocalDateTime effectiveEndAt, boolean inGrace) {
+        public MembershipSummary(boolean active, String type, LocalDateTime endAt) {
+            this(active, type, endAt, endAt, false);
+        }
     }
 
     @Override

@@ -15,6 +15,8 @@ public final class SecurityRequestMatchers {
             PATHS.matcher(HttpMethod.POST, "/api/auth/login"),
             PATHS.matcher(HttpMethod.POST, "/api/auth/reissue"),
             PATHS.matcher(HttpMethod.POST, "/api/admin/auth/login"),
+            PATHS.matcher(HttpMethod.POST, "/api/admin/auth/reissue"),
+            PATHS.matcher(HttpMethod.GET, "/api/auth/csrf"),
             PATHS.matcher(HttpMethod.POST, "/api/service-area/check"),
             PATHS.matcher("/api/webhooks/**"),
             PATHS.matcher(HttpMethod.GET, "/api/categories"),

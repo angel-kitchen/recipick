@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { api, getAdminSession, logoutAdminSession, restoreSession, setAdminAuthLostHandler, setAdminToken } from '../api/client';
 
 // 관리자 토큰도 회원과 같이 메모리에만 둔다. 새로고침하면 리프레시 쿠키로 다시 받는다.
-// 쿠키가 하나라서 한 브라우저에서 회원·관리자를 함께 로그인하면 나중 로그인이 앞을 덮어쓴다(테스트는 시크릿 창).
+// 회원·관리자는 별도 Cookie·재발급 경로를 사용한다.
 const AdminContext = createContext(null);
 
 export function AdminProvider({ children }) {
@@ -12,7 +12,7 @@ export function AdminProvider({ children }) {
 
   useEffect(() => {
     let ignore = false;
-    restoreSession().finally(() => {
+    restoreSession("ADMIN").catch(() => null).finally(() => {
       if (ignore) return;
       setAdmin(getAdminSession());
       setLoading(false);

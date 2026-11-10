@@ -244,13 +244,13 @@ class PointQueryIntegrationTest extends IntegrationTestSupport {
     }
 
     private MockHttpServletResponse memberGet(String path) throws Exception {
-        String token = tokenProvider.createMemberTokens(member.getId()).accessToken();
+        String token = testMemberTokens(member.getId()).accessToken();
         return mockMvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andReturn().getResponse();
     }
 
     private MockHttpServletResponse adminGet(String path) throws Exception {
-        String token = tokenProvider.createTokens(
+        String token = testAdminTokens(
             new AuthPrincipal(SubjectType.ADMIN, superAdmin.getId(), "SUPER_ADMIN", null)).accessToken();
         return mockMvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andReturn().getResponse();

@@ -1,5 +1,7 @@
 # 인증·인가 선택 근거와 검증 결과
 
+> **2026-11-11 정책 개정:** [인증·세션 보완](../api/auth-session-hardening.md)을 현재 기준으로 사용합니다. 아래 기존 검증 기록의 실행 날짜·건수는 과거 결과입니다.
+
 회원·관리자 API는 액세스 JWT를 Bearer 헤더로 검증하고, 재발급은 HttpOnly 쿠키와 Redis의 리프레시 세션으로 관리합니다.
 회원 토큰은 DB의 탈퇴 여부도 확인합니다. HTTP 세션을 사용하지 않지만, 서버 상태를 전혀 저장하지 않는 구조는 아닙니다.
 
@@ -75,8 +77,8 @@ SecurityContext의 Principal에 넣습니다. 컨트롤러는 `@LoginMember`·`@
 인증 필터는 공개 요청과 CORS preflight를 제외하며, 공개 경로는 잘못된 Bearer 토큰이 있어도 JWT 오류로 막지 않습니다.
 
 회원 토큰은 [MemberStatusChecker](../../src/main/java/com/recipick/global/security/MemberStatusChecker.java)를 통해
-[MemberStatusService](../../src/main/java/com/recipick/domain/member/service/MemberStatusService.java)가 회원 존재·탈퇴 여부를 확인합니다.
-공통 보안이 회원 Repository를 직접 참조하지 않도록 인터페이스로 연결했고, 존재 조회로 회원 엔티티를 선로딩하지 않습니다.
+[MemberStatusService](../../src/main/java/com/recipick/domain/member/service/MemberStatusService.java)가 회원 존재·탈퇴 여부와 액세스 tokenVersion을 DB에서 확인합니다.
+공통 보안이 회원 Repository를 직접 참조하지 않도록 인터페이스로 연결했습니다. 관리자도 현재 활성 상태·역할·마트를 확인하고, 업무 요청은 Redis의 sid 세션 존재까지 확인합니다. JWT만으로 끝나는 무상태 인증은 아닙니다.
 없는 회원과 탈퇴 회원은 인증 단계에서 `401 AUTH-011`로 거절합니다.
 
 ### 3-3. 리프레시 회전과 로그아웃
@@ -94,23 +96,23 @@ SecurityContext의 Principal에 넣습니다. 컨트롤러는 `@LoginMember`·`@
 4. Lua에서 기존 해시가 일치할 때만 새 해시와 TTL로 교체합니다.
 5. 교체 후 회원 상태·버전을 다시 확인하고 성공일 때만 새 토큰과 쿠키를 반환합니다. 이전 토큰 재사용은 `AUTH-011`로 거절합니다.
 
-현재 회전은 새 발급 시각부터 14일로 TTL을 갱신합니다. 별도의 로그인 세션 절대 수명 상한은 두지 않습니다.
+로그인 시 최초 발급한 sessionExpiresAt을 회전 때도 유지합니다. 로그인 세션은 최초 로그인부터 최대 14일이며, 액세스·리프레시와 Redis TTL 모두 남은 세션 수명을 넘지 않습니다.
 이전 리프레시 토큰을 거절하는 동작과, 재사용 시 해당 회원의 모든 로그인 세션을 폐기하는 동작은 구분합니다. 후자는 현재 구현 범위가 아닙니다.
 
 로그아웃은 액세스 토큰의 `sid`로 해당 세션을 삭제하고 쿠키를 만료시킵니다.
 회전 중에도 같은 Redis 키를 사용하므로 로그아웃 뒤 교체된 세션이 남지 않게 합니다.
 현재 세션 폐기가 다른 기기 전체 세션 폐기를 의미하지는 않습니다.
 비밀번호 변경은 별도로 MEMBER.refresh_token_version을 비밀번호 해시와 함께 갱신합니다.
-리프레시 JWT의 refreshVersion과 DB 버전이 다르면 재발급을 거절하고, 기존 액세스 토큰에는 이 버전을 적용하지 않습니다.
-기존 토큰의 버전 누락은 0으로 해석합니다. Redis 키 정리와 경합·실패 정책은 비밀번호 변경 API 문서를 따릅니다.
-기발급 액세스 토큰은 별도 블랙리스트 없이 만료까지 유효하며, 탈퇴 회원은 DB 상태 검사로 차단합니다.
+리프레시 JWT의 refreshVersion과 DB 버전이 다르면 재발급을 거절하고, 현재 액세스에도 tokenVersion을 적용합니다(2026-11-11 개정).
+이전 보안 스키마 토큰은 재로그인을 요구합니다. Redis 키 정리와 경합·실패 정책은 비밀번호 변경 API 문서를 따릅니다.
+업무 액세스는 DB 상태·버전과 Redis 세션을 확인하며 비밀번호 변경·로그아웃·탈퇴 후 거절합니다.
 
 ### 3-4. 비밀번호 변경과 탈퇴
 
 비밀번호 변경은 `PATCH /api/members/me/password`로 현재 비밀번호를 재확인하고 가입과 같은 새 비밀번호 규칙을 검증합니다.
 [MemberPasswordService](../../src/main/java/com/recipick/domain/member/service/MemberPasswordService.java)는 회원 행을 잠근 뒤
 비밀번호 해시와 `refresh_token_version`을 같은 DB 트랜잭션에서 변경합니다. 기존 리프레시 토큰은 DB 버전으로 무효화하며,
-기존 액세스 토큰은 30분 수명까지 유지합니다. 같은 비밀번호로 변경해도 버전을 올립니다.
+현재 정책은 이전 액세스도 다음 요청부터 거절합니다. 같은 비밀번호로 변경해도 버전을 올립니다.
 
 [MemberPasswordFacade](../../src/main/java/com/recipick/domain/member/facade/MemberPasswordFacade.java)는 DB 작업 전에 정리할 Redis 세션 키를 고정하고,
 DB 커밋 뒤 그 키만 삭제합니다. 새 비밀번호로 커밋 뒤 로그인한 세션을 전체 삭제로 지우지 않기 위한 방식입니다.

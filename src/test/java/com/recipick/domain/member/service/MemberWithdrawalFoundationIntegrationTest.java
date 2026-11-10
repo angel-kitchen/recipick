@@ -68,7 +68,7 @@ class MemberWithdrawalFoundationIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(unique + "@status.test").name("상태 검증 회원")
                 .phone(unique.substring(0, 20)).passwordHash(encoder.encode("Password1!"))
                 .martId(1L).build());
-        pair = tokens.createMemberTokens(member.getId());
+        pair = testMemberTokens(member.getId());
         refreshTokens.save("MEMBER", member.getId(), pair.refreshTokenId(), pair.refreshToken(),
                 pair.refreshExpiration());
     }

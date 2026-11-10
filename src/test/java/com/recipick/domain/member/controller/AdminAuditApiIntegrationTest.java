@@ -85,7 +85,7 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     }
 
     private String token(Admin value) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, value.getId(), value.getRole().name(),
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, value.getId(), value.getRole().name(),
                 value.getMartId())).accessToken();
     }
 
@@ -192,7 +192,7 @@ class AdminAuditApiIntegrationTest extends IntegrationTestSupport {
     @DisplayName("미인증·회원·마트 관리자는 목록과 상세에 접근할 수 없다")
     void protectsBothEndpoints() throws Exception {
         // given
-        String memberToken = tokens.createMemberTokens(member.getId()).accessToken();
+        String memberToken = testMemberTokens(member.getId()).accessToken();
         // when, then
         for (String path : List.of("/api/admin/audit-logs", "/api/admin/audit-logs/1")) {
             assertThat(mvc.perform(get(path)).andReturn().getResponse().getStatus()).isEqualTo(401);

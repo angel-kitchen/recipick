@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +31,14 @@ public class MemberWithdrawalProcessor {
     private final TrialBlockService trialBlocks;
     private final MemberWithdrawalService withdrawal;
     private final ObjectProvider<WithdrawalSettlementChecker> settlementCheckers;
-    private final PasswordEncoder encoder;
+    private final com.recipick.domain.member.service.SensitivePasswordGuard passwordGuard;
     private final Clock clock;
 
     @Transactional
     public void withdraw(Long memberId, MemberWithdrawRequest request) {
         // 일반 조회보다 먼저 잠가 주문 생성·멤버십 지급과 직렬화한다.
         Member member = members.getMemberForUpdate(memberId);
-        if (!encoder.matches(request.password(), member.getPasswordHash())) {
-            throw new BusinessException(MemberErrorCode.INVALID_CURRENT_PASSWORD);
-        }
+        passwordGuard.verify(memberId, request.password(), member.getPasswordHash());
         if (orders.existsInProgressOrder(memberId)) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_ORDER);
         }

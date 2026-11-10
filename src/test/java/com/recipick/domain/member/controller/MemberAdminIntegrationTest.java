@@ -55,7 +55,7 @@ class MemberAdminIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         prefix = UUID.randomUUID().toString().substring(0, 12);
-        superToken = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        superToken = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
         now = LocalDateTime.now(clock).withNano(0);
         fixtures = new ArrayList<>();
         List<String> names = List.of("plain", "trial", "paid", "grant", "expired", "terminated", "reserved", "future");
@@ -244,8 +244,9 @@ class MemberAdminIntegrationTest extends IntegrationTestSupport {
     @DisplayName("비로그인·일반 회원·마트 관리자는 회원 목록을 조회할 수 없다")
     void restrictsAccessToSuperAdmin() throws Exception {
         // given
-        String member = tokens.createMemberTokens(fixtures.get(0).getId()).accessToken();
-        String mart = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "MART_ADMIN", 1L)).accessToken();
+        String member = testMemberTokens(fixtures.get(0).getId()).accessToken();
+        var martAdmin = adminsForRoleTest();
+        String mart = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, martAdmin.getId(), "MART_ADMIN", 1L)).accessToken();
 
         // when
         MockHttpServletResponse anonymous = request(null);
@@ -363,4 +364,15 @@ class MemberAdminIntegrationTest extends IntegrationTestSupport {
         assertThat(data(blank).path("totalElements").asInt()).isEqualTo(8);
     }
 
+
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.recipick.domain.member.repository.AdminRepository roleTestAdmins;
+
+    private com.recipick.domain.member.entity.Admin adminsForRoleTest() {
+        return roleTestAdmins.saveAndFlush(com.recipick.domain.member.entity.Admin.builder()
+                .loginId(java.util.UUID.randomUUID().toString()).passwordHash("unused")
+                .role(com.recipick.domain.member.entity.enums.AdminRole.MART_ADMIN)
+                .martId(1L).active(true).build());
+    }
 }

@@ -165,7 +165,7 @@ class MemberAddressListIntegrationTest extends IntegrationTestSupport {
     @DisplayName("존재하지 않는 회원 토큰이면 빈 목록 대신 AUTH-011을 반환한다")
     void rejectsMissingMember() throws Exception {
         // given
-        String token = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+        String token = testMemberTokens(Long.MAX_VALUE).accessToken();
 
         // when
         MockHttpServletResponse response = request(token);
@@ -179,7 +179,7 @@ class MemberAddressListIntegrationTest extends IntegrationTestSupport {
     @DisplayName("비로그인 요청은 401이고 관리자 토큰은 403이다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String adminToken = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null))
+        String adminToken = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null))
                 .accessToken();
 
         // when
@@ -206,7 +206,7 @@ class MemberAddressListIntegrationTest extends IntegrationTestSupport {
     }
 
     private String token(Member owner) {
-        return tokens.createMemberTokens(owner.getId()).accessToken();
+        return testMemberTokens(owner.getId()).accessToken();
     }
 
     private MockHttpServletResponse request(String token) throws Exception {

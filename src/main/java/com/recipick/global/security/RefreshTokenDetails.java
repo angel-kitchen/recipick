@@ -1,8 +1,7 @@
 package com.recipick.global.security;
 
-public record RefreshTokenDetails(AuthPrincipal principal, String tokenId, String sessionId, long refreshTokenVersion) {
+import java.time.Instant;
 
-    public RefreshTokenDetails(AuthPrincipal principal, String tokenId, String sessionId) {
-        this(principal, tokenId, sessionId, 0);
-    }
+public record RefreshTokenDetails(AuthPrincipal principal, String tokenId, String sessionId,
+        long refreshTokenVersion, Instant sessionExpiresAt) {
 }

@@ -57,7 +57,7 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
 
         // when
         mvc.perform(post("/api/billing-keys")
-                .header("Authorization", "Bearer " + tokens.createMemberTokens(member.getId()).accessToken())
+                .header("Authorization", "Bearer " + testMemberTokens(member.getId()).accessToken())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"issueId\":\"" + issueId + "\",\"billingKey\":\"" + newKey + "\"}"))
             .andExpect(status().isOk())
@@ -88,7 +88,7 @@ class BillingKeyRegistrationResumeIntegrationTest extends MembershipRenewalFlowS
         try {
             // when
             mvc.perform(post("/api/billing-keys")
-                    .header("Authorization", "Bearer " + tokens.createMemberTokens(member.getId()).accessToken())
+                    .header("Authorization", "Bearer " + testMemberTokens(member.getId()).accessToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"issueId\":\"" + issueId + "\",\"billingKey\":\"" + newKey + "\"}"))
                 .andExpect(status().isOk())

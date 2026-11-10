@@ -1,14 +1,16 @@
-// 액세스 토큰은 회원·관리자 모두 메모리에만 둔다. 새로고침하면 사라지지만 httpOnly 리프레시 쿠키로 다시 받는다.
+// 액세스는 주체별 메모리에만 보관한다. 리프레시 Cookie와 갱신 경로도 분리한다.
 let accessToken = null;
-let onAuthLost = () => {};
-// 회원과 관리자는 같은 리프레시 쿠키를 쓰므로 한 브라우저에서는 나중에 로그인한 쪽이 쿠키를 차지한다.
-// 액세스 토큰은 둘을 따로 들고 있다가 경로(/api/admin/ 여부)에 맞는 쪽을 붙인다.
 let adminToken = null;
 let adminSession = null;
+let onAuthLost = () => {};
 let onAdminAuthLost = () => {};
-let reissuing = null;
-let restoring = null;
+const reissuing = new Map();
+const restoring = new Map();
+let csrf = null;
+let csrfLoading = null;
 const isAdminPath = (path) => path.startsWith('/api/admin/');
+const authPath = (type, action) => type === 'ADMIN' ? `/api/admin/auth/${action}` : `/api/auth/${action}`;
+const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('recipick-auth-v2') : null;
 
 export class ApiError extends Error {
   constructor(status, body) {
@@ -19,19 +21,10 @@ export class ApiError extends Error {
   }
 }
 
-// 서버가 요청을 반영했는지 알 수 없는 실패. 응답을 못 받았거나(네트워크 오류·프록시 502 이상) 서버가 500을 돌려준 경우다.
-// 500은 저장 실패의 증거가 아니다(커밋 뒤 처리에서 예외가 날 수 있다). 이때만 같은 Idempotency-Key로 다시 보낸다
 export const isUnknownOutcome = (e) => !(e instanceof ApiError) || e.status >= 500;
+export function setAuthLostHandler(handler) { onAuthLost = handler; }
+export function setAdminAuthLostHandler(handler) { onAdminAuthLost = handler; }
 
-export function setAuthLostHandler(handler) {
-  onAuthLost = handler;
-}
-
-export function setAdminAuthLostHandler(handler) {
-  onAdminAuthLost = handler;
-}
-
-// 토큰 본문(payload)만 읽는다. 서명 검증은 서버가 하고, 여기서는 누구의 토큰인지 화면에 쓰려는 용도다
 function readClaims(token) {
   try {
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -41,22 +34,42 @@ function readClaims(token) {
   }
 }
 
-export function setAccessToken(token) {
-  accessToken = token;
-}
-
+export function setAccessToken(token) { accessToken = token; }
 export function setAdminToken(token, session = null) {
   adminToken = token;
   adminSession = token ? session ?? adminSessionFrom(token) : null;
 }
-
 function adminSessionFrom(token) {
   const claims = readClaims(token);
   return claims ? { adminId: claims.adminId, role: claims.role, martId: claims.martId ?? null } : null;
 }
+export function getAdminSession() { return adminSession; }
 
-export function getAdminSession() {
-  return adminSession;
+function loseSession(type) {
+  restoring.delete(type);
+  if (type === 'ADMIN') {
+    setAdminToken(null);
+    onAdminAuthLost();
+  } else {
+    setAccessToken(null);
+    onAuthLost();
+  }
+}
+
+if (channel) {
+  channel.onmessage = ({ data }) => {
+    if (data?.event !== 'LOGOUT' || !['MEMBER', 'ADMIN'].includes(data.type)) return;
+    const token = data.type === 'ADMIN' ? adminToken : accessToken;
+    // 다른 계정으로 새로 로그인한 탭의 세션까지 지우지 않는다.
+    if (!data.sid || readClaims(token)?.sid === data.sid) loseSession(data.type);
+  };
+}
+
+// 브라우저 탭끼리도 같은 주체의 Cookie 회전을 순서화한다. 토큰을 storage에 저장하지 않는다.
+function withSessionLock(type, work) {
+  return globalThis.navigator?.locks?.request
+    ? globalThis.navigator.locks.request(`recipick-auth-${type}`, work)
+    : work();
 }
 
 function buildUrl(path, query) {
@@ -69,127 +82,133 @@ function buildUrl(path, query) {
   return qs ? `${path}?${qs}` : path;
 }
 
-async function send(method, path, { body, headers, query, admin, credentials = 'same-origin' } = {}) {
+const cookieActions = new Set([
+  '/api/auth/signup', '/api/auth/login', '/api/auth/reissue', '/api/auth/logout',
+  '/api/admin/auth/login', '/api/admin/auth/reissue', '/api/admin/auth/logout',
+]);
+async function csrfToken() {
+  if (csrf) return csrf;
+  if (!csrfLoading) {
+    csrfLoading = fetch('/api/auth/csrf', { credentials: 'same-origin' }).then(parse)
+      .then((data) => { csrf = data; return data; })
+      .finally(() => { csrfLoading = null; });
+  }
+  return csrfLoading;
+}
+
+async function send(method, path, { body, headers, query, admin, credentials = 'same-origin', csrfRetried = false } = {}) {
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders['Content-Type'] = 'application/json';
   const token = admin || isAdminPath(path) ? adminToken : accessToken;
   if (token) finalHeaders.Authorization = `Bearer ${token}`;
-  return fetch(buildUrl(path, query), {
-    method,
-    headers: finalHeaders,
+  if (method === 'POST' && cookieActions.has(path)) {
+    // 다른 탭이 CSRF Cookie를 처음 만든 경우도 현재 Cookie에 대응하는 값을 다시 받는다.
+    csrf = null;
+    const protection = await csrfToken();
+    finalHeaders[protection.headerName] = protection.token;
+  }
+  const response = await fetch(buildUrl(path, query), {
+    method, headers: finalHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials,
   });
+  if (!csrfRetried && method === 'POST' && cookieActions.has(path) && response.status === 403) {
+    const error = await response.clone().json().catch(() => null);
+    if (error?.code === 'AUTH-013') {
+      csrf = null;
+      return send(method, path, { body, headers, query, admin, credentials, csrfRetried: true });
+    }
+  }
+  return response;
 }
 
-// 사용자 PC 시계가 틀려도 특가 카운트다운이 맞도록 응답의 Date 헤더로 서버 시각과의 차이를 기억한다.
-// 검색 결과는 캐시되므로 본문에 시각을 넣지 않고 헤더(캐시와 무관)를 쓴다
 let serverOffsetMs = 0;
 export const serverNow = () => Date.now() + serverOffsetMs;
-
 function syncServerClock(res) {
   const serverTime = Date.parse(res.headers.get('Date') ?? '');
   if (!Number.isNaN(serverTime)) serverOffsetMs = serverTime - Date.now();
 }
-
 async function parse(res) {
   syncServerClock(res);
   const text = await res.text();
   let json = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    // 프록시가 돌려준 일반 텍스트 오류는 JSON이 아니다
-  }
-  // 백엔드가 꺼져 있으면 프록시가 본문 없는 502를 돌려준다
+  try { json = text ? JSON.parse(text) : null; } catch { /* 프록시 일반 텍스트 응답은 JSON이 아니다. */ }
   if (!json && res.status >= 502) {
-    throw new ApiError(res.status, { message: '서버에 연결하지 못했어요. 잠시 뒤에 화면을 새로고침해서 방금 한 일이 반영됐는지 확인해 주세요.' });
+    throw new ApiError(res.status, { message: '서버에 연결하지 못했어요. 잠시 후 처리 결과를 확인해 주세요.' });
   }
   if (!res.ok || json?.success === false) throw new ApiError(res.status, json);
   return json?.data ?? null;
 }
 
-// 쿠키 하나로 회원·관리자 중 한쪽만 재발급되므로, 받은 토큰이 누구 것인지 보고 알맞은 자리에 둔다.
-// 서버가 리프레시 토큰을 유예 없이 교체하기 때문에 동시에 여러 번 보내면 하나만 성공한다.
-// 그래서 여러 요청이 동시에 401을 받아도 재발급은 한 번만 보낸다.
-// 돌려주는 값은 'MEMBER' 또는 'ADMIN'이다.
-export function reissueToken() {
-  if (!reissuing) {
-    reissuing = send('POST', '/api/auth/reissue')
-      .then(parse)
-      .then((data) => {
+export function reissueToken(type = 'MEMBER') {
+  if (!reissuing.has(type)) {
+    const pending = withSessionLock(type, async () => {
+      const data = await parse(await send('POST', authPath(type, 'reissue')));
+      if (readClaims(data.accessToken)?.type !== type) {
+        throw new ApiError(401, { code: 'AUTH-011', message: '다시 로그인해 주세요.' });
+      }
+      if (type === 'ADMIN') setAdminToken(data.accessToken);
+      else setAccessToken(data.accessToken);
+      return type;
+    }).finally(() => reissuing.delete(type));
+    reissuing.set(type, pending);
+  }
+  return reissuing.get(type);
+}
+
+export function restoreSession(type = 'MEMBER') {
+  if (!restoring.has(type)) {
+    restoring.set(type, reissueToken(type).catch((e) => {
+      if (e.status === 401 || (e.status === 403 && e.code === 'AUTH-009')) return null;
+      restoring.delete(type);
+      throw e;
+    }));
+  }
+  return restoring.get(type);
+}
+
+export async function logoutSession(type = 'MEMBER') {
+  const original = readClaims(type === 'ADMIN' ? adminToken : accessToken);
+  await withSessionLock(type, async () => {
+    let res = await send('POST', authPath(type, 'logout'), { admin: type === 'ADMIN' });
+    if (res.status === 401) {
+      try {
+        // 같은 Web Lock을 중첩 획득하지 않도록 여기서는 직접 재발급한다.
+        const data = await parse(await send('POST', authPath(type, 'reissue')));
         const claims = readClaims(data.accessToken);
-        if (claims?.type === 'ADMIN') {
-          setAdminToken(data.accessToken);
-          return 'ADMIN';
+        if (claims?.type !== type || (original?.sid && claims.sid !== original.sid)) {
+          loseSession(type);
+          return;
         }
-        accessToken = data.accessToken;
-        return 'MEMBER';
-      })
-      .finally(() => {
-        reissuing = null;
-      });
-  }
-  return reissuing;
-}
-
-// 페이지를 연 직후 한 번만 재발급해서 로그인 상태를 복구한다. 회원·관리자 화면이 같은 결과를 나눠 쓴다.
-// 로그인한 적이 없어 실패하면 null이다.
-export function restoreSession() {
-  if (!restoring) restoring = reissueToken().catch(() => null);
-  return restoring;
-}
-
-// 관리자 로그아웃: 서버의 리프레시 세션을 지워야 새로고침해도 다시 로그인되지 않는다.
-// 서버가 처리하지 못했는데 화면만 로그아웃으로 바꾸면 쿠키가 남아 다시 로그인될 수 있어서, 실패하면 오류를 던진다
-// 토큰에 세션 id(sid)가 있으면 서버는 쿠키 없이 그 세션을 지운다. 이때 쿠키를 보내지 않아야, 같은 브라우저에서 나중에
-// 로그인한 회원의 쿠키가 이 응답의 쿠키 삭제 지시에 같이 지워지지 않는다. sid가 없는 옛 토큰만 쿠키로 세션을 찾는다
-const adminLogout = () =>
-  send('POST', '/api/auth/logout', { admin: true, credentials: readClaims(adminToken)?.sid ? 'omit' : 'same-origin' });
-
-export async function logoutAdminSession() {
-  let res = await adminLogout();
-  if (res.status === 401) {
-    let who = null;
-    try {
-      who = await reissueToken();
-    } catch (e) {
-      // 재발급이 401/403이면 세션이 이미 끝난 것이라 서버에 지울 것이 없다. 서버·네트워크 오류는 그대로 던진다
-      if (e.status !== 401 && e.status !== 403) throw e;
+        if (type === 'ADMIN') setAdminToken(data.accessToken);
+        else setAccessToken(data.accessToken);
+        res = await send('POST', authPath(type, 'logout'), { admin: type === 'ADMIN' });
+      } catch (e) {
+        if (e.status !== 401 && !(e.status === 403 && e.code === 'AUTH-009')) throw e;
+        loseSession(type);
+        return;
+      }
     }
-    if (who !== 'ADMIN') {
-      setAdminToken(null);
-      return;
-    }
-    res = await adminLogout();
-  }
-  if (!res.ok) throw new ApiError(res.status, { message: '관리자 로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.' });
-  setAdminToken(null);
+    await parse(res);
+    loseSession(type);
+  });
+  channel?.postMessage({ event: 'LOGOUT', type, sid: original?.sid });
 }
+export const logoutAdminSession = () => logoutSession('ADMIN');
 
 async function request(method, path, options) {
-  const admin = isAdminPath(path);
+  const type = isAdminPath(path) ? 'ADMIN' : 'MEMBER';
   let res = await send(method, path, options);
-  const reissuable = res.status === 401 && !path.startsWith('/api/auth/') && !path.startsWith('/api/admin/auth/');
-  if (reissuable) {
-    let who = null;
+  const authEndpoint = path.startsWith('/api/auth/') || path.startsWith('/api/admin/auth/');
+  if (res.status === 401 && !authEndpoint) {
     try {
-      who = await reissueToken();
+      await reissueToken(type);
     } catch (e) {
-      if (e.status !== 401 && e.status !== 403) throw e;
+      if (e.status === 401 || (e.status === 403 && e.code === 'AUTH-009')) loseSession(type);
+      throw e;
     }
-    // 재발급된 토큰이 이 요청의 주인(회원/관리자)과 같아야 다시 시도한다
-    if (who === (admin ? 'ADMIN' : 'MEMBER')) {
-      res = await send(method, path, options);
-    } else if (admin) {
-      setAdminToken(null);
-      onAdminAuthLost();
-      throw new ApiError(401, { message: '관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.' });
-    } else {
-      accessToken = null;
-      onAuthLost();
-      throw new ApiError(401, { message: '로그인이 필요해요. 다시 로그인해 주세요.' });
-    }
+    res = await send(method, path, options);
+    if (res.status === 401) loseSession(type);
   }
   return parse(res);
 }

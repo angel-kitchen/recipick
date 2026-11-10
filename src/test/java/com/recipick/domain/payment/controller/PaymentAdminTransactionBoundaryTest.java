@@ -59,7 +59,7 @@ class PaymentAdminTransactionBoundaryTest extends IntegrationTestSupport {
     @DisplayName("테스트 트랜잭션이 없어도 Facade가 직접 쓰기 트랜잭션을 열어 조회 감사 기록을 커밋한다")
     void facadeOpensWriteTransaction() throws Exception {
         // given
-        String token = tokens.createTokens(
+        String token = testAdminTokens(
             new AuthPrincipal(SubjectType.ADMIN, superAdminId, "SUPER_ADMIN", null)).accessToken();
         // 주문이 없는 회원으로 조회해 다른 테스트가 남긴 결제 데이터와 무관하게 만든다
         String url = "/api/admin/payments?memberId=" + Long.MAX_VALUE;

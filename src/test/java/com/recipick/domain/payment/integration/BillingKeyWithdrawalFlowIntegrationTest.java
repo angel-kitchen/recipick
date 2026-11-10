@@ -67,7 +67,7 @@ class BillingKeyWithdrawalFlowIntegrationTest extends MembershipRenewalFlowSuppo
         KEY_PG.reset();
         clock.fixAt(T);
         remote = KEY_PG.register(cardA.getPortoneBillingKey());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach
@@ -218,7 +218,7 @@ class BillingKeyWithdrawalFlowIntegrationTest extends MembershipRenewalFlowSuppo
         // given
         activeMembership();
         clock.fixAt(T.minusDays(1));
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         // when
         var response = withdraw(PASSWORD, 0);
         // then

@@ -46,7 +46,7 @@ class MemberWithdrawalPreparationProcessorTest {
         var factory = new StaticListableBeanFactory();
         factory.addBean("checker", checker);
         processor = new MemberWithdrawalPreparationProcessor(members, orders, memberships,
-                factory.getBeanProvider(WithdrawalSettlementChecker.class), methods, encoder, clock);
+                factory.getBeanProvider(WithdrawalSettlementChecker.class), methods, guard(), clock);
         given(members.getMemberForUpdate(1L)).willReturn(Member.builder().passwordHash("hash").build());
         given(encoder.matches("password", "hash")).willReturn(true);
         given(checker.supportedScopes()).willReturn(EnumSet.allOf(WithdrawalSettlementChecker.Scope.class));
@@ -117,5 +117,11 @@ class MemberWithdrawalPreparationProcessorTest {
     void assertError(MemberErrorCode expected) {
         assertThatThrownBy(() -> processor.prepare(1L, request)).isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(expected));
+    }
+
+    private com.recipick.domain.member.service.SensitivePasswordGuard guard() {
+        var attempts = mock(com.recipick.infra.redis.RedisLoginAttemptStore.class);
+        given(attempts.clearIfUnlocked(any(), any())).willReturn(true);
+        return new com.recipick.domain.member.service.SensitivePasswordGuard(attempts, encoder);
     }
 }

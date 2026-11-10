@@ -21,6 +21,9 @@ public enum MemberErrorCode implements ErrorCode {
     WITHDRAW_SETTLEMENT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "MEMBER-008",
             "현재 탈퇴 정산 확인을 진행할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 
+    REAUTHENTICATION_LOCKED(HttpStatus.FORBIDDEN, "MEMBER-009",
+            "비밀번호 확인 시도가 많습니다. 10분 후 다시 시도해 주세요."),
+
     AUDIT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "AUDIT-001", "감사 로그를 찾을 수 없습니다."),
 
     REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "REGION-001", "지역을 찾을 수 없습니다."),
