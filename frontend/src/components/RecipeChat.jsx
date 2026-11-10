@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { clearMemory, isValidResult, readMemory, writeMemory } from '../chatMemory';
@@ -140,7 +140,6 @@ function RecipeCard({ recipe, showPrice }) {
 // 기존 세 가지 검색(메뉴·조건 / 가진 재료 / 식단)은 "자세히 찾기" 버튼으로 연다
 // children은 "자세히 찾기"를 눌렀을 때 대화 아래에 펼쳐지는 기존 검색 화면이다
 export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
-  const navigate = useNavigate();
   const { member } = useAuth();
   const isMembership = Boolean(member?.membership?.active);
   // 상세 화면에 갔다가 뒤로 오면 같은 대화를 보여 줘서, AI를 다시 부르지 않게 한다(chatMemory.js)
@@ -220,8 +219,8 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
     run(() => api.post('/api/recipes/ai-recommendations', { text: next.text }));
   };
 
-  // 메뉴 이름이면 자동 장바구니 미리보기로 넘어가고, 이름으로 못 찾으면 같은 문장을 조건으로 보고 추천한다.
-  // 이용 마트가 없으면 미리보기는 못 하지만 조건 추천은 마트 없이도 된다
+  // 무엇을 입력해도 같은 조건 추천으로 보내 항상 레시피 카드로 보여 준다.
+  // 메뉴 이름 → 자동 장바구니 미리보기는 카드의 "재료 담기"나 "자세히 찾기"에서 쓴다
   const submit = (event) => {
     event.preventDefault();
     const sentence = text.trim();
@@ -229,25 +228,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
     reset();
     setAsked(sentence);
     // 요청이 실패하면 다시 보낼 수 있게 입력을 남겨 둔다
-    run(async () => {
-      let data;
-      try {
-        data = await api.post('/api/auto-carts/ai-preview', { text: sentence });
-      } catch (e) {
-        if (e.code !== 'ORDER-004') throw e;
-        data = { status: 'NO_MATCH' };
-      }
-      if (data.status === 'PREVIEWED') {
-        navigate(`/auto-carts/${data.preview.autoCartRequestId}`);
-        return null;
-      }
-      if (data.status === 'NO_MATCH') return api.post('/api/recipes/ai-recommendations', { text: sentence });
-      // 후보 선택이 필요하거나 AI 장애일 때는 이름만 보여 주고 상세로 보낸다. 같은 AI를 또 부르지 않는다.
-      // 인분까지 고르는 화면은 "자세히 찾기"에 있다. 메뉴가 여럿이면 같은 레시피가 겹칠 수 있어 하나만 남긴다
-      const candidates = data.status === 'FALLBACK' ? data.recipes : data.menus.flatMap((menu) => menu.candidates);
-      const names = [...new Map(candidates.map((item) => [item.recipeId, item])).values()];
-      return names.length === 0 ? { status: 'NO_MATCH' } : { status: data.status, names };
-    }).then((ok) => ok && setText(''));
+    run(() => api.post('/api/recipes/ai-recommendations', { text: sentence })).then((ok) => ok && setText(''));
   };
 
   const guardMembership = () => {
@@ -293,26 +274,7 @@ export default function RecipeChat({ detailOpen, onToggleDetail, children }) {
         {asked && <Me>{asked}</Me>}
         {loading && <RepiSearching />}
         {error && <ErrorNotice error={error} />}
-        {result?.names && (
-          <>
-            <Ai
-              live
-              lines={
-                result.status === 'FALLBACK'
-                  ? ['잘 알아듣지 못했어요.', '대신 이런 레시피는 어때요?']
-                  : ['어떤 레시피인지 골라 주세요.', '인분까지 정하려면 "자세히 찾기"를 써 주세요.']
-              }
-            />
-            <div className="chat-chips">
-              {result.names.map((item) => (
-                <Link key={item.recipeId} to={`/recipes/${item.recipeId}`} className="chat-chip">
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-          </>
-        )}
-        {result && !result.names && (
+        {result && (
           <>
             {recipes.length === 0 && result.status === 'FALLBACK' && (
               <Ai live lines={['지금은 추천하기 어려워요.', '아래 필터로 직접 찾아볼까요?']} />
