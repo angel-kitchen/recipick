@@ -13,7 +13,7 @@ export default function ProductSearchInput({ value, onChange }) {
     <div className="suggest">
       <input
         className="field__input"
-        placeholder="상품 이름 검색 (초성도 돼요: ㅇㅎㅂ)"
+        placeholder="상품 이름 검색"
         value={value}
         maxLength={50}
         aria-label="상품 이름 검색"
