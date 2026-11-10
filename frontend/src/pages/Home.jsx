@@ -113,6 +113,16 @@ function PopularRanking() {
   const [period, setPeriod] = useState('WEEKLY');
   const [recipes, setRecipes] = useState(null);
   const listRef = useRef(null);
+  // 맨 앞·맨 끝에서는 갈 곳이 없는 화살표를 숨긴다
+  const [edge, setEdge] = useState({ start: true, end: false });
+
+  const updateEdge = () => {
+    const list = listRef.current;
+    if (!list) return;
+    setEdge({ start: list.scrollLeft <= 4, end: list.scrollLeft + list.clientWidth >= list.scrollWidth - 4 });
+  };
+
+  useEffect(updateEdge, [recipes]);
 
   useEffect(() => {
     let ignore = false;
@@ -151,7 +161,7 @@ function PopularRanking() {
         {recipes?.length === 0 && <p className="state-message">이 기간에 찜한 레시피가 아직 없어요.</p>}
         {recipes?.length > 0 && (
           <div className="hm-rank__wrap">
-            <ol className="hm-rank__list" ref={listRef}>
+            <ol className="hm-rank__list" ref={listRef} onScroll={updateEdge}>
               {recipes.map((recipe, i) => (
                 <li key={recipe.recipeId} className="hm-rank__item">
                   <Link to={`/recipes/${recipe.recipeId}`} className="hm-rank__card">
@@ -169,21 +179,28 @@ function PopularRanking() {
                 </li>
               ))}
             </ol>
-            <button
-              type="button"
-              className="hm-rank__next"
-              aria-label="다음 레시피 보기"
-              onClick={() => listRef.current?.scrollBy({ left: 480, behavior: 'smooth' })}
-            >
-              ›
-            </button>
+            {!edge.start && (
+              <button
+                type="button"
+                className="hm-rank__prev"
+                aria-label="이전 레시피 보기"
+                onClick={() => listRef.current?.scrollBy({ left: -480, behavior: 'smooth' })}
+              >
+                ‹
+              </button>
+            )}
+            {!edge.end && (
+              <button
+                type="button"
+                className="hm-rank__next"
+                aria-label="다음 레시피 보기"
+                onClick={() => listRef.current?.scrollBy({ left: 480, behavior: 'smooth' })}
+              >
+                ›
+              </button>
+            )}
           </div>
         )}
-        <div className="hm-rank__all">
-          <Link to="/recipes/rankings" className="hm-btn hm-btn--line hm-btn--wide">
-            전체보기 ›
-          </Link>
-        </div>
       </div>
     </section>
   );
