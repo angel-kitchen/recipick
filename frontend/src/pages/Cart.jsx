@@ -156,17 +156,24 @@ export default function Cart() {
           <div className="tile__meta">
             {formatAmount(item.saleUnitAmount, item.saleUnit)} · {formatWon(item.price)}
           </div>
-          {!available && <span className="badge badge--warn">{CART_STATUS[item.status]}</span>}
+          {!available && (
+            <span className="badge badge--warn">
+              {CART_STATUS[item.status]}
+              {/* − 버튼이 수량을 재고까지 한 번에 내리므로 몇 개까지 살 수 있는지 먼저 알린다 */}
+              {item.status === 'INSUFFICIENT_STOCK' && ` · ${item.stock}개 남음`}
+            </span>
+          )}
         </div>
         <div className="cart-row__side">
           <span className="tile__price">{formatWon(item.lineAmount)}</span>
           <div className="stepper">
-            {/* 재고가 모자란 항목은 재고 이하로 줄이는 변경만 허용한다 */}
+            {/* 재고가 모자란 항목은 재고 이하로 줄이는 변경만 허용한다.
+                서버가 재고보다 많은 수량을 거절하므로 한 번에 재고까지 내린다 */}
             <button
               type="button"
               aria-label="수량 줄이기"
               disabled={item.quantity <= 1 || !(available || item.status === 'INSUFFICIENT_STOCK')}
-              onClick={() => act(() => api.patch(`/api/cart-items/${item.cartItemId}`, { quantity: item.quantity - 1 }))}
+              onClick={() => act(() => api.patch(`/api/cart-items/${item.cartItemId}`, { quantity: Math.min(item.quantity - 1, item.stock) }))}
             >
               −
             </button>
