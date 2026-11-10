@@ -171,7 +171,7 @@ export default function MyPage() {
             <dd className="info-list__row">
               <span>
                 {member.membership?.active
-                  ? `${MEMBERSHIP_TYPE[member.membership.type] ?? member.membership.type} · ${formatDateTime(member.membership.endAt)}까지`
+                  ? `${MEMBERSHIP_TYPE[member.membership.type] ?? member.membership.type}${member.membership.inGrace ? ' · 결제 유예 중' : ''} · ${formatDateTime(member.membership.effectiveEndAt ?? member.membership.endAt)}까지`
                   : '이용 중이 아니에요'}
               </span>
               <Link to={member.membership?.active ? '/membership' : '/membership-info'} className="btn btn--muted">

@@ -10,6 +10,7 @@ public record MembershipMeResponse(boolean active, Current current, boolean tria
     }
 
     public record Current(Long membershipId, String type, String source, LocalDateTime startAt,
-            LocalDateTime endAt, boolean autoRenew, LocalDate billingAnchorDate, LocalDateTime cancelReservedAt) {
+            LocalDateTime endAt, boolean autoRenew, LocalDate billingAnchorDate, LocalDateTime cancelReservedAt,
+            LocalDateTime graceEndAt, LocalDateTime effectiveEndAt, boolean inGrace) {
     }
 }

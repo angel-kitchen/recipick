@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, restoreSession, setAccessToken, setAuthLostHandler } from '../api/client';
+import { api, restoreSession, logoutSession, setAccessToken, setAuthLostHandler } from '../api/client';
 import { clearMemory } from '../chatMemory';
 
 const AuthContext = createContext(null);
@@ -35,13 +35,9 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(async () => {
-    try {
-      await api.post('/api/auth/logout');
-    } finally {
-      setAccessToken(null);
-      setMember(null);
-      clearMemory();
-    }
+    await logoutSession('MEMBER');
+    setMember(null);
+    clearMemory();
   }, []);
 
   const value = useMemo(

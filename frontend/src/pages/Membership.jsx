@@ -227,7 +227,10 @@ export default function Membership() {
             <dt>시작</dt>
             <dd>{formatDateTime(current.startAt)}</dd>
             <dt>종료</dt>
-            <dd>{formatDateTime(current.endAt)}</dd>
+            <dd>{formatDateTime(current.effectiveEndAt ?? current.endAt)}</dd>
+            {current.inGrace && (
+              <><dt>결제 상태</dt><dd>갱신 결제 유예 중이에요. 결제수단을 확인해 주세요.</dd></>
+            )}
             <dt>자동 갱신</dt>
             <dd>{current.autoRenew ? '사용' : '사용 안 함'}</dd>
             {current.cancelReservedAt && (
@@ -338,8 +341,9 @@ export default function Membership() {
           onConfirm={() => doReserve(modal.target)}
           onCancel={closeModal}
         >
-          다음 자동 결제를 멈추고, 이미 이용 중인 기간은 끝날 때까지 그대로 쓸 수 있어요. 결제 대기 중이거나 결제 유예 중이면
-          혜택이 바로 끝날 수 있어요.
+          {modal.target.inGrace
+            ? '현재 결제 유예 중이에요. 해지 예약하면 유예 혜택이 지금 종료되고 다음 결제를 중단해요.'
+            : '다음 자동 결제를 중단해요. 이용 중인 정상 기간의 혜택은 종료 시각까지 유지돼요. 결제 대기는 아직 혜택이 시작되지 않은 상태예요.'}
         </ConfirmModal>
       )}
       {modal?.type === 'terminate' && (

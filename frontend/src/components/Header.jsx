@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import useRecipeSuggestions from '../hooks/useRecipeSuggestions';
 import Icon from './Icon';
 import Logo from './Logo';
+import ErrorNotice from './ErrorNotice';
 
 export default function Header() {
   const { member, logout } = useAuth();
@@ -13,6 +14,8 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [cartCount, setCartCount] = useState(0);
+  const [logoutError, setLogoutError] = useState(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef(null);
   const { inputProps: suggestionProps, list: suggestionList } = useRecipeSuggestions(keyword, 'header-recipe-suggestions');
 
@@ -52,12 +55,21 @@ export default function Header() {
   };
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/');
+    setLogoutError(null);
+    setLoggingOut(true);
+    try {
+      await logout();
+      navigate('/');
+    } catch (e) {
+      setLogoutError(new Error('서버의 로그인 세션을 종료하지 못했어요. 다시 시도해 주세요.'));
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
     <header className="header header--shop">
+      {logoutError && <div className="container"><ErrorNotice error={logoutError} /></div>}
       <div className="header__inner container">
         <Link to="/" className="header__logo" aria-label="Recipick 홈">
           <Logo />
@@ -137,7 +149,7 @@ export default function Header() {
                   <NavLink to="/auto-carts">자동 담기 기록</NavLink>
                   <NavLink to="/membership">내 멤버십</NavLink>
                   <NavLink to="/addresses">배송지 관리</NavLink>
-                  <button type="button" className="header__link-button" onClick={handleLogout}>
+                  <button type="button" className="header__link-button" onClick={handleLogout} disabled={loggingOut}>
                     로그아웃
                   </button>
                 </div>
