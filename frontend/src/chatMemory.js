@@ -2,10 +2,10 @@
 // AI를 또 부르지 않게 하려는 것이다. 탭을 닫거나 로그아웃하면 사라지고, 다른 회원의 기억은 읽지 않는다.
 // 저장 공간을 못 쓰는 브라우저(사생활 보호 모드 등)에서는 기억 없이 그냥 동작한다.
 // 저장 모양을 바꾸면 키의 버전(v1)을 올려, 이전 모양으로 남은 기억을 읽다가 화면이 깨지지 않게 한다
-const KEYS = { chat: 'recipick.recipe-chat.v1', detail: 'recipick.recipe-detail-search.v1' };
+const KEYS = { chat: 'recipick.recipe-chat.v2', detail: 'recipick.recipe-detail-search.v1' };
 
 // 화면이 결과에서 배열로 쓰는 항목이 배열이 아니면 기억이 깨진 것이다
-const LIST_FIELDS = ['recipes', 'menus', 'meals', 'names'];
+const LIST_FIELDS = ['recipes', 'menus', 'meals'];
 
 export function isValidResult(result) {
   if (result == null) return true;
