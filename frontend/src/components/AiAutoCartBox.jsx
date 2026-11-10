@@ -17,7 +17,7 @@ const MODES = {
     placeholder: '예: 김치찌개 2인분이랑 계란말이 / 매운 음식 30분 이내',
   },
   fridge: {
-    label: '가진 재료로 찾기',
+    label: '냉장고 파먹기',
     placeholder: '예: 두부랑 김치 있는데 뭐 해먹지?',
   },
   mealPlan: {
