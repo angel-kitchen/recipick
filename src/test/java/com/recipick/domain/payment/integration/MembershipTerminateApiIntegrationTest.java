@@ -27,7 +27,7 @@ class MembershipTerminateApiIntegrationTest extends MembershipRefundFlowSupport 
 
     MockHttpServletResponse terminate(Long id, String key) throws Exception {
         var request = post("/api/memberships/{id}/terminate", id)
-                .header("Authorization", "Bearer " + tokens.createMemberTokens(member.getId()).accessToken());
+                .header("Authorization", "Bearer " + testMemberTokens(member.getId()).accessToken());
         if (key != null) {
             request.header("Idempotency-Key", key);
         }
@@ -180,7 +180,7 @@ class MembershipTerminateApiIntegrationTest extends MembershipRefundFlowSupport 
         Long id = activeMembership();
         var other = saveMember();
         var request = post("/api/memberships/{id}/terminate", id)
-                .header("Authorization", "Bearer " + tokens.createMemberTokens(other.getId()).accessToken())
+                .header("Authorization", "Bearer " + testMemberTokens(other.getId()).accessToken())
                 .header("Idempotency-Key", newKey());
         // when
         var response = mvc.perform(request).andReturn().getResponse();

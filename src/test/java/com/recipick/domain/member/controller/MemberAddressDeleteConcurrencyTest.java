@@ -63,7 +63,7 @@ class MemberAddressDeleteConcurrencyTest extends IntegrationTestSupport {
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("동시 삭제 검증")
                 .passwordHash("test-password-hash").build());
         memberId = member.getId();
-        token = tokens.createMemberTokens(memberId).accessToken();
+        token = testMemberTokens(memberId).accessToken();
         addressId = new TransactionTemplate(transactionManager).execute(status -> {
             Member owner = members.findById(memberId).orElseThrow();
             MemberAddress address = addresses.saveAndFlush(MemberAddress.builder().member(owner).label("집")

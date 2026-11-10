@@ -52,7 +52,7 @@ class MembershipTrialStartIntegrationTest extends IntegrationTestSupport {
         String suffix = UUID.randomUUID().toString().substring(0, 20);
         member = members.saveAndFlush(Member.builder().email(suffix + "@trial.test")
             .phone(suffix).name("체험 회원").passwordHash("hash").build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     // 빌링키는 암호문·지문으로 저장된다 — 체험 시작 흐름이 키 행을 읽어도 복호화되도록 실제 암호화기로 만든다

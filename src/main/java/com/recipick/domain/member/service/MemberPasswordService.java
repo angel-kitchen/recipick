@@ -16,15 +16,15 @@ public class MemberPasswordService {
 
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SensitivePasswordGuard passwordGuard;
 
     @Transactional
     public void changePassword(Long memberId, MemberPasswordChangeRequest request) {
+        passwordGuard.requireAvailable(memberId);
         Member member = memberRepository.findByIdForUpdate(memberId)
                 .filter(value -> !value.isWithdrawn())
                 .orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
-        if (!passwordEncoder.matches(request.currentPassword(), member.getPasswordHash())) {
-            throw new BusinessException(MemberErrorCode.INVALID_CURRENT_PASSWORD);
-        }
+        passwordGuard.verify(memberId, request.currentPassword(), member.getPasswordHash());
         member.changePasswordHash(passwordEncoder.encode(request.newPassword()));
     }
 }

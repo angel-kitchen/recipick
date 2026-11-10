@@ -82,6 +82,10 @@ class AuthenticationWebTest {
     @MockitoBean
     private MemberStatusChecker memberStatusChecker;
     @MockitoBean
+    private AdminStatusChecker adminStatusChecker;
+    @MockitoBean
+    private SessionStatusChecker sessionStatusChecker;
+    @MockitoBean
     private RecipeService recipeService;
     @MockitoBean
     private RecipeFacade recipeFacade;
@@ -121,7 +125,7 @@ class AuthenticationWebTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(objectMapper.readTree(response.getContentAsString()).path("data").get(0).asLong()).isEqualTo(17L);
         assertThat(objectMapper.readTree(response.getContentAsString()).path("data").get(1).asLong()).isEqualTo(17L);
-        verify(tokenProvider, times(1)).parseAccessToken(token);
+        verify(tokenProvider, times(1)).parseAccessTokenDetails(token);
     }
 
     @Test
@@ -374,7 +378,23 @@ class AuthenticationWebTest {
     private String signedToken(Map<String, Object> claims, Instant expiration) {
         return Jwts.builder().subject("17").id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(Instant.now().minusSeconds(60))).expiration(Date.from(expiration))
-                .claim("tokenUse", "ACCESS").claims(claims).signWith(jwtSigningKey).compact();
+                .claim("tokenUse", "ACCESS").claim("authSchema", 2).claim("tokenVersion", 0)
+                .claim("sid", UUID.randomUUID().toString())
+                .claim("sessionExpiresAt", Instant.now().plusSeconds(86400).getEpochSecond()).claims(claims).signWith(jwtSigningKey).compact();
+    }
+
+    @Test
+    @DisplayName("인증 세션 저장소 장애는 정상 인증으로 통과하지 않고 공통 오류로 반환한다")
+    void refusesAuthenticationWhenSessionStoreIsUnavailable() throws Exception {
+        // given
+        String token = tokenProvider.createMemberTokens(17L).accessToken();
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("unavailable"))
+                .when(sessionStatusChecker).requireActive(org.mockito.ArgumentMatchers.any());
+        // when
+        var response = mockMvc.perform(get("/api/auth-test/member")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn().getResponse();
+        // then
+        assertError(response, 500, "COMMON-500");
     }
 
     private void assertError(MockHttpServletResponse response, int status, String code) throws Exception {

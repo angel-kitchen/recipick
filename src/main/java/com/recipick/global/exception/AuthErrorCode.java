@@ -19,7 +19,8 @@ public enum AuthErrorCode implements ErrorCode {
     INACTIVE_ADMIN(HttpStatus.FORBIDDEN, "AUTH-009", "비활성화된 관리자 계정입니다."),
     INVALID_WEBHOOK_SIGNATURE(HttpStatus.UNAUTHORIZED, "AUTH-010", "웹훅 검증에 실패했습니다."),
     RELOGIN_REQUIRED(HttpStatus.UNAUTHORIZED, "AUTH-011", "다시 로그인해 주세요."),
-    LOGIN_LOCKED(HttpStatus.FORBIDDEN, "AUTH-012", "로그인 시도가 많아 잠시 후 다시 시도해 주세요.");
+    LOGIN_LOCKED(HttpStatus.FORBIDDEN, "AUTH-012", "로그인 시도가 많아 잠시 후 다시 시도해 주세요."),
+    INVALID_CSRF(HttpStatus.FORBIDDEN, "AUTH-013", "요청 보호 정보를 다시 확인해 주세요.");
 
     private final HttpStatus status;
     private final String code;

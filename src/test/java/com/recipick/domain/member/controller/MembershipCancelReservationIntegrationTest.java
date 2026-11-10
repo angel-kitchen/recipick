@@ -63,7 +63,7 @@ class MembershipCancelReservationIntegrationTest extends IntegrationTestSupport 
     void setup() {
         member = newMember();
         other = newMember();
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         now = LocalDateTime.now(clock).withNano(0);
     }
 
@@ -259,7 +259,7 @@ class MembershipCancelReservationIntegrationTest extends IntegrationTestSupport 
         // given
         Membership membership = active();
         String path = "/api/memberships/" + membership.getId() + "/cancel-reservation";
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
         // when, then
         assertThat(mvc.perform(post(path)).andReturn().getResponse().getStatus()).isEqualTo(401);
         assertThat(mvc.perform(post(path).header("Authorization", "Bearer " + admin))

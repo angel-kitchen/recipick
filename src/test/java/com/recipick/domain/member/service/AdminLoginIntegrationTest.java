@@ -124,8 +124,8 @@ class AdminLoginIntegrationTest extends IntegrationTestSupport {
                 .digest(refresh.getBytes(StandardCharsets.UTF_8)));
         assertThat(redis.opsForValue().get(key)).isEqualTo(hash).isNotEqualTo(refresh);
         assertThat(redis.getExpire(key)).isBetween(1209590L, 1209600L);
-        assertThat(response.getHeader(HttpHeaders.SET_COOKIE))
-                .contains("HttpOnly", "Secure", "SameSite=Strict", "Path=/api/auth", "Max-Age=1209600");
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> value.startsWith("adminRefreshToken=")).findFirst().orElse(null))
+                .contains("HttpOnly", "Secure", "SameSite=Strict", "Path=/api/admin/auth", "Max-Age=1209600");
     }
 
     @Test
@@ -273,25 +273,25 @@ class AdminLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("관리자 로그인으로 발급한 토큰은 공통 재발급·로그아웃 API에서 사용할 수 있다")
+    @DisplayName("관리자 로그인으로 발급한 토큰은 관리자 전용 재발급·로그아웃 API에서 사용할 수 있다")
     void connectsToReissueAndLogout() throws Exception {
         // given
         MockHttpServletResponse loggedIn = login(loginId, PASSWORD);
         String originalRefresh = refreshCookie(loggedIn);
 
         // when
-        MockHttpServletResponse reissued = mockMvc.perform(post("/api/auth/reissue")
-                .cookie(new Cookie("refreshToken", originalRefresh))).andReturn().getResponse();
+        MockHttpServletResponse reissued = mockMvc.perform(post("/api/admin/auth/reissue")
+                .cookie(new Cookie("adminRefreshToken", originalRefresh))).andReturn().getResponse();
         String access = mapper.readTree(reissued.getContentAsString()).path("data").path("accessToken").asText();
-        MockHttpServletResponse loggedOut = mockMvc.perform(post("/api/auth/logout")
+        MockHttpServletResponse loggedOut = mockMvc.perform(post("/api/admin/auth/logout")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + access)
-                .cookie(new Cookie("refreshToken", refreshCookie(reissued)))).andReturn().getResponse();
+                .cookie(new Cookie("adminRefreshToken", refreshCookie(reissued)))).andReturn().getResponse();
 
         // then
         assertThat(reissued.getStatus()).isEqualTo(200);
         assertThat(loggedOut.getStatus()).isEqualTo(204);
-        MockHttpServletResponse afterLogout = mockMvc.perform(post("/api/auth/reissue")
-                .cookie(new Cookie("refreshToken", refreshCookie(reissued)))).andReturn().getResponse();
+        MockHttpServletResponse afterLogout = mockMvc.perform(post("/api/admin/auth/reissue")
+                .cookie(new Cookie("adminRefreshToken", refreshCookie(reissued)))).andReturn().getResponse();
         assertError(afterLogout, 401, "AUTH-011");
     }
 
@@ -337,9 +337,9 @@ class AdminLoginIntegrationTest extends IntegrationTestSupport {
     }
 
     private String refreshCookie(MockHttpServletResponse response) {
-        String header = response.getHeader(HttpHeaders.SET_COOKIE);
-        assertThat(header).startsWith("refreshToken=");
-        return header.substring("refreshToken=".length(), header.indexOf(';'));
+        String header = response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> value.startsWith("adminRefreshToken=")).findFirst().orElse(null);
+        assertThat(header).startsWith("adminRefreshToken=");
+        return header.substring("adminRefreshToken=".length(), header.indexOf(';'));
     }
 
     private Claims claims(String token) {
@@ -354,6 +354,6 @@ class AdminLoginIntegrationTest extends IntegrationTestSupport {
     private void assertError(MockHttpServletResponse response, int status, String code) throws Exception {
         assertThat(response.getStatus()).isEqualTo(status);
         assertThat(mapper.readTree(response.getContentAsString()).path("code").asText()).isEqualTo(code);
-        assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> value.startsWith("adminRefreshToken=")).findFirst().orElse(null)).isNull();
     }
 }

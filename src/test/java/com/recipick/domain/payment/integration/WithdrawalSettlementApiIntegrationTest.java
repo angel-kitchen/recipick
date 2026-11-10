@@ -124,7 +124,7 @@ class WithdrawalSettlementApiIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(suffix + "@t.dev").phone(suffix.substring(0, 20))
             .name("탈퇴정산테스트").passwordHash(encoder.encode(PASSWORD)).build());
         phoneHash = hasher.hash(member.getPhone());
-        access = tokens.createMemberTokens(member.getId()).accessToken();
+        access = testMemberTokens(member.getId()).accessToken();
         lotSequence = LOT_ORDER_OFFSET + member.getId() * 100;
     }
 

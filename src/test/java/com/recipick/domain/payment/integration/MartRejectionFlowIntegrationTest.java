@@ -383,7 +383,7 @@ class MartRejectionFlowIntegrationTest extends PaymentFlowIntegrationSupport {
     }
 
     private String token(Admin admin) {
-        return tokenProvider.createTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(), admin.getRole().name(),
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(), admin.getRole().name(),
             admin.getMartId())).accessToken();
     }
 

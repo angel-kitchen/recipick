@@ -181,7 +181,7 @@ class AiPromptAdminControllerIntegrationTest extends IntegrationTestSupport {
     void findPrompts_rejectsMartAdmin() throws Exception {
         // when
         MockHttpServletResponse response = mockMvc.perform(get(URL + "?type=MENU")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(Long.MAX_VALUE, "MART_ADMIN", 1L)))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(martAdminForRoleTest(), "MART_ADMIN", 1L)))
             .andReturn()
             .getResponse();
 
@@ -211,7 +211,7 @@ class AiPromptAdminControllerIntegrationTest extends IntegrationTestSupport {
     }
 
     private String token(Long adminId, String role, Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
     }
 
     private JsonNode body(MockHttpServletResponse response) throws Exception {
@@ -235,5 +235,10 @@ class AiPromptAdminControllerIntegrationTest extends IntegrationTestSupport {
         change.put("before", before);
         change.put("after", after);
         return change;
+    }
+
+    private Long martAdminForRoleTest() {
+        return adminRepository.saveAndFlush(Admin.builder().loginId(UUID.randomUUID().toString())
+                .passwordHash("unused").role(AdminRole.MART_ADMIN).martId(1L).active(true).build()).getId();
     }
 }

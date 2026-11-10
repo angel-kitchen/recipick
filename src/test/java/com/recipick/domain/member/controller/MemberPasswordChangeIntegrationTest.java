@@ -97,7 +97,7 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("비밀번호 변경은 모든 이전 재발급 세션을 폐기하고 액세스 토큰은 유지한다")
+    @DisplayName("비밀번호 변경은 모든 이전 재발급 세션과 액세스 토큰을 무효화한다")
     void changesPasswordAndRevokesAllRefreshTokens() throws Exception {
         // given
         String originalHash = current().getPasswordHash();
@@ -108,7 +108,7 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
         // then
         assertThat(response.getStatus()).isEqualTo(204);
         assertThat(response.getContentAsString()).isEmpty();
-        assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).contains("Max-Age=0", "HttpOnly", "Path=/api/auth");
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE).stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).contains("Max-Age=0", "HttpOnly", "Path=/api/auth");
         assertThat(current().getPasswordHash()).isNotEqualTo(originalHash).isNotEqualTo(NEW_PASSWORD);
         assertThat(encoder.matches(NEW_PASSWORD, current().getPasswordHash())).isTrue();
         assertThat(encoder.matches(OLD_PASSWORD, current().getPasswordHash())).isFalse();
@@ -117,7 +117,7 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
         rejectsRefresh(first);
         rejectsRefresh(second);
         assertThat(mvc.perform(get("/api/members/me").header(HttpHeaders.AUTHORIZATION,
-                "Bearer " + first.accessToken())).andReturn().getResponse().getStatus()).isEqualTo(200);
+                "Bearer " + first.accessToken())).andReturn().getResponse().getStatus()).isEqualTo(401);
     }
 
     @Test
@@ -260,7 +260,7 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("익명·관리자·탈퇴 회원은 회원 비밀번호 변경 API를 사용할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when, then
         assertError(change(OLD_PASSWORD, NEW_PASSWORD, null), 401, "AUTH-001");
@@ -335,8 +335,8 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
         String unique = UUID.randomUUID().toString().replace("-", "");
         Member other = members.saveAndFlush(Member.builder().email(unique + "@other.test").name("다른 회원")
                 .phone(unique.substring(0, 20)).passwordHash(current().getPasswordHash()).build());
-        JwtTokenPair otherPair = tokens.createMemberTokens(other.getId());
-        JwtTokenPair adminPair = tokens.createTokens(
+        JwtTokenPair otherPair = testMemberTokens(other.getId());
+        JwtTokenPair adminPair = testAdminTokens(
                 new AuthPrincipal(SubjectType.ADMIN, member.getId(), "SUPER_ADMIN", null));
         sessions.save("MEMBER", other.getId(), otherPair.refreshTokenId(),
                 otherPair.refreshToken(), otherPair.refreshExpiration());
@@ -362,7 +362,7 @@ class MemberPasswordChangeIntegrationTest extends IntegrationTestSupport {
     }
 
     private JwtTokenPair startSession() {
-        JwtTokenPair pair = tokens.createMemberTokens(member.getId());
+        JwtTokenPair pair = testMemberTokens(member.getId());
         sessions.save("MEMBER", member.getId(), pair.refreshTokenId(), pair.refreshToken(), pair.refreshExpiration());
         return pair;
     }

@@ -204,7 +204,7 @@ class AiRequestLogAdminControllerIntegrationTest extends IntegrationTestSupport 
     @DisplayName("MART_ADMIN은 403 AUTH-006이다")
     void findAiRequests_rejectsMartAdmin() throws Exception {
         // when
-        MockHttpServletResponse response = request(token(Long.MAX_VALUE, "MART_ADMIN", 1L), URL);
+        MockHttpServletResponse response = request(token(martAdminForRoleTest(), "MART_ADMIN", 1L), URL);
 
         // then
         assertThat(response.getStatus()).isEqualTo(403);
@@ -212,7 +212,7 @@ class AiRequestLogAdminControllerIntegrationTest extends IntegrationTestSupport 
     }
 
     private String token(Long adminId, String role, Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
     }
 
     private MockHttpServletResponse request(String token, String url) throws Exception {
@@ -235,5 +235,10 @@ class AiRequestLogAdminControllerIntegrationTest extends IntegrationTestSupport 
         return auditLogRepository.findAll().stream()
             .filter(audit -> audit.getAdmin().getId().equals(superAdminId))
             .toList();
+    }
+
+    private Long martAdminForRoleTest() {
+        return adminRepository.saveAndFlush(Admin.builder().loginId(UUID.randomUUID().toString())
+                .passwordHash("unused").role(AdminRole.MART_ADMIN).martId(1L).active(true).build()).getId();
     }
 }

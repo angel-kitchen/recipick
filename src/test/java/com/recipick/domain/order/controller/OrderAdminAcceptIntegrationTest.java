@@ -205,7 +205,7 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
                 .name("권한 검증 회원").phone(unique.substring(0, 20)).passwordHash("hash").build());
 
         // when
-        MockHttpServletResponse response = accept(order.getId(), tokens.createMemberTokens(activeMember.getId()).accessToken());
+        MockHttpServletResponse response = accept(order.getId(), testMemberTokens(activeMember.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(403);
@@ -227,12 +227,12 @@ class OrderAdminAcceptIntegrationTest extends IntegrationTestSupport {
     }
 
     private String superToken() {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
                 .accessToken();
     }
 
     private String martAdminToken(Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, MART_ADMIN_ID, "MART_ADMIN", martId))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, MART_ADMIN_ID, "MART_ADMIN", martId))
                 .accessToken();
     }
 

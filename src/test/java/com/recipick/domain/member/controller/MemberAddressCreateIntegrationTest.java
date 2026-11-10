@@ -56,7 +56,7 @@ class MemberAddressCreateIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@ac.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("배송지 등록 검증")
                 .passwordHash("test-password-hash").build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @Test
@@ -296,8 +296,8 @@ class MemberAddressCreateIntegrationTest extends IntegrationTestSupport {
     @DisplayName("없는 회원은 AUTH-011이고 관리자와 비로그인은 등록할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String missing = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String missing = testMemberTokens(Long.MAX_VALUE).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when
         MockHttpServletResponse missingResponse = request(body("1111014000"), missing);

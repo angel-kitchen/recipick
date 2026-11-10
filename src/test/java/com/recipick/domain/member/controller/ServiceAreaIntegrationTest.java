@@ -48,7 +48,7 @@ class ServiceAreaIntegrationTest extends IntegrationTestSupport {
         assertThat(json.path("data").path("available").asBoolean()).isTrue();
         assertThat(json.path("data").path("martName").asText()).isEqualTo(name);
         assertThat(json.path("data").size()).isEqualTo(2);
-        assertThat(response.getHeader("Set-Cookie")).isNull();
+        assertThat(response.getHeaders("Set-Cookie").stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
     }
 
     @ParameterizedTest

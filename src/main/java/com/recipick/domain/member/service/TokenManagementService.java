@@ -23,10 +23,22 @@ public class TokenManagementService {
     private final MemberRepository memberRepository;
     private final AdminRepository adminRepository;
 
-    public JwtTokenPair reissue(String refreshToken) {
+    public JwtTokenPair reissue(String refreshToken, SubjectType expectedType) {
         RefreshTokenDetails details = tokenProvider.parseRefreshToken(refreshToken);
+        if (details.principal().type() != expectedType) {
+            throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
+        }
+        return reissueDetails(refreshToken, details);
+    }
+
+    public JwtTokenPair reissue(String refreshToken) {
+        return reissueDetails(refreshToken, tokenProvider.parseRefreshToken(refreshToken));
+    }
+
+    private JwtTokenPair reissueDetails(String refreshToken, RefreshTokenDetails details) {
         AuthPrincipal principal = currentPrincipal(details);
-        JwtTokenPair tokens = tokenProvider.rotateTokens(principal, details.sessionId(), details.refreshTokenVersion());
+        JwtTokenPair tokens = tokenProvider.rotateTokens(principal, details.sessionId(),
+                details.refreshTokenVersion(), details.sessionExpiresAt());
         boolean rotated = refreshTokenStore.rotate(principal.type().name(), principal.id(), details.sessionId(),
                 refreshToken, tokens.refreshToken(), tokens.refreshExpiration());
         if (!rotated) {
@@ -39,31 +51,26 @@ public class TokenManagementService {
         return tokens;
     }
 
+    public boolean ownsRefreshCookie(AuthPrincipal principal, String refreshToken) {
+        if (principal == null || refreshToken == null || refreshToken.isBlank()) {
+            return false;
+        }
+        try {
+            RefreshTokenDetails details = tokenProvider.parseRefreshToken(refreshToken);
+            return principal.type() == details.principal().type()
+                    && principal.id().equals(details.principal().id())
+                    && java.util.Objects.equals(principal.sessionId(), details.sessionId());
+        } catch (BusinessException exception) {
+            // 유효하지 않은 Cookie는 정리해도 다른 정상 세션을 지우지 않는다.
+            return true;
+        }
+    }
+
     public void logout(AuthPrincipal principal, String refreshToken) {
-        if (principal == null) {
+        if (principal == null || principal.sessionId() == null) {
             throw new BusinessException(AuthErrorCode.LOGIN_REQUIRED);
         }
-        if (principal.sessionId() != null) {
-            refreshTokenStore.delete(principal.type().name(), principal.id(), principal.sessionId());
-            return;
-        }
-        // 이전 형식 액세스 토큰에는 sid가 없으므로 본인 리프레시 쿠키가 있을 때만 세션을 찾는다.
-        if (refreshToken == null || refreshToken.isBlank()) {
-            return;
-        }
-        RefreshTokenDetails details;
-        try {
-            details = tokenProvider.parseRefreshToken(refreshToken);
-        } catch (BusinessException exception) {
-            if (exception.getErrorCode() != AuthErrorCode.RELOGIN_REQUIRED) {
-                throw exception;
-            }
-            // 인증된 로그아웃은 잘못됐거나 만료된 쿠키도 제거하고 멱등 성공한다.
-            return;
-        }
-        if (principal.type() == details.principal().type() && principal.id().equals(details.principal().id())) {
-            refreshTokenStore.delete(principal.type().name(), principal.id(), details.sessionId());
-        }
+        refreshTokenStore.delete(principal.type().name(), principal.id(), principal.sessionId());
     }
 
     private AuthPrincipal currentPrincipal(RefreshTokenDetails details) {

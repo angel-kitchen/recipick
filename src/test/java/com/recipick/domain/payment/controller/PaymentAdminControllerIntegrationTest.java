@@ -324,7 +324,7 @@ class PaymentAdminControllerIntegrationTest extends IntegrationTestSupport {
     @DisplayName("MART_ADMIN은 목록·상세 모두 403 AUTH-006이다")
     void rejectsMartAdmin() throws Exception {
         // given
-        String martToken = token(Long.MAX_VALUE, "MART_ADMIN", 1L);
+        String martToken = token(martAdminForRoleTest(), "MART_ADMIN", 1L);
 
         // when
         MockHttpServletResponse list = request(martToken, URL);
@@ -356,7 +356,7 @@ class PaymentAdminControllerIntegrationTest extends IntegrationTestSupport {
         );
 
         String memberToken =
-            tokens.createMemberTokens(member.getId()).accessToken();
+            testMemberTokens(member.getId()).accessToken();
 
         // when
         MockHttpServletResponse response = request(memberToken, URL);
@@ -420,7 +420,7 @@ class PaymentAdminControllerIntegrationTest extends IntegrationTestSupport {
     // ---------- 요청·응답 ----------
 
     private String token(Long adminId, String role, Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, role, martId)).accessToken();
     }
 
     private MockHttpServletResponse request(String token, String url) throws Exception {
@@ -445,5 +445,10 @@ class PaymentAdminControllerIntegrationTest extends IntegrationTestSupport {
         return auditLogRepository.findAll().stream()
             .filter(audit -> audit.getAdmin().getId().equals(superAdminId))
             .toList();
+    }
+
+    private Long martAdminForRoleTest() {
+        return adminRepository.saveAndFlush(Admin.builder().loginId(UUID.randomUUID().toString())
+                .passwordHash("unused").role(AdminRole.MART_ADMIN).martId(1L).active(true).build()).getId();
     }
 }

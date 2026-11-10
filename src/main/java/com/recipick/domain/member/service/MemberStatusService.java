@@ -16,6 +16,14 @@ public class MemberStatusService implements MemberStatusChecker {
     private final MemberRepository memberRepository;
 
     @Override
+    public void requireCurrent(Long memberId, long tokenVersion) {
+        if (memberRepository.findById(memberId)
+                .filter(member -> !member.isWithdrawn() && member.getRefreshTokenVersion() == tokenVersion).isEmpty()) {
+            throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);
+        }
+    }
+
+    @Override
     public void requireActive(Long memberId) {
         if (!memberRepository.existsByIdAndWithdrawnAtIsNull(memberId)) {
             throw new BusinessException(AuthErrorCode.RELOGIN_REQUIRED);

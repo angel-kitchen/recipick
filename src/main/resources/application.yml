@@ -72,6 +72,10 @@ springdoc:
     path: /api/docs
   swagger-ui:
     path: /api/swagger-ui
+    csrf:
+      enabled: true
+      cookie-name: authCsrfToken
+      header-name: X-CSRF-TOKEN
 
 recipick:
   rate-limit:

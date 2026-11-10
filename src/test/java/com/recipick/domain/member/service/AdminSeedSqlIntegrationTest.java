@@ -73,7 +73,7 @@ class AdminSeedSqlIntegrationTest extends IntegrationTestSupport {
         assertThat(memberResponse.getStatus()).isEqualTo(401);
         assertThat(mapper.readTree(memberResponse.getContentAsString()).path("code").asText())
                 .isEqualTo("AUTH-007");
-        assertThat(memberResponse.getHeader("Set-Cookie")).isNull();
+        assertThat(memberResponse.getHeaders("Set-Cookie").stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
     }
 
     @ParameterizedTest

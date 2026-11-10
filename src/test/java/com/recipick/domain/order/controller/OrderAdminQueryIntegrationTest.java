@@ -114,7 +114,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
 
         // when
         MockHttpServletResponse response = perform("/api/admin/orders",
-                tokens.createMemberTokens(activeMember.getId()).accessToken());
+                testMemberTokens(activeMember.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(403);
@@ -387,7 +387,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
     }
 
     private String superToken() {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
                 .accessToken();
     }
 
@@ -396,7 +396,7 @@ class OrderAdminQueryIntegrationTest extends IntegrationTestSupport {
                 .loginId(UUID.randomUUID().toString()).passwordHash("hash")
                 .role(com.recipick.domain.member.entity.enums.AdminRole.MART_ADMIN).martId(martId).active(true).build()).getId();
         adminIds.add(adminId);
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, "MART_ADMIN", martId))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, adminId, "MART_ADMIN", martId))
                 .accessToken();
     }
 

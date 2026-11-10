@@ -24,6 +24,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider tokenProvider;
     private final SecurityErrorResponseWriter responseWriter;
     private final MemberStatusChecker memberStatusChecker;
+    private final AdminStatusChecker adminStatusChecker;
+    private final SessionStatusChecker sessionStatusChecker;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -44,13 +46,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (headers.size() != 1 || !header.regionMatches(true, 0, "Bearer ", 0, 7)) {
                 throw new BusinessException(AuthErrorCode.INVALID_TOKEN);
             }
-            principal = tokenProvider.parseAccessToken(header.substring(7).trim());
+            AccessTokenDetails details = tokenProvider.parseAccessTokenDetails(header.substring(7).trim());
+            principal = details.principal();
             if (principal.type() == SubjectType.MEMBER) {
-                memberStatusChecker.requireActive(principal.id());
+                memberStatusChecker.requireCurrent(principal.id(), details.tokenVersion());
+            } else {
+                adminStatusChecker.requireCurrent(principal);
+            }
+            // 로그아웃은 유효한 주체의 동일 세션 삭제를 반복해도 성공한다.
+            String path = request.getRequestURI().substring(request.getContextPath().length());
+            if (!"/api/auth/logout".equals(path) && !"/api/admin/auth/logout".equals(path)) {
+                sessionStatusChecker.requireActive(principal);
             }
         } catch (BusinessException exception) {
             SecurityContextHolder.clearContext();
+            SecurityEvents.rejected(SecurityEvents.Event.TOKEN_REJECTED, null, null);
             responseWriter.write(response, exception.getErrorCode());
+            return;
+        } catch (org.springframework.dao.DataAccessException exception) {
+            SecurityContextHolder.clearContext();
+            SecurityEvents.rejected(SecurityEvents.Event.AUTH_STORE_UNAVAILABLE, null, null);
+            responseWriter.write(response, com.recipick.global.exception.CommonErrorCode.INTERNAL_SERVER_ERROR);
             return;
         }
         SecurityContext context = SecurityContextHolder.createEmptyContext();

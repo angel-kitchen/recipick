@@ -98,7 +98,7 @@ class PointsOnlyPaymentIntegrationTest extends PaymentFlowIntegrationSupport {
             .passwordHash("hash")
             .martId(MART_ID)
             .build());
-        memberToken = tokenProvider.createMemberTokens(member.getId()).accessToken();
+        memberToken = testMemberTokens(member.getId()).accessToken();
         Mart mart = martRepository.findById(MART_ID).orElseThrow();
         product = productRepository.save(Product.builder()
             .mart(mart)
@@ -316,7 +316,7 @@ class PointsOnlyPaymentIntegrationTest extends PaymentFlowIntegrationSupport {
     }
 
     private MockHttpServletResponse reject(Long orderId, Admin admin, String idempotencyKey) throws Exception {
-        String token = tokenProvider.createTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(),
+        String token = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(),
             admin.getRole().name(), admin.getMartId())).accessToken();
         MockHttpServletResponse response = mockMvc.perform(post("/api/admin/orders/{orderId}/reject", orderId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)

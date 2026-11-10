@@ -68,7 +68,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("가입 직후에는 본인 정보와 빈 배송지·마트·멤버십을 반환한다")
     void returnsNewMemberProfile() throws Exception {
         // given
-        String token = tokens.createMemberTokens(member.getId()).accessToken();
+        String token = testMemberTokens(member.getId()).accessToken();
 
         // when
         MockHttpServletResponse response = request(token);
@@ -88,7 +88,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         assertThat(data.path("membership").path("endAt").isNull()).isTrue();
         assertThat(data.path("trialEligible").asBoolean()).isTrue();
         assertThat(data.has("passwordHash")).isFalse();
-        assertThat(response.getHeader("Set-Cookie")).isNull();
+        assertThat(response.getHeaders("Set-Cookie").stream().filter(value -> (value.startsWith("memberRefreshToken=") || value.startsWith("adminRefreshToken="))).findFirst().orElse(null)).isNull();
     }
 
     @Test
@@ -103,7 +103,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
                 .endAt(now.plusDays(29)).build());
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -128,7 +128,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         selectAddress("9999999999", null);
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -147,7 +147,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         var before = jdbc.queryForMap("SELECT * FROM member WHERE id = ?", member.getId());
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -165,7 +165,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         selectAddress("1111014000", 2L);
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -184,7 +184,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         selectAddress("1111014000", null);
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -199,7 +199,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
         selectAddress("1111014000", Long.MAX_VALUE);
 
         // when
-        MockHttpServletResponse response = request(tokens.createMemberTokens(member.getId()).accessToken());
+        MockHttpServletResponse response = request(testMemberTokens(member.getId()).accessToken());
 
         // then
         assertThat(response.getStatus()).isEqualTo(200);
@@ -211,7 +211,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("요청 파라미터로 다른 회원 ID를 보내도 토큰의 본인 정보만 조회한다")
     void ignoresSuppliedMemberId() throws Exception {
         // given
-        String token = tokens.createMemberTokens(member.getId()).accessToken();
+        String token = testMemberTokens(member.getId()).accessToken();
 
         // when
         MockHttpServletResponse response = mockMvc.perform(get("/api/members/me")
@@ -227,7 +227,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("유효한 회원 토큰이어도 회원이 없으면 AUTH-011을 반환한다")
     void rejectsMissingMember() throws Exception {
         // given
-        String token = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+        String token = testMemberTokens(Long.MAX_VALUE).accessToken();
 
         // when
         MockHttpServletResponse response = request(token);
@@ -241,7 +241,7 @@ class MemberMeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("비로그인 요청은 401이고 관리자 토큰은 403이다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String adminToken = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null))
+        String adminToken = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null))
                 .accessToken();
 
         // when

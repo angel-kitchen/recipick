@@ -31,7 +31,7 @@ class JwtTokenProviderTest {
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
-    @DisplayName("리프레시 세션 버전은 발급·회전 때 유지하고 액세스 토큰에는 넣지 않는다")
+    @DisplayName("회원 토큰 버전은 액세스와 리프레시에 포함하고 회전 후에도 유지한다")
     void preservesRefreshVersionWithoutChangingAccessClaims() {
         // given
         JwtTokenPair pair = provider.createMemberTokens(1L, 3);
@@ -39,13 +39,13 @@ class JwtTokenProviderTest {
 
         // when
         JwtTokenPair rotated = provider.rotateTokens(parsed.principal(), parsed.sessionId(),
-                parsed.refreshTokenVersion());
+                parsed.refreshTokenVersion(), parsed.sessionExpiresAt());
 
         // then
         assertThat(parsed.refreshTokenVersion()).isEqualTo(3);
         assertThat(provider.parseRefreshToken(rotated.refreshToken()).refreshTokenVersion()).isEqualTo(3);
         assertThat(Jwts.parser().verifyWith(key).clock(() -> Date.from(NOW)).build()
-                .parseSignedClaims(pair.accessToken()).getPayload()).doesNotContainKey("refreshVersion");
+                .parseSignedClaims(pair.accessToken()).getPayload()).containsEntry("tokenVersion", 3);
     }
 
     @Test
@@ -280,11 +280,54 @@ class JwtTokenProviderTest {
         assertError(thrown, AuthErrorCode.INVALID_TOKEN);
     }
 
+    @Test
+    @DisplayName("13일 뒤 재발급해도 최초 로그인 14일의 절대 만료는 연장되지 않는다")
+    void preservesAbsoluteSessionDeadline() {
+        // given
+        var first = provider.createMemberTokens(17L, 2);
+        var original = provider.parseRefreshToken(first.refreshToken());
+        var later = new JwtTokenProvider(key,
+                new JwtProperties(null, Duration.ofMinutes(30), Duration.ofDays(14)),
+                Clock.fixed(NOW.plus(Duration.ofDays(13)), ZoneOffset.UTC));
+        // when
+        var rotated = later.rotateTokens(original.principal(), original.sessionId(),
+                original.refreshTokenVersion(), original.sessionExpiresAt());
+        // then
+        assertThat(rotated.refreshExpiration()).isEqualTo(Duration.ofDays(1));
+        assertThat(later.parseRefreshToken(rotated.refreshToken()).sessionExpiresAt())
+                .isEqualTo(NOW.plus(Duration.ofDays(14)));
+        var expired = new JwtTokenProvider(key,
+                new JwtProperties(null, Duration.ofMinutes(30), Duration.ofDays(14)),
+                Clock.fixed(NOW.plus(Duration.ofDays(14)), ZoneOffset.UTC));
+        assertError(catchThrowable(() -> expired.parseRefreshToken(rotated.refreshToken())),
+                AuthErrorCode.RELOGIN_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("절대 만료까지 10초 남으면 새 액세스 토큰도 10초까지만 발급한다")
+    void capsAccessAtSessionDeadline() {
+        // given
+        var original = provider.parseRefreshToken(provider.createMemberTokens(17L).refreshToken());
+        var later = new JwtTokenProvider(key,
+                new JwtProperties(null, Duration.ofMinutes(30), Duration.ofDays(14)),
+                Clock.fixed(original.sessionExpiresAt().minusSeconds(10), ZoneOffset.UTC));
+        // when
+        var rotated = later.rotateTokens(original.principal(), original.sessionId(),
+                original.refreshTokenVersion(), original.sessionExpiresAt());
+        // then
+        assertThat(rotated.accessExpiration()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(rotated.refreshExpiration()).isEqualTo(Duration.ofSeconds(10));
+    }
+
     private String token(Map<String, Object> overrides) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", "17");
         claims.put("type", "MEMBER");
         claims.put("tokenUse", "ACCESS");
+        claims.put("authSchema", 2);
+        claims.put("tokenVersion", 0L);
+        claims.put("sid", UUID.randomUUID().toString());
+        claims.put("sessionExpiresAt", NOW.plusSeconds(86400).getEpochSecond());
         claims.put("iat", Date.from(NOW.minusSeconds(1)));
         claims.put("exp", Date.from(NOW.plusSeconds(120)));
         claims.put("jti", UUID.randomUUID().toString());

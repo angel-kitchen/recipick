@@ -58,7 +58,7 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@ac.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("배송지 등록 검증")
                 .passwordHash("test-password-hash").build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         address = addresses.saveAndFlush(MemberAddress.builder().member(member).label("집")
                 .address("기존 주소").detailAddress("101호").legalDongCode("1111014000").build());
         member.selectAddress(address, 1L);
@@ -168,10 +168,10 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
     @DisplayName("다른 회원 배송지와 없는 배송지는 동일한 ADDRESS-001로 거절한다")
     void hidesUnownedAddresses() throws Exception {
         // given
-        String other = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
+        String other = testMemberTokens(Long.MAX_VALUE).accessToken();
         Member owner = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@owner.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).passwordHash("hash").build());
-        String ownerToken = tokens.createMemberTokens(owner.getId()).accessToken();
+        String ownerToken = testMemberTokens(owner.getId()).accessToken();
 
         // when
         MockHttpServletResponse unowned = request(Map.of("label", "수정 시도"), ownerToken);
@@ -249,7 +249,7 @@ class MemberAddressUpdateIntegrationTest extends IntegrationTestSupport {
     @DisplayName("회원 토큰 없이 또는 관리자 토큰으로 배송지를 수정할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when
         MockHttpServletResponse anonymous = request(Map.of("label", "회사"), null);

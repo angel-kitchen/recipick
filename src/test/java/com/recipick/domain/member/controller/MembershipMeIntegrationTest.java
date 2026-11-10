@@ -54,7 +54,7 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
     @BeforeEach
     void setUp() {
         member = createMember();
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         now = LocalDateTime.now(clock).withNano(0);
     }
 
@@ -214,8 +214,8 @@ class MembershipMeIntegrationTest extends IntegrationTestSupport {
     @DisplayName("비로그인·관리자·없는 회원은 멤버십을 조회할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String missing = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String missing = testMemberTokens(Long.MAX_VALUE).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when
         MockHttpServletResponse anonymous = request(null);

@@ -94,7 +94,7 @@ class OrderCreateIntegrationTest extends IntegrationTestSupport {
             .passwordHash("hash")
             .martId(MART_ID)
             .build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach

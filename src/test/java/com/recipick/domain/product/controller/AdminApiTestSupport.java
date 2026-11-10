@@ -51,7 +51,7 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
     protected ProductRepository productRepository;
 
     protected String superToken() {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, SUPER_ADMIN_ID, "SUPER_ADMIN", null))
             .accessToken();
     }
 
@@ -60,7 +60,7 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
                 com.recipick.domain.member.entity.Admin.builder().loginId(UUID.randomUUID().toString())
                         .passwordHash("hash").role(com.recipick.domain.member.entity.enums.AdminRole.MART_ADMIN)
                         .martId(id).active(true).build()).getId());
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, martAdminId, "MART_ADMIN", martId))
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, martAdminId, "MART_ADMIN", martId))
             .accessToken();
     }
 
@@ -68,7 +68,7 @@ abstract class AdminApiTestSupport extends IntegrationTestSupport {
         String unique = UUID.randomUUID().toString().replace("-", "");
         Member member = members.saveAndFlush(Member.builder().email(unique + "@role.test")
                 .name("권한 검증 회원").phone(unique.substring(0, 20)).passwordHash("hash").build());
-        return tokens.createMemberTokens(member.getId()).accessToken();
+        return testMemberTokens(member.getId()).accessToken();
     }
 
     protected MockHttpServletResponse get(String url, String token) throws Exception {

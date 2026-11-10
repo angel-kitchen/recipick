@@ -15,7 +15,6 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +26,7 @@ public class MemberWithdrawalPreparationProcessor {
     private final MembershipService memberships;
     private final ObjectProvider<WithdrawalSettlementChecker> settlementCheckers;
     private final WithdrawalPaymentMethodPreparer paymentMethods;
-    private final PasswordEncoder encoder;
+    private final com.recipick.domain.member.service.SensitivePasswordGuard passwordGuard;
     private final Clock clock;
 
     public boolean isEnabled() {
@@ -38,9 +37,7 @@ public class MemberWithdrawalPreparationProcessor {
     public WithdrawalPaymentMethodPreparation prepare(Long memberId, MemberWithdrawRequest request) {
         // 회원을 먼저 잠근 뒤 재인증·기본 제한을 확인한다. 포인트·개인정보는 변경하지 않는다.
         Member member = members.getMemberForUpdate(memberId);
-        if (!encoder.matches(request.password(), member.getPasswordHash())) {
-            throw new BusinessException(MemberErrorCode.INVALID_CURRENT_PASSWORD);
-        }
+        passwordGuard.verify(memberId, request.password(), member.getPasswordHash());
         if (orders.existsInProgressOrder(memberId)) {
             throw new BusinessException(MemberErrorCode.WITHDRAW_BLOCKED_ORDER);
         }

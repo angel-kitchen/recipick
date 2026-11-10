@@ -74,7 +74,7 @@ class BillingKeyApiIntegrationTest extends IntegrationTestSupport {
         String suffix = UUID.randomUUID().toString();
         member = members.saveAndFlush(Member.builder().email(suffix + "@t.dev").phone(suffix.substring(0, 20))
             .name("빌링키API테스트").passwordHash(encoder.encode(PASSWORD)).build());
-        access = tokens.createMemberTokens(member.getId()).accessToken();
+        access = testMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach

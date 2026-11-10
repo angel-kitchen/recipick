@@ -53,7 +53,7 @@ class ProductControllerTest extends AdminApiTestSupport {
             .email(UUID.randomUUID() + "@product.test").name("상품 조회")
             .phone(UUID.randomUUID().toString().substring(0, 20))
             .passwordHash("test-password-hash").martId(martId).build());
-        return tokens.createMemberTokens(member.getId()).accessToken();
+        return testMemberTokens(member.getId()).accessToken();
     }
 
     private List<String> names(MockHttpServletResponse response) throws Exception {

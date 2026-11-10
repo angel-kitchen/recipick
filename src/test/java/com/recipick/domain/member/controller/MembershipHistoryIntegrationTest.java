@@ -87,7 +87,7 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
     }
 
     private String token(Admin value) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, value.getId(), value.getRole().name(),
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, value.getId(), value.getRole().name(),
                 value.getMartId())).accessToken();
     }
 
@@ -246,7 +246,7 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
     void restrictsAccessToSuperAdmin() throws Exception {
         // given
         String path = "/api/admin/members/" + member.getId() + "/memberships";
-        String memberToken = tokens.createMemberTokens(member.getId()).accessToken();
+        String memberToken = testMemberTokens(member.getId()).accessToken();
         // when, then
         assertThat(mvc.perform(get(path)).andReturn().getResponse().getStatus()).isEqualTo(401);
         for (String denied : List.of(memberToken, token(martAdmin))) {
@@ -266,7 +266,7 @@ class MembershipHistoryIntegrationTest extends IntegrationTestSupport {
         var changedRole = search(member.getId());
         // then
         assertThat(inactive.getStatus()).isEqualTo(403);
-        assertThat(changedRole.getStatus()).isEqualTo(403);
+        assertThat(changedRole.getStatus()).isEqualTo(401);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM admin_audit_log WHERE admin_id = ?", Long.class,
                 admin.getId())).isZero();
     }

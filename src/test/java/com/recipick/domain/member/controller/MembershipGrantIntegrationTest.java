@@ -172,7 +172,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // given
         assertThat(membershipService.isActive(member.getId())).isFalse();
         assertThat(grant(member.getId(), token).getStatus()).isEqualTo(201);
-        String memberToken = tokens.createMemberTokens(member.getId()).accessToken();
+        String memberToken = testMemberTokens(member.getId()).accessToken();
 
         // when
         MockHttpServletResponse membership = mockMvc.perform(get("/api/memberships/me")
@@ -272,7 +272,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
     @DisplayName("비로그인·회원·마트 관리자에게 지급 권한이 없다")
     void enforcesSuperAdminOnly() throws Exception {
         // given
-        String memberToken = tokens.createMemberTokens(member.getId()).accessToken();
+        String memberToken = testMemberTokens(member.getId()).accessToken();
         Admin martAdmin = admin(AdminRole.MART_ADMIN, true);
         String martToken = adminToken(martAdmin, "MART_ADMIN", 1L);
 
@@ -298,13 +298,13 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
         // when
         MockHttpServletResponse inactiveResponse = grant(member.getId(), adminToken(inactive, "SUPER_ADMIN", null));
         MockHttpServletResponse demotedResponse = grant(member.getId(), adminToken(demoted, "SUPER_ADMIN", null));
-        MockHttpServletResponse missingAdmin = grant(member.getId(), tokens.createTokens(
+        MockHttpServletResponse missingAdmin = grant(member.getId(), testAdminTokens(
                 new AuthPrincipal(SubjectType.ADMIN, Long.MAX_VALUE, "SUPER_ADMIN", null)).accessToken());
 
         // then
         assertError(inactiveResponse, 403, "AUTH-009");
-        assertError(demotedResponse, 403, "AUTH-006");
-        assertError(missingAdmin, 403, "AUTH-004");
+        assertError(demotedResponse, 401, "AUTH-011");
+        assertError(missingAdmin, 401, "AUTH-011");
         assertThat(memberships.existsByMemberId(member.getId())).isFalse();
     }
 
@@ -347,7 +347,7 @@ class MembershipGrantIntegrationTest extends IntegrationTestSupport {
     }
 
     private String adminToken(Admin admin, String role, Long martId) {
-        return tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(), role, martId)).accessToken();
+        return testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, admin.getId(), role, martId)).accessToken();
     }
 
     private MockHttpServletResponse grant(Long memberId, String access) throws Exception {

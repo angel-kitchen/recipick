@@ -46,7 +46,7 @@ class MemberAddressDeleteIntegrationTest extends IntegrationTestSupport {
         member = members.saveAndFlush(Member.builder().email(UUID.randomUUID() + "@as.test")
                 .phone(UUID.randomUUID().toString().substring(0, 20)).name("배송지 선택 검증")
                 .passwordHash("test-password-hash").build());
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
         selected = address(member, "1111014000");
         target = address(member, "4121010300");
         member.selectAddress(selected, 1L);
@@ -161,8 +161,8 @@ class MemberAddressDeleteIntegrationTest extends IntegrationTestSupport {
     @DisplayName("없는 회원과 관리자 및 비로그인 요청은 배송지를 삭제할 수 없다")
     void enforcesMemberAuthentication() throws Exception {
         // given
-        String missing = tokens.createMemberTokens(Long.MAX_VALUE).accessToken();
-        String admin = tokens.createTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
+        String missing = testMemberTokens(Long.MAX_VALUE).accessToken();
+        String admin = testAdminTokens(new AuthPrincipal(SubjectType.ADMIN, 1L, "SUPER_ADMIN", null)).accessToken();
 
         // when
         MockHttpServletResponse missingMember = deleteAddress(target.getId(), missing);

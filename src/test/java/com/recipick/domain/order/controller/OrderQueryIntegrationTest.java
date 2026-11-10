@@ -54,7 +54,7 @@ class OrderQueryIntegrationTest extends IntegrationTestSupport {
     void setUp() {
         member = member();
         otherMember = member();
-        token = tokens.createMemberTokens(member.getId()).accessToken();
+        token = testMemberTokens(member.getId()).accessToken();
     }
 
     @AfterEach

@@ -50,11 +50,11 @@ class TokenManagementServiceTest {
         Member after = Member.builder().passwordHash("old-hash").build();
         after.changePasswordHash("new-hash");
         given(tokenProvider.parseRefreshToken("old-refresh"))
-                .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id"));
+                .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id", 0, java.time.Instant.parse("2030-01-01T00:00:00Z")));
         given(members.findById(1L)).willReturn(Optional.of(before), Optional.of(after));
         JwtTokenPair pair = new JwtTokenPair("access", "new-refresh", "new-id",
                 Duration.ofMinutes(30), Duration.ofDays(14));
-        given(tokenProvider.rotateTokens(principal, "session-id", 0)).willReturn(pair);
+        given(tokenProvider.rotateTokens(principal, "session-id", 0, java.time.Instant.parse("2030-01-01T00:00:00Z"))).willReturn(pair);
         given(store.rotate("MEMBER", 1L, "session-id", "old-refresh", "new-refresh", Duration.ofDays(14)))
                 .willReturn(true);
 
@@ -74,10 +74,10 @@ class TokenManagementServiceTest {
         JwtTokenPair pair = new JwtTokenPair("access", "new-refresh", "new-id",
                 Duration.ofMinutes(30), Duration.ofDays(14));
         given(tokenProvider.parseRefreshToken("old-refresh"))
-                .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id"));
+                .willReturn(new RefreshTokenDetails(principal, "old-id", "session-id", 0, java.time.Instant.parse("2030-01-01T00:00:00Z")));
         given(members.findById(1L)).willReturn(Optional.of(
                 Member.builder().passwordHash("hash").build()));
-        given(tokenProvider.rotateTokens(principal, "session-id", 0)).willReturn(pair);
+        given(tokenProvider.rotateTokens(principal, "session-id", 0, java.time.Instant.parse("2030-01-01T00:00:00Z"))).willReturn(pair);
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("Redis unavailable");
         given(store.rotate("MEMBER", 1L, "session-id", "old-refresh", "new-refresh", Duration.ofDays(14)))
                 .willThrow(failure);

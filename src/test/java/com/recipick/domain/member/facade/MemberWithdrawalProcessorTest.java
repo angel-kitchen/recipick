@@ -51,7 +51,7 @@ class MemberWithdrawalProcessorTest {
             factory.addBean("checker" + i, checkers[i]);
         }
         return new MemberWithdrawalProcessor(members, orders, carts, memberships, blocks, withdrawal,
-                factory.getBeanProvider(WithdrawalSettlementChecker.class), encoder, clock);
+                factory.getBeanProvider(WithdrawalSettlementChecker.class), guard(), clock);
     }
 
     @Test
@@ -228,4 +228,10 @@ class MemberWithdrawalProcessorTest {
         verifyNoInteractions(blocks, withdrawal);
     }
 
+
+    private com.recipick.domain.member.service.SensitivePasswordGuard guard() {
+        var attempts = mock(com.recipick.infra.redis.RedisLoginAttemptStore.class);
+        given(attempts.clearIfUnlocked(any(), any())).willReturn(true);
+        return new com.recipick.domain.member.service.SensitivePasswordGuard(attempts, encoder);
+    }
 }

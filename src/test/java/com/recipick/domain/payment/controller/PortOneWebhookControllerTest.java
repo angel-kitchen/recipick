@@ -71,6 +71,11 @@ class PortOneWebhookControllerTest {
 
     @MockitoBean
     private MemberStatusChecker memberStatusChecker;
+    @MockitoBean
+    private com.recipick.global.security.AdminStatusChecker adminStatusChecker;
+    @MockitoBean
+    private com.recipick.global.security.SessionStatusChecker sessionStatusChecker;
+
 
     @MockitoBean
     private PortOneWebhookFacade portOneWebhookFacade;
