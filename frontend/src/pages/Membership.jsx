@@ -182,6 +182,15 @@ export default function Membership() {
   );
   const terminable = current && current.type === 'PAID' && PAID_SOURCES.includes(current.source) ? current : null;
   const canStart = !membership.active && !pending;
+  // 해지 버튼은 멤버십이 있으면 항상 보이고, 지금 할 수 없는 동작은 이유와 함께 비활성으로 둔다
+  const hasMembership = Boolean(current || pending);
+  const heldMembership = current ?? pending;
+  const reserveBlockedReason =
+    heldMembership?.source === 'ADMIN_GRANT'
+      ? '관리자가 지급한 멤버십은 해지 예약을 할 수 없어요.'
+      : heldMembership?.cancelReservedAt
+        ? '이미 해지 예약했어요.'
+        : '자동 갱신을 쓰지 않는 멤버십이라 해지 예약할 것이 없어요.';
 
   return (
     <div className="container page">
@@ -270,27 +279,31 @@ export default function Membership() {
               구독하기
             </button>
           )}
-          {reservable && (
-            <button
-              type="button"
-              className="btn btn--outline"
-              disabled={busy}
-              onClick={() => setModal({ type: 'reserve', target: reservable })}
-            >
-              해지 예약
-            </button>
-          )}
-          {terminable && (
-            <button
-              type="button"
-              className="btn btn--outline"
-              disabled={busy}
-              onClick={() => setModal({ type: 'terminate', target: terminable })}
-            >
-              즉시 해지
-            </button>
+          {hasMembership && (
+            <>
+              <button
+                type="button"
+                className="btn btn--outline"
+                disabled={busy || !reservable}
+                onClick={() => setModal({ type: 'reserve', target: reservable })}
+              >
+                해지 예약
+              </button>
+              <button
+                type="button"
+                className="btn btn--outline"
+                disabled={busy || !terminable}
+                onClick={() => setModal({ type: 'terminate', target: terminable })}
+              >
+                즉시 해지
+              </button>
+            </>
           )}
         </div>
+        {hasMembership && !reservable && <p className="field__hint">{reserveBlockedReason}</p>}
+        {hasMembership && !terminable && (
+          <p className="field__hint">즉시 해지는 유료 구독 중일 때만 할 수 있어요. 무료 체험은 해지 예약을 써 주세요.</p>
+        )}
       </section>
 
       <section className="card" style={{ marginTop: 16 }}>
