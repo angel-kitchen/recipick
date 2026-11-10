@@ -96,6 +96,8 @@ export default function Checkout() {
       detailAddress: form.detailAddress,
       legalDongCode: form.legalDongCode || null,
       usedPoint,
+      // 주문서에 보인 결제 금액. 그 사이 가격이 바뀌었으면 서버가 주문을 만들지 않고 ORDER-011로 거절한다
+      expectedPayAmount: preview.payAmount - usedPoint,
     };
     const serialized = JSON.stringify(body);
     if (!idempotency.current.key || idempotency.current.body !== serialized) {
@@ -121,6 +123,10 @@ export default function Checkout() {
         setPendingOrder(await findPendingOrder().catch(() => null));
         setModalError(null);
         setModal('pending');
+      } else if (e.code === 'ORDER-011') {
+        // 바뀐 금액을 다시 보여 준 뒤 안내한다. 미리보기 조회가 오류를 지우므로 그 뒤에 넣는다
+        await runPreview();
+        setError(e);
       } else {
         setError(e);
       }
