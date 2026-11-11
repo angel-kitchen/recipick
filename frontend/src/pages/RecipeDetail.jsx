@@ -227,9 +227,10 @@ function RecipeDetailView({ recipeId }) {
                   allowFullScreen
                 />
               </div>
-              {/* 영상 주인이 퍼가기를 막아 둔 경우를 위해 원본 링크를 함께 둔다 */}
+              {/* 시연용으로 남의 영상을 빌려 쓰고 있어 출처와 비영리 목적을 밝혀 둔다 */}
               <p className="field__hint" style={{ marginTop: 8 }}>
-                영상이 나오지 않으면 <a href={recipe.youtubeUrl} target="_blank" rel="noreferrer">YouTube에서 보기</a>
+                이 영상은 외부 유튜브 영상으로, 저작권은 원작자에게 있어요. Recipick은 이 영상으로 수익을 얻지 않는
+                시연용 서비스이며, 정식 출시 때는 자체 제작 영상으로 교체할 예정이에요.
               </p>
             </section>
           )}
