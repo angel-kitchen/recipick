@@ -405,6 +405,38 @@ class ProductRepositoryTest extends IntegrationTestSupport {
         assertThat(exists).isTrue();
     }
 
+    @Test
+    @DisplayName("마트 ID를 먼저 조회해도 뒤이은 재고 잠금 조회는 그 사이 차감된 최신 재고를 읽는다")
+    void findMartIdsBeforeLock_lockReadsLatestStock() {
+        // given
+        Long productId = productRepository.save(Product.builder()
+            .mart(martA)
+            .name("재고 잠금 상품")
+            .price(1000L)
+            .totalQuantity(10)
+            .deleted(false)
+            .build()).getId();
+        em.flush();
+        em.clear();
+        productRepository.findMartIdsByIdIn(List.of(productId));
+        // 영속성 컨텍스트를 거치지 않는 벌크 UPDATE로,
+        // 주문 생성의 조회와 잠금 사이에 다른 주문 3건이 재고 차감을 커밋한 상황을 만든다
+        em.createQuery("update Product p set p.totalQuantity = 7 where p.id = :id")
+            .setParameter("id", productId)
+            .executeUpdate();
+
+        // when
+        Product locked = productRepository.findAllByIdInForUpdate(List.of(productId)).get(0);
+        int lockedQuantity = locked.getTotalQuantity();
+        locked.decreaseStock(1);
+        em.flush();
+        em.clear();
+
+        // then
+        assertThat(lockedQuantity).isEqualTo(7);
+        assertThat(productRepository.findById(productId).orElseThrow().getTotalQuantity()).isEqualTo(6);
+    }
+
     private void changePrice(String name, Long price) {
         productRepository.findAll().stream()
             .filter(p -> p.getName().equals(name))
