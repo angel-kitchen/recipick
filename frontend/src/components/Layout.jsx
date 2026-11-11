@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import Footer from './Footer';
 import FloatingRecent from './FloatingRecent';
@@ -25,9 +25,18 @@ function hiddenToday() {
 export default function Layout() {
   const { member } = useAuth();
   const { pathname, search } = useLocation();
+  const navigationType = useNavigationType();
   const [trialOffer, setTrialOffer] = useState(false);
   // 닫으면 사이트에 새로 들어오거나 새로고침할 때까지 다시 띄우지 않는다. 다른 회원으로 로그인하면 다시 띄운다
   const [closedFor, setClosedFor] = useState(null);
+
+  // SPA는 화면을 바꿔도 앞 화면의 스크롤 위치가 남아 새 화면이 중간부터 보인다.
+  // 뒤로 가기는 보던 위치로 돌아가는 게 자연스러워 새로 이동할 때만 맨 위로 올린다
+  useEffect(() => {
+    if (navigationType !== 'POP') {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, navigationType]);
 
   // 체험할 수 있는 비회원에게 띄운다. 모바일 결제·카드 등록에서 돌아온 화면은 결과 처리가 먼저다
   useEffect(() => {
