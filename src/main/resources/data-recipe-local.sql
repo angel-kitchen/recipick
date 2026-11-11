@@ -88,7 +88,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '시금치된장�
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '떡국', 'KOREAN', 'SOUP', 2, 30, 'EASY', 0,
-       '[{"order":1,"description":"떡국 떡을 찬물에 10분 불린다"},{"order":2,"description":"냄비에 참기름을 두르고 소고기를 볶는다"},{"order":3,"description":"물(또는 사골육수)을 붓고 끓으면 국간장으로 간한다"},{"order":4,"description":"떡을 넣고 떡이 떠오를 때까지 끓인다"},{"order":5,"description":"달걀물을 풀어 넣고 대파를 넣은 뒤 김가루를 올려 낸다"}]', 'Eu5zpddy0kg', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"떡국 떡을 찬물에 10분 불린다"},{"order":2,"description":"냄비에 참기름을 두르고 소고기를 볶는다"},{"order":3,"description":"물(또는 사골육수)을 붓고 끓으면 국간장으로 간한다"},{"order":4,"description":"떡을 넣고 떡이 떠오를 때까지 끓인다"},{"order":5,"description":"달걀물을 풀어 넣고 대파를 넣은 뒤 김가루를 올려 낸다"}]', 'EFHiAVUe9t4', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '떡국');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -112,7 +112,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '갈비탕');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '감자탕', 'KOREAN', 'SOUP', 4, 120, 'HARD', 2,
-       '[{"order":1,"description":"돼지 등뼈를 찬물에 2시간 담가 핏물을 뺀다"},{"order":2,"description":"끓는 물에 등뼈를 10분 데친 뒤 깨끗이 씻는다"},{"order":3,"description":"새 물에 등뼈·된장·생강·통마늘을 넣고 1시간 끓인다"},{"order":4,"description":"우거지·감자와 고춧가루·들깻가루·다진 마늘 양념을 넣고 30분 더 끓인다"},{"order":5,"description":"깻잎·대파·청양고추를 올리고 소금으로 간을 맞춘다"}]', 'jl35PZZFJEg', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"돼지 등뼈를 찬물에 2시간 담가 핏물을 뺀다"},{"order":2,"description":"끓는 물에 등뼈를 10분 데친 뒤 깨끗이 씻는다"},{"order":3,"description":"새 물에 등뼈·된장·생강·통마늘을 넣고 1시간 끓인다"},{"order":4,"description":"우거지·감자와 고춧가루·들깻가루·다진 마늘 양념을 넣고 30분 더 끓인다"},{"order":5,"description":"깻잎·대파·청양고추를 올리고 소금으로 간을 맞춘다"}]', '9iwaoHo9jV0', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '감자탕');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -184,13 +184,13 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '김치볶음밥')
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '비빔밥', 'KOREAN', 'RICE', 2, 30, 'EASY', 1,
-       '[{"order":1,"description":"시금치·콩나물·고사리는 데쳐 소금·참기름으로 각각 무친다"},{"order":2,"description":"애호박·당근은 채 썰어 볶고 소고기는 간장 양념해 볶는다"},{"order":3,"description":"고추장·설탕·참기름·다진 마늘로 비빔 양념장을 만든다"},{"order":4,"description":"그릇에 밥을 담고 나물과 고기를 돌려 담는다"},{"order":5,"description":"달걀 프라이와 양념장을 올리고 참기름·통깨를 뿌린다"}]', 'WPnmxb4T9zE', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"시금치·콩나물·고사리는 데쳐 소금·참기름으로 각각 무친다"},{"order":2,"description":"애호박·당근은 채 썰어 볶고 소고기는 간장 양념해 볶는다"},{"order":3,"description":"고추장·설탕·참기름·다진 마늘로 비빔 양념장을 만든다"},{"order":4,"description":"그릇에 밥을 담고 나물과 고기를 돌려 담는다"},{"order":5,"description":"달걀 프라이와 양념장을 올리고 참기름·통깨를 뿌린다"}]', 'KJAHpWjbB2k', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '비빔밥');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '콩나물밥', 'KOREAN', 'RICE', 2, 40, 'EASY', 0,
-       '[{"order":1,"description":"쌀을 씻어 30분 불리고 콩나물은 씻어 다듬는다"},{"order":2,"description":"냄비(또는 밥솥)에 쌀과 평소보다 적은 물을 붓는다"},{"order":3,"description":"쌀 위에 콩나물(취향에 따라 양념한 돼지고기)을 올리고 밥을 짓는다"},{"order":4,"description":"간장·고춧가루·다진 파·다진 마늘·참기름·깨로 양념장을 만든다"},{"order":5,"description":"밥이 되면 고루 섞어 담고 양념장을 곁들인다"}]', 'f5ZV-xgMxP4', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"쌀을 씻어 30분 불리고 콩나물은 씻어 다듬는다"},{"order":2,"description":"냄비(또는 밥솥)에 쌀과 평소보다 적은 물을 붓는다"},{"order":3,"description":"쌀 위에 콩나물(취향에 따라 양념한 돼지고기)을 올리고 밥을 짓는다"},{"order":4,"description":"간장·고춧가루·다진 파·다진 마늘·참기름·깨로 양념장을 만든다"},{"order":5,"description":"밥이 되면 고루 섞어 담고 양념장을 곁들인다"}]', 'xi59VEYx7gA', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '콩나물밥');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -250,7 +250,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '잔치국수');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '비빔국수', 'KOREAN', 'NOODLE', 2, 20, 'EASY', 2,
-       '[{"order":1,"description":"고추장·고춧가루·식초·설탕·간장·다진 마늘·참기름으로 양념장을 만든다"},{"order":2,"description":"오이는 채 썰고 김치는 잘게 썰며 달걀은 삶아 반으로 자른다"},{"order":3,"description":"소면을 삶아 찬물에 여러 번 헹궈 물기를 뺀다"},{"order":4,"description":"소면에 양념장과 김치를 넣고 고루 비빈다"},{"order":5,"description":"그릇에 담고 오이·삶은 달걀·통깨를 올린다"}]', 'KQ8D6z71O_E', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"고추장·고춧가루·식초·설탕·간장·다진 마늘·참기름으로 양념장을 만든다"},{"order":2,"description":"오이는 채 썰고 김치는 잘게 썰며 달걀은 삶아 반으로 자른다"},{"order":3,"description":"소면을 삶아 찬물에 여러 번 헹궈 물기를 뺀다"},{"order":4,"description":"소면에 양념장과 김치를 넣고 고루 비빈다"},{"order":5,"description":"그릇에 담고 오이·삶은 달걀·통깨를 올린다"}]', 'iWWQBoS3SL4', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '비빔국수');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -292,7 +292,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '라볶이');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '쫄면', 'KOREAN', 'NOODLE', 2, 20, 'EASY', 2,
-       '[{"order":1,"description":"고추장·고춧가루·식초·설탕·물엿·다진 마늘·사이다로 쫄면 양념장을 만든다"},{"order":2,"description":"양배추·오이·당근은 채 썰고 콩나물은 데치며 달걀은 삶는다"},{"order":3,"description":"쫄면 사리를 한 가닥씩 풀어 끓는 물에 3~4분 삶는다"},{"order":4,"description":"찬물에 여러 번 비벼 헹궈 물기를 뺀다"},{"order":5,"description":"그릇에 면을 담고 채소·콩나물·삶은 달걀·양념장을 올린다"}]', '2_RCd4Ffwic', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"고추장·고춧가루·식초·설탕·물엿·다진 마늘·사이다로 쫄면 양념장을 만든다"},{"order":2,"description":"양배추·오이·당근은 채 썰고 콩나물은 데치며 달걀은 삶는다"},{"order":3,"description":"쫄면 사리를 한 가닥씩 풀어 끓는 물에 3~4분 삶는다"},{"order":4,"description":"찬물에 여러 번 비벼 헹궈 물기를 뺀다"},{"order":5,"description":"그릇에 면을 담고 채소·콩나물·삶은 달걀·양념장을 올린다"}]', 'FbApByZGCXg', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '쫄면');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -316,7 +316,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '시금치나물')
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '콩나물무침', 'KOREAN', 'SIDE', 3, 15, 'EASY', 1,
-       '[{"order":1,"description":"콩나물을 씻어 다듬는다"},{"order":2,"description":"냄비에 콩나물과 물·소금을 넣고 뚜껑을 덮어 5분간 삶는다"},{"order":3,"description":"체에 밭쳐 한김 식힌다"},{"order":4,"description":"소금·다진 마늘·다진 파·고춧가루를 넣고 무친다"},{"order":5,"description":"참기름·통깨를 넣어 마무리한다"}]', 'nluWpHDU1S4', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"콩나물을 씻어 다듬는다"},{"order":2,"description":"냄비에 콩나물과 물·소금을 넣고 뚜껑을 덮어 5분간 삶는다"},{"order":3,"description":"체에 밭쳐 한김 식힌다"},{"order":4,"description":"소금·다진 마늘·다진 파·고춧가루를 넣고 무친다"},{"order":5,"description":"참기름·통깨를 넣어 마무리한다"}]', '5UZDNxzxnTI', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '콩나물무침');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -328,7 +328,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '멸치볶음');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '감자조림', 'KOREAN', 'SIDE', 3, 25, 'EASY', 0,
-       '[{"order":1,"description":"감자를 깍둑썰기해 찬물에 담가 전분을 뺀다"},{"order":2,"description":"팬에 식용유를 두르고 감자 겉면을 볶는다"},{"order":3,"description":"물·간장·설탕·다진 마늘을 넣고 중불에서 졸인다"},{"order":4,"description":"감자가 익으면 물엿을 넣고 국물이 거의 없어질 때까지 졸인다"},{"order":5,"description":"참기름·통깨를 뿌려 마무리한다"}]', '-GSljcFyUJ0', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"감자를 깍둑썰기해 찬물에 담가 전분을 뺀다"},{"order":2,"description":"팬에 식용유를 두르고 감자 겉면을 볶는다"},{"order":3,"description":"물·간장·설탕·다진 마늘을 넣고 중불에서 졸인다"},{"order":4,"description":"감자가 익으면 물엿을 넣고 국물이 거의 없어질 때까지 졸인다"},{"order":5,"description":"참기름·통깨를 뿌려 마무리한다"}]', 'rDwyR7gkxvU', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '감자조림');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -352,13 +352,13 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '오이무침');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '감자채볶음', 'KOREAN', 'SIDE', 3, 15, 'EASY', 0,
-       '[{"order":1,"description":"감자를 곱게 채 썰어 찬물에 담가 전분을 뺀다"},{"order":2,"description":"끓는 소금물에 감자채를 30초 데쳐 물기를 뺀다"},{"order":3,"description":"팬에 식용유를 두르고 양파·당근을 볶는다"},{"order":4,"description":"감자채를 넣고 소금으로 간하며 부서지지 않게 볶는다"},{"order":5,"description":"후추·통깨를 뿌려 마무리한다"}]', 'cMc1zyMw62E', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"감자를 곱게 채 썰어 찬물에 담가 전분을 뺀다"},{"order":2,"description":"끓는 소금물에 감자채를 30초 데쳐 물기를 뺀다"},{"order":3,"description":"팬에 식용유를 두르고 양파·당근을 볶는다"},{"order":4,"description":"감자채를 넣고 소금으로 간하며 부서지지 않게 볶는다"},{"order":5,"description":"후추·통깨를 뿌려 마무리한다"}]', 'Bwn36dAuiX8', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '감자채볶음');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '어묵볶음', 'KOREAN', 'SIDE', 3, 15, 'EASY', 0,
-       '[{"order":1,"description":"어묵을 먹기 좋게 썰어 끓는 물에 데쳐 기름기를 뺀다"},{"order":2,"description":"양파·당근·대파를 채 썬다"},{"order":3,"description":"팬에 식용유를 두르고 채소를 볶는다"},{"order":4,"description":"어묵과 간장·설탕·다진 마늘·물을 넣고 볶는다"},{"order":5,"description":"물엿·참기름·통깨를 넣어 윤기 있게 마무리한다"}]', '-kbf5FixN28', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"어묵을 먹기 좋게 썰어 끓는 물에 데쳐 기름기를 뺀다"},{"order":2,"description":"양파·당근·대파를 채 썬다"},{"order":3,"description":"팬에 식용유를 두르고 채소를 볶는다"},{"order":4,"description":"어묵과 간장·설탕·다진 마늘·물을 넣고 볶는다"},{"order":5,"description":"물엿·참기름·통깨를 넣어 윤기 있게 마무리한다"}]', 'K2U_2E6V4u4', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '어묵볶음');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -370,13 +370,13 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '무생채');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '고등어조림', 'KOREAN', 'SIDE', 2, 35, 'NORMAL', 1,
-       '[{"order":1,"description":"고등어를 손질해 토막 내고 쌀뜨물에 담가 비린내를 뺀다"},{"order":2,"description":"무를 두껍게 썰어 냄비 바닥에 깐다"},{"order":3,"description":"고춧가루·간장·설탕·다진 마늘·생강·맛술로 양념장을 만든다"},{"order":4,"description":"무 위에 고등어와 양념장·물을 넣고 중불에서 20분 졸인다"},{"order":5,"description":"양파·대파·청양고추를 넣고 국물을 끼얹으며 5분 더 졸인다"}]', 'zXLptahhORE', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"고등어를 손질해 토막 내고 쌀뜨물에 담가 비린내를 뺀다"},{"order":2,"description":"무를 두껍게 썰어 냄비 바닥에 깐다"},{"order":3,"description":"고춧가루·간장·설탕·다진 마늘·생강·맛술로 양념장을 만든다"},{"order":4,"description":"무 위에 고등어와 양념장·물을 넣고 중불에서 20분 졸인다"},{"order":5,"description":"양파·대파·청양고추를 넣고 국물을 끼얹으며 5분 더 졸인다"}]', 'T0JtNmv4KaM', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '고등어조림');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '잡채', 'KOREAN', 'ETC', 4, 50, 'NORMAL', 0,
-       '[{"order":1,"description":"당면을 물에 30분 불린다"},{"order":2,"description":"시금치는 데쳐 무치고 양파·당근·버섯·파프리카는 채 썰어 각각 볶는다"},{"order":3,"description":"소고기는 간장·설탕·마늘로 양념해 볶는다"},{"order":4,"description":"당면을 삶아 간장·설탕·식용유를 넣고 팬에 볶는다"},{"order":5,"description":"모든 재료를 합쳐 간장·참기름·통깨로 버무린다"}]', 'vqb3WyZmL_8', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"당면을 물에 30분 불린다"},{"order":2,"description":"시금치는 데쳐 무치고 양파·당근·버섯·파프리카는 채 썰어 각각 볶는다"},{"order":3,"description":"소고기는 간장·설탕·마늘로 양념해 볶는다"},{"order":4,"description":"당면을 삶아 간장·설탕·식용유를 넣고 팬에 볶는다"},{"order":5,"description":"모든 재료를 합쳐 간장·참기름·통깨로 버무린다"}]', 'Ryk_6X-ZvO0', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '잡채');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -406,19 +406,19 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '계란찜');
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '갈비찜', 'KOREAN', 'ETC', 4, 120, 'HARD', 0,
-       '[{"order":1,"description":"소갈비를 찬물에 2시간 담가 핏물을 빼고 기름을 손질한다"},{"order":2,"description":"끓는 물에 갈비를 10분 데쳐 헹군다"},{"order":3,"description":"간장·설탕·배즙·양파즙·다진 마늘·후추·참기름으로 양념을 만든다"},{"order":4,"description":"갈비와 양념·물을 넣고 1시간 끓인다"},{"order":5,"description":"무·당근·밤·대추·표고를 넣고 30분 더 졸여 윤기를 낸다"}]', 'tOrUOZ7oFnc', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"소갈비를 찬물에 2시간 담가 핏물을 빼고 기름을 손질한다"},{"order":2,"description":"끓는 물에 갈비를 10분 데쳐 헹군다"},{"order":3,"description":"간장·설탕·배즙·양파즙·다진 마늘·후추·참기름으로 양념을 만든다"},{"order":4,"description":"갈비와 양념·물을 넣고 1시간 끓인다"},{"order":5,"description":"무·당근·밤·대추·표고를 넣고 30분 더 졸여 윤기를 낸다"}]', 'SocQNohIdeE', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '갈비찜');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '찜닭', 'KOREAN', 'ETC', 3, 50, 'NORMAL', 1,
-       '[{"order":1,"description":"당면을 불리고 닭을 데쳐 헹군다"},{"order":2,"description":"간장·설탕·물엿·다진 마늘·생강·후추로 양념을 만든다"},{"order":3,"description":"냄비에 닭·양념·물·건고추를 넣고 20분 끓인다"},{"order":4,"description":"감자·당근·양파를 넣고 10분 더 끓인다"},{"order":5,"description":"불린 당면과 대파·청양고추를 넣고 국물이 졸아들 때까지 끓인다"}]', 'blIAgtr1jWw', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"당면을 불리고 닭을 데쳐 헹군다"},{"order":2,"description":"간장·설탕·물엿·다진 마늘·생강·후추로 양념을 만든다"},{"order":3,"description":"냄비에 닭·양념·물·건고추를 넣고 20분 끓인다"},{"order":4,"description":"감자·당근·양파를 넣고 10분 더 끓인다"},{"order":5,"description":"불린 당면과 대파·청양고추를 넣고 국물이 졸아들 때까지 끓인다"}]', 'PW04hLy9o0w', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '찜닭');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '수육', 'KOREAN', 'ETC', 3, 70, 'NORMAL', 0,
-       '[{"order":1,"description":"돼지고기(삼겹살·앞다리살)를 덩어리째 준비한다"},{"order":2,"description":"냄비에 물·된장·대파·양파·통마늘·통후추·월계수잎을 넣고 끓인다"},{"order":3,"description":"끓으면 고기를 넣고 중불에서 50분~1시간 삶는다"},{"order":4,"description":"젓가락으로 찔러 핏물이 나오지 않으면 건져 10분 레스팅한다"},{"order":5,"description":"한입 크기로 썰어 새우젓·김치와 함께 낸다"}]', 'Gdoj1coJEuM', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"돼지고기(삼겹살·앞다리살)를 덩어리째 준비한다"},{"order":2,"description":"냄비에 물·된장·대파·양파·통마늘·통후추·월계수잎을 넣고 끓인다"},{"order":3,"description":"끓으면 고기를 넣고 중불에서 50분~1시간 삶는다"},{"order":4,"description":"젓가락으로 찔러 핏물이 나오지 않으면 건져 10분 레스팅한다"},{"order":5,"description":"한입 크기로 썰어 새우젓·김치와 함께 낸다"}]', '55FQ_Q6uHG0', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '수육');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
@@ -454,7 +454,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '로제파스타')
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
                     steps, youtube_video_id, status, auto_cart_enabled, created_at, updated_at)
 SELECT '미트볼스파게티', 'WESTERN', 'PASTA', 3, 45, 'NORMAL', 0,
-       '[{"order":1,"description":"다진 소고기·돼지고기에 빵가루·우유·달걀·양파·소금·후추를 섞어 치댄다"},{"order":2,"description":"한입 크기로 동글게 빚어 팬에 겉면을 굽는다"},{"order":3,"description":"양파·마늘을 볶고 토마토소스를 넣어 끓인다"},{"order":4,"description":"미트볼을 소스에 넣고 15분간 졸인다"},{"order":5,"description":"삶은 스파게티 위에 소스와 미트볼을 올리고 치즈·파슬리를 뿌린다"}]', 'uMlSYLgo0EE', 'ACTIVE', FALSE, NOW(), NOW()
+       '[{"order":1,"description":"다진 소고기·돼지고기에 빵가루·우유·달걀·양파·소금·후추를 섞어 치댄다"},{"order":2,"description":"한입 크기로 동글게 빚어 팬에 겉면을 굽는다"},{"order":3,"description":"양파·마늘을 볶고 토마토소스를 넣어 끓인다"},{"order":4,"description":"미트볼을 소스에 넣고 15분간 졸인다"},{"order":5,"description":"삶은 스파게티 위에 소스와 미트볼을 올리고 치즈·파슬리를 뿌린다"}]', 'hO7ErATgLF4', 'ACTIVE', FALSE, NOW(), NOW()
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM recipe WHERE name = '미트볼스파게티');
 
 INSERT INTO recipe (name, cuisine, dish_type, base_servings, cook_time_min, difficulty, spicy_level,
