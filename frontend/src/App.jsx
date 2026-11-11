@@ -25,7 +25,6 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import RequireDelivery from './components/RequireDelivery';
 import Addresses from './pages/Addresses';
-import AutoCartHistory from './pages/AutoCartHistory';
 import AutoCartPreview from './pages/AutoCartPreview';
 import Bookmarks from './pages/Bookmarks';
 import Cart from './pages/Cart';
@@ -87,7 +86,6 @@ export default function App() {
           <Route path="/points/history" element={<PointHistory />} />
           <Route path="/recipes" element={<Recipes />} />
           <Route path="/recipes/:recipeId" element={<RecipeDetail />} />
-          <Route path="/auto-carts" element={<AutoCartHistory />} />
           <Route path="/auto-carts/:autoCartId" element={<AutoCartPreview />} />
           <Route path="/bookmarks" element={<Bookmarks />} />
           <Route path="/mypage" element={<MyPage />} />

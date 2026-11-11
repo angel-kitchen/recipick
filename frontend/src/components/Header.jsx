@@ -146,7 +146,6 @@ export default function Header() {
                   <NavLink to="/mypage">내 정보</NavLink>
                   <NavLink to="/orders">주문 내역</NavLink>
                   <NavLink to="/bookmarks">찜한 레시피</NavLink>
-                  <NavLink to="/auto-carts">자동 담기 기록</NavLink>
                   <NavLink to="/membership">내 멤버십</NavLink>
                   <NavLink to="/addresses">배송지 관리</NavLink>
                   <button type="button" className="header__link-button" onClick={handleLogout} disabled={loggingOut}>

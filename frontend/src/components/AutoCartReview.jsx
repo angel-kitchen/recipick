@@ -177,7 +177,7 @@ export default function AutoCartReview({ preview, disabled = false, onBrowse }) 
   return (
     <div>
       <ErrorNotice error={error} />
-      {(outcomeUnknown || preview.status === 'CONFIRMED') && <p className="notice"><Link to="/cart">장바구니 확인</Link> · <Link to="/auto-carts">자동 장보기 이력</Link></p>}
+      {(outcomeUnknown || preview.status === 'CONFIRMED') && <p className="notice"><Link to="/cart">장바구니 확인</Link></p>}
       <div className="review-summary">
         <div className="summary__row">
           <span>담을 상품</span>
