@@ -11,6 +11,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -23,7 +24,13 @@ import java.util.List;
 
 @Getter
 @Entity
-@Table(name = "recipe")
+@Table(
+    name = "recipe",
+    indexes = {
+        // 목록 검색은 '%검색어%'라 인덱스로 거를 수 없지만, 이름순 인덱스를 따라 읽으면 정렬 없이 한 페이지가 차는 즉시 멈춘다
+        @Index(name = "idx_recipe_status_name", columnList = "status, name, id")
+    }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Recipe extends BaseTimeEntity {
 
