@@ -2,7 +2,9 @@ package com.recipick.domain.recipe.repository;
 
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.core.types.dsl.StringExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -50,6 +52,23 @@ public class RecipeRepositoryImpl implements RecipeRepositoryCustom {
             .where(where);
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
+    }
+
+    // 사람은 앞글자부터 치므로 이름이 검색어로 시작하는 레시피를 먼저, 같은 순위는 많이 본 레시피를 먼저 보여 준다
+    @Override
+    public List<Recipe> findSuggestions(String query, int limit) {
+        StringExpression source = Choseong.isChoseongOnly(query) ? recipe.nameChoseong : recipe.name;
+        StringExpression target = Expressions.stringTemplate("replace({0}, ' ', '')", source).lower();
+        NumberExpression<Integer> prefixRank = new CaseBuilder()
+            .when(target.startsWith(query)).then(0)
+            .otherwise(1);
+
+        return queryFactory
+            .selectFrom(recipe)
+            .where(recipe.status.eq(RecipeStatus.ACTIVE), target.contains(query))
+            .orderBy(prefixRank.asc(), recipe.viewCount.desc(), recipe.name.asc(), recipe.id.asc())
+            .limit(limit)
+            .fetch();
     }
 
     private BooleanExpression nameContains(String keyword) {
