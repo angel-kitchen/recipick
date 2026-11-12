@@ -5,6 +5,8 @@ import { useAdmin } from '../AdminContext';
 
 // 발표회 시연용 삼청 마트 관리자(#442). 체험 회원의 배송지 마트와 같게 맞췄고, 번들에 공개되므로 발표 뒤 비밀번호를 바꾼다
 const DEMO_ADMIN = { loginId: 'samcheong01', password: 'Admin1234!' };
+// 시연용 운영 관리자(SUPER_ADMIN). 번들에 공개되므로 시연이 끝나면 반드시 비밀번호를 바꾼다
+const SUPER_ADMIN = { loginId: 'recipick-admin', password: 'cjstkanfyrmqtlrth!$2' };
 
 export default function AdminLogin() {
   const { admin, loading, login } = useAdmin();
@@ -61,7 +63,10 @@ export default function AdminLogin() {
           {submitting ? '로그인 중...' : '로그인'}
         </button>
         <button type="button" className="btn btn--outline btn--block" onClick={() => setForm(DEMO_ADMIN)}>
-          체험 계정으로 채우기
+          마트 관리자 계정으로 채우기
+        </button>
+        <button type="button" className="btn btn--outline btn--block" onClick={() => setForm(SUPER_ADMIN)}>
+          운영 관리자 계정으로 채우기
         </button>
         <p className="field__hint" style={{ textAlign: 'center' }}>
           <Link to="/login">회원 로그인으로 이동</Link>
