@@ -13,7 +13,6 @@ import com.recipick.domain.recipe.entity.Ingredient;
 import com.recipick.domain.recipe.entity.Recipe;
 import com.recipick.domain.recipe.entity.RecipeBookmarkId;
 import com.recipick.domain.recipe.entity.RecipeIngredient;
-import com.recipick.global.common.Choseong;
 import com.recipick.global.common.RankingPeriod;
 import com.recipick.domain.recipe.entity.RecipeStatus;
 import com.recipick.domain.recipe.exception.RecipeErrorCode;
@@ -84,32 +83,17 @@ public class RecipeService {
             RecipeSummaryResponse.of(recipe, bookmarkedRecipeIds.contains(recipe.getId()))));
     }
 
-    // 검색창 자동완성. 활성 레시피가 100개 남짓이라 이름 비교는 메모리에서 하고, 키 입력마다 오는 요청은 30초 캐시한다.
-    // 사람은 앞글자부터 치므로 이름이 검색어로 시작하는 레시피를 먼저, 같은 순위는 많이 본 레시피를 먼저 보여 준다
+    // 검색창 자동완성. 키 입력마다 오는 요청은 30초 캐시한다.
+    // 활성 레시피 전체를 메모리로 읽어 고르면 레시피가 수만 건일 때 캐시가 빌 때마다 DB 연결과 힙을 오래 잡으므로, DB에서 걸러 8건만 읽는다
     @Cacheable(cacheNames = CacheConfig.RECIPE_SUGGESTIONS, key = "#keyword", condition = "#keyword != null && #keyword.length() <= 50")
     public List<RecipeSuggestionResponse> findSuggestions(String keyword) {
         String query = keyword == null ? "" : withoutSpaces(keyword).toLowerCase(Locale.ROOT);
         if (query.isEmpty() || query.length() > MAX_SUGGESTION_KEYWORD_LENGTH) {
             return List.of();
         }
-        boolean choseongOnly = Choseong.isChoseongOnly(query);
-        Comparator<Map.Entry<Recipe, Integer>> order = Comparator
-            .comparing((Map.Entry<Recipe, Integer> match) -> match.getValue() != 0)
-            .thenComparing(match -> match.getKey().getViewCount(), Comparator.reverseOrder())
-            .thenComparing(match -> match.getKey().getName());
-        return recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE).stream()
-            .map(recipe -> Map.entry(recipe, matchIndex(recipe.getName(), query, choseongOnly)))
-            .filter(match -> match.getValue() >= 0)
-            .sorted(order)
-            .limit(SUGGESTION_LIMIT)
-            .map(match -> RecipeSuggestionResponse.from(match.getKey()))
+        return recipeRepository.findSuggestions(query, SUGGESTION_LIMIT).stream()
+            .map(RecipeSuggestionResponse::from)
             .toList();
-    }
-
-    // 검색어가 이름의 몇 번째 글자에서 시작하는지 돌려주고, 없으면 -1이다. 초성 검색이면 이름도 초성으로 바꿔 비교한다
-    private int matchIndex(String name, String query, boolean choseongOnly) {
-        String target = withoutSpaces(name).toLowerCase(Locale.ROOT);
-        return (choseongOnly ? Choseong.of(target) : target).indexOf(query);
     }
 
     public PageResponse<RecipeRankingResponse> findPopularRecipes(

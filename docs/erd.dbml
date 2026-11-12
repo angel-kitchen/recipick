@@ -372,6 +372,10 @@ Table RECIPE {
   view_count int [not null, default: 0, note: '상세 조회 누적 횟수(전체 기간)']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (status, name, id) [name: 'idx_recipe_status_name', note: '목록 검색의 이름순 정렬. 정렬 없이 인덱스 순서로 읽다가 페이지가 차면 멈춘다']
+  }
 }
 
 Table RECIPE_BOOKMARK {

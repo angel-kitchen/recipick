@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -413,53 +414,16 @@ class RecipeServiceTest {
     }
 
     @Test
-    @DisplayName("자동완성은 이름이 검색어로 시작하는 레시피를 먼저, 같은 순위는 조회수 많은 순으로 띄어쓰기를 무시하고 보여 준다")
-    void findSuggestions_ordersPrefixMatchesFirstThenViewCount() {
+    @DisplayName("자동완성은 검색어의 띄어쓰기를 지우고 소문자로 바꿔 최대 8개를 조회한다")
+    void findSuggestions_normalizesKeywordAndLimitsToEight() {
         // given
-        given(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE)).willReturn(List.of(
-            recipeWithViews(1L, "참치김치찌개", 500),
-            recipeWithViews(2L, "김치볶음밥", 10),
-            recipeWithViews(3L, "김치찌개", 300),
-            recipeWithViews(4L, "된장찌개", 900)));
+        given(recipeRepository.findSuggestions("김치pa", 8)).willReturn(List.of(recipe(3L, "김치Pasta")));
 
         // when
-        List<RecipeSuggestionResponse> suggestions = recipeService.findSuggestions("김치 ");
+        List<RecipeSuggestionResponse> suggestions = recipeService.findSuggestions(" 김치 PA ");
 
         // then
-        assertThat(suggestions).extracting(RecipeSuggestionResponse::name)
-            .containsExactly("김치찌개", "김치볶음밥", "참치김치찌개");
-    }
-
-    @Test
-    @DisplayName("초성만 입력하면 레시피 이름의 초성과 비교한다")
-    void findSuggestions_matchesChoseong() {
-        // given
-        given(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE)).willReturn(List.of(
-            recipeWithViews(1L, "김치찌개", 0),
-            recipeWithViews(2L, "까르보나라", 0),
-            recipeWithViews(3L, "된장찌개", 0)));
-
-        // when
-        List<RecipeSuggestionResponse> suggestions = recipeService.findSuggestions("ㄱㅊ");
-
-        // then
-        assertThat(suggestions).extracting(RecipeSuggestionResponse::name).containsExactly("김치찌개");
-    }
-
-    @Test
-    @DisplayName("자동완성은 최대 8개까지 보여 주고, 영문은 대소문자를 가리지 않는다")
-    void findSuggestions_limitsToEightIgnoringCase() {
-        // given
-        List<Recipe> recipes = LongStream.rangeClosed(1, 10)
-            .mapToObj(id -> recipeWithViews(id, "Pasta " + id, (int) id))
-            .toList();
-        given(recipeRepository.findAllByStatusOrderByIdAsc(RecipeStatus.ACTIVE)).willReturn(recipes);
-
-        // when
-        List<RecipeSuggestionResponse> suggestions = recipeService.findSuggestions("pas");
-
-        // then
-        assertThat(suggestions).hasSize(8).extracting(RecipeSuggestionResponse::recipeId).startsWith(10L, 9L);
+        assertThat(suggestions).extracting(RecipeSuggestionResponse::recipeId).containsExactly(3L);
     }
 
     @ParameterizedTest
@@ -471,13 +435,7 @@ class RecipeServiceTest {
 
         // then
         assertThat(suggestions).isEmpty();
-        verify(recipeRepository, never()).findAllByStatusOrderByIdAsc(any());
-    }
-
-    private Recipe recipeWithViews(Long id, String name, int viewCount) {
-        Recipe recipe = recipe(id, name);
-        ReflectionTestUtils.setField(recipe, "viewCount", viewCount);
-        return recipe;
+        verify(recipeRepository, never()).findSuggestions(any(), anyInt());
     }
 
     private Ingredient ingredient(Long id, String name) {
