@@ -1088,7 +1088,7 @@
 }
 
 .toast a {
-  color: var(--green-light);
+  color: var(--text-on-dark);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1316,7 +1316,7 @@
   padding: var(--space-3);
   border-radius: var(--radius-card);
   background: var(--green-light);
-  color: var(--green-house);
+  color: var(--green-brand);
 }
 
 .start__result .field {
